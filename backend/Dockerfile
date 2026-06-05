@@ -10,6 +10,7 @@ RUN go mod download
 COPY . .
 
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main ./cmd/api
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o seed-admin ./cmd/seed-admin
 
 FROM alpine:latest
 
@@ -19,6 +20,7 @@ ENV TZ=Asia/Jakarta
 WORKDIR /root/
 
 COPY --from=builder /app/main .
+COPY --from=builder /app/seed-admin .
 
 EXPOSE 8080
 

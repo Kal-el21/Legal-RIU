@@ -2,19 +2,23 @@ import { createBrowserRouter } from 'react-router-dom'
 import { GuestRoute, PrivateRoute, AdminRoute } from './guards'
 
 import PublicLayout from '@/layouts/PublicLayout'
+import DashboardLayout from '@/layouts/DashboardLayout'
 import HomePage from '@/pages/public/HomePage'
 import AktaPerusahaanPage from '@/pages/public/AktaPerusahaanPage'
 import ComingSoonPage from '@/pages/public/ComingSoonPage'
 import LoginPage from '@/pages/auth/LoginPage'
+import LegalOpinionListPage from '@/pages/dashboard/legal-opinions/LegalOpinionListPage'
+import LegalOpinionFormPage from '@/pages/dashboard/legal-opinions/LegalOpinionFormPage'
+import LegalOpinionDetailPage from '@/pages/dashboard/legal-opinions/LegalOpinionDetailPage'
 
 const Placeholder = ({ title }: { title: string }) => (
-  <div className="flex items-center justify-center min-h-screen">
+  <div className="flex items-center justify-center min-h-[60vh]">
     <h1 className="text-2xl font-semibold text-gray-400">{title} — Coming Soon</h1>
   </div>
 )
 
 export const router = createBrowserRouter([
-  // ─── Public (with Navbar + Footer) ───────────────────────────────────────
+  // ─── Public ───────────────────────────────────────────────────────────────
   {
     element: <PublicLayout />,
     children: [
@@ -35,21 +39,27 @@ export const router = createBrowserRouter([
     ],
   },
 
-  // ─── User routes ──────────────────────────────────────────────────────────
+  // ─── User dashboard ───────────────────────────────────────────────────────
   {
     element: <PrivateRoute />,
     children: [
-      { path: '/dashboard', element: <Placeholder title="Dashboard User" /> },
-      { path: '/dashboard/legal-opinions', element: <Placeholder title="Legal Opinion List" /> },
-      { path: '/dashboard/legal-opinions/new', element: <Placeholder title="Buat Legal Opinion" /> },
-      { path: '/dashboard/legal-opinions/:id', element: <Placeholder title="Detail Legal Opinion" /> },
-      { path: '/dashboard/review-documents', element: <Placeholder title="Review Dokumen List" /> },
-      { path: '/dashboard/review-documents/new', element: <Placeholder title="Buat Review Dokumen" /> },
-      { path: '/dashboard/review-documents/:id', element: <Placeholder title="Detail Review Dokumen" /> },
+      {
+        element: <DashboardLayout />,
+        children: [
+          { path: '/dashboard', element: <Placeholder title="Dashboard User" /> },
+          { path: '/dashboard/legal-opinions', element: <LegalOpinionListPage /> },
+          { path: '/dashboard/legal-opinions/new', element: <LegalOpinionFormPage /> },
+          { path: '/dashboard/legal-opinions/:id', element: <LegalOpinionDetailPage /> },
+          { path: '/dashboard/legal-opinions/:id/edit', element: <LegalOpinionFormPage /> },
+          { path: '/dashboard/review-documents', element: <Placeholder title="Review Dokumen" /> },
+          { path: '/dashboard/review-documents/new', element: <Placeholder title="Buat Review Dokumen" /> },
+          { path: '/dashboard/review-documents/:id', element: <Placeholder title="Detail Review Dokumen" /> },
+        ],
+      },
     ],
   },
 
-  // ─── Admin routes ─────────────────────────────────────────────────────────
+  // ─── Admin ────────────────────────────────────────────────────────────────
   {
     element: <AdminRoute />,
     children: [

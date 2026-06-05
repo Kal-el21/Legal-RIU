@@ -16,13 +16,11 @@ import (
 )
 
 func main() {
-	// ─── Config & Infrastructure ──────────────────────────────────────────────
 	cfg := config.Load()
 	db := config.InitDatabase(cfg)
-	storage.InitMinIO(cfg)
+	store := storage.InitMinIO(cfg)
 
-	// ─── Auto Migrate ─────────────────────────────────────────────────────────
-	err := db.AutoMigrate(
+	if err := db.AutoMigrate(
 		&entity.User{},
 		&entity.LegalOpinion{},
 		&entity.LegalOpinionAttachment{},
@@ -30,23 +28,29 @@ func main() {
 		&entity.DocumentReview{},
 		&entity.DocumentReviewAttachment{},
 		&entity.DocumentReviewResult{},
-	)
-	if err != nil {
-		log.Fatalf("Failed to migrate database: %v", err)
+	); err != nil {
+		log.Fatalf("Migration failed: %v", err)
 	}
 	log.Println("Database migrated successfully")
 
-	// ─── Dependency Injection ─────────────────────────────────────────────────
+	// ── Repositories ─────────────────────────────────────────────────────────
 	userRepo := repository.NewUserRepository(db)
-	authSvc := service.NewAuthService(userRepo, cfg)
-	authHandler := handler.NewAuthHandler(authSvc)
+	loRepo := repository.NewLegalOpinionRepository(db)
 
-	// ─── Gin Setup ────────────────────────────────────────────────────────────
+	// ── Services ─────────────────────────────────────────────────────────────
+	authSvc := service.NewAuthService(userRepo, cfg)
+	loSvc := service.NewLegalOpinionService(loRepo, store)
+
+	// ── Handlers ─────────────────────────────────────────────────────────────
+	authHandler := handler.NewAuthHandler(authSvc)
+	loHandler := handler.NewLegalOpinionHandler(loSvc)
+
+	// ── Gin ──────────────────────────────────────────────────────────────────
 	if cfg.App.Env == "production" {
 		gin.SetMode(gin.ReleaseMode)
 	}
-
 	r := gin.Default()
+	r.MaxMultipartMemory = 110 << 20 // 110 MB
 
 	r.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{"http://localhost:5173", "http://localhost:3000"},
@@ -56,24 +60,39 @@ func main() {
 		AllowCredentials: true,
 	}))
 
-	// ─── Routes ───────────────────────────────────────────────────────────────
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok", "service": "Legal RIU Portal API"})
 	})
 
 	api := r.Group("/api/v1")
 
-	auth := api.Group("/auth")
-	{
-		auth.POST("/login", authHandler.Login)
-	}
+	// ── Public auth ───────────────────────────────────────────────────────────
+	api.POST("/auth/login", authHandler.Login)
 
-	authProtected := api.Group("/auth")
-	authProtected.Use(middleware.AuthMiddleware(cfg))
-	{
-		authProtected.GET("/me", authHandler.Me)
-		authProtected.POST("/change-password", authHandler.ChangePassword)
-	}
+	// ── Protected ─────────────────────────────────────────────────────────────
+	protected := api.Group("")
+	protected.Use(middleware.AuthMiddleware(cfg))
+
+	protected.GET("/auth/me", authHandler.Me)
+	protected.POST("/auth/change-password", authHandler.ChangePassword)
+
+	// Legal opinions — presign
+	protected.GET("/legal-opinions/presign", loHandler.GetPresignedURL)
+
+	// Legal opinions — user CRUD
+	protected.GET("/legal-opinions", loHandler.GetAll)
+	protected.POST("/legal-opinions", loHandler.Create)
+	protected.GET("/legal-opinions/:id", loHandler.GetByID)
+	protected.PUT("/legal-opinions/:id", loHandler.Update)
+	protected.DELETE("/legal-opinions/:id", loHandler.Delete)
+	protected.POST("/legal-opinions/:id/resubmit", loHandler.Resubmit)
+
+	// ── Admin only ────────────────────────────────────────────────────────────
+	admin := api.Group("/admin")
+	admin.Use(middleware.AuthMiddleware(cfg), middleware.RoleMiddleware("ADMIN"))
+
+	admin.PATCH("/legal-opinions/:id/status", loHandler.AdminUpdateStatus)
+	admin.POST("/legal-opinions/:id/result", loHandler.AdminUploadResult)
 
 	log.Printf("Server running on port %s", cfg.App.Port)
 	if err := r.Run(":" + cfg.App.Port); err != nil {
