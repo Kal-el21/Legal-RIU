@@ -1,8 +1,8 @@
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ArrowLeft, Download, Edit, Trash2, RefreshCw, FileText, Clock, MessageSquare } from 'lucide-react'
+import { ArrowLeft, Download, Edit, Trash2, RefreshCw, FileText, MessageSquare } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
-import StatusBadge from '@/components/common/Statusbadge'
+import StatusBadge from '@/components/common/StatusBadge'
 import { useLegalOpinion, useDeleteLegalOpinion, useResubmitLegalOpinion } from '@/hooks/useLegalOpinion'
 import { useAuthStore } from '@/store/auth.store'
 import { formatDateTime, formatFileSize, validateFile } from '@/lib/utils'
@@ -20,6 +20,7 @@ export default function LegalOpinionDetailPage() {
   const resubmitMutation = useResubmitLegalOpinion()
 
   const [resubmitFiles, setResubmitFiles] = useState<File[]>([])
+  const [resubmitErrors, setResubmitErrors] = useState<string[]>([])
   const [showResubmit, setShowResubmit] = useState(false)
 
   const handleDelete = async () => {
@@ -32,6 +33,7 @@ export default function LegalOpinionDetailPage() {
     await resubmitMutation.mutateAsync({ id: id!, files: resubmitFiles })
     setShowResubmit(false)
     setResubmitFiles([])
+    setResubmitErrors([])
   }
 
   const handleDownload = async (filePath: string, fileName: string) => {
@@ -43,10 +45,20 @@ export default function LegalOpinionDetailPage() {
     a.click()
   }
 
-  const handleResubmitFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleResubmitFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = Array.from(e.target.files ?? [])
-    const valid = selected.filter((f) => !validateFile(f))
-    setResubmitFiles((prev) => [...prev, ...valid])
+    const errs: string[] = []
+    const validFiles: File[] = []
+    
+    for (const f of selected) {
+      const err = await validateFile(f)
+      if (err) errs.push(`${f.name}: ${err}`)
+      else validFiles.push(f)
+    }
+    
+    setResubmitErrors(errs)
+    setResubmitFiles((prev) => [...prev, ...validFiles])
+    e.target.value = ''
   }
 
   if (isLoading) return <div className="p-12 text-center text-gray-400">Memuat data...</div>
@@ -187,6 +199,13 @@ export default function LegalOpinionDetailPage() {
                   <p className="text-sm text-gray-500">Upload dokumen revisi (opsional)</p>
                   <input type="file" multiple accept=".pdf,.doc,.docx" className="hidden" onChange={handleResubmitFileChange} />
                 </label>
+                {resubmitErrors.length > 0 && (
+                  <div className="space-y-1">
+                    {resubmitErrors.map((e, i) => (
+                      <p key={i} className="text-xs text-red-500">{e}</p>
+                    ))}
+                  </div>
+                )}
                 {resubmitFiles.length > 0 && (
                   <div className="space-y-1.5">
                     {resubmitFiles.map((f, i) => (
@@ -199,7 +218,7 @@ export default function LegalOpinionDetailPage() {
                 )}
                 <div className="flex gap-2">
                   <Button variant="outline" onClick={() => setShowResubmit(false)}>Batal</Button>
-                  <Button onClick={handleResubmit} disabled={resubmitMutation.isPending}
+                  <Button onClick={handleResubmit} disabled={resubmitMutation.isPending || resubmitFiles.length === 0}
                     className="text-white" style={{ background: '#C8102E' }}>
                     {resubmitMutation.isPending ? 'Mengajukan...' : 'Konfirmasi Ajukan Ulang'}
                   </Button>

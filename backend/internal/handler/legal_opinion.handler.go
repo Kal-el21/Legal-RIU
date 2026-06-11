@@ -61,8 +61,10 @@ func (h *LegalOpinionHandler) GetByID(c *gin.Context) {
 
 // POST /api/v1/legal-opinions
 func (h *LegalOpinionHandler) Create(c *gin.Context) {
+	_, _ = c.MultipartForm()
+
 	var req dto.CreateLegalOpinionRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := c.ShouldBind(&req); err != nil {
 		utils.BadRequest(c, "Validasi gagal", err.Error())
 		return
 	}
@@ -161,9 +163,11 @@ func (h *LegalOpinionHandler) GetPresignedURL(c *gin.Context) {
 		return
 	}
 
-	url, err := h.svc.GetPresignedURL(filePath)
+	userID := middleware.GetUserID(c)
+	role := middleware.GetUserRole(c)
+	url, err := h.svc.GetPresignedURL(filePath, userID, role)
 	if err != nil {
-		utils.InternalError(c, "Gagal membuat URL")
+		utils.NotFound(c, err.Error())
 		return
 	}
 	utils.OK(c, "Success", gin.H{"url": url})

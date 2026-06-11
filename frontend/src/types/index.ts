@@ -38,6 +38,8 @@ export interface User {
   division: string
   role: UserRole
   status: UserStatus
+  email_notifications: boolean
+  two_fa_enabled: boolean
   created_at: string
   updated_at: string
 }
@@ -134,6 +136,8 @@ export interface LoginRequest {
 
 export interface AuthResponse {
   token: string
+  access_token?: string
+  refresh_token: string
   user: User
 }
 

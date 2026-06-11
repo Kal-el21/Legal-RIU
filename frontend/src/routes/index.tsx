@@ -3,13 +3,28 @@ import { GuestRoute, PrivateRoute, AdminRoute } from './guards'
 
 import PublicLayout from '@/layouts/PublicLayout'
 import DashboardLayout from '@/layouts/DashboardLayout'
+import AdminLayout from '@/layouts/AdminLayout'
+
 import HomePage from '@/pages/public/HomePage'
 import AktaPerusahaanPage from '@/pages/public/AktaPerusahaanPage'
 import ComingSoonPage from '@/pages/public/ComingSoonPage'
 import LoginPage from '@/pages/auth/LoginPage'
+
+import UserDashboardPage from '@/pages/dashboard/UserDashboardPage'
+import SettingsPage from '@/pages/settings/SettingsPage'
 import LegalOpinionListPage from '@/pages/dashboard/legal-opinions/LegalOpinionListPage'
 import LegalOpinionFormPage from '@/pages/dashboard/legal-opinions/LegalOpinionFormPage'
 import LegalOpinionDetailPage from '@/pages/dashboard/legal-opinions/LegalOpinionDetailPage'
+import ReviewDocumentListPage from '@/pages/dashboard/review-documents/ReviewDocumentListPage'
+import ReviewDocumentFormPage from '@/pages/dashboard/review-documents/ReviewDocumentFormPage'
+import ReviewDocumentDetailPage from '@/pages/dashboard/review-documents/ReviewDocumentDetailPage'
+
+import AdminDashboardPage from '@/pages/admin/AdminDashboardPage'
+import UserManagementPage from '@/pages/admin/users/UserManagementPage'
+import AdminLegalOpinionListPage from '@/pages/admin/legal-opinions/AdminLegalOpinionListPage'
+import AdminLegalOpinionDetailPage from '@/pages/admin/legal-opinions/AdminLegalOpinionDetailPage'
+import AdminReviewDocumentListPage from '@/pages/admin/review-documents/AdminReviewDocumentListPage'
+import AdminReviewDocumentDetailPage from '@/pages/admin/review-documents/AdminReviewDocumentDetailPage'
 
 const Placeholder = ({ title }: { title: string }) => (
   <div className="flex items-center justify-center min-h-[60vh]">
@@ -34,9 +49,7 @@ export const router = createBrowserRouter([
   // ─── Guest only ───────────────────────────────────────────────────────────
   {
     element: <GuestRoute />,
-    children: [
-      { path: '/login', element: <LoginPage /> },
-    ],
+    children: [{ path: '/login', element: <LoginPage /> }],
   },
 
   // ─── User dashboard ───────────────────────────────────────────────────────
@@ -46,14 +59,16 @@ export const router = createBrowserRouter([
       {
         element: <DashboardLayout />,
         children: [
-          { path: '/dashboard', element: <Placeholder title="Dashboard User" /> },
+          { path: '/dashboard', element: <UserDashboardPage /> },
+          { path: '/dashboard/settings', element: <SettingsPage /> },
           { path: '/dashboard/legal-opinions', element: <LegalOpinionListPage /> },
           { path: '/dashboard/legal-opinions/new', element: <LegalOpinionFormPage /> },
           { path: '/dashboard/legal-opinions/:id', element: <LegalOpinionDetailPage /> },
           { path: '/dashboard/legal-opinions/:id/edit', element: <LegalOpinionFormPage /> },
-          { path: '/dashboard/review-documents', element: <Placeholder title="Review Dokumen" /> },
-          { path: '/dashboard/review-documents/new', element: <Placeholder title="Buat Review Dokumen" /> },
-          { path: '/dashboard/review-documents/:id', element: <Placeholder title="Detail Review Dokumen" /> },
+          { path: '/dashboard/review-documents', element: <ReviewDocumentListPage /> },
+          { path: '/dashboard/review-documents/new', element: <ReviewDocumentFormPage /> },
+          { path: '/dashboard/review-documents/:id', element: <ReviewDocumentDetailPage /> },
+          { path: '/dashboard/review-documents/:id/edit', element: <ReviewDocumentFormPage /> },
         ],
       },
     ],
@@ -63,12 +78,18 @@ export const router = createBrowserRouter([
   {
     element: <AdminRoute />,
     children: [
-      { path: '/admin', element: <Placeholder title="Dashboard Admin" /> },
-      { path: '/admin/legal-opinions', element: <Placeholder title="Manage Legal Opinion" /> },
-      { path: '/admin/legal-opinions/:id', element: <Placeholder title="Detail Legal Opinion Admin" /> },
-      { path: '/admin/review-documents', element: <Placeholder title="Manage Review Dokumen" /> },
-      { path: '/admin/review-documents/:id', element: <Placeholder title="Detail Review Dokumen Admin" /> },
-      { path: '/admin/users', element: <Placeholder title="User Management" /> },
+      {
+        element: <AdminLayout />,
+        children: [
+          { path: '/admin', element: <AdminDashboardPage /> },
+          { path: '/admin/settings', element: <SettingsPage /> },
+          { path: '/admin/legal-opinions', element: <AdminLegalOpinionListPage /> },
+          { path: '/admin/legal-opinions/:id', element: <AdminLegalOpinionDetailPage /> },
+          { path: '/admin/review-documents', element: <AdminReviewDocumentListPage /> },
+          { path: '/admin/review-documents/:id', element: <AdminReviewDocumentDetailPage /> },
+          { path: '/admin/users', element: <UserManagementPage /> },
+        ],
+      },
     ],
   },
 

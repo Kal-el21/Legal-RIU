@@ -15,18 +15,6 @@ export interface CreateLegalOpinionData {
   attachments?: File[]
 }
 
-function buildFormData(data: CreateLegalOpinionData): FormData {
-  const form = new FormData()
-  const json = { ...data }
-  delete (json as Record<string, unknown>).attachments
-  // Send JSON fields as individual form fields
-  Object.entries(json).forEach(([k, v]) => {
-    if (v !== undefined && v !== null) form.append(k, String(v))
-  })
-  data.attachments?.forEach((f) => form.append('attachments', f))
-  return form
-}
-
 export const legalOpinionService = {
   getAll: async (params?: { page?: number; limit?: number; status?: string }) => {
     const res = await api.get<ApiResponse<PaginatedData<LegalOpinion>>>('/legal-opinions', { params })
@@ -39,16 +27,13 @@ export const legalOpinionService = {
   },
 
   create: async (data: CreateLegalOpinionData) => {
-    const form = new FormData()
-    // send body fields as JSON string + files separately
     const { attachments, ...fields } = data
+    const form = new FormData()
     Object.entries(fields).forEach(([k, v]) => {
       if (v !== undefined && v !== null) form.append(k, String(v))
     })
     attachments?.forEach((f) => form.append('attachments', f))
-    const res = await api.post<ApiResponse<LegalOpinion>>('/legal-opinions', form, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    })
+    const res = await api.post<ApiResponse<LegalOpinion>>('/legal-opinions', form)
     return res.data.data!
   },
 
@@ -64,9 +49,7 @@ export const legalOpinionService = {
   resubmit: async (id: string, files?: File[]) => {
     const form = new FormData()
     files?.forEach((f) => form.append('attachments', f))
-    const res = await api.post<ApiResponse<LegalOpinion>>(`/legal-opinions/${id}/resubmit`, form, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    })
+    const res = await api.post<ApiResponse<LegalOpinion>>(`/legal-opinions/${id}/resubmit`, form)
     return res.data.data!
   },
 
@@ -84,11 +67,6 @@ export const legalOpinionService = {
     const form = new FormData()
     form.append('result', file)
     if (notes) form.append('notes', notes)
-    await api.post(`/admin/legal-opinions/${id}/result`, form, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    })
+    await api.post(`/admin/legal-opinions/${id}/result`, form)
   },
 }
-
-// suppress unused warning
-void buildFormData

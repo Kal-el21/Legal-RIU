@@ -14,7 +14,11 @@ type UserRepository interface {
 	Update(user *entity.User) error
 	FindAll(page, limit int, search string) ([]entity.User, int64, error)
 	UpdateStatus(id uuid.UUID, status entity.UserStatus) error
+	Delete(id uuid.UUID) error
 	UpdatePassword(id uuid.UUID, passwordHash string) error
+	UpdateProfile(id uuid.UUID, fullName, position, division string) error
+	UpdateNotificationPref(id uuid.UUID, emailNotif bool) error
+	UpdateTwoFA(id uuid.UUID, enabled bool) error
 }
 
 type userRepository struct {
@@ -69,6 +73,26 @@ func (r *userRepository) UpdateStatus(id uuid.UUID, status entity.UserStatus) er
 	return r.db.Model(&entity.User{}).Where("id = ?", id).Update("status", status).Error
 }
 
+func (r *userRepository) Delete(id uuid.UUID) error {
+	return r.db.Delete(&entity.User{}, id).Error
+}
+
 func (r *userRepository) UpdatePassword(id uuid.UUID, passwordHash string) error {
 	return r.db.Model(&entity.User{}).Where("id = ?", id).Update("password_hash", passwordHash).Error
+}
+
+func (r *userRepository) UpdateProfile(id uuid.UUID, fullName, position, division string) error {
+	return r.db.Model(&entity.User{}).Where("id = ?", id).Updates(map[string]interface{}{
+		"full_name": fullName,
+		"position":  position,
+		"division":  division,
+	}).Error
+}
+
+func (r *userRepository) UpdateNotificationPref(id uuid.UUID, emailNotif bool) error {
+	return r.db.Model(&entity.User{}).Where("id = ?", id).Update("email_notifications", emailNotif).Error
+}
+
+func (r *userRepository) UpdateTwoFA(id uuid.UUID, enabled bool) error {
+	return r.db.Model(&entity.User{}).Where("id = ?", id).Update("two_fa_enabled", enabled).Error
 }

@@ -11,7 +11,7 @@ export function useLogin() {
   return useMutation({
     mutationFn: (data: LoginRequest) => authService.login(data),
     onSuccess: (res) => {
-      setAuth(res.token, res.user)
+      setAuth(res.access_token ?? res.token, res.refresh_token, res.user)
       if (res.user.role === 'ADMIN') {
         navigate('/admin')
       } else {
@@ -24,10 +24,20 @@ export function useLogin() {
 export function useLogout() {
   const navigate = useNavigate()
   const logout = useAuthStore((s) => s.logout)
+  const refreshToken = useAuthStore((s) => s.refreshToken)
 
   return () => {
-    logout()
-    navigate('/login')
+    const finish = () => {
+      logout()
+      navigate('/login')
+    }
+
+    if (!refreshToken) {
+      finish()
+      return
+    }
+
+    authService.logout(refreshToken).finally(finish)
   }
 }
 

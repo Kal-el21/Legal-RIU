@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"mime/multipart"
+	"strings"
 
 	"legal-riu-portal/internal/dto"
 	"legal-riu-portal/internal/entity"
@@ -23,7 +24,7 @@ type LegalOpinionService interface {
 	Resubmit(id string, userID string, files []*multipart.FileHeader) (*entity.LegalOpinion, error)
 	UpdateStatus(id string, req dto.UpdateStatusRequest) error
 	UploadResult(id string, adminID string, req dto.UploadResultRequest, file *multipart.FileHeader) error
-	GetPresignedURL(filePath string) (string, error)
+	GetPresignedURL(filePath string, userID string, role string) (string, error)
 }
 
 type legalOpinionService struct {
@@ -223,7 +224,25 @@ func (s *legalOpinionService) UploadResult(id string, adminID string, req dto.Up
 	return s.repo.AddResult(result)
 }
 
-func (s *legalOpinionService) GetPresignedURL(filePath string) (string, error) {
+func (s *legalOpinionService) GetPresignedURL(filePath string, userID string, role string) (string, error) {
+	if !strings.HasPrefix(filePath, "legal-opinions/") {
+		return "", errors.New("path file tidak valid")
+	}
+
+	var filterUserID *uuid.UUID
+	if role != string(entity.RoleAdmin) {
+		uid, err := parseUUID(userID)
+		if err != nil {
+			return "", errors.New("user tidak valid")
+		}
+		filterUserID = &uid
+	}
+
+	allowed, err := s.repo.FileBelongsToAccessibleSubmission(filePath, filterUserID)
+	if err != nil || !allowed {
+		return "", errors.New("file tidak ditemukan")
+	}
+
 	return s.storage.GetPresignedURL(context.Background(), filePath)
 }
 

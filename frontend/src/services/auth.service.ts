@@ -7,6 +7,15 @@ export const authService = {
     return res.data.data!
   },
 
+  refresh: async (refresh_token: string): Promise<AuthResponse> => {
+    const res = await api.post<ApiResponse<AuthResponse>>('/auth/refresh', { refresh_token })
+    return res.data.data!
+  },
+
+  logout: async (refresh_token: string): Promise<void> => {
+    await api.post('/auth/logout', { refresh_token })
+  },
+
   me: async (): Promise<User> => {
     const res = await api.get<ApiResponse<User>>('/auth/me')
     return res.data.data!
@@ -14,5 +23,18 @@ export const authService = {
 
   changePassword: async (data: { current_password: string; new_password: string }): Promise<void> => {
     await api.post('/auth/change-password', data)
+  },
+}
+
+export const settingsService = {
+  updateProfile: async (data: { full_name: string; position: string; division: string }) => {
+    const res = await api.put('/settings/profile', data)
+    return res.data.data
+  },
+  updateNotifications: async (email_notifications: boolean) => {
+    await api.put('/settings/notifications', { email_notifications })
+  },
+  toggle2FA: async (enabled: boolean, password: string) => {
+    await api.put('/settings/two-fa', { enabled, password })
   },
 }

@@ -51,6 +51,13 @@ func Forbidden(c *gin.Context, message string) {
 	})
 }
 
+func TooManyRequests(c *gin.Context, message string) {
+	c.JSON(http.StatusTooManyRequests, Response{
+		Success: false,
+		Message: message,
+	})
+}
+
 func NotFound(c *gin.Context, message string) {
 	c.JSON(http.StatusNotFound, Response{
 		Success: false,

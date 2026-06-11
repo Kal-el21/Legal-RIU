@@ -2,11 +2,13 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"mime/multipart"
 	"net/url"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -20,6 +22,21 @@ type MinIOClient struct {
 	client  *minio.Client
 	bucket  string
 	expires time.Duration
+}
+
+const maxUploadSizeBytes = 25 * 1024 * 1024
+
+var allowedUploadExtensions = map[string]bool{
+	".pdf":  true,
+	".doc":  true,
+	".docx": true,
+	".xls":  true,
+	".xlsx": true,
+	".ppt":  true,
+	".pptx": true,
+	".jpg":  true,
+	".jpeg": true,
+	".png":  true,
 }
 
 var Storage *MinIOClient
@@ -60,6 +77,10 @@ func InitMinIO(cfg *config.Config) *MinIOClient {
 
 // UploadFile uploads a file to MinIO and returns the stored path
 func (m *MinIOClient) UploadFile(ctx context.Context, folder string, fileHeader *multipart.FileHeader) (string, string, error) {
+	if err := validateUpload(fileHeader); err != nil {
+		return "", "", err
+	}
+
 	file, err := fileHeader.Open()
 	if err != nil {
 		return "", "", fmt.Errorf("failed to open file: %w", err)
@@ -77,6 +98,25 @@ func (m *MinIOClient) UploadFile(ctx context.Context, folder string, fileHeader 
 	}
 
 	return objectName, fileHeader.Filename, nil
+}
+
+func validateUpload(fileHeader *multipart.FileHeader) error {
+	if fileHeader == nil {
+		return errors.New("file tidak ditemukan")
+	}
+	if fileHeader.Size <= 0 {
+		return errors.New("file kosong tidak dapat diupload")
+	}
+	if fileHeader.Size > maxUploadSizeBytes {
+		return fmt.Errorf("ukuran file maksimal %d MB", maxUploadSizeBytes/(1024*1024))
+	}
+
+	ext := strings.ToLower(filepath.Ext(fileHeader.Filename))
+	if !allowedUploadExtensions[ext] {
+		return errors.New("tipe file tidak diizinkan")
+	}
+
+	return nil
 }
 
 // GetPresignedURL generates a temporary pre-signed URL for file access

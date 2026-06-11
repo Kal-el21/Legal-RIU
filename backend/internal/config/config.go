@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/joho/godotenv"
 )
@@ -13,6 +14,7 @@ type Config struct {
 	Database DatabaseConfig
 	JWT      JWTConfig
 	MinIO    MinIOConfig
+	Security SecurityConfig
 }
 
 type AppConfig struct {
@@ -30,8 +32,9 @@ type DatabaseConfig struct {
 }
 
 type JWTConfig struct {
-	Secret       string
-	ExpiresHours int
+	Secret              string
+	ExpiresHours        int
+	RefreshExpiresHours int
 }
 
 type MinIOConfig struct {
@@ -43,6 +46,12 @@ type MinIOConfig struct {
 	PresignExpiresMinutes int
 }
 
+type SecurityConfig struct {
+	AllowedOrigins         []string
+	LoginRateLimit         int
+	LoginRateWindowMinutes int
+}
+
 var AppConfig_ *Config
 
 func Load() *Config {
@@ -51,8 +60,11 @@ func Load() *Config {
 	}
 
 	jwtExpires, _ := strconv.Atoi(getEnv("JWT_EXPIRES_HOURS", "24"))
+	refreshExpires, _ := strconv.Atoi(getEnv("JWT_REFRESH_EXPIRES_HOURS", "168"))
 	minioSSL, _ := strconv.ParseBool(getEnv("MINIO_USE_SSL", "false"))
 	presignExpires, _ := strconv.Atoi(getEnv("MINIO_PRESIGN_EXPIRES_MINUTES", "15"))
+	loginRateLimit, _ := strconv.Atoi(getEnv("LOGIN_RATE_LIMIT", "5"))
+	loginRateWindow, _ := strconv.Atoi(getEnv("LOGIN_RATE_WINDOW_MINUTES", "15"))
 
 	cfg := &Config{
 		App: AppConfig{
@@ -68,8 +80,9 @@ func Load() *Config {
 			SSLMode:  getEnv("DB_SSLMODE", "disable"),
 		},
 		JWT: JWTConfig{
-			Secret:       getEnv("JWT_SECRET", "secret"),
-			ExpiresHours: jwtExpires,
+			Secret:              getEnv("JWT_SECRET", "secret"),
+			ExpiresHours:        jwtExpires,
+			RefreshExpiresHours: refreshExpires,
 		},
 		MinIO: MinIOConfig{
 			Endpoint:              getEnv("MINIO_ENDPOINT", "localhost:9000"),
@@ -79,6 +92,18 @@ func Load() *Config {
 			UseSSL:                minioSSL,
 			PresignExpiresMinutes: presignExpires,
 		},
+		Security: SecurityConfig{
+			AllowedOrigins: splitCSV(getEnv(
+				"CORS_ALLOWED_ORIGINS",
+				"http://localhost:89,http://localhost:5173,http://127.0.0.1:89,http://127.0.0.1:5173",
+			)),
+			LoginRateLimit:         loginRateLimit,
+			LoginRateWindowMinutes: loginRateWindow,
+		},
+	}
+
+	if cfg.App.Env == "production" && (cfg.JWT.Secret == "secret" || cfg.JWT.Secret == "change-me" || len(cfg.JWT.Secret) < 32) {
+		log.Fatal("JWT_SECRET must be changed to a strong value in production")
 	}
 
 	AppConfig_ = cfg
@@ -90,4 +115,16 @@ func getEnv(key, defaultValue string) string {
 		return value
 	}
 	return defaultValue
+}
+
+func splitCSV(value string) []string {
+	parts := strings.Split(value, ",")
+	result := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			result = append(result, part)
+		}
+	}
+	return result
 }

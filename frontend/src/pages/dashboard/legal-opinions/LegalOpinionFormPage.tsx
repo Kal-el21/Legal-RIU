@@ -1,5 +1,5 @@
 import { useNavigate, useParams } from 'react-router-dom'
-import { useForm } from 'react-hook-form'
+import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useState, useEffect } from 'react'
@@ -12,6 +12,22 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useCreateLegalOpinion, useUpdateLegalOpinion, useLegalOpinion } from '@/hooks/useLegalOpinion'
 import { useAuthStore } from '@/store/auth.store'
 import { validateFile, formatFileSize } from '@/lib/utils'
+
+const DIVISIONS = [
+  'Underwriting',
+  'Claims',
+  'IT',
+  'Finance',
+  'HR',
+  'Legal',
+  'Marketing',
+  'Operations',
+  'Risk Management',
+  'Reinsurance',
+  'Actuarial',
+  'Corporate',
+  'Lainnya',
+]
 
 const LEGAL_TYPES = [
   'Permasalahan Hukum',
@@ -49,7 +65,7 @@ export default function LegalOpinionFormPage() {
   const createMutation = useCreateLegalOpinion()
   const updateMutation = useUpdateLegalOpinion()
 
-  const { register, handleSubmit, watch, setValue, reset, formState: { errors } } = useForm<FormData>({
+  const { register, handleSubmit, watch, setValue, reset, control, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: {
       requestor_name: user?.full_name ?? '',
@@ -78,17 +94,19 @@ export default function LegalOpinionFormPage() {
     }
   }, [existing, isEdit, reset])
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = Array.from(e.target.files ?? [])
     const errs: string[] = []
-    const valid: File[] = []
-    selected.forEach((f) => {
-      const err = validateFile(f)
+    const validFiles: File[] = []
+    
+    for (const f of selected) {
+      const err = await validateFile(f)
       if (err) errs.push(`${f.name}: ${err}`)
-      else valid.push(f)
-    })
+      else validFiles.push(f)
+    }
+    
     setFileErrors(errs)
-    setFiles((prev) => [...prev, ...valid])
+    setFiles((prev) => [...prev, ...validFiles])
     e.target.value = ''
   }
 
@@ -132,7 +150,18 @@ export default function LegalOpinionFormPage() {
               <Input {...register('requestor_position')} placeholder="Jabatan Anda" />
             </Field>
             <Field label="Divisi pada RIU" error={errors.requestor_division?.message}>
-              <Input {...register('requestor_division')} placeholder="Nama divisi" />
+              <Controller
+                name="requestor_division"
+                control={control}
+                render={({ field }) => (
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <SelectTrigger><SelectValue placeholder="Pilih divisi" /></SelectTrigger>
+                    <SelectContent>
+                      {DIVISIONS.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
             </Field>
             <Field label="Email Kantor" error={errors.requestor_email?.message}>
               <Input {...register('requestor_email')} type="email" placeholder="email@indonesiare.co.id" />

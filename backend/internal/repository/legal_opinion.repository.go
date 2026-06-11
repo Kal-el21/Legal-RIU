@@ -21,6 +21,7 @@ type LegalOpinionRepository interface {
 	AddAttachment(att *entity.LegalOpinionAttachment) error
 	GetLatestUploadRound(loID uuid.UUID) (int, error)
 	AddResult(result *entity.LegalOpinionResult) error
+	FileBelongsToAccessibleSubmission(filePath string, userID *uuid.UUID) (bool, error)
 }
 
 type legalOpinionRepository struct {
@@ -118,4 +119,21 @@ func (r *legalOpinionRepository) GetLatestUploadRound(loID uuid.UUID) (int, erro
 
 func (r *legalOpinionRepository) AddResult(result *entity.LegalOpinionResult) error {
 	return r.db.Create(result).Error
+}
+
+func (r *legalOpinionRepository) FileBelongsToAccessibleSubmission(filePath string, userID *uuid.UUID) (bool, error) {
+	var count int64
+	query := r.db.Model(&entity.LegalOpinion{}).
+		Joins("LEFT JOIN legal_opinion_attachments loa ON loa.legal_opinion_id = legal_opinions.id").
+		Joins("LEFT JOIN legal_opinion_results lor ON lor.legal_opinion_id = legal_opinions.id").
+		Where("(loa.file_path = ? OR lor.file_path = ?)", filePath, filePath)
+
+	if userID != nil {
+		query = query.Where("legal_opinions.user_id = ?", *userID)
+	}
+
+	if err := query.Count(&count).Error; err != nil {
+		return false, err
+	}
+	return count > 0, nil
 }

@@ -48,13 +48,31 @@ const (
 
 type User struct {
 	Base
-	FullName     string     `gorm:"not null" json:"full_name"`
-	Email        string     `gorm:"uniqueIndex;not null" json:"email"`
-	PasswordHash string     `gorm:"not null" json:"-"`
-	Position     string     `gorm:"not null" json:"position"`
-	Division     string     `gorm:"not null" json:"division"`
-	Role         UserRole   `gorm:"not null;default:'USER'" json:"role"`
-	Status       UserStatus `gorm:"not null;default:'ACTIVE'" json:"status"`
+	FullName           string     `gorm:"not null" json:"full_name"`
+	Email              string     `gorm:"uniqueIndex;not null" json:"email"`
+	PasswordHash       string     `gorm:"not null" json:"-"`
+	Position           string     `gorm:"not null" json:"position"`
+	Division           string     `gorm:"not null" json:"division"`
+	Role               UserRole   `gorm:"not null;default:'USER'" json:"role"`
+	Status             UserStatus `gorm:"not null;default:'ACTIVE'" json:"status"`
+	EmailNotifications bool       `gorm:"not null;default:true" json:"email_notifications"`
+	TwoFAEnabled       bool       `gorm:"not null;default:false" json:"two_fa_enabled"`
+}
+
+type RefreshToken struct {
+	Base
+	UserID    uuid.UUID  `gorm:"type:uuid;not null;index" json:"user_id"`
+	User      User       `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	TokenHash string     `gorm:"size:64;uniqueIndex;not null" json:"-"`
+	ExpiresAt time.Time  `gorm:"not null;index" json:"expires_at"`
+	RevokedAt *time.Time `gorm:"index" json:"revoked_at"`
+	IPAddress string     `gorm:"size:45" json:"ip_address"`
+	UserAgent string     `gorm:"size:255" json:"user_agent"`
+	LastUsedAt time.Time  `json:"last_used_at"`
+}
+
+func (r *RefreshToken) IsValid() bool {
+	return r.RevokedAt == nil && time.Now().Before(r.ExpiresAt)
 }
 
 // ─── Legal Opinion ────────────────────────────────────────────────────────────
@@ -170,6 +188,24 @@ type DocumentReviewResult struct {
 func (r *DocumentReviewResult) BeforeCreate(tx *gorm.DB) error {
 	if r.ID == uuid.Nil {
 		r.ID = uuid.New()
+	}
+	return nil
+}
+
+// ─── Settings ─────────────────────────────────────────────────────────────────
+
+type UserSettings struct {
+	ID                uuid.UUID `gorm:"type:uuid;primaryKey" json:"id"`
+	UserID            uuid.UUID `gorm:"type:uuid;uniqueIndex;not null" json:"user_id"`
+	EmailNotification bool      `gorm:"default:true" json:"email_notification"`
+	TwoFactorEnabled  bool      `gorm:"default:false" json:"two_factor_enabled"`
+	CreatedAt         time.Time `json:"created_at"`
+	UpdatedAt         time.Time `json:"updated_at"`
+}
+
+func (s *UserSettings) BeforeCreate(tx *gorm.DB) error {
+	if s.ID == uuid.Nil {
+		s.ID = uuid.New()
 	}
 	return nil
 }

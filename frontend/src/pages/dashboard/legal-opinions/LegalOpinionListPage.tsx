@@ -1,12 +1,12 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Plus, FileText, Search, Filter } from 'lucide-react'
+import { Plus, FileText, } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+// import { Input } from '@/components/ui/input'
 import { useLegalOpinions } from '@/hooks/useLegalOpinion'
 import { formatDate } from '@/lib/utils'
 import type { SubmissionStatus } from '@/types'
-import StatusBadge from '@/components/common/Statusbadge'
+import StatusBadge from '@/components/common/StatusBadge'
 
 const STATUS_FILTERS: { label: string; value: string }[] = [
   { label: 'Semua', value: '' },
