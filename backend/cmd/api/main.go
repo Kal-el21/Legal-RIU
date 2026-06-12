@@ -76,7 +76,7 @@ func main() {
 	})
 
 	api := r.Group("/api/v1")
-	loginLimiter := middleware.NewLoginRateLimiter(cfg.Security.LoginRateWindowMinutes)
+	loginLimiter := middleware.NewLoginRateLimiter(cfg.Security.LoginRateLimit, cfg.Security.LoginRateWindowMinutes)
 
 	// ── Public auth ───────────────────────────────────────────────────────────
 	api.POST("/auth/login", loginLimiter.Middleware(), authHandler.Login)
@@ -99,7 +99,7 @@ func main() {
 	protected.GET("/dashboard/stats", dashHandler.UserStats)
 	protected.GET("/dashboard/recent", dashHandler.UserRecent)
 
-// Legal opinions — presign
+	// Legal opinions — presign
 	protected.GET("/legal-opinions/presign", loHandler.GetPresignedURL)
 	protected.GET("/legal-opinions/download", loHandler.Download)
 	protected.GET("/legal-opinions", loHandler.GetAll)

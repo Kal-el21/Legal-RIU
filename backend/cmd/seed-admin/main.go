@@ -26,8 +26,8 @@ func main() {
 		log.Fatalf("Failed to migrate users table: %v", err)
 	}
 
-	email := requiredEnv("ADMIN_EMAIL")
-	password := requiredEnv("ADMIN_PASSWORD")
+	email := getEnv("ADMIN_EMAIL", "admin@example.com")
+	password := getEnv("ADMIN_PASSWORD", "12345678")
 
 	admin := entity.User{
 		FullName: getEnv("ADMIN_FULL_NAME", "Super Admin"),

@@ -15,6 +15,7 @@ import (
 type LoginRateLimiter struct {
 	mu       sync.Mutex
 	attempts map[string]*loginAttempt
+	limit    int
 	window   time.Duration
 }
 
@@ -24,7 +25,11 @@ type loginAttempt struct {
 }
 
 // NewLoginRateLimiter creates a rate limiter that tracks attempts per account
-func NewLoginRateLimiter(windowMinutes int) *LoginRateLimiter {
+func NewLoginRateLimiter(limit, windowMinutes int) *LoginRateLimiter {
+	if limit <= 0 {
+		limit = 5
+	}
+
 	window := time.Duration(windowMinutes) * time.Minute
 	if window <= 0 {
 		window = 15 * time.Minute
@@ -32,6 +37,7 @@ func NewLoginRateLimiter(windowMinutes int) *LoginRateLimiter {
 
 	limiter := &LoginRateLimiter{
 		attempts: make(map[string]*loginAttempt),
+		limit:    limit,
 		window:   window,
 	}
 
@@ -62,7 +68,7 @@ func (l *LoginRateLimiter) Middleware() gin.HandlerFunc {
 			return
 		}
 
-		if attempt.count >= 5 {
+		if attempt.count >= l.limit {
 			resetAfter := int(time.Until(attempt.resetAt).Seconds())
 			if resetAfter < 1 {
 				resetAfter = 1

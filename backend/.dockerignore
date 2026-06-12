@@ -1,0 +1,44 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+bin/
+dist/
+
+# Test output
+*.test
+*.out
+
+# Dependencies and workspace
+vendor/
+go.work
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Logs and temporary files
+*.log
+logs/
+tmp/
+temp/
+
+# Local data
+*.db
+*.sqlite
+*.sqlite3

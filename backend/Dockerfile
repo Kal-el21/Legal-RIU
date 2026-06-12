@@ -9,8 +9,8 @@ RUN go mod download
 
 COPY . .
 
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main ./cmd/api
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o seed-admin ./cmd/seed-admin
+RUN CGO_ENABLED=0 GOOS=linux go build -o main ./cmd/api
+RUN CGO_ENABLED=0 GOOS=linux go build -o seed-admin ./cmd/seed-admin
 
 FROM alpine:latest
 
