@@ -15,17 +15,17 @@ const (
 	ContextRole   = "userRole"
 )
 
-// AuthMiddleware validates JWT and injects user info into context
+// AuthMiddleware validates JWT from Authorization header OR cookie
 func AuthMiddleware(cfg *config.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		authHeader := c.GetHeader("Authorization")
-		if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
+		tokenStr := getTokenFromRequest(c)
+
+		if tokenStr == "" {
 			utils.Unauthorized(c, "Token tidak ditemukan")
 			c.Abort()
 			return
 		}
 
-		tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
 		claims, err := utils.ValidateToken(tokenStr, cfg.JWT.Secret)
 		if err != nil {
 			utils.Unauthorized(c, "Token tidak valid atau sudah expired")
@@ -38,6 +38,19 @@ func AuthMiddleware(cfg *config.Config) gin.HandlerFunc {
 		c.Set(ContextRole, claims.Role)
 		c.Next()
 	}
+}
+
+// getTokenFromRequest extracts token from Authorization header or cookie
+func getTokenFromRequest(c *gin.Context) string {
+	// Try Authorization header first
+	authHeader := c.GetHeader("Authorization")
+	if authHeader != "" && strings.HasPrefix(authHeader, "Bearer ") {
+		return strings.TrimPrefix(authHeader, "Bearer ")
+	}
+
+	// Fall back to access_token cookie
+	token, _ := c.Cookie("access_token")
+	return token
 }
 
 // RoleMiddleware restricts access to specific roles

@@ -1,9 +1,14 @@
-import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios'
+import axios, {
+  AxiosHeaders,
+  type AxiosError,
+  type InternalAxiosRequestConfig,
+} from 'axios'
 import { useAuthStore } from '@/store/auth.store'
 import type { ApiResponse, AuthResponse } from '@/types'
 
 const api = axios.create({
   baseURL: '/api/v1',
+  withCredentials: true,
 })
 
 function clearLegacyAuthStorage() {
@@ -18,10 +23,10 @@ interface RetriableRequestConfig extends InternalAxiosRequestConfig {
 let refreshPromise: Promise<AuthResponse> | null = null
 let csrfToken: string | null = null
 
-function refreshSession(refreshToken: string) {
+function refreshSession() {
   if (!refreshPromise) {
     refreshPromise = axios
-      .post<ApiResponse<AuthResponse>>('/auth/refresh', { refresh_token: refreshToken })
+      .post<ApiResponse<AuthResponse>>('/api/v1/auth/refresh', {}) // No body needed - cookie sent automatically
       .then((res) => res.data.data!)
       .finally(() => {
         refreshPromise = null
@@ -30,55 +35,88 @@ function refreshSession(refreshToken: string) {
   return refreshPromise
 }
 
+type HeaderBag = { get?: (name: string) => unknown } | Record<string, unknown>
+
+function getHeader(headers: HeaderBag | undefined, name: string) {
+  const getter = (headers as { get?: (name: string) => unknown } | undefined)?.get
+
+  if (typeof getter === 'function') {
+    return getter.call(headers, name)
+  }
+
+  if (headers && typeof headers === 'object' && name in headers) {
+    return (headers as Record<string, unknown>)[name]
+  }
+
+  return undefined
+}
+
 api.interceptors.request.use((config) => {
-  const token = useAuthStore.getState().token
-  if (token) {
-    config.headers = config.headers ?? {}
-    ;(config.headers as Record<string, string>).Authorization = `Bearer ${token}`
+  const headers = AxiosHeaders.from(config.headers)
+  const isFormData = config.data instanceof FormData
+  const method = (config.method ?? 'GET').toUpperCase()
+
+  // Penting untuk multipart/form-data.
+  // Browser wajib men-set Content-Type termasuk boundary.
+  if (isFormData) {
+    headers.delete('Content-Type')
+  } else if (config.data !== undefined) {
+    headers.set('Content-Type', 'application/json')
   }
-  // Don't set Content-Type for FormData - browser sets it with boundary
-  if (!config.data || !(config.data instanceof FormData)) {
-    ;(config.headers as Record<string, string>)['Content-Type'] = 'application/json'
+
+  // Backend membutuhkan X-CSRF-Token untuk non-GET.
+  if (csrfToken && !['GET', 'HEAD', 'OPTIONS'].includes(method)) {
+    headers.set('X-CSRF-Token', csrfToken)
   }
-  // Attach CSRF token for non-GET requests
-  if (csrfToken && !['GET', 'HEAD', 'OPTIONS'].includes(config.method?.toUpperCase() || 'GET')) {
-    ;(config.headers as Record<string, string>)['X-CSRF-Token'] = csrfToken
-  }
+
+  config.headers = headers
+
   return config
 })
 
 api.interceptors.response.use(
   (response) => {
-    // Extract CSRF token from response headers (axios puts it in 'x-csrf-token')
-    const csrfHeader = response.headers['x-csrf-token'] || response.headers['X-CSRF-Token']
-    if (csrfHeader && typeof csrfHeader === 'string') {
+    const csrfHeader =
+      getHeader(response.headers, 'x-csrf-token') ||
+      getHeader(response.headers, 'X-CSRF-Token')
+
+    if (typeof csrfHeader === 'string') {
       csrfToken = csrfHeader
     }
+
     return response
   },
   async (error: AxiosError) => {
     const originalRequest = error.config as RetriableRequestConfig | undefined
     const isAuthRefresh = originalRequest?.url?.includes('/auth/refresh')
     const isAuthLogin = originalRequest?.url?.includes('/auth/login')
+    const skipAuthRedirect =
+      getHeader(originalRequest?.headers, 'X-Skip-Auth-Redirect') === 'true'
 
-    if (error.response?.status === 401 && originalRequest && !originalRequest._retry && !isAuthRefresh && !isAuthLogin) {
-      const refreshToken = useAuthStore.getState().refreshToken
-      if (refreshToken) {
-        try {
-          originalRequest._retry = true
-          const refreshed = await refreshSession(refreshToken)
-          const token = refreshed.access_token ?? refreshed.token
-          useAuthStore.getState().setAuth(token, refreshed.refresh_token, refreshed.user)
-          originalRequest.headers = originalRequest.headers ?? {}
-          ;(originalRequest.headers as Record<string, string>).Authorization = `Bearer ${token}`
-          return api(originalRequest)
-        } catch {
-          // Fall through to logout below.
-        }
+    if (
+      error.response?.status === 401 &&
+      originalRequest &&
+      !originalRequest._retry &&
+      !isAuthRefresh &&
+      !isAuthLogin
+    ) {
+      try {
+        originalRequest._retry = true
+
+        const refreshed = await refreshSession()
+        useAuthStore.getState().setAuth(refreshed.user)
+
+        return api(originalRequest)
+      } catch {
+        // Lanjut ke logout di bawah.
       }
     }
 
     if (error.response?.status === 401) {
+      if (skipAuthRedirect) {
+        return Promise.reject(error)
+      }
+
       useAuthStore.getState().logout()
       clearLegacyAuthStorage()
 
@@ -86,6 +124,7 @@ api.interceptors.response.use(
         window.location.href = '/login'
       }
     }
+
     return Promise.reject(error)
   }
 )

@@ -1,6 +1,9 @@
 package handler
 
 import (
+	"time"
+
+	"legal-riu-portal/internal/config"
 	"legal-riu-portal/internal/dto"
 	"legal-riu-portal/internal/middleware"
 	"legal-riu-portal/internal/service"
@@ -11,10 +14,11 @@ import (
 
 type AuthHandler struct {
 	authService service.AuthService
+	cfg         *config.Config
 }
 
-func NewAuthHandler(authService service.AuthService) *AuthHandler {
-	return &AuthHandler{authService: authService}
+func NewAuthHandler(authService service.AuthService, cfg *config.Config) *AuthHandler {
+	return &AuthHandler{authService: authService, cfg: cfg}
 }
 
 func getClientIP(c *gin.Context) string {
@@ -26,6 +30,32 @@ func getClientIP(c *gin.Context) string {
 
 func getUserAgent(c *gin.Context) string {
 	return c.GetHeader("User-Agent")
+}
+
+// setAuthCookies sets httpOnly cookies for access and refresh tokens
+func (h *AuthHandler) setAuthCookies(c *gin.Context, accessToken, refreshToken string) {
+	isProduction := h.cfg.App.Env == "production"
+
+	// Access token - convert hours to seconds
+	accessMaxAge := h.cfg.JWT.ExpiresHours * int(time.Hour / time.Second)
+	if accessMaxAge <= 0 {
+		accessMaxAge = 3600 // 1 hour default
+	}
+
+	// Refresh token
+	refreshMaxAge := h.cfg.JWT.RefreshExpiresHours * int(time.Hour / time.Second)
+	if refreshMaxAge <= 0 {
+		refreshMaxAge = 604800 // 7 days default
+	}
+
+	c.SetCookie("access_token", accessToken, accessMaxAge, "/", "", isProduction, true)
+	c.SetCookie("refresh_token", refreshToken, refreshMaxAge, "/", "", isProduction, true)
+}
+
+// clearAuthCookies clears auth cookies
+func (h *AuthHandler) clearAuthCookies(c *gin.Context) {
+	c.SetCookie("access_token", "", -1, "/", "", false, true)
+	c.SetCookie("refresh_token", "", -1, "/", "", false, true)
 }
 
 // POST /api/v1/auth/login
@@ -44,39 +74,53 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
+	h.setAuthCookies(c, res.AccessToken, res.RefreshToken)
 	utils.OK(c, "Login berhasil", res)
 }
 
 // POST /api/v1/auth/refresh
 func (h *AuthHandler) RefreshToken(c *gin.Context) {
-	var req dto.RefreshTokenRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "Validasi gagal", err.Error())
-		return
+	// Try to get refresh token from cookie first
+	refreshToken, _ := c.Cookie("refresh_token")
+	if refreshToken == "" {
+		var req dto.RefreshTokenRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			utils.BadRequest(c, "Validasi gagal", err.Error())
+			return
+		}
+		refreshToken = req.RefreshToken
 	}
+
+	req := dto.RefreshTokenRequest{RefreshToken: refreshToken}
 
 	res, err := h.authService.RefreshToken(req)
 	if err != nil {
+		h.clearAuthCookies(c)
 		utils.Unauthorized(c, err.Error())
 		return
 	}
 
+	h.setAuthCookies(c, res.AccessToken, res.RefreshToken)
 	utils.OK(c, "Sesi berhasil diperbarui", res)
 }
 
 // POST /api/v1/auth/logout
 func (h *AuthHandler) Logout(c *gin.Context) {
+	refreshToken, _ := c.Cookie("refresh_token")
+
 	var req dto.LogoutRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "Validasi gagal", err.Error())
-		return
+	if refreshToken != "" {
+		req.RefreshToken = refreshToken
+	} else {
+		if err := c.ShouldBindJSON(&req); err != nil {
+			h.clearAuthCookies(c)
+			utils.OK(c, "Logout berhasil", nil)
+			return
+		}
 	}
 
-	if err := h.authService.Logout(req); err != nil {
-		utils.BadRequest(c, "Gagal logout", nil)
-		return
-	}
-
+	_ = h.authService.Logout(req)
+	h.clearAuthCookies(c)
 	utils.OK(c, "Logout berhasil", nil)
 }
 

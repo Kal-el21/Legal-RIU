@@ -21,7 +21,6 @@ type DocumentReviewRepository interface {
 	AddAttachment(att *entity.DocumentReviewAttachment) error
 	GetLatestUploadRound(drID uuid.UUID) (int, error)
 	AddResult(result *entity.DocumentReviewResult) error
-	FileBelongsToAccessibleSubmission(filePath string, userID *uuid.UUID) (bool, error)
 }
 
 type documentReviewRepository struct {
@@ -119,21 +118,4 @@ func (r *documentReviewRepository) GetLatestUploadRound(drID uuid.UUID) (int, er
 
 func (r *documentReviewRepository) AddResult(result *entity.DocumentReviewResult) error {
 	return r.db.Create(result).Error
-}
-
-func (r *documentReviewRepository) FileBelongsToAccessibleSubmission(filePath string, userID *uuid.UUID) (bool, error) {
-	var count int64
-	query := r.db.Model(&entity.DocumentReview{}).
-		Joins("LEFT JOIN document_review_attachments dra ON dra.document_review_id = document_reviews.id").
-		Joins("LEFT JOIN document_review_results drr ON drr.document_review_id = document_reviews.id").
-		Where("(dra.file_path = ? OR drr.file_path = ?)", filePath, filePath)
-
-	if userID != nil {
-		query = query.Where("document_reviews.user_id = ?", *userID)
-	}
-
-	if err := query.Count(&count).Error; err != nil {
-		return false, err
-	}
-	return count > 0, nil
 }

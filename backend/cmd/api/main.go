@@ -49,7 +49,7 @@ func main() {
 	dashSvc := service.NewDashboardService(dashRepo)
 
 	// ── Handlers ─────────────────────────────────────────────────────────────
-	authHandler := handler.NewAuthHandler(authSvc)
+	authHandler := handler.NewAuthHandler(authSvc, cfg)
 	userHandler := handler.NewUserHandler(userSvc)
 	loHandler := handler.NewLegalOpinionHandler(loSvc)
 	drHandler := handler.NewDocumentReviewHandler(drSvc)
@@ -99,10 +99,9 @@ func main() {
 	protected.GET("/dashboard/stats", dashHandler.UserStats)
 	protected.GET("/dashboard/recent", dashHandler.UserRecent)
 
-	// Legal opinions — presign
+// Legal opinions — presign
 	protected.GET("/legal-opinions/presign", loHandler.GetPresignedURL)
-
-	// Legal opinions — user CRUD
+	protected.GET("/legal-opinions/download", loHandler.Download)
 	protected.GET("/legal-opinions", loHandler.GetAll)
 	protected.POST("/legal-opinions", loHandler.Create)
 	protected.GET("/legal-opinions/:id", loHandler.GetByID)
@@ -112,6 +111,7 @@ func main() {
 
 	// Review documents
 	protected.GET("/review-documents/presign", drHandler.GetPresignedURL)
+	protected.GET("/review-documents/download", drHandler.Download)
 	protected.GET("/review-documents", drHandler.GetAll)
 	protected.POST("/review-documents", drHandler.Create)
 	protected.GET("/review-documents/:id", drHandler.GetByID)

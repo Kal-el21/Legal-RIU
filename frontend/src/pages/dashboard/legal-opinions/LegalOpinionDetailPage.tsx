@@ -36,13 +36,14 @@ export default function LegalOpinionDetailPage() {
     setResubmitErrors([])
   }
 
-  const handleDownload = async (filePath: string, fileName: string) => {
-    const url = await legalOpinionService.getPresignedURL(filePath)
+  const handleDownload = async (filePath: string) => {
+    const { blob, filename } = await legalOpinionService.downloadFile(filePath)
+    const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = fileName
-    a.target = '_blank'
+    a.download = filename
     a.click()
+    URL.revokeObjectURL(url)
   }
 
   const handleResubmitFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -153,7 +154,7 @@ export default function LegalOpinionDetailPage() {
                     <p className="text-sm text-gray-700 truncate">{att.file_name}</p>
                     <p className="text-xs text-gray-400">{formatFileSize(att.file_size)} · Round {att.upload_round}</p>
                   </div>
-                  <button onClick={() => handleDownload(att.file_path, att.file_name)}
+                  <button onClick={() => handleDownload(att.file_path)}
                     className="p-1.5 rounded-lg hover:bg-gray-200 transition-colors text-gray-400 hover:text-gray-600">
                     <Download className="w-4 h-4" />
                   </button>
@@ -174,7 +175,7 @@ export default function LegalOpinionDetailPage() {
                     <p className="text-sm text-gray-700 truncate">{res.file_name}</p>
                     {res.notes && <p className="text-xs text-gray-500 mt-0.5">{res.notes}</p>}
                   </div>
-                  <Button size="sm" onClick={() => handleDownload(res.file_path, res.file_name)}
+                  <Button size="sm" onClick={() => handleDownload(res.file_path)}
                     className="flex items-center gap-1.5 text-white text-xs" style={{ background: '#0B2545' }}>
                     <Download className="w-3.5 h-3.5" /> Unduh
                   </Button>

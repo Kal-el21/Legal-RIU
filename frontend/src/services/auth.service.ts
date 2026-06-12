@@ -7,13 +7,13 @@ export const authService = {
     return res.data.data!
   },
 
-  refresh: async (refresh_token: string): Promise<AuthResponse> => {
-    const res = await api.post<ApiResponse<AuthResponse>>('/auth/refresh', { refresh_token })
+  refresh: async (): Promise<AuthResponse> => {
+    const res = await api.post<ApiResponse<AuthResponse>>('/auth/refresh')
     return res.data.data!
   },
 
-  logout: async (refresh_token: string): Promise<void> => {
-    await api.post('/auth/logout', { refresh_token })
+  logout: async (): Promise<void> => {
+    await api.post('/auth/logout')
   },
 
   me: async (): Promise<User> => {

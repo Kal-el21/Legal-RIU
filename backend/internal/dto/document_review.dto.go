@@ -1,15 +1,15 @@
 package dto
 
 type CreateDocumentReviewRequest struct {
-	RequestorName     string `json:"requestor_name" binding:"required"`
-	RequestorPosition string `json:"requestor_position" binding:"required"`
-	RequestorDivision string `json:"requestor_division" binding:"required"`
-	RequestorEmail    string `json:"requestor_email" binding:"required,email"`
-	RequestorPhone    string `json:"requestor_phone" binding:"required"`
-	DocumentName      string `json:"document_name" binding:"required"`
-	SecondParty       string `json:"second_party" binding:"required"`
+	RequestorName     string `json:"requestor_name"`
+	RequestorPosition string `json:"requestor_position"`
+	RequestorDivision string `json:"requestor_division"`
+	RequestorEmail    string `json:"requestor_email"`
+	RequestorPhone    string `json:"requestor_phone"`
+	DocumentName      string `json:"document_name"`
+	SecondParty       string `json:"second_party"`
 	ThirdParty        string `json:"third_party"`
-	DocumentType      string `json:"document_type" binding:"required"`
+	DocumentType      string `json:"document_type"`
 	DocumentTypeOther string `json:"document_type_other"`
 	AdditionalNote    string `json:"additional_note"`
 }

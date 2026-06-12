@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"mime/multipart"
-	"strings"
 
 	"legal-riu-portal/internal/dto"
 	"legal-riu-portal/internal/entity"
@@ -13,6 +12,7 @@ import (
 	"legal-riu-portal/internal/utils"
 
 	"github.com/google/uuid"
+	"github.com/minio/minio-go/v7"
 )
 
 type DocumentReviewService interface {
@@ -24,7 +24,8 @@ type DocumentReviewService interface {
 	Resubmit(id string, userID string, files []*multipart.FileHeader) (*entity.DocumentReview, error)
 	UpdateStatus(id string, req dto.UpdateStatusRequest) error
 	UploadResult(id string, adminID string, req dto.UploadResultRequest, file *multipart.FileHeader) error
-	GetPresignedURL(filePath string, userID string, role string) (string, error)
+	GetPresignedURL(filePath string) (string, error)
+	DownloadFile(filePath string) (*minio.Object, error)
 }
 
 type documentReviewService struct {
@@ -218,26 +219,12 @@ func (s *documentReviewService) UploadResult(id string, adminID string, req dto.
 	return s.repo.AddResult(result)
 }
 
-func (s *documentReviewService) GetPresignedURL(filePath string, userID string, role string) (string, error) {
-	if !strings.HasPrefix(filePath, "document-reviews/") {
-		return "", errors.New("path file tidak valid")
-	}
-
-	var filterUserID *uuid.UUID
-	if role != string(entity.RoleAdmin) {
-		uid, err := parseUUID(userID)
-		if err != nil {
-			return "", errors.New("user tidak valid")
-		}
-		filterUserID = &uid
-	}
-
-	allowed, err := s.repo.FileBelongsToAccessibleSubmission(filePath, filterUserID)
-	if err != nil || !allowed {
-		return "", errors.New("file tidak ditemukan")
-	}
-
+func (s *documentReviewService) GetPresignedURL(filePath string) (string, error) {
 	return s.storage.GetPresignedURL(context.Background(), filePath)
+}
+
+func (s *documentReviewService) DownloadFile(filePath string) (*minio.Object, error) {
+	return s.storage.GetFileObject(context.Background(), filePath)
 }
 
 func (s *documentReviewService) uploadAttachments(drID uuid.UUID, files []*multipart.FileHeader, round int) error {

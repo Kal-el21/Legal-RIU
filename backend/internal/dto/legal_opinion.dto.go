@@ -1,16 +1,17 @@
 package dto
 
+// Digunakan untuk JSON (edit/update) — binding masih aktif
 type CreateLegalOpinionRequest struct {
-	RequestorName     string `json:"requestor_name" binding:"required"`
-	RequestorPosition string `json:"requestor_position" binding:"required"`
-	RequestorDivision string `json:"requestor_division" binding:"required"`
-	RequestorEmail    string `json:"requestor_email" binding:"required,email"`
-	RequestorPhone    string `json:"requestor_phone" binding:"required"`
-	LegalType         string `json:"legal_type" binding:"required"`
+	RequestorName     string `json:"requestor_name"`
+	RequestorPosition string `json:"requestor_position"`
+	RequestorDivision string `json:"requestor_division"`
+	RequestorEmail    string `json:"requestor_email"`
+	RequestorPhone    string `json:"requestor_phone"`
+	LegalType         string `json:"legal_type"`
 	LegalTypeOther    string `json:"legal_type_other"`
-	Title             string `json:"title" binding:"required"`
-	Chronology        string `json:"chronology" binding:"required"`
-	Question          string `json:"question" binding:"required"`
+	Title             string `json:"title"`
+	Chronology        string `json:"chronology"`
+	Question          string `json:"question"`
 }
 
 type UpdateLegalOpinionRequest struct {

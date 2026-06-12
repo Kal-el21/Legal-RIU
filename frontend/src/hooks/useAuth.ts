@@ -11,7 +11,8 @@ export function useLogin() {
   return useMutation({
     mutationFn: (data: LoginRequest) => authService.login(data),
     onSuccess: (res) => {
-      setAuth(res.access_token ?? res.token, res.refresh_token, res.user)
+      // With httpOnly cookies, we only store user in state (token is in cookie)
+      setAuth(res.user)
       if (res.user.role === 'ADMIN') {
         navigate('/admin')
       } else {
@@ -24,7 +25,6 @@ export function useLogin() {
 export function useLogout() {
   const navigate = useNavigate()
   const logout = useAuthStore((s) => s.logout)
-  const refreshToken = useAuthStore((s) => s.refreshToken)
 
   return () => {
     const finish = () => {
@@ -32,12 +32,7 @@ export function useLogout() {
       navigate('/login')
     }
 
-    if (!refreshToken) {
-      finish()
-      return
-    }
-
-    authService.logout(refreshToken).finally(finish)
+    authService.logout().finally(finish)
   }
 }
 

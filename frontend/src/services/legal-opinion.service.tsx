@@ -29,10 +29,18 @@ export const legalOpinionService = {
   create: async (data: CreateLegalOpinionData) => {
     const { attachments, ...fields } = data
     const form = new FormData()
+
+    // Append semua text fields
     Object.entries(fields).forEach(([k, v]) => {
-      if (v !== undefined && v !== null) form.append(k, String(v))
+      if (v !== undefined && v !== null && v !== '') {
+        form.append(k, String(v))
+      }
     })
+
+    // Append files jika ada
     attachments?.forEach((f) => form.append('attachments', f))
+
+    // JANGAN set Content-Type manual — browser otomatis set beserta boundary
     const res = await api.post<ApiResponse<LegalOpinion>>('/legal-opinions', form)
     return res.data.data!
   },
@@ -58,7 +66,22 @@ export const legalOpinionService = {
     return res.data.data!.url
   },
 
-  // Admin
+  downloadFile: async (path: string): Promise<{ blob: Blob; filename: string }> => {
+    const res = await api.get('/legal-opinions/download', {
+      params: { path },
+      responseType: 'blob',
+    })
+
+    const contentDisposition = res.headers['content-disposition']
+    let filename = 'download'
+    if (contentDisposition) {
+      const match = contentDisposition.match(/filename="?([^"]+)"?/i)
+      if (match) filename = match[1]
+    }
+
+    return { blob: res.data, filename }
+  },
+
   adminUpdateStatus: async (id: string, data: { status: string; admin_note?: string }) => {
     await api.patch(`/admin/legal-opinions/${id}/status`, data)
   },

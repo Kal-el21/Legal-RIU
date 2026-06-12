@@ -3,11 +3,9 @@ import { persist } from 'zustand/middleware'
 import type { User } from '@/types'
 
 interface AuthState {
-  token: string | null
-  refreshToken: string | null
   user: User | null
   isAuthenticated: boolean
-  setAuth: (token: string, refreshToken: string, user: User) => void
+  setAuth: (user: User) => void
   updateUser: (user: User) => void
   logout: () => void
 }
@@ -15,13 +13,11 @@ interface AuthState {
 export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
-      token: null,
-      refreshToken: null,
       user: null,
       isAuthenticated: false,
 
-      setAuth: (token, refreshToken, user) => {
-        set({ token, refreshToken, user, isAuthenticated: true })
+      setAuth: (user: User) => {
+        set({ user, isAuthenticated: true })
       },
 
       updateUser: (user: User) => {
@@ -29,14 +25,12 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: () => {
-        set({ token: null, refreshToken: null, user: null, isAuthenticated: false })
+        set({ user: null, isAuthenticated: false })
       },
     }),
     {
       name: 'legal-riu-auth',
       partialize: (state) => ({
-        token: state.token,
-        refreshToken: state.refreshToken,
         user: state.user,
         isAuthenticated: state.isAuthenticated,
       }),

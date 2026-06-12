@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -42,17 +43,15 @@ func NewLoginRateLimiter(windowMinutes int) *LoginRateLimiter {
 func (l *LoginRateLimiter) Middleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Read body to extract email for key
-		bodyBytes, _ := c.GetRawData()
-		
-		// Create a new reader for the request body
-		c.Request.Body = http.MaxBytesReader(nil, nil, int64(len(bodyBytes)))
-		
+		bodyBytes, _ := io.ReadAll(c.Request.Body)
+		c.Request.Body = io.NopCloser(strings.NewReader(string(bodyBytes)))
+
 		// Extract email from JSON body (simple string search for performance)
 		email := extractEmailFromJSON(string(bodyBytes))
 		if email == "" {
 			email = c.ClientIP()
 		}
-		
+
 		now := time.Now()
 		l.mu.Lock()
 		attempt, ok := l.attempts[email]
@@ -89,23 +88,24 @@ func extractEmailFromJSON(body string) string {
 	if start == -1 {
 		return ""
 	}
-	start = strings.Index(body[start:], ":")
-	if start == -1 {
+	remaining := body[start:]
+	colonIdx := strings.Index(remaining, ":")
+	if colonIdx == -1 {
 		return ""
 	}
-	start += 1
-	// Skip whitespace and quote
-	for start < len(body) && (body[start] == ' ' || body[start] == '"' || body[start] == ':') {
+	start = colonIdx + 1
+	// Skip whitespace and quotes
+	for start < len(remaining) && (remaining[start] == ' ' || remaining[start] == '"' || remaining[start] == ':') {
 		start++
 	}
 	end := start
-	for end < len(body) && body[end] != '"' && body[end] != ',' && body[end] != '}' {
+	for end < len(remaining) && remaining[end] != '"' && remaining[end] != ',' && remaining[end] != '}' {
 		end++
 	}
-	if start >= end || start >= len(body) {
+	if start >= end || start >= len(remaining) {
 		return ""
 	}
-	return strings.ToLower(strings.TrimSpace(body[start:end]))
+	return strings.ToLower(strings.TrimSpace(remaining[start:end]))
 }
 
 func (l *LoginRateLimiter) cleanup() {

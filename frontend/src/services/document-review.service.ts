@@ -18,7 +18,10 @@ export interface CreateDocumentReviewData {
 
 export const documentReviewService = {
   getAll: async (params?: { page?: number; limit?: number; status?: string }) => {
-    const res = await api.get<ApiResponse<PaginatedData<DocumentReview>>>('/review-documents', { params })
+    const res = await api.get<ApiResponse<PaginatedData<DocumentReview>>>(
+      '/review-documents',
+      { params }
+    )
     return res.data.data!
   },
 
@@ -30,10 +33,17 @@ export const documentReviewService = {
   create: async (data: CreateDocumentReviewData) => {
     const { attachments, ...fields } = data
     const form = new FormData()
-    Object.entries(fields).forEach(([k, v]) => {
-      if (v !== undefined && v !== null) form.append(k, String(v))
+
+    Object.entries(fields).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) {
+        form.append(key, String(value))
+      }
     })
-    attachments?.forEach((f) => form.append('attachments', f))
+
+    attachments?.forEach((file) => {
+      form.append('attachments', file)
+    })
+
     const res = await api.post<ApiResponse<DocumentReview>>('/review-documents', form)
     return res.data.data!
   },
@@ -49,24 +59,56 @@ export const documentReviewService = {
 
   resubmit: async (id: string, files?: File[]) => {
     const form = new FormData()
-    files?.forEach((f) => form.append('attachments', f))
-    const res = await api.post<ApiResponse<DocumentReview>>(`/review-documents/${id}/resubmit`, form)
+
+    files?.forEach((file) => {
+      form.append('attachments', file)
+    })
+
+    const res = await api.post<ApiResponse<DocumentReview>>(
+      `/review-documents/${id}/resubmit`,
+      form
+    )
+
     return res.data.data!
   },
 
   getPresignedURL: async (path: string) => {
-    const res = await api.get<ApiResponse<{ url: string }>>('/review-documents/presign', { params: { path } })
+    const res = await api.get<ApiResponse<{ url: string }>>('/review-documents/presign', {
+      params: { path },
+    })
+
     return res.data.data!.url
+  },
+
+  downloadFile: async (path: string): Promise<{ blob: Blob; filename: string }> => {
+    const res = await api.get('/review-documents/download', {
+      params: { path },
+      responseType: 'blob',
+    })
+
+    const contentDisposition = res.headers['content-disposition']
+    let filename = 'download'
+    if (contentDisposition) {
+      const match = contentDisposition.match(/filename="?([^"]+)"?/i)
+      if (match) filename = match[1]
+    }
+
+    return { blob: res.data, filename }
   },
 
   adminUpdateStatus: async (id: string, data: { status: string; admin_note?: string }) => {
     await api.patch(`/admin/review-documents/${id}/status`, data)
   },
 
-  adminUploadResult: async (id: string, file: File, notes?: string) => {
+  adminUploadResult: async (id: string, file: File, notes?: string): Promise<void> => {
     const form = new FormData()
+
     form.append('result', file)
-    if (notes) form.append('notes', notes)
+
+    if (notes) {
+      form.append('notes', notes)
+    }
+
     await api.post(`/admin/review-documents/${id}/result`, form)
   },
 }

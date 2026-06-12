@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"fmt"
 	"mime/multipart"
+	"strings"
 
 	"legal-riu-portal/internal/dto"
 	"legal-riu-portal/internal/middleware"
@@ -57,18 +59,48 @@ func (h *DocumentReviewHandler) GetByID(c *gin.Context) {
 
 // POST /api/v1/review-documents
 func (h *DocumentReviewHandler) Create(c *gin.Context) {
-	_, _ = c.MultipartForm()
-
-	var req dto.CreateDocumentReviewRequest
-	if err := c.ShouldBind(&req); err != nil {
-		utils.BadRequest(c, "Validasi gagal", err.Error())
+	if err := c.Request.ParseMultipartForm(110 << 20); err != nil {
+		var req dto.CreateDocumentReviewRequest
+		if jsonErr := c.ShouldBindJSON(&req); jsonErr != nil {
+			utils.BadRequest(c, "Gagal memparse request", err.Error())
+			return
+		}
+		userID := middleware.GetUserID(c)
+		dr, svcErr := h.svc.Create(userID, req, nil)
+		if svcErr != nil {
+			utils.InternalError(c, svcErr.Error())
+			return
+		}
+		utils.Created(c, "Pengajuan berhasil dibuat", dr)
 		return
 	}
-	form, _ := c.MultipartForm()
+
+	req := dto.CreateDocumentReviewRequest{
+		RequestorName:     c.PostForm("requestor_name"),
+		RequestorPosition: c.PostForm("requestor_position"),
+		RequestorDivision: c.PostForm("requestor_division"),
+		RequestorEmail:    c.PostForm("requestor_email"),
+		RequestorPhone:    c.PostForm("requestor_phone"),
+		DocumentName:      c.PostForm("document_name"),
+		SecondParty:       c.PostForm("second_party"),
+		ThirdParty:        c.PostForm("third_party"),
+		DocumentType:      c.PostForm("document_type"),
+		DocumentTypeOther: c.PostForm("document_type_other"),
+		AdditionalNote:    c.PostForm("additional_note"),
+	}
+
+	if req.RequestorName == "" || req.RequestorPosition == "" || req.RequestorDivision == "" ||
+		req.RequestorEmail == "" || req.RequestorPhone == "" || req.DocumentName == "" ||
+		req.SecondParty == "" || req.DocumentType == "" {
+		utils.BadRequest(c, "Semua field wajib diisi", nil)
+		return
+	}
+
 	var files []*multipart.FileHeader
-	if form != nil {
+	if form := c.Request.MultipartForm; form != nil {
 		files = form.File["attachments"]
 	}
+
 	userID := middleware.GetUserID(c)
 	dr, err := h.svc.Create(userID, req, files)
 	if err != nil {
@@ -110,9 +142,8 @@ func (h *DocumentReviewHandler) Delete(c *gin.Context) {
 func (h *DocumentReviewHandler) Resubmit(c *gin.Context) {
 	id := c.Param("id")
 	userID := middleware.GetUserID(c)
-	form, _ := c.MultipartForm()
 	var files []*multipart.FileHeader
-	if form != nil {
+	if form, _ := c.MultipartForm(); form != nil {
 		files = form.File["attachments"]
 	}
 	dr, err := h.svc.Resubmit(id, userID, files)
@@ -130,14 +161,36 @@ func (h *DocumentReviewHandler) GetPresignedURL(c *gin.Context) {
 		utils.BadRequest(c, "Path file diperlukan", nil)
 		return
 	}
-	userID := middleware.GetUserID(c)
-	role := middleware.GetUserRole(c)
-	url, err := h.svc.GetPresignedURL(filePath, userID, role)
+	url, err := h.svc.GetPresignedURL(filePath)
 	if err != nil {
-		utils.NotFound(c, err.Error())
+		utils.InternalError(c, "Gagal membuat URL")
 		return
 	}
 	utils.OK(c, "Success", gin.H{"url": url})
+}
+
+// GET /api/v1/review-documents/download?path=xxx
+func (h *DocumentReviewHandler) Download(c *gin.Context) {
+	filePath := c.Query("path")
+	if filePath == "" {
+		utils.BadRequest(c, "Path file diperlukan", nil)
+		return
+	}
+
+	obj, err := h.svc.DownloadFile(filePath)
+	if err != nil {
+		utils.InternalError(c, "Gagal mengambil file")
+		return
+	}
+	defer obj.Close()
+
+	// Extract filename from path
+	parts := strings.Split(filePath, "/")
+	fileName := parts[len(parts)-1]
+
+	c.DataFromReader(-1, -1, "application/octet-stream", obj, map[string]string{
+		"Content-Disposition": fmt.Sprintf(`attachment; filename="%s"`, fileName),
+	})
 }
 
 // PATCH /api/v1/admin/review-documents/:id/status

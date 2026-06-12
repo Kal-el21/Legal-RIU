@@ -44,6 +44,7 @@ type MinIOConfig struct {
 	Bucket                string
 	UseSSL                bool
 	PresignExpiresMinutes int
+	PublicEndpoint        string
 }
 
 type SecurityConfig struct {
@@ -91,6 +92,7 @@ func Load() *Config {
 			Bucket:                getEnv("MINIO_BUCKET", "legal-riu"),
 			UseSSL:                minioSSL,
 			PresignExpiresMinutes: presignExpires,
+			PublicEndpoint:        getEnv("MINIO_PUBLIC_ENDPOINT", getEnv("MINIO_ENDPOINT", "localhost:9000")),
 		},
 		Security: SecurityConfig{
 			AllowedOrigins: splitCSV(getEnv(
