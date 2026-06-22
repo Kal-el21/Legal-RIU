@@ -54,6 +54,7 @@ func (s *userService) Create(req dto.CreateUserRequest) (*dto.UserResponse, erro
 	user := &entity.User{
 		FullName:     req.FullName,
 		Email:        req.Email,
+		AuthType:     entity.AuthTypeLocal,
 		PasswordHash: string(hash),
 		Position:     req.Position,
 		Division:     req.Division,
@@ -130,6 +131,14 @@ func (s *userService) ResetPassword(id string, req dto.ResetPasswordRequest) err
 	uid, err := parseUUID(id)
 	if err != nil {
 		return errors.New("user tidak valid")
+	}
+
+	user, err := s.userRepo.FindByID(uid)
+	if err != nil {
+		return errors.New("user tidak ditemukan")
+	}
+	if user.IsLDAP() {
+		return errors.New("reset password untuk akun LDAP harus dilakukan melalui Active Directory")
 	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)

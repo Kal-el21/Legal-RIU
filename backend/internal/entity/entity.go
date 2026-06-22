@@ -27,6 +27,7 @@ func (b *Base) BeforeCreate(tx *gorm.DB) error {
 
 type UserRole string
 type UserStatus string
+type UserAuthType string
 type SubmissionStatus string
 
 const (
@@ -35,6 +36,9 @@ const (
 
 	UserActive   UserStatus = "ACTIVE"
 	UserInactive UserStatus = "INACTIVE"
+
+	AuthTypeLocal UserAuthType = "LOCAL"
+	AuthTypeLDAP  UserAuthType = "LDAP"
 
 	StatusSubmitted    SubmissionStatus = "SUBMITTED"
 	StatusUnderReview  SubmissionStatus = "UNDER_REVIEW"
@@ -48,26 +52,35 @@ const (
 
 type User struct {
 	Base
-	FullName           string     `gorm:"not null" json:"full_name"`
-	Email              string     `gorm:"uniqueIndex;not null" json:"email"`
-	PasswordHash       string     `gorm:"not null" json:"-"`
-	Position           string     `gorm:"not null" json:"position"`
-	Division           string     `gorm:"not null" json:"division"`
-	Role               UserRole   `gorm:"not null;default:'USER'" json:"role"`
-	Status             UserStatus `gorm:"not null;default:'ACTIVE'" json:"status"`
-	EmailNotifications bool       `gorm:"not null;default:true" json:"email_notifications"`
-	TwoFAEnabled       bool       `gorm:"not null;default:false" json:"two_fa_enabled"`
+	FullName           string       `gorm:"not null" json:"full_name"`
+	Email              string       `gorm:"uniqueIndex;not null" json:"email"`
+	PasswordHash       string       `gorm:"not null" json:"-"`
+	AuthType           UserAuthType `gorm:"type:varchar(20);not null;default:'LOCAL'" json:"auth_type"`
+	Position           string       `gorm:"not null" json:"position"`
+	Division           string       `gorm:"not null" json:"division"`
+	Role               UserRole     `gorm:"not null;default:'USER'" json:"role"`
+	Status             UserStatus   `gorm:"not null;default:'ACTIVE'" json:"status"`
+	EmailNotifications bool         `gorm:"not null;default:true" json:"email_notifications"`
+	TwoFAEnabled       bool         `gorm:"not null;default:false" json:"two_fa_enabled"`
+}
+
+func (u *User) IsLDAP() bool {
+	return u.AuthType == AuthTypeLDAP
+}
+
+func (u *User) IsLocal() bool {
+	return u.AuthType == "" || u.AuthType == AuthTypeLocal
 }
 
 type RefreshToken struct {
 	Base
-	UserID    uuid.UUID  `gorm:"type:uuid;not null;index" json:"user_id"`
-	User      User       `gorm:"foreignKey:UserID" json:"user,omitempty"`
-	TokenHash string     `gorm:"size:64;uniqueIndex;not null" json:"-"`
-	ExpiresAt time.Time  `gorm:"not null;index" json:"expires_at"`
-	RevokedAt *time.Time `gorm:"index" json:"revoked_at"`
-	IPAddress string     `gorm:"size:45" json:"ip_address"`
-	UserAgent string     `gorm:"size:255" json:"user_agent"`
+	UserID     uuid.UUID  `gorm:"type:uuid;not null;index" json:"user_id"`
+	User       User       `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	TokenHash  string     `gorm:"size:64;uniqueIndex;not null" json:"-"`
+	ExpiresAt  time.Time  `gorm:"not null;index" json:"expires_at"`
+	RevokedAt  *time.Time `gorm:"index" json:"revoked_at"`
+	IPAddress  string     `gorm:"size:45" json:"ip_address"`
+	UserAgent  string     `gorm:"size:255" json:"user_agent"`
 	LastUsedAt time.Time  `json:"last_used_at"`
 }
 

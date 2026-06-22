@@ -15,6 +15,7 @@ type Config struct {
 	JWT      JWTConfig
 	MinIO    MinIOConfig
 	Security SecurityConfig
+	LDAP     LDAPConfig
 }
 
 type AppConfig struct {
@@ -51,6 +52,24 @@ type SecurityConfig struct {
 	AllowedOrigins         []string
 	LoginRateLimit         int
 	LoginRateWindowMinutes int
+}
+
+type LDAPConfig struct {
+	Host               string
+	Port               int
+	UseSSL             bool
+	InsecureSkipVerify bool
+	BindDN             string
+	BindPassword       string
+	BaseDN             string
+	UserFilter         string
+	AttrName           string
+	AttrEmail          string
+	AttrPosition       string
+	AttrDivision       string
+	DefaultEmailDomain string
+	DefaultPosition    string
+	DefaultDivision    string
 }
 
 var AppConfig_ *Config
@@ -102,10 +121,36 @@ func Load() *Config {
 			LoginRateLimit:         loginRateLimit,
 			LoginRateWindowMinutes: loginRateWindow,
 		},
+		LDAP: LDAPConfig{
+			Host:               getEnv("LDAP_HOST", ""),
+			Port:               getEnvAsInt("LDAP_PORT", 389),
+			UseSSL:             getEnvAsBool("LDAP_USE_SSL", false),
+			InsecureSkipVerify: getEnvAsBool("LDAP_INSECURE_SKIP_VERIFY", false),
+			BindDN:             getEnv("LDAP_BIND_DN", ""),
+			BindPassword:       getEnv("LDAP_BIND_PASSWORD", ""),
+			BaseDN:             getEnv("LDAP_BASE_DN", ""),
+			UserFilter:         getEnv("LDAP_USER_FILTER", "(sAMAccountName=%s)"),
+			AttrName:           getEnv("LDAP_ATTR_NAME", "displayName"),
+			AttrEmail:          getEnv("LDAP_ATTR_EMAIL", "mail"),
+			AttrPosition:       getEnv("LDAP_ATTR_POSITION", "title"),
+			AttrDivision:       getEnv("LDAP_ATTR_DIVISION", "department"),
+			DefaultEmailDomain: getEnv("LDAP_DEFAULT_EMAIL_DOMAIN", ""),
+			DefaultPosition:    getEnv("LDAP_DEFAULT_POSITION", "Staff"),
+			DefaultDivision:    getEnv("LDAP_DEFAULT_DIVISION", "General"),
+		},
 	}
 
 	if cfg.App.Env == "production" && (cfg.JWT.Secret == "secret" || cfg.JWT.Secret == "change-me" || len(cfg.JWT.Secret) < 32) {
 		log.Fatal("JWT_SECRET must be changed to a strong value in production")
+	}
+
+	if cfg.App.Env == "production" {
+		if cfg.LDAP.Host == "" {
+			log.Println("Warning: LDAP_HOST is not set in production; only local users can log in")
+		}
+		if cfg.LDAP.Host != "" && (cfg.LDAP.BindDN == "" || cfg.LDAP.BaseDN == "") {
+			log.Println("Warning: LDAP_BIND_DN and LDAP_BASE_DN should be set when LDAP is enabled")
+		}
 	}
 
 	AppConfig_ = cfg
@@ -114,6 +159,22 @@ func Load() *Config {
 
 func getEnv(key, defaultValue string) string {
 	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
+}
+
+func getEnvAsInt(key string, defaultValue int) int {
+	valueStr := getEnv(key, "")
+	if value, err := strconv.Atoi(valueStr); err == nil {
+		return value
+	}
+	return defaultValue
+}
+
+func getEnvAsBool(key string, defaultValue bool) bool {
+	valueStr := getEnv(key, "")
+	if value, err := strconv.ParseBool(valueStr); err == nil {
 		return value
 	}
 	return defaultValue

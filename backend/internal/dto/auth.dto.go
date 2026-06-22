@@ -33,6 +33,7 @@ type UserResponse struct {
 	ID                 string `json:"id"`
 	FullName           string `json:"full_name"`
 	Email              string `json:"email"`
+	AuthType           string `json:"auth_type"`
 	Position           string `json:"position"`
 	Division           string `json:"division"`
 	Role               string `json:"role"`

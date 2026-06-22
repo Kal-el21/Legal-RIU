@@ -21,7 +21,7 @@ export default function DashboardLayout() {
     <div className="min-h-screen flex" style={{ background: '#f8fafc' }}>
       <aside className={cn(
         'fixed inset-y-0 left-0 z-50 w-60 bg-white border-r border-gray-100 flex flex-col transition-transform duration-200',
-        'lg:translate-x-0 lg:static lg:z-auto',
+         'lg:translate-x-0 lg:static lg:h-screen lg:z-auto',
         sidebarOpen ? 'translate-x-0' : '-translate-x-full'
       )}>
         <div className="h-16 flex items-center px-5 border-b border-gray-100">

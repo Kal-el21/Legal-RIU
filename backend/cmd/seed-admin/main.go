@@ -32,6 +32,7 @@ func main() {
 	admin := entity.User{
 		FullName: getEnv("ADMIN_FULL_NAME", "Super Admin"),
 		Email:    email,
+		AuthType: entity.AuthTypeLocal,
 		Position: getEnv("ADMIN_POSITION", "Administrator"),
 		Division: getEnv("ADMIN_DIVISION", "Legal"),
 		Role:     entity.RoleAdmin,
@@ -47,6 +48,9 @@ func main() {
 		}
 		if existing.Status != entity.UserActive {
 			updates["status"] = entity.UserActive
+		}
+		if existing.AuthType != entity.AuthTypeLocal {
+			updates["auth_type"] = entity.AuthTypeLocal
 		}
 
 		if len(updates) > 0 {
