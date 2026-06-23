@@ -22,7 +22,7 @@ export default function AdminLayout() {
     <div className="min-h-screen flex" style={{ background: '#f8fafc' }}>
       <aside className={cn(
         'fixed inset-y-0 left-0 z-50 w-60 flex flex-col transition-transform duration-200 border-r border-white/10',
-         'lg:translate-x-0 lg:static lg:h-screen lg:z-auto',
+         'lg:translate-x-0 lg:h-screen',
         sidebarOpen ? 'translate-x-0' : '-translate-x-full'
       )} style={{ background: '#0B2545' }}>
         <div className="h-16 flex items-center px-5 border-b border-white/10">
@@ -60,7 +60,7 @@ export default function AdminLayout() {
         <div className="fixed inset-0 z-40 bg-black/30 lg:hidden" onClick={() => setSidebarOpen(false)} />
       )}
 
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 lg:ml-60">
         <header className="h-16 bg-white border-b border-gray-100 flex items-center px-4 gap-3 sticky top-0 z-30">
           <button onClick={() => setSidebarOpen(true)} className="lg:hidden p-2 rounded-lg hover:bg-gray-100">
             <Menu className="w-5 h-5 text-gray-600" />
