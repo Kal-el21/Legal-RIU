@@ -10,22 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useUsers, useCreateUser, useUpdateUser, useUpdateUserStatus, useResetPassword, useDeleteUser } from '@/hooks/useUser'
 import { formatDate } from '@/lib/utils'
 import type { User } from '@/types'
-
-const DIVISIONS = [
-  'Underwriting',
-  'Claims',
-  'IT',
-  'Finance',
-  'HR',
-  'Legal',
-  'Marketing',
-  'Operations',
-  'Risk Management',
-  'Reinsurance',
-  'Actuarial',
-  'Corporate',
-  'Lainnya',
-]
+import { DIVISIONS } from '@/constants/divisions'
 
 // ── Schemas ───────────────────────────────────────────────────────────────────
 

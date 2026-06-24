@@ -44,45 +44,47 @@ export default function Navbar() {
           </Link>
 
           {/* Desktop nav */}
-          <div className="hidden lg:flex items-center gap-1">
-            {NAV_LINKS.map((link) =>
-              link.children ? (
-                <div key={link.label} className="relative">
-                  <button
-                    onMouseEnter={() => setDropdownOpen(true)}
-                    onMouseLeave={() => setDropdownOpen(false)}
-                    className="flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-colors"
-                  >
-                    {link.label}
-                    <ChevronDown className={cn('w-3.5 h-3.5 transition-transform', dropdownOpen && 'rotate-180')} />
-                  </button>
-                  {dropdownOpen && (
-                    <div
+          {isAuthenticated && (
+            <div className="hidden lg:flex items-center gap-1">
+              {NAV_LINKS.map((link) =>
+                link.children ? (
+                  <div key={link.label} className="relative">
+                    <button
                       onMouseEnter={() => setDropdownOpen(true)}
                       onMouseLeave={() => setDropdownOpen(false)}
-                      className="absolute top-full left-0 mt-1 w-52 bg-white rounded-xl shadow-lg border border-gray-100 py-1.5 z-50"
+                      className="flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-colors"
                     >
-                      {link.children.map((child) => (
-                        <Link key={child.href} to={child.href}
-                          className="flex items-center justify-between px-4 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50">
-                          {child.label}
-                          {child.soon && <span className="text-xs px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-600 font-medium">Soon</span>}
-                        </Link>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <Link key={link.href} to={link.href!}
-                  className={cn('flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
-                    location.pathname === link.href ? 'text-gray-900 bg-gray-100' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                  )}>
-                  {link.label}
-                  {link.soon && <span className="text-xs px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-600 font-medium">Soon</span>}
-                </Link>
-              )
-            )}
-          </div>
+                      {link.label}
+                      <ChevronDown className={cn('w-3.5 h-3.5 transition-transform', dropdownOpen && 'rotate-180')} />
+                    </button>
+                    {dropdownOpen && (
+                      <div
+                        onMouseEnter={() => setDropdownOpen(true)}
+                        onMouseLeave={() => setDropdownOpen(false)}
+                        className="absolute top-full left-0 mt-1 w-52 bg-white rounded-xl shadow-lg border border-gray-100 py-1.5 z-50"
+                      >
+                        {link.children.map((child) => (
+                          <Link key={child.href} to={child.href}
+                            className="flex items-center justify-between px-4 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50">
+                            {child.label}
+                            {child.soon && <span className="text-xs px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-600 font-medium">Soon</span>}
+                          </Link>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <Link key={link.href} to={link.href!}
+                    className={cn('flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
+                      location.pathname === link.href ? 'text-gray-900 bg-gray-100' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                    )}>
+                    {link.label}
+                    {link.soon && <span className="text-xs px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-600 font-medium">Soon</span>}
+                  </Link>
+                )
+              )}
+            </div>
+          )}
 
           {/* Right side */}
           <div className="hidden lg:flex items-center gap-2">
@@ -123,14 +125,20 @@ export default function Navbar() {
           </div>
 
           {/* Mobile toggle */}
-          <button onClick={() => setMobileOpen(!mobileOpen)} className="lg:hidden p-2 rounded-lg text-gray-600 hover:bg-gray-50">
-            {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-          </button>
+          {isAuthenticated ? (
+            <button onClick={() => setMobileOpen(!mobileOpen)} className="lg:hidden p-2 rounded-lg text-gray-600 hover:bg-gray-50">
+              {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            </button>
+          ) : (
+            <Link to="/login" className="lg:hidden px-4 py-2 rounded-lg text-sm font-medium text-white transition-colors" style={{ background: '#C8102E' }}>
+              Login
+            </Link>
+          )}
         </div>
       </div>
 
       {/* Mobile menu */}
-      {mobileOpen && (
+      {mobileOpen && isAuthenticated && (
         <div className="lg:hidden border-t border-gray-100 bg-white px-4 py-3 space-y-1">
           {NAV_LINKS.map((link) =>
             link.children ? (
