@@ -12,22 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useCreateLegalOpinion, useUpdateLegalOpinion, useLegalOpinion } from '@/hooks/useLegalOpinion'
 import { useAuthStore } from '@/store/auth.store'
 import { validateFile, formatFileSize } from '@/lib/utils'
-
-const DIVISIONS = [
-  'Underwriting',
-  'Claims',
-  'IT',
-  'Finance',
-  'HR',
-  'Legal',
-  'Marketing',
-  'Operations',
-  'Risk Management',
-  'Reinsurance',
-  'Actuarial',
-  'Corporate',
-  'Lainnya',
-]
+import { DIVISIONS } from '@/constants/divisions'
 
 const LEGAL_TYPES = [
   'Permasalahan Hukum',
