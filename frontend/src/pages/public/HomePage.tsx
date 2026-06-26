@@ -39,6 +39,41 @@ const DATABASE_LEGAL = [
 export default function HomePage() {
   const { isAuthenticated } = useAuthStore()
 
+  if (!isAuthenticated) {
+    return (
+      <section
+        className="relative flex min-h-[calc(100vh-4rem)] items-center overflow-hidden"
+        style={{ background: 'linear-gradient(135deg, #0B2545 0%, #1A3A6B 55%, #0B2545 100%)' }}
+      >
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute -top-32 -right-32 w-96 h-96 rounded-full opacity-10" style={{ background: '#C8102E' }} />
+          <div className="absolute top-20 -left-20 w-72 h-72 rounded-full border border-white/10" />
+          <div className="absolute bottom-0 left-0 right-0 h-1" style={{ background: '#C8102E' }} />
+        </div>
+        <div className="relative max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-24">
+          <div className="max-w-2xl">
+            <p className="text-xs font-semibold uppercase tracking-widest mb-4" style={{ color: '#C8102E' }}>
+              Legal RIU
+            </p>
+            <h1 className="text-4xl lg:text-6xl font-bold text-white leading-tight mb-6">
+              Selamat datang di Portal Legal RIU
+            </h1>
+            <p className="text-lg text-white/60 leading-relaxed mb-10 max-w-xl">
+              Silakan masuk untuk melanjutkan ke portal internal Indonesia Re.
+            </p>
+            <Link
+              to="/login"
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-semibold text-white transition-all hover:opacity-90"
+              style={{ background: '#C8102E' }}
+            >
+              Masuk ke Portal <ArrowRight className="w-4 h-4" />
+            </Link>
+          </div>
+        </div>
+      </section>
+    )
+  }
+
   return (
     <div>
       {/* Hero */}

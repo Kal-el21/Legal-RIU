@@ -7,10 +7,11 @@ import { cn } from '@/lib/utils'
 
 interface SidebarUserButtonProps {
   settingsPath: string
-  dark?: boolean // true = AdminLayout (dark sidebar)
+  dark?: boolean
+  collapsed?: boolean
 }
 
-export default function SidebarUserButton({ settingsPath, dark = false }: SidebarUserButtonProps) {
+export default function SidebarUserButton({ settingsPath, dark = false, collapsed = false }: SidebarUserButtonProps) {
   const { user } = useAuthStore()
   const logout = useLogout()
   const [open, setOpen] = useState(false)
@@ -31,6 +32,7 @@ export default function SidebarUserButton({ settingsPath, dark = false }: Sideba
         onClick={() => setOpen(!open)}
         className={cn(
           'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors',
+          collapsed && 'justify-center px-2',
           dark ? 'hover:bg-white/5' : 'hover:bg-gray-50'
         )}
       >
@@ -38,27 +40,31 @@ export default function SidebarUserButton({ settingsPath, dark = false }: Sideba
           style={{ background: dark ? '#C8102E' : '#0B2545' }}>
           {user?.full_name?.charAt(0).toUpperCase()}
         </div>
-        <div className="min-w-0 flex-1 text-left">
-          <p className={cn('text-sm font-medium truncate', dark ? 'text-white' : 'text-gray-900')}>{user?.full_name}</p>
-          <p className={cn('text-xs truncate', dark ? 'text-white/40' : 'text-gray-500')}>{user?.division}</p>
-        </div>
+        {!collapsed && (
+          <div className="min-w-0 flex-1 text-left">
+            <p className={cn('text-sm font-medium truncate', dark ? 'text-white' : 'text-gray-900')}>{user?.full_name}</p>
+            <p className={cn('text-xs truncate', dark ? 'text-white/40' : 'text-gray-500')}>{user?.division}</p>
+          </div>
+        )}
         <ChevronUp className={cn(
           'w-4 h-4 flex-shrink-0 transition-transform duration-200',
           dark ? 'text-white/40' : 'text-gray-400',
-          !open && 'rotate-180'
+          !open && 'rotate-180',
+          collapsed ? 'hidden' : ''
         )} />
       </button>
 
       {/* Popover */}
       {open && (
         <div className={cn(
-          'absolute bottom-full left-3 right-3 mb-2 rounded-xl border shadow-lg overflow-hidden z-50',
+          'absolute bottom-full mb-2 rounded-xl border shadow-lg overflow-hidden z-50',
+          collapsed ? 'left-16 -translate-x-0 right-auto w-48' : 'left-3 right-3',
           dark ? 'bg-[#0f2d4d] border-white/10' : 'bg-white border-gray-100'
         )}>
           {/* User info */}
           <div className={cn('px-4 py-3 border-b', dark ? 'border-white/10' : 'border-gray-100')}>
             <p className={cn('text-sm font-medium', dark ? 'text-white' : 'text-gray-900')}>{user?.full_name}</p>
-            <p className={cn('text-xs mt-0.5', dark ? 'text-white/50' : 'text-gray-500')}>{user?.email}</p>
+            {!collapsed && <p className={cn('text-xs mt-0.5', dark ? 'text-white/50' : 'text-gray-500')}>{user?.email}</p>}
           </div>
 
           {/* Actions */}

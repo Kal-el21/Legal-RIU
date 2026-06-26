@@ -22,22 +22,7 @@ import {
 } from "@/hooks/useDocumentReview";
 import { useAuthStore } from "@/store/auth.store";
 import { validateFile, formatFileSize } from "@/lib/utils";
-
-const DIVISIONS = [
-  "Underwriting",
-  "Claims",
-  "IT",
-  "Finance",
-  "HR",
-  "Legal",
-  "Marketing",
-  "Operations",
-  "Risk Management",
-  "Reinsurance",
-  "Actuarial",
-  "Corporate",
-  "Lainnya",
-];
+import { DIVISIONS } from "@/constants/divisions";
 
 const DOCUMENT_TYPES = [
   "Surat Perintah Kerja",

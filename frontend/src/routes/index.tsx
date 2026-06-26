@@ -26,9 +26,9 @@ import AdminLegalOpinionDetailPage from '@/pages/admin/legal-opinions/AdminLegal
 import AdminReviewDocumentListPage from '@/pages/admin/review-documents/AdminReviewDocumentListPage'
 import AdminReviewDocumentDetailPage from '@/pages/admin/review-documents/AdminReviewDocumentDetailPage'
 
-const Placeholder = ({ title }: { title: string }) => (
+const notFoundElement = (
   <div className="flex items-center justify-center min-h-[60vh]">
-    <h1 className="text-2xl font-semibold text-gray-400">{title} — Coming Soon</h1>
+    <h1 className="text-2xl font-semibold text-gray-400">404 - Halaman tidak ditemukan</h1>
   </div>
 )
 
@@ -38,11 +38,22 @@ export const router = createBrowserRouter([
     element: <PublicLayout />,
     children: [
       { path: '/', element: <HomePage /> },
-      { path: '/akta-perusahaan', element: <AktaPerusahaanPage /> },
-      { path: '/asset-perusahaan', element: <ComingSoonPage title="Asset Perusahaan" /> },
-      { path: '/sk-sop-legal', element: <ComingSoonPage title="SK SOP Legal" /> },
-      { path: '/materi-legal', element: <ComingSoonPage title="Materi Legal" /> },
-      { path: '/profil-legal', element: <ComingSoonPage title="Profil Legal" /> },
+    ],
+  },
+
+  {
+    element: <PrivateRoute />,
+    children: [
+      {
+        element: <PublicLayout />,
+        children: [
+          { path: '/akta-perusahaan', element: <AktaPerusahaanPage /> },
+          { path: '/asset-perusahaan', element: <ComingSoonPage title="Asset Perusahaan" /> },
+          { path: '/sk-sop-legal', element: <ComingSoonPage title="SK SOP Legal" /> },
+          { path: '/materi-legal', element: <ComingSoonPage title="Materi Legal" /> },
+          { path: '/profil-legal', element: <ComingSoonPage title="Profil Legal" /> },
+        ],
+      },
     ],
   },
 
@@ -93,5 +104,5 @@ export const router = createBrowserRouter([
     ],
   },
 
-  { path: '*', element: <Placeholder title="404 — Halaman tidak ditemukan" /> },
+  { path: '*', element: notFoundElement },
 ])
