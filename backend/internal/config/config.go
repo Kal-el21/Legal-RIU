@@ -97,7 +97,7 @@ func Load() *Config {
 		Security: SecurityConfig{
 			AllowedOrigins: splitCSV(getEnv(
 				"CORS_ALLOWED_ORIGINS",
-				"http://localhost:89,http://localhost:5173,http://127.0.0.1:89,http://127.0.0.1:5173",
+				"http://192.168.1.87:89,http://192.168.1.87:5173",
 			)),
 			LoginRateLimit:         loginRateLimit,
 			LoginRateWindowMinutes: loginRateWindow,
