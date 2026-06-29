@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation } from 'react-router-dom'
-import { Scale, LayoutDashboard, FileText, FileSearch, Users, Menu, ChevronRight, ChevronLeft } from 'lucide-react'
+import { Scale, LayoutDashboard, FileText, FileSearch, Users, Menu, ChevronRight, ChevronLeft, ScrollText } from 'lucide-react'
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
 import SidebarUserButton from '@/components/common/SidebarUserButton'
@@ -9,6 +9,7 @@ const NAV = [
   { label: 'Legal Opinion', href: '/admin/legal-opinions', icon: FileText },
   { label: 'Review Dokumen', href: '/admin/review-documents', icon: FileSearch },
   { label: 'User Management', href: '/admin/users', icon: Users },
+  { label: 'Audit Log', href: '/admin/audit-logs', icon: ScrollText },
 ]
 
 export default function AdminLayout() {

@@ -159,3 +159,38 @@ export interface AdminDashboardStats {
   need_revision: number
   resubmitted: number
 }
+
+export type AuditAction =
+  | 'STATUS_CHANGE'
+  | 'FILE_UPLOAD'
+  | 'USER_UPDATE'
+  | 'LOGIN'
+  | 'LOGOUT'
+  | 'DELETE'
+  | 'FILE_DELETE'
+
+export interface AuditLog {
+  id: string
+  user_id: string
+  user?: Pick<User, 'id' | 'full_name' | 'email' | 'role'>
+  action: AuditAction
+  entity_type: string
+  entity_id: string
+  old_value?: string
+  new_value?: string
+  description?: string
+  ip_address: string
+  user_agent: string
+  created_at: string
+}
+
+export interface AuditLogFilters {
+  action?: AuditAction
+  entity_type?: string
+  user_id?: string
+  date_from?: string
+  date_to?: string
+  search?: string
+  page: number
+  limit: number
+}

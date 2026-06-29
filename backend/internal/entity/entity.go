@@ -194,6 +194,34 @@ func (r *DocumentReviewResult) BeforeCreate(tx *gorm.DB) error {
 	return nil
 }
 
+// ─── Audit Log ─────────────────────────────────────────────────────────────────
+
+type AuditAction string
+
+const (
+	ActionStatusChange AuditAction = "STATUS_CHANGE"
+	ActionFileUpload   AuditAction = "FILE_UPLOAD"
+	ActionUserUpdate   AuditAction = "USER_UPDATE"
+	ActionLogin        AuditAction = "LOGIN"
+	ActionLogout       AuditAction = "LOGOUT"
+	ActionDelete       AuditAction = "DELETE"
+	ActionFileDelete   AuditAction = "FILE_DELETE"
+)
+
+type AuditLog struct {
+	Base
+	UserID      uuid.UUID  `gorm:"type:uuid;not null;index" json:"user_id"`
+	User        User       `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	Action      AuditAction `gorm:"not null;index" json:"action"`
+	EntityType  string     `gorm:"not null;index" json:"entity_type"`
+	EntityID    uuid.UUID  `gorm:"type:uuid;not null;index" json:"entity_id"`
+	OldValue    *string    `gorm:"type:text" json:"old_value,omitempty"`
+	NewValue    *string    `gorm:"type:text" json:"new_value,omitempty"`
+	Description *string    `gorm:"type:text" json:"description,omitempty"`
+	IPAddress   string     `gorm:"size:45" json:"ip_address"`
+	UserAgent   string     `gorm:"size:500" json:"user_agent"`
+}
+
 // ─── Settings ─────────────────────────────────────────────────────────────────
 
 type UserSettings struct {

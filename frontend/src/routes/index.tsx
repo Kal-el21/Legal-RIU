@@ -27,6 +27,7 @@ import AdminLegalOpinionListPage from '@/pages/admin/legal-opinions/AdminLegalOp
 import AdminLegalOpinionDetailPage from '@/pages/admin/legal-opinions/AdminLegalOpinionDetailPage'
 import AdminReviewDocumentListPage from '@/pages/admin/review-documents/AdminReviewDocumentListPage'
 import AdminReviewDocumentDetailPage from '@/pages/admin/review-documents/AdminReviewDocumentDetailPage'
+import AuditLogPage from '@/pages/admin/AuditLogPage'
 
 import LegalDashboardPage from '@/pages/legal/LegalDashboardPage'
 import LegalLegalOpinionListPage from '@/pages/legal/legal-opinions/LegalOpinionListPage'
@@ -113,6 +114,7 @@ export const router = createBrowserRouter([
           { path: '/admin/review-documents', element: <AdminReviewDocumentListPage /> },
           { path: '/admin/review-documents/:id', element: <AdminReviewDocumentDetailPage /> },
           { path: '/admin/users', element: <UserManagementPage /> },
+          { path: '/admin/audit-logs', element: <AuditLogPage /> },
         ],
       },
     ],

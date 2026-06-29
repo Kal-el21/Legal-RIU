@@ -29,6 +29,7 @@ func main() {
 		&entity.DocumentReview{},
 		&entity.DocumentReviewAttachment{},
 		&entity.DocumentReviewResult{},
+		&entity.AuditLog{},
 	); err != nil {
 		log.Fatalf("Migration failed: %v", err)
 	}
@@ -40,6 +41,7 @@ func main() {
 	loRepo := repository.NewLegalOpinionRepository(db)
 	drRepo := repository.NewDocumentReviewRepository(db)
 	dashRepo := repository.NewDashboardRepository(db)
+	auditLogRepo := repository.NewAuditLogRepository(db)
 
 	// ── Services ─────────────────────────────────────────────────────────────
 	authSvc := service.NewAuthService(userRepo, refreshTokenRepo, cfg)
@@ -47,13 +49,15 @@ func main() {
 	loSvc := service.NewLegalOpinionService(loRepo, store)
 	drSvc := service.NewDocumentReviewService(drRepo, store)
 	dashSvc := service.NewDashboardService(dashRepo)
+	auditLogSvc := service.NewAuditLogService(auditLogRepo)
 
 	// ── Handlers ─────────────────────────────────────────────────────────────
-	authHandler := handler.NewAuthHandler(authSvc, cfg)
-	userHandler := handler.NewUserHandler(userSvc)
-	loHandler := handler.NewLegalOpinionHandler(loSvc)
-	drHandler := handler.NewDocumentReviewHandler(drSvc)
+	authHandler := handler.NewAuthHandler(authSvc, cfg, auditLogSvc)
+	userHandler := handler.NewUserHandler(userSvc, auditLogSvc)
+	loHandler := handler.NewLegalOpinionHandler(loSvc, auditLogSvc)
+	drHandler := handler.NewDocumentReviewHandler(drSvc, auditLogSvc)
 	dashHandler := handler.NewDashboardHandler(dashSvc)
+	auditLogHandler := handler.NewAuditLogHandler(auditLogSvc, auditLogRepo)
 
 	// ── Gin ──────────────────────────────────────────────────────────────────
 	if cfg.App.Env == "production" {
@@ -85,7 +89,7 @@ func main() {
 
 	// ── Protected ─────────────────────────────────────────────────────────────
 	protected := api.Group("")
-	protected.Use(middleware.AuthMiddleware(cfg), middleware.CSRFProtection())
+	protected.Use(middleware.AuthMiddleware(cfg), middleware.AuditMiddleware(auditLogSvc), middleware.CSRFProtection())
 
 	protected.GET("/auth/me", authHandler.Me)
 	protected.POST("/auth/change-password", authHandler.ChangePassword)
@@ -121,7 +125,7 @@ func main() {
 
 	// ── Admin only ────────────────────────────────────────────────────────────
 	admin := api.Group("/admin")
-	admin.Use(middleware.AuthMiddleware(cfg), middleware.RoleMiddleware("ADMIN"), middleware.CSRFProtection())
+	admin.Use(middleware.AuthMiddleware(cfg), middleware.RoleMiddleware("ADMIN"), middleware.AuditMiddleware(auditLogSvc), middleware.CSRFProtection())
 
 	admin.GET("/dashboard/stats", dashHandler.AdminStats)
 	admin.GET("/dashboard/recent", dashHandler.AdminRecent)
@@ -137,9 +141,11 @@ func main() {
 	admin.PATCH("/users/:id/status", userHandler.UpdateStatus)
 	admin.POST("/users/:id/reset-password", userHandler.ResetPassword)
 
+	admin.GET("/audit-logs", auditLogHandler.GetAll)
+
 	// ── Legal ────────────────────────────────────────────────────────────────
 	legal := api.Group("/legal")
-	legal.Use(middleware.AuthMiddleware(cfg), middleware.RoleMiddleware("LEGAL"), middleware.CSRFProtection())
+	legal.Use(middleware.AuthMiddleware(cfg), middleware.RoleMiddleware("LEGAL"), middleware.AuditMiddleware(auditLogSvc), middleware.CSRFProtection())
 
 	legal.GET("/dashboard/stats", dashHandler.LegalStats)
 	legal.GET("/dashboard/recent", dashHandler.LegalRecent)
@@ -156,7 +162,7 @@ func main() {
 
 	// ─── External ─────────────────────────────────────────────────────────────
 	external := api.Group("/external")
-	external.Use(middleware.AuthMiddleware(cfg), middleware.RoleMiddleware("EXTERNAL"), middleware.CSRFProtection())
+	external.Use(middleware.AuthMiddleware(cfg), middleware.RoleMiddleware("EXTERNAL"), middleware.AuditMiddleware(auditLogSvc), middleware.CSRFProtection())
 
 	external.GET("/dashboard/stats", dashHandler.ExternalStats)
 	external.GET("/dashboard/recent", dashHandler.ExternalRecent)
@@ -171,3 +177,5 @@ func main() {
 		log.Fatalf("Failed to start server: %v", err)
 	}
 }
+
+
