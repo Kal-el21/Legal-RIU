@@ -20,14 +20,14 @@ const createSchema = z.object({
   password: z.string().min(8, 'Minimal 8 karakter'),
   position: z.string().min(1, 'Wajib diisi'),
   division: z.string().min(1, 'Wajib diisi'),
-  role: z.enum(['USER', 'ADMIN']),
+  role: z.enum(['USER', 'ADMIN', 'LEGAL', 'EXTERNAL']),
 })
 
 const editSchema = z.object({
   full_name: z.string().min(1, 'Wajib diisi'),
   position: z.string().min(1, 'Wajib diisi'),
   division: z.string().min(1, 'Wajib diisi'),
-  role: z.enum(['USER', 'ADMIN']),
+  role: z.enum(['USER', 'ADMIN', 'LEGAL', 'EXTERNAL']),
 })
 
 const resetSchema = z.object({
@@ -184,8 +184,13 @@ export default function UserManagementPage() {
                 <tr key={user.id} className="hover:bg-gray-50/50 transition-colors">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
-                        style={{ background: user.role === 'ADMIN' ? '#C8102E' : '#0B2545' }}>
+<div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
+                         style={{ 
+                           background: user.role === 'ADMIN' ? '#C8102E' : 
+                                      user.role === 'LEGAL' ? '#7C3AED' : 
+                                      user.role === 'EXTERNAL' ? '#059669' : 
+                                      '#0B2545' 
+                         }}>
                         {user.full_name.charAt(0).toUpperCase()}
                       </div>
                       <div>
@@ -198,14 +203,17 @@ export default function UserManagementPage() {
                     <p className="text-sm text-gray-700">{user.position}</p>
                     <p className="text-xs text-gray-400">{user.division}</p>
                   </td>
-                  <td className="px-6 py-4">
-                    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
-                      user.role === 'ADMIN' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'
-                    }`}>
-                      {user.role === 'ADMIN' ? <Shield className="w-3 h-3 mr-1" /> : null}
-                      {user.role}
-                    </span>
-                  </td>
+<td className="px-6 py-4">
+                   <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
+                       user.role === 'ADMIN' ? 'bg-red-100 text-red-700' :
+                       user.role === 'LEGAL' ? 'bg-purple-100 text-purple-700' :
+                       user.role === 'EXTERNAL' ? 'bg-green-100 text-green-700' :
+                       'bg-blue-100 text-blue-700'
+                   }`}>
+                       {user.role === 'ADMIN' ? <Shield className="w-3 h-3 mr-1" /> : null}
+                       {user.role}
+                   </span>
+                 </td>
                   <td className="px-6 py-4">
                     <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
                       user.status === 'ACTIVE' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
@@ -289,22 +297,24 @@ export default function UserManagementPage() {
                  />
                </Field>
              </div>
-            <Field label="Role" error={createForm.formState.errors.role?.message}>
-              <Controller
-                name="role"
-                control={createForm.control}
-                render={({ field }) => (
-                  <Select onValueChange={field.onChange} value={field.value}>
-                    <SelectTrigger><SelectValue placeholder="Pilih role" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="USER">User</SelectItem>
-                      <SelectItem value="ADMIN">Admin</SelectItem>
-                    </SelectContent>
-                  </Select>
-                )}
-              />
-            </Field>
-            {createMutation.isError && createMutation.error && (
+<Field label="Role" error={createForm.formState.errors.role?.message}>
+               <Controller
+                 name="role"
+                 control={createForm.control}
+                 render={({ field }) => (
+                   <Select onValueChange={field.onChange} value={field.value}>
+                     <SelectTrigger><SelectValue placeholder="Pilih role" /></SelectTrigger>
+                     <SelectContent>
+                       <SelectItem value="USER">User</SelectItem>
+                       <SelectItem value="LEGAL">Legal</SelectItem>
+                       <SelectItem value="EXTERNAL">External User</SelectItem>
+                       <SelectItem value="ADMIN">Admin</SelectItem>
+                     </SelectContent>
+                   </Select>
+                 )}
+               />
+             </Field>
+             {createMutation.isError && createMutation.error && (
               <p className="text-xs text-red-500">
                 {(createMutation.error as any)?.response?.data?.message || (createMutation.error as Error)?.message}
               </p>
@@ -343,22 +353,24 @@ export default function UserManagementPage() {
                  )}
                />
              </Field>
-            <Field label="Role" error={editForm.formState.errors.role?.message}>
-              <Controller
-                name="role"
-                control={editForm.control}
-                render={({ field }) => (
-                  <Select onValueChange={field.onChange} value={field.value}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="USER">User</SelectItem>
-                      <SelectItem value="ADMIN">Admin</SelectItem>
-                    </SelectContent>
-                  </Select>
-                )}
-              />
-            </Field>
-            {updateMutation.isError && (
+<Field label="Role" error={editForm.formState.errors.role?.message}>
+               <Controller
+                 name="role"
+                 control={editForm.control}
+                 render={({ field }) => (
+                   <Select onValueChange={field.onChange} value={field.value}>
+                     <SelectTrigger><SelectValue /></SelectTrigger>
+                     <SelectContent>
+                       <SelectItem value="USER">User</SelectItem>
+                       <SelectItem value="LEGAL">Legal</SelectItem>
+                       <SelectItem value="EXTERNAL">External User</SelectItem>
+                       <SelectItem value="ADMIN">Admin</SelectItem>
+                     </SelectContent>
+                   </Select>
+                 )}
+               />
+             </Field>
+             {updateMutation.isError && (
               <p className="text-xs text-red-500">{(updateMutation.error as Error)?.message}</p>
             )}
             <div className="flex gap-2 pt-2">

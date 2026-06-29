@@ -11,10 +11,13 @@ export function useLogin() {
   return useMutation({
     mutationFn: (data: LoginRequest) => authService.login(data),
     onSuccess: (res) => {
-      // With httpOnly cookies, we only store user in state (token is in cookie)
       setAuth(res.user)
       if (res.user.role === 'ADMIN') {
         navigate('/admin')
+      } else if (res.user.role === 'LEGAL') {
+        navigate('/legal')
+      } else if (res.user.role === 'EXTERNAL') {
+        navigate('/external')
       } else {
         navigate('/dashboard')
       }

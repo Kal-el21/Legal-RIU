@@ -1,6 +1,6 @@
 // ─── Enums ───────────────────────────────────────────────────────────────────
 
-export type UserRole = 'USER' | 'ADMIN'
+export type UserRole = 'USER' | 'ADMIN' | 'LEGAL' | 'EXTERNAL'
 export type UserStatus = 'ACTIVE' | 'INACTIVE'
 
 export type SubmissionStatus =

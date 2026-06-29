@@ -47,13 +47,14 @@ type CreateUserRequest struct {
 	Password string `json:"password" binding:"required,min=8"`
 	Position string `json:"position" binding:"required"`
 	Division string `json:"division" binding:"required"`
-	Role     string `json:"role" binding:"required,oneof=USER ADMIN"`
+	Role     string `json:"role" binding:"required,oneof=USER ADMIN LEGAL EXTERNAL"`
 }
 
 type UpdateUserRequest struct {
 	FullName string `json:"full_name" binding:"required"`
 	Position string `json:"position" binding:"required"`
 	Division string `json:"division" binding:"required"`
+	Role     string `json:"role" binding:"omitempty,oneof=USER ADMIN LEGAL EXTERNAL"`
 }
 
 type ResetPasswordRequest struct {

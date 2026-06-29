@@ -102,13 +102,19 @@ export const documentReviewService = {
 
   adminUploadResult: async (id: string, file: File, notes?: string): Promise<void> => {
     const form = new FormData()
-
     form.append('result', file)
-
-    if (notes) {
-      form.append('notes', notes)
-    }
-
+    if (notes) form.append('notes', notes)
     await api.post(`/admin/review-documents/${id}/result`, form)
+  },
+
+  legalUpdateStatus: async (id: string, data: { status: string; admin_note?: string }) => {
+    await api.patch(`/legal/review-documents/${id}/status`, data)
+  },
+
+  legalUploadResult: async (id: string, file: File, notes?: string): Promise<void> => {
+    const form = new FormData()
+    form.append('result', file)
+    if (notes) form.append('notes', notes)
+    await api.post(`/legal/review-documents/${id}/result`, form)
   },
 }

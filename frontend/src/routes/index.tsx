@@ -1,9 +1,11 @@
 import { createBrowserRouter } from 'react-router-dom'
-import { GuestRoute, PrivateRoute, AdminRoute } from './guards'
+import { GuestRoute, PrivateRoute, AdminRoute, LegalRoute, ExternalRoute } from './guards'
 
 import PublicLayout from '@/layouts/PublicLayout'
 import DashboardLayout from '@/layouts/DashboardLayout'
 import AdminLayout from '@/layouts/AdminLayout'
+import LegalLayout from '@/layouts/LegalLayout'
+import ExternalLayout from '@/layouts/ExternalLayout'
 
 import HomePage from '@/pages/public/HomePage'
 import AktaPerusahaanPage from '@/pages/public/AktaPerusahaanPage'
@@ -25,6 +27,18 @@ import AdminLegalOpinionListPage from '@/pages/admin/legal-opinions/AdminLegalOp
 import AdminLegalOpinionDetailPage from '@/pages/admin/legal-opinions/AdminLegalOpinionDetailPage'
 import AdminReviewDocumentListPage from '@/pages/admin/review-documents/AdminReviewDocumentListPage'
 import AdminReviewDocumentDetailPage from '@/pages/admin/review-documents/AdminReviewDocumentDetailPage'
+
+import LegalDashboardPage from '@/pages/legal/LegalDashboardPage'
+import LegalLegalOpinionListPage from '@/pages/legal/legal-opinions/LegalOpinionListPage'
+import LegalLegalOpinionDetailPage from '@/pages/legal/legal-opinions/LegalOpinionDetailPage'
+import LegalReviewDocumentListPage from '@/pages/legal/review-documents/ReviewDocumentListPage'
+import LegalReviewDocumentDetailPage from '@/pages/legal/review-documents/ReviewDocumentDetailPage'
+
+import ExternalDashboardPage from '@/pages/external/ExternalDashboardPage'
+import ExternalLegalOpinionListPage from '@/pages/external/legal-opinions/LegalOpinionListPage'
+import ExternalLegalOpinionDetailPage from '@/pages/external/legal-opinions/LegalOpinionDetailPage'
+import ExternalReviewDocumentListPage from '@/pages/external/review-documents/ReviewDocumentListPage'
+import ExternalReviewDocumentDetailPage from '@/pages/external/review-documents/ReviewDocumentDetailPage'
 
 const notFoundElement = (
   <div className="flex items-center justify-center min-h-[60vh]">
@@ -99,6 +113,42 @@ export const router = createBrowserRouter([
           { path: '/admin/review-documents', element: <AdminReviewDocumentListPage /> },
           { path: '/admin/review-documents/:id', element: <AdminReviewDocumentDetailPage /> },
           { path: '/admin/users', element: <UserManagementPage /> },
+        ],
+      },
+    ],
+  },
+
+  // ─── Legal ───────────────────────────────────────────────────────────────
+  {
+    element: <LegalRoute />,
+    children: [
+      {
+        element: <LegalLayout />,
+        children: [
+          { path: '/legal', element: <LegalDashboardPage /> },
+          { path: '/legal/settings', element: <SettingsPage /> },
+          { path: '/legal/legal-opinions', element: <LegalLegalOpinionListPage /> },
+          { path: '/legal/legal-opinions/:id', element: <LegalLegalOpinionDetailPage /> },
+          { path: '/legal/review-documents', element: <LegalReviewDocumentListPage /> },
+          { path: '/legal/review-documents/:id', element: <LegalReviewDocumentDetailPage /> },
+        ],
+      },
+    ],
+  },
+
+  // ─── External ────────────────────────────────────────────────────────────
+  {
+    element: <ExternalRoute />,
+    children: [
+      {
+        element: <ExternalLayout />,
+        children: [
+          { path: '/external', element: <ExternalDashboardPage /> },
+          { path: '/external/settings', element: <SettingsPage /> },
+          { path: '/external/legal-opinions', element: <ExternalLegalOpinionListPage /> },
+          { path: '/external/legal-opinions/:id', element: <ExternalLegalOpinionDetailPage /> },
+          { path: '/external/review-documents', element: <ExternalReviewDocumentListPage /> },
+          { path: '/external/review-documents/:id', element: <ExternalReviewDocumentDetailPage /> },
         ],
       },
     ],

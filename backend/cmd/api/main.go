@@ -137,6 +137,35 @@ func main() {
 	admin.PATCH("/users/:id/status", userHandler.UpdateStatus)
 	admin.POST("/users/:id/reset-password", userHandler.ResetPassword)
 
+	// ── Legal ────────────────────────────────────────────────────────────────
+	legal := api.Group("/legal")
+	legal.Use(middleware.AuthMiddleware(cfg), middleware.RoleMiddleware("LEGAL"), middleware.CSRFProtection())
+
+	legal.GET("/dashboard/stats", dashHandler.LegalStats)
+	legal.GET("/dashboard/recent", dashHandler.LegalRecent)
+
+	legal.PATCH("/legal-opinions/:id/status", loHandler.AdminUpdateStatus)
+	legal.POST("/legal-opinions/:id/result", loHandler.AdminUploadResult)
+	legal.PATCH("/review-documents/:id/status", drHandler.AdminUpdateStatus)
+	legal.POST("/review-documents/:id/result", drHandler.AdminUploadResult)
+
+	legal.GET("/legal-opinions", loHandler.GetAll)
+	legal.GET("/legal-opinions/:id", loHandler.GetByID)
+	legal.GET("/review-documents", drHandler.GetAll)
+	legal.GET("/review-documents/:id", drHandler.GetByID)
+
+	// ─── External ─────────────────────────────────────────────────────────────
+	external := api.Group("/external")
+	external.Use(middleware.AuthMiddleware(cfg), middleware.RoleMiddleware("EXTERNAL"), middleware.CSRFProtection())
+
+	external.GET("/dashboard/stats", dashHandler.ExternalStats)
+	external.GET("/dashboard/recent", dashHandler.ExternalRecent)
+
+	external.GET("/legal-opinions", loHandler.GetAll)
+	external.GET("/legal-opinions/:id", loHandler.GetByID)
+	external.GET("/review-documents", drHandler.GetAll)
+	external.GET("/review-documents/:id", drHandler.GetByID)
+
 	log.Printf("Server running on port %s", cfg.App.Port)
 	if err := r.Run(":" + cfg.App.Port); err != nil {
 		log.Fatalf("Failed to start server: %v", err)

@@ -30,8 +30,10 @@ type UserStatus string
 type SubmissionStatus string
 
 const (
-	RoleUser  UserRole = "USER"
-	RoleAdmin UserRole = "ADMIN"
+	RoleUser       UserRole = "USER"
+	RoleAdmin      UserRole = "ADMIN"
+	RoleLegal      UserRole = "LEGAL"
+	RoleExternal   UserRole = "EXTERNAL"
 
 	UserActive   UserStatus = "ACTIVE"
 	UserInactive UserStatus = "INACTIVE"
