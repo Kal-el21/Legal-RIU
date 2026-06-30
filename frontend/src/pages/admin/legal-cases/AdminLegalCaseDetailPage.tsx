@@ -141,36 +141,6 @@ export default function AdminLegalCaseDetailPage() {
             <TextInfo label="Spesifikasi Kasus" value={legalCase.specification || '-'} />
             <TextInfo label="Catatan Tambahan" value={legalCase.additional_notes || '-'} />
           </Section>
-
-          <Section title="Kronologi Sidang">
-            {(legalCase.chronologies?.length ?? 0) === 0 ? (
-              <div className="rounded-lg bg-gray-50 p-8 text-center text-sm text-gray-400">Belum ada kronologi sidang</div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-gray-100 bg-gray-50">
-                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">Tanggal</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">Agenda</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">Keterangan</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">Dokumen</th>
-                      <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-gray-500">Aksi</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50">
-                    {legalCase.chronologies?.map((chronology) => (
-                      <ChronologyRow
-                        key={chronology.id}
-                        chronology={chronology}
-                        onDownload={handleDownload}
-                        onDelete={handleDeleteChronology}
-                      />
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </Section>
         </div>
 
         <div className="space-y-6">
@@ -199,11 +169,11 @@ export default function AdminLegalCaseDetailPage() {
               <Field label="Tanggal">
                 <Input type="date" value={agendaDate} onChange={(event) => setAgendaDate(event.target.value)} required />
               </Field>
-              <Field label="Agenda">
-                <Input value={agenda} onChange={(event) => setAgenda(event.target.value)} placeholder="Agenda sidang" required />
+              <Field label="Status Terkini">
+                <Input value={agenda} onChange={(event) => setAgenda(event.target.value)} placeholder="Status terkini" required />
               </Field>
-              <Field label="Keterangan">
-                <Textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={4} placeholder="Keterangan" />
+              <Field label="Tindak Lanjut">
+                <Textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={4} placeholder="Tindak lanjut" />
               </Field>
               <Field label="Dokumen">
                 <label className="flex cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed border-gray-200 p-5 hover:bg-gray-50">
@@ -242,6 +212,38 @@ export default function AdminLegalCaseDetailPage() {
             </form>
           </Section>
         </div>
+      </div>
+
+      <div className="mt-6">
+        <Section title="Kronologi Sidang">
+          {(legalCase.chronologies?.length ?? 0) === 0 ? (
+            <div className="rounded-lg bg-gray-50 p-8 text-center text-sm text-gray-400">Belum ada kronologi sidang</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-100 bg-gray-50">
+                    <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">Tanggal</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">Status Terkini</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">Tindak Lanjut</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">Dokumen</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-gray-500">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {legalCase.chronologies?.map((chronology) => (
+                    <ChronologyRow
+                      key={chronology.id}
+                      chronology={chronology}
+                      onDownload={handleDownload}
+                      onDelete={handleDeleteChronology}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Section>
       </div>
 
       <LegalCaseFormDialog open={editOpen} onOpenChange={setEditOpen} legalCase={legalCase} />
