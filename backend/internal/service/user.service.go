@@ -47,8 +47,13 @@ func (s *userService) Create(req dto.CreateUserRequest) (*dto.UserResponse, erro
 	}
 
 	role := entity.RoleUser
-	if req.Role == "ADMIN" {
+	switch req.Role {
+	case "ADMIN":
 		role = entity.RoleAdmin
+	case "LEGAL":
+		role = entity.RoleLegal
+	case "EXTERNAL":
+		role = entity.RoleExternal
 	}
 
 	user := &entity.User{
@@ -84,6 +89,19 @@ func (s *userService) Update(id string, req dto.UpdateUserRequest) (*dto.UserRes
 	user.FullName = req.FullName
 	user.Position = req.Position
 	user.Division = req.Division
+
+	if req.Role != "" {
+		switch req.Role {
+		case "ADMIN":
+			user.Role = entity.RoleAdmin
+		case "LEGAL":
+			user.Role = entity.RoleLegal
+		case "EXTERNAL":
+			user.Role = entity.RoleExternal
+		default:
+			user.Role = entity.RoleUser
+		}
+	}
 
 	if err := s.userRepo.Update(user); err != nil {
 		return nil, errors.New("gagal mengupdate user")

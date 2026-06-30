@@ -73,3 +73,15 @@ export function useAdminUpdateDocumentReviewStatus() {
     },
   })
 }
+
+export function useLegalUpdateDocumentReviewStatus() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, status, admin_note }: { id: string; status: string; admin_note?: string }) =>
+      documentReviewService.legalUpdateStatus(id, { status, admin_note }),
+    onSuccess: (_, { id }) => {
+      qc.invalidateQueries({ queryKey: KEYS.detail(id) })
+      qc.invalidateQueries({ queryKey: KEYS.all })
+    },
+  })
+}

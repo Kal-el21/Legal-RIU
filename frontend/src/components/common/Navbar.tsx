@@ -94,10 +94,10 @@ export default function Navbar() {
               </Link>
             ) : (
               <div className="flex items-center gap-2">
-                <Link to={user?.role === 'ADMIN' ? '/admin' : '/dashboard'}
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors">
-                  <LayoutDashboard className="w-4 h-4" /> Dashboard
-                </Link>
+<Link to={user?.role === 'ADMIN' ? '/admin' : user?.role === 'LEGAL' ? '/legal' : '/external'}
+                   className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors">
+                   <LayoutDashboard className="w-4 h-4" /> Dashboard
+                 </Link>
                 <div className="relative">
                   <button onClick={() => setProfileOpen(!profileOpen)}
                     className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-50 transition-colors">
@@ -168,10 +168,10 @@ export default function Navbar() {
               </Link>
             ) : (
               <div className="space-y-1">
-                <Link to={user?.role === 'ADMIN' ? '/admin' : '/dashboard'} onClick={() => setMobileOpen(false)}
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
-                  <LayoutDashboard className="w-4 h-4" /> Dashboard
-                </Link>
+<Link to={user?.role === 'ADMIN' ? '/admin' : user?.role === 'LEGAL' ? '/legal' : '/external'} onClick={() => setMobileOpen(false)}
+                   className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
+                   <LayoutDashboard className="w-4 h-4" /> Dashboard
+                 </Link>
                 <button onClick={logout} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-red-600 hover:bg-red-50">
                   <LogOut className="w-4 h-4" /> Keluar
                 </button>

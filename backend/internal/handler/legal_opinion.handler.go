@@ -1,11 +1,14 @@
 package handler
 
 import (
+	"bytes"
 	"fmt"
 	"mime/multipart"
+	"strconv"
 	"strings"
 
 	"legal-riu-portal/internal/dto"
+	"legal-riu-portal/internal/entity"
 	"legal-riu-portal/internal/middleware"
 	"legal-riu-portal/internal/service"
 	"legal-riu-portal/internal/utils"
@@ -14,11 +17,12 @@ import (
 )
 
 type LegalOpinionHandler struct {
-	svc service.LegalOpinionService
+	svc         service.LegalOpinionService
+	auditLogSvc service.AuditLogService
 }
 
-func NewLegalOpinionHandler(svc service.LegalOpinionService) *LegalOpinionHandler {
-	return &LegalOpinionHandler{svc: svc}
+func NewLegalOpinionHandler(svc service.LegalOpinionService, auditLogSvc service.AuditLogService) *LegalOpinionHandler {
+	return &LegalOpinionHandler{svc: svc, auditLogSvc: auditLogSvc}
 }
 
 // GET /api/v1/legal-opinions
@@ -75,6 +79,8 @@ func (h *LegalOpinionHandler) Create(c *gin.Context) {
 			return
 		}
 		utils.Created(c, "Pengajuan berhasil dibuat", lo)
+		middleware.SetAuditContext(c, entity.ActionUserUpdate, "legal_opinion", lo.ID.String())
+		c.Set("audit_description", "Legal opinion created")
 		return
 	}
 
@@ -112,6 +118,12 @@ func (h *LegalOpinionHandler) Create(c *gin.Context) {
 		utils.InternalError(c, err.Error())
 		return
 	}
+	middleware.SetAuditContext(c, entity.ActionUserUpdate, "legal_opinion", lo.ID.String())
+	desc := "Legal opinion created"
+	if len(files) > 0 {
+		desc = "Legal opinion created with " + strconv.Itoa(len(files)) + " file(s)"
+	}
+	c.Set("audit_description", desc)
 	utils.Created(c, "Pengajuan berhasil dibuat", lo)
 }
 
@@ -129,6 +141,7 @@ func (h *LegalOpinionHandler) Update(c *gin.Context) {
 		utils.BadRequest(c, err.Error(), nil)
 		return
 	}
+	middleware.SetAuditContext(c, entity.ActionUserUpdate, "legal_opinion", id)
 	utils.OK(c, "Pengajuan berhasil diupdate", lo)
 }
 
@@ -140,6 +153,7 @@ func (h *LegalOpinionHandler) Delete(c *gin.Context) {
 		utils.BadRequest(c, err.Error(), nil)
 		return
 	}
+	middleware.SetAuditContext(c, entity.ActionDelete, "legal_opinion", id)
 	utils.OK(c, "Pengajuan berhasil dihapus", nil)
 }
 
@@ -156,6 +170,12 @@ func (h *LegalOpinionHandler) Resubmit(c *gin.Context) {
 		utils.BadRequest(c, err.Error(), nil)
 		return
 	}
+	middleware.SetAuditContext(c, entity.ActionUserUpdate, "legal_opinion", id)
+	desc := "Legal opinion resubmitted"
+	if len(files) > 0 {
+		desc = "Legal opinion resubmitted with " + strconv.Itoa(len(files)) + " file(s)"
+	}
+	c.Set("audit_description", desc)
 	utils.OK(c, "Pengajuan berhasil diajukan ulang", lo)
 }
 
@@ -209,6 +229,8 @@ func (h *LegalOpinionHandler) AdminUpdateStatus(c *gin.Context) {
 		utils.BadRequest(c, err.Error(), nil)
 		return
 	}
+	desc := "Status changed to " + req.Status
+	middleware.SetAuditContextWithValues(c, entity.ActionStatusChange, "legal_opinion", id, nil, &req.Status, &desc)
 	utils.OK(c, "Status berhasil diubah", nil)
 }
 
@@ -226,5 +248,24 @@ func (h *LegalOpinionHandler) AdminUploadResult(c *gin.Context) {
 		utils.InternalError(c, err.Error())
 		return
 	}
+	middleware.SetAuditContext(c, entity.ActionFileUpload, "legal_opinion", id)
 	utils.OK(c, "Hasil kajian berhasil diupload", nil)
 }
+
+// GET /api/v1/legal-opinions/:id/pdf
+func (h *LegalOpinionHandler) GeneratePDF(c *gin.Context) {
+	id := c.Param("id")
+	pdfData, err := h.svc.GeneratePDF(id)
+	if err != nil {
+		utils.InternalError(c, err.Error())
+		return
+	}
+
+	lo, _ := h.svc.GetByID(id, middleware.GetUserID(c), middleware.GetUserRole(c))
+
+	c.DataFromReader(-1, -1, "application/pdf", bytes.NewReader(pdfData), map[string]string{
+		"Content-Disposition": fmt.Sprintf(`attachment; filename="legal-opinion-%s.pdf"`, lo.TicketNumber),
+	})
+}
+
+

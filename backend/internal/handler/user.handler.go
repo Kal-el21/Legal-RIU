@@ -2,6 +2,8 @@ package handler
 
 import (
 	"legal-riu-portal/internal/dto"
+	"legal-riu-portal/internal/entity"
+	"legal-riu-portal/internal/middleware"
 	"legal-riu-portal/internal/service"
 	"legal-riu-portal/internal/utils"
 
@@ -9,11 +11,12 @@ import (
 )
 
 type UserHandler struct {
-	svc service.UserService
+	svc         service.UserService
+	auditLogSvc service.AuditLogService
 }
 
-func NewUserHandler(svc service.UserService) *UserHandler {
-	return &UserHandler{svc: svc}
+func NewUserHandler(svc service.UserService, auditLogSvc service.AuditLogService) *UserHandler {
+	return &UserHandler{svc: svc, auditLogSvc: auditLogSvc}
 }
 
 // GET /api/v1/admin/users
@@ -58,6 +61,9 @@ func (h *UserHandler) Create(c *gin.Context) {
 		utils.BadRequest(c, err.Error(), nil)
 		return
 	}
+	desc := "User created by admin"
+	middleware.SetAuditContext(c, entity.ActionUserUpdate, "user", user.ID)
+	c.Set("audit_description", desc)
 	utils.Created(c, "User berhasil dibuat", user)
 }
 
@@ -75,6 +81,7 @@ func (h *UserHandler) Update(c *gin.Context) {
 		utils.BadRequest(c, err.Error(), nil)
 		return
 	}
+	middleware.SetAuditContext(c, entity.ActionUserUpdate, "user", id)
 	utils.OK(c, "User berhasil diupdate", user)
 }
 
@@ -85,6 +92,7 @@ func (h *UserHandler) Delete(c *gin.Context) {
 		utils.BadRequest(c, err.Error(), nil)
 		return
 	}
+	middleware.SetAuditContext(c, entity.ActionDelete, "user", id)
 	utils.OK(c, "User berhasil dihapus", nil)
 }
 
@@ -103,6 +111,7 @@ func (h *UserHandler) UpdateStatus(c *gin.Context) {
 		utils.BadRequest(c, err.Error(), nil)
 		return
 	}
+	middleware.SetAuditContextWithValues(c, entity.ActionStatusChange, "user", id, nil, &body.Status, stringPtr("Status changed to "+body.Status))
 	utils.OK(c, "Status user berhasil diubah", nil)
 }
 
@@ -119,5 +128,7 @@ func (h *UserHandler) ResetPassword(c *gin.Context) {
 		utils.BadRequest(c, err.Error(), nil)
 		return
 	}
+	middleware.SetAuditContext(c, entity.ActionUserUpdate, "user", id)
 	utils.OK(c, "Password berhasil direset", nil)
 }
+
