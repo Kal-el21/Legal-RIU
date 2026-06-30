@@ -28,6 +28,20 @@ export type DocumentType =
   | 'Surat'
   | 'Lain-Lain'
 
+export type LegalCaseType =
+  | 'NON_LITIGASI'
+  | 'PERDATA'
+  | 'PIDANA'
+  | 'TIPEKOR'
+  | 'ARBITRASE'
+  | 'TUN'
+
+export type CaseCategory =
+  | 'Life'
+  | 'BPPDAN'
+  | 'Property'
+  | 'COB'
+
 // ─── Entities ─────────────────────────────────────────────────────────────────
 
 export interface User {
@@ -106,6 +120,66 @@ export interface DocumentReview {
   admin_note?: string
   attachments?: Attachment[]
   results?: SubmissionResult[]
+  created_at: string
+  updated_at: string
+}
+
+export interface Regency {
+  id: string
+  name: string
+  province: string
+  type: string
+  label: string
+}
+
+export interface Division {
+  id: string
+  name: string
+  description?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface Cedant {
+  id: string
+  name: string
+  description?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface CaseChronology {
+  id: string
+  case_id: string
+  agenda_date: string
+  agenda: string
+  description?: string
+  documents: string[]
+  created_at: string
+  updated_at: string
+}
+
+export interface LegalCase {
+  id: string
+  case_name: string
+  case_summary?: string
+  related_party_id: string
+  related_party?: Cedant
+  category: CaseCategory
+  specification?: string
+  case_type: LegalCaseType | string
+  technical_reserve?: string
+  case_value: number
+  pic: string
+  pic_division?: Division
+  document_link?: string
+  current_status?: string
+  case_date: string
+  level: string
+  additional_notes?: string
+  location_regency_id: string
+  location_regency?: Regency
+  chronologies?: CaseChronology[]
   created_at: string
   updated_at: string
 }

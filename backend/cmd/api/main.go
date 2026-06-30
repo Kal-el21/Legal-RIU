@@ -8,6 +8,7 @@ import (
 	"legal-riu-portal/internal/handler"
 	"legal-riu-portal/internal/middleware"
 	"legal-riu-portal/internal/repository"
+	"legal-riu-portal/internal/seed"
 	"legal-riu-portal/internal/service"
 	"legal-riu-portal/internal/storage"
 
@@ -20,6 +21,10 @@ func main() {
 	db := config.InitDatabase(cfg)
 	store := storage.InitMinIO(cfg)
 
+	if err := db.Migrator().DropTable(&entity.CaseChronology{}, &entity.LegalCase{}); err != nil {
+		log.Fatalf("Failed to drop legal_case tables: %v", err)
+	}
+	log.Println("Legal case tables recreated to accommodate PIC -> uuid migration")
 	if err := db.AutoMigrate(
 		&entity.User{},
 		&entity.RefreshToken{},
@@ -29,11 +34,24 @@ func main() {
 		&entity.DocumentReview{},
 		&entity.DocumentReviewAttachment{},
 		&entity.DocumentReviewResult{},
+		&entity.Regency{},
+		&entity.Cedant{},
+		&entity.Division{},
+		&entity.LegalCase{},
+		&entity.CaseChronology{},
 		&entity.AuditLog{},
 	); err != nil {
 		log.Fatalf("Migration failed: %v", err)
 	}
 	log.Println("Database migrated successfully")
+	if err := seed.SeedRegencies(db); err != nil {
+		log.Fatalf("Regency seed failed: %v", err)
+	}
+	log.Println("Regencies seeded successfully")
+	if err := seed.SeedDivisions(db); err != nil {
+		log.Fatalf("Division seed failed: %v", err)
+	}
+	log.Println("Divisions seeded successfully")
 
 	// ── Repositories ─────────────────────────────────────────────────────────
 	userRepo := repository.NewUserRepository(db)
@@ -42,6 +60,8 @@ func main() {
 	drRepo := repository.NewDocumentReviewRepository(db)
 	dashRepo := repository.NewDashboardRepository(db)
 	auditLogRepo := repository.NewAuditLogRepository(db)
+	legalCaseRepo := repository.NewLegalCaseRepository(db)
+	divisionRepo := repository.NewDivisionRepository(db)
 
 	// ── Services ─────────────────────────────────────────────────────────────
 	authSvc := service.NewAuthService(userRepo, refreshTokenRepo, cfg)
@@ -50,6 +70,8 @@ func main() {
 	drSvc := service.NewDocumentReviewService(drRepo, store)
 	dashSvc := service.NewDashboardService(dashRepo)
 	auditLogSvc := service.NewAuditLogService(auditLogRepo)
+	legalCaseSvc := service.NewLegalCaseService(legalCaseRepo, store)
+	divisionSvc := service.NewDivisionService(divisionRepo)
 
 	// ── Handlers ─────────────────────────────────────────────────────────────
 	authHandler := handler.NewAuthHandler(authSvc, cfg, auditLogSvc)
@@ -58,6 +80,8 @@ func main() {
 	drHandler := handler.NewDocumentReviewHandler(drSvc, auditLogSvc)
 	dashHandler := handler.NewDashboardHandler(dashSvc)
 	auditLogHandler := handler.NewAuditLogHandler(auditLogSvc, auditLogRepo)
+	legalCaseHandler := handler.NewLegalCaseHandler(legalCaseSvc, auditLogSvc)
+	divisionHandler := handler.NewDivisionHandler(divisionSvc)
 
 	// ── Gin ──────────────────────────────────────────────────────────────────
 	if cfg.App.Env == "production" {
@@ -131,6 +155,27 @@ func main() {
 	admin.GET("/dashboard/stats", dashHandler.AdminStats)
 	admin.GET("/dashboard/recent", dashHandler.AdminRecent)
 
+	admin.GET("/legal-cases/regencies", legalCaseHandler.ListRegencies)
+	admin.GET("/legal-cases/cedants", legalCaseHandler.ListCedants)
+	admin.POST("/legal-cases/cedants", legalCaseHandler.CreateCedant)
+	admin.PUT("/legal-cases/cedants/:id", legalCaseHandler.UpdateCedant)
+	admin.DELETE("/legal-cases/cedants/:id", legalCaseHandler.DeleteCedant)
+	admin.GET("/divisions", divisionHandler.GetAll)
+	admin.POST("/divisions", divisionHandler.Create)
+	admin.PUT("/divisions/:id", divisionHandler.Update)
+	admin.DELETE("/divisions/:id", divisionHandler.Delete)
+	admin.GET("/legal-cases/download", legalCaseHandler.Download)
+	admin.GET("/legal-cases/latest", legalCaseHandler.GetLatest)
+	admin.GET("/legal-cases", legalCaseHandler.GetAll)
+	admin.POST("/legal-cases", legalCaseHandler.Create)
+	admin.GET("/legal-cases/:id", legalCaseHandler.GetByID)
+	admin.PUT("/legal-cases/:id", legalCaseHandler.Update)
+	admin.DELETE("/legal-cases/:id", legalCaseHandler.Delete)
+	admin.GET("/legal-cases/:id/chronology", legalCaseHandler.ListChronologies)
+	admin.POST("/legal-cases/:id/chronology", legalCaseHandler.CreateChronology)
+	admin.PUT("/legal-cases/:id/chronology/:chronId", legalCaseHandler.UpdateChronology)
+	admin.DELETE("/legal-cases/:id/chronology/:chronId", legalCaseHandler.DeleteChronology)
+
 	admin.PATCH("/legal-opinions/:id/status", loHandler.AdminUpdateStatus)
 	admin.POST("/legal-opinions/:id/result", loHandler.AdminUploadResult)
 	admin.GET("/legal-opinions/:id/pdf", loHandler.GeneratePDF)
@@ -180,5 +225,3 @@ func main() {
 		log.Fatalf("Failed to start server: %v", err)
 	}
 }
-
-

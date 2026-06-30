@@ -27,6 +27,8 @@ import AdminLegalOpinionListPage from '@/pages/admin/legal-opinions/AdminLegalOp
 import AdminLegalOpinionDetailPage from '@/pages/admin/legal-opinions/AdminLegalOpinionDetailPage'
 import AdminReviewDocumentListPage from '@/pages/admin/review-documents/AdminReviewDocumentListPage'
 import AdminReviewDocumentDetailPage from '@/pages/admin/review-documents/AdminReviewDocumentDetailPage'
+import AdminLegalCaseListPage from '@/pages/admin/legal-cases/AdminLegalCaseListPage'
+import AdminLegalCaseDetailPage from '@/pages/admin/legal-cases/AdminLegalCaseDetailPage'
 import AuditLogPage from '@/pages/admin/AuditLogPage'
 
 import LegalDashboardPage from '@/pages/legal/LegalDashboardPage'
@@ -113,6 +115,8 @@ export const router = createBrowserRouter([
           { path: '/admin/legal-opinions/:id', element: <AdminLegalOpinionDetailPage /> },
           { path: '/admin/review-documents', element: <AdminReviewDocumentListPage /> },
           { path: '/admin/review-documents/:id', element: <AdminReviewDocumentDetailPage /> },
+          { path: '/admin/legal-cases', element: <AdminLegalCaseListPage /> },
+          { path: '/admin/legal-cases/:id', element: <AdminLegalCaseDetailPage /> },
           { path: '/admin/users', element: <UserManagementPage /> },
           { path: '/admin/audit-logs', element: <AuditLogPage /> },
         ],
