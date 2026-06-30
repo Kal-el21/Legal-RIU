@@ -8,6 +8,7 @@ import (
 	"legal-riu-portal/internal/handler"
 	"legal-riu-portal/internal/middleware"
 	"legal-riu-portal/internal/repository"
+	"legal-riu-portal/internal/seed"
 	"legal-riu-portal/internal/service"
 	"legal-riu-portal/internal/storage"
 
@@ -20,6 +21,10 @@ func main() {
 	db := config.InitDatabase(cfg)
 	store := storage.InitMinIO(cfg)
 
+	if err := db.Migrator().DropTable(&entity.CaseChronology{}, &entity.LegalCase{}); err != nil {
+		log.Fatalf("Failed to drop legal_case tables: %v", err)
+	}
+	log.Println("Legal case tables recreated to accommodate PIC -> uuid migration")
 	if err := db.AutoMigrate(
 		&entity.User{},
 		&entity.RefreshToken{},
@@ -29,10 +34,24 @@ func main() {
 		&entity.DocumentReview{},
 		&entity.DocumentReviewAttachment{},
 		&entity.DocumentReviewResult{},
+		&entity.Regency{},
+		&entity.Cedant{},
+		&entity.Division{},
+		&entity.LegalCase{},
+		&entity.CaseChronology{},
+		&entity.AuditLog{},
 	); err != nil {
 		log.Fatalf("Migration failed: %v", err)
 	}
 	log.Println("Database migrated successfully")
+	if err := seed.SeedRegencies(db); err != nil {
+		log.Fatalf("Regency seed failed: %v", err)
+	}
+	log.Println("Regencies seeded successfully")
+	if err := seed.SeedDivisions(db); err != nil {
+		log.Fatalf("Division seed failed: %v", err)
+	}
+	log.Println("Divisions seeded successfully")
 
 	// ── Repositories ─────────────────────────────────────────────────────────
 	userRepo := repository.NewUserRepository(db)
@@ -40,6 +59,9 @@ func main() {
 	loRepo := repository.NewLegalOpinionRepository(db)
 	drRepo := repository.NewDocumentReviewRepository(db)
 	dashRepo := repository.NewDashboardRepository(db)
+	auditLogRepo := repository.NewAuditLogRepository(db)
+	legalCaseRepo := repository.NewLegalCaseRepository(db)
+	divisionRepo := repository.NewDivisionRepository(db)
 
 	// ── Services ─────────────────────────────────────────────────────────────
 	authSvc := service.NewAuthService(userRepo, refreshTokenRepo, cfg)
@@ -47,13 +69,19 @@ func main() {
 	loSvc := service.NewLegalOpinionService(loRepo, store)
 	drSvc := service.NewDocumentReviewService(drRepo, store)
 	dashSvc := service.NewDashboardService(dashRepo)
+	auditLogSvc := service.NewAuditLogService(auditLogRepo)
+	legalCaseSvc := service.NewLegalCaseService(legalCaseRepo, store)
+	divisionSvc := service.NewDivisionService(divisionRepo)
 
 	// ── Handlers ─────────────────────────────────────────────────────────────
-	authHandler := handler.NewAuthHandler(authSvc, cfg)
-	userHandler := handler.NewUserHandler(userSvc)
-	loHandler := handler.NewLegalOpinionHandler(loSvc)
-	drHandler := handler.NewDocumentReviewHandler(drSvc)
+	authHandler := handler.NewAuthHandler(authSvc, cfg, auditLogSvc)
+	userHandler := handler.NewUserHandler(userSvc, auditLogSvc)
+	loHandler := handler.NewLegalOpinionHandler(loSvc, auditLogSvc)
+	drHandler := handler.NewDocumentReviewHandler(drSvc, auditLogSvc)
 	dashHandler := handler.NewDashboardHandler(dashSvc)
+	auditLogHandler := handler.NewAuditLogHandler(auditLogSvc, auditLogRepo)
+	legalCaseHandler := handler.NewLegalCaseHandler(legalCaseSvc, auditLogSvc)
+	divisionHandler := handler.NewDivisionHandler(divisionSvc)
 
 	// ── Gin ──────────────────────────────────────────────────────────────────
 	if cfg.App.Env == "production" {
@@ -85,7 +113,7 @@ func main() {
 
 	// ── Protected ─────────────────────────────────────────────────────────────
 	protected := api.Group("")
-	protected.Use(middleware.AuthMiddleware(cfg), middleware.CSRFProtection())
+	protected.Use(middleware.AuthMiddleware(cfg), middleware.AuditMiddleware(auditLogSvc), middleware.CSRFProtection())
 
 	protected.GET("/auth/me", authHandler.Me)
 	protected.POST("/auth/change-password", authHandler.ChangePassword)
@@ -102,6 +130,7 @@ func main() {
 	// Legal opinions — presign
 	protected.GET("/legal-opinions/presign", loHandler.GetPresignedURL)
 	protected.GET("/legal-opinions/download", loHandler.Download)
+	protected.GET("/legal-opinions/:id/pdf", loHandler.GeneratePDF)
 	protected.GET("/legal-opinions", loHandler.GetAll)
 	protected.POST("/legal-opinions", loHandler.Create)
 	protected.GET("/legal-opinions/:id", loHandler.GetByID)
@@ -121,13 +150,35 @@ func main() {
 
 	// ── Admin only ────────────────────────────────────────────────────────────
 	admin := api.Group("/admin")
-	admin.Use(middleware.AuthMiddleware(cfg), middleware.RoleMiddleware("ADMIN"), middleware.CSRFProtection())
+	admin.Use(middleware.AuthMiddleware(cfg), middleware.RoleMiddleware("ADMIN"), middleware.AuditMiddleware(auditLogSvc), middleware.CSRFProtection())
 
 	admin.GET("/dashboard/stats", dashHandler.AdminStats)
 	admin.GET("/dashboard/recent", dashHandler.AdminRecent)
 
+	admin.GET("/legal-cases/regencies", legalCaseHandler.ListRegencies)
+	admin.GET("/legal-cases/cedants", legalCaseHandler.ListCedants)
+	admin.POST("/legal-cases/cedants", legalCaseHandler.CreateCedant)
+	admin.PUT("/legal-cases/cedants/:id", legalCaseHandler.UpdateCedant)
+	admin.DELETE("/legal-cases/cedants/:id", legalCaseHandler.DeleteCedant)
+	admin.GET("/divisions", divisionHandler.GetAll)
+	admin.POST("/divisions", divisionHandler.Create)
+	admin.PUT("/divisions/:id", divisionHandler.Update)
+	admin.DELETE("/divisions/:id", divisionHandler.Delete)
+	admin.GET("/legal-cases/download", legalCaseHandler.Download)
+	admin.GET("/legal-cases/latest", legalCaseHandler.GetLatest)
+	admin.GET("/legal-cases", legalCaseHandler.GetAll)
+	admin.POST("/legal-cases", legalCaseHandler.Create)
+	admin.GET("/legal-cases/:id", legalCaseHandler.GetByID)
+	admin.PUT("/legal-cases/:id", legalCaseHandler.Update)
+	admin.DELETE("/legal-cases/:id", legalCaseHandler.Delete)
+	admin.GET("/legal-cases/:id/chronology", legalCaseHandler.ListChronologies)
+	admin.POST("/legal-cases/:id/chronology", legalCaseHandler.CreateChronology)
+	admin.PUT("/legal-cases/:id/chronology/:chronId", legalCaseHandler.UpdateChronology)
+	admin.DELETE("/legal-cases/:id/chronology/:chronId", legalCaseHandler.DeleteChronology)
+
 	admin.PATCH("/legal-opinions/:id/status", loHandler.AdminUpdateStatus)
 	admin.POST("/legal-opinions/:id/result", loHandler.AdminUploadResult)
+	admin.GET("/legal-opinions/:id/pdf", loHandler.GeneratePDF)
 	admin.PATCH("/review-documents/:id/status", drHandler.AdminUpdateStatus)
 	admin.POST("/review-documents/:id/result", drHandler.AdminUploadResult)
 
@@ -136,6 +187,38 @@ func main() {
 	admin.PUT("/users/:id", userHandler.Update)
 	admin.PATCH("/users/:id/status", userHandler.UpdateStatus)
 	admin.POST("/users/:id/reset-password", userHandler.ResetPassword)
+
+	admin.GET("/audit-logs", auditLogHandler.GetAll)
+
+	// ── Legal ────────────────────────────────────────────────────────────────
+	legal := api.Group("/legal")
+	legal.Use(middleware.AuthMiddleware(cfg), middleware.RoleMiddleware("LEGAL"), middleware.AuditMiddleware(auditLogSvc), middleware.CSRFProtection())
+
+	legal.GET("/dashboard/stats", dashHandler.LegalStats)
+	legal.GET("/dashboard/recent", dashHandler.LegalRecent)
+
+	legal.PATCH("/legal-opinions/:id/status", loHandler.AdminUpdateStatus)
+	legal.POST("/legal-opinions/:id/result", loHandler.AdminUploadResult)
+	legal.GET("/legal-opinions/:id/pdf", loHandler.GeneratePDF)
+	legal.PATCH("/review-documents/:id/status", drHandler.AdminUpdateStatus)
+	legal.POST("/review-documents/:id/result", drHandler.AdminUploadResult)
+
+	legal.GET("/legal-opinions", loHandler.GetAll)
+	legal.GET("/legal-opinions/:id", loHandler.GetByID)
+	legal.GET("/review-documents", drHandler.GetAll)
+	legal.GET("/review-documents/:id", drHandler.GetByID)
+
+	// ─── External ─────────────────────────────────────────────────────────────
+	external := api.Group("/external")
+	external.Use(middleware.AuthMiddleware(cfg), middleware.RoleMiddleware("EXTERNAL"), middleware.AuditMiddleware(auditLogSvc), middleware.CSRFProtection())
+
+	external.GET("/dashboard/stats", dashHandler.ExternalStats)
+	external.GET("/dashboard/recent", dashHandler.ExternalRecent)
+
+	external.GET("/legal-opinions", loHandler.GetAll)
+	external.GET("/legal-opinions/:id", loHandler.GetByID)
+	external.GET("/review-documents", drHandler.GetAll)
+	external.GET("/review-documents/:id", drHandler.GetByID)
 
 	log.Printf("Server running on port %s", cfg.App.Port)
 	if err := r.Run(":" + cfg.App.Port); err != nil {

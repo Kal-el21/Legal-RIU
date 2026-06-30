@@ -28,10 +28,13 @@ func (b *Base) BeforeCreate(tx *gorm.DB) error {
 type UserRole string
 type UserStatus string
 type SubmissionStatus string
+type LegalCaseType string
 
 const (
-	RoleUser  UserRole = "USER"
-	RoleAdmin UserRole = "ADMIN"
+	RoleUser       UserRole = "USER"
+	RoleAdmin      UserRole = "ADMIN"
+	RoleLegal      UserRole = "LEGAL"
+	RoleExternal   UserRole = "EXTERNAL"
 
 	UserActive   UserStatus = "ACTIVE"
 	UserInactive UserStatus = "INACTIVE"
@@ -42,6 +45,18 @@ const (
 	StatusRejected     SubmissionStatus = "REJECTED"
 	StatusResubmitted  SubmissionStatus = "RESUBMITTED"
 	StatusCompleted    SubmissionStatus = "COMPLETED"
+
+	CaseTypeNonLitigasi LegalCaseType = "NON_LITIGASI"
+	CaseTypePerdata     LegalCaseType = "PERDATA"
+	CaseTypePidana      LegalCaseType = "PIDANA"
+	CaseTypeTipekor     LegalCaseType = "TIPEKOR"
+	CaseTypeArbitrase   LegalCaseType = "ARBITRASE"
+	CaseTypeTUN         LegalCaseType = "TUN"
+
+	CaseCategoryLife      string = "Life"
+	CaseCategoryBPPDAN    string = "BPPDAN"
+	CaseCategoryProperty  string = "Property"
+	CaseCategoryCOB       string = "COB"
 )
 
 // ─── User ─────────────────────────────────────────────────────────────────────
@@ -61,13 +76,13 @@ type User struct {
 
 type RefreshToken struct {
 	Base
-	UserID    uuid.UUID  `gorm:"type:uuid;not null;index" json:"user_id"`
-	User      User       `gorm:"foreignKey:UserID" json:"user,omitempty"`
-	TokenHash string     `gorm:"size:64;uniqueIndex;not null" json:"-"`
-	ExpiresAt time.Time  `gorm:"not null;index" json:"expires_at"`
-	RevokedAt *time.Time `gorm:"index" json:"revoked_at"`
-	IPAddress string     `gorm:"size:45" json:"ip_address"`
-	UserAgent string     `gorm:"size:255" json:"user_agent"`
+	UserID     uuid.UUID  `gorm:"type:uuid;not null;index" json:"user_id"`
+	User       User       `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	TokenHash  string     `gorm:"size:64;uniqueIndex;not null" json:"-"`
+	ExpiresAt  time.Time  `gorm:"not null;index" json:"expires_at"`
+	RevokedAt  *time.Time `gorm:"index" json:"revoked_at"`
+	IPAddress  string     `gorm:"size:45" json:"ip_address"`
+	UserAgent  string     `gorm:"size:255" json:"user_agent"`
 	LastUsedAt time.Time  `json:"last_used_at"`
 }
 
@@ -192,6 +207,90 @@ func (r *DocumentReviewResult) BeforeCreate(tx *gorm.DB) error {
 	return nil
 }
 
+// ─── Audit Log ─────────────────────────────────────────────────────────────────
+
+// Case Management
+
+type Regency struct {
+	Base
+	Name     string `gorm:"size:255;not null;uniqueIndex:idx_regencies_name_province" json:"name"`
+	Province string `gorm:"size:255;not null;uniqueIndex:idx_regencies_name_province;index" json:"province"`
+	Type     string `gorm:"size:20;not null;index" json:"type"`
+}
+
+type Cedant struct {
+	Base
+	Name        string `gorm:"size:255;not null;uniqueIndex" json:"name"`
+	Description string `gorm:"type:text" json:"description"`
+}
+
+type Division struct {
+	Base
+	Name        string `gorm:"size:255;not null;uniqueIndex" json:"name"`
+	Description string `gorm:"type:text" json:"description"`
+}
+
+type LegalCase struct {
+	Base
+	CaseName          string           `gorm:"size:255;not null;index" json:"case_name"`
+	CaseSummary       string           `gorm:"type:text" json:"case_summary"`
+	RelatedPartyID    uuid.UUID        `gorm:"type:uuid;not null;index" json:"related_party_id"`
+	RelatedParty      Cedant           `gorm:"foreignKey:RelatedPartyID" json:"related_party,omitempty"`
+	Category          string           `gorm:"size:100;not null;index" json:"category"`
+	Specification     string           `gorm:"type:text" json:"specification"`
+	CaseType          LegalCaseType    `gorm:"size:20;not null;index" json:"case_type"`
+	TechnicalReserve  string           `gorm:"size:255" json:"technical_reserve"`
+	CaseValue         float64          `gorm:"type:decimal(18,2)" json:"case_value"`
+	PIC               uuid.UUID      `gorm:"type:uuid;not null;index" json:"pic"`
+	PICDivision       Division        `gorm:"foreignKey:PIC" json:"pic_division,omitempty"`
+	DocumentLink      string           `gorm:"size:500" json:"document_link"`
+	CurrentStatus     string           `gorm:"size:100;index" json:"current_status"`
+	CaseDate          time.Time        `gorm:"not null;index" json:"case_date"`
+	Level             string           `gorm:"size:100;not null;index" json:"level"`
+	AdditionalNotes   string           `gorm:"type:text" json:"additional_notes"`
+	LocationRegencyID uuid.UUID        `gorm:"type:uuid;not null;index" json:"location_regency_id"`
+	LocationRegency   Regency          `gorm:"foreignKey:LocationRegencyID" json:"location_regency,omitempty"`
+	Chronologies      []CaseChronology `gorm:"foreignKey:CaseID" json:"chronologies,omitempty"`
+}
+
+type CaseChronology struct {
+	Base
+	CaseID      uuid.UUID `gorm:"type:uuid;not null;index" json:"case_id"`
+	LegalCase   LegalCase `gorm:"foreignKey:CaseID" json:"legal_case,omitempty"`
+	AgendaDate  time.Time `gorm:"not null;index" json:"agenda_date"`
+	Agenda      string    `gorm:"size:255;not null" json:"agenda"`
+	Description string    `gorm:"type:text" json:"description"`
+	Documents   string    `gorm:"type:text" json:"-"`
+}
+
+// Audit Log
+
+type AuditAction string
+
+const (
+	ActionStatusChange AuditAction = "STATUS_CHANGE"
+	ActionFileUpload   AuditAction = "FILE_UPLOAD"
+	ActionUserUpdate   AuditAction = "USER_UPDATE"
+	ActionLogin        AuditAction = "LOGIN"
+	ActionLogout       AuditAction = "LOGOUT"
+	ActionDelete       AuditAction = "DELETE"
+	ActionFileDelete   AuditAction = "FILE_DELETE"
+)
+
+type AuditLog struct {
+	Base
+	UserID      uuid.UUID   `gorm:"type:uuid;not null;index" json:"user_id"`
+	User        User        `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	Action      AuditAction `gorm:"not null;index" json:"action"`
+	EntityType  string      `gorm:"not null;index" json:"entity_type"`
+	EntityID    uuid.UUID   `gorm:"type:uuid;not null;index" json:"entity_id"`
+	OldValue    *string     `gorm:"type:text" json:"old_value,omitempty"`
+	NewValue    *string     `gorm:"type:text" json:"new_value,omitempty"`
+	Description *string     `gorm:"type:text" json:"description,omitempty"`
+	IPAddress   string      `gorm:"size:45" json:"ip_address"`
+	UserAgent   string      `gorm:"size:500" json:"user_agent"`
+}
+
 // ─── Settings ─────────────────────────────────────────────────────────────────
 
 type UserSettings struct {
@@ -209,3 +308,5 @@ func (s *UserSettings) BeforeCreate(tx *gorm.DB) error {
 	}
 	return nil
 }
+
+

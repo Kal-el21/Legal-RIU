@@ -73,3 +73,21 @@ export function useAdminUpdateStatus() {
     },
   })
 }
+
+export function useLegalUpdateStatus() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, status, admin_note }: { id: string; status: string; admin_note?: string }) =>
+      legalOpinionService.legalUpdateStatus(id, { status, admin_note }),
+    onSuccess: (_, { id }) => {
+      qc.invalidateQueries({ queryKey: KEYS.detail(id) })
+      qc.invalidateQueries({ queryKey: KEYS.all })
+    },
+  })
+}
+
+export function useAdminDownloadPDF() {
+  return useMutation({
+    mutationFn: (id: string) => legalOpinionService.adminDownloadPDF(id),
+  })
+}

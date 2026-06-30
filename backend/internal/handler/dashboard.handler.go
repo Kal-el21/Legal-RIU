@@ -57,3 +57,43 @@ func (h *DashboardHandler) AdminRecent(c *gin.Context) {
 	}
 	utils.OK(c, "Success", data)
 }
+
+// GET /api/v1/legal/dashboard/stats
+func (h *DashboardHandler) LegalStats(c *gin.Context) {
+	stats, err := h.svc.GetLegalStats()
+	if err != nil {
+		utils.InternalError(c, err.Error())
+		return
+	}
+	utils.OK(c, "Success", stats)
+}
+
+// GET /api/v1/legal/dashboard/recent
+func (h *DashboardHandler) LegalRecent(c *gin.Context) {
+	data, err := h.svc.GetLegalRecentActivity()
+	if err != nil {
+		utils.InternalError(c, err.Error())
+		return
+	}
+	utils.OK(c, "Success", data)
+}
+
+// GET /api/v1/external/dashboard/stats
+func (h *DashboardHandler) ExternalStats(c *gin.Context) {
+	stats, err := h.svc.GetExternalStats()
+	if err != nil {
+		utils.InternalError(c, err.Error())
+		return
+	}
+	utils.OK(c, "Success", stats)
+}
+
+// GET /api/v1/external/dashboard/recent
+func (h *DashboardHandler) ExternalRecent(c *gin.Context) {
+	data, err := h.svc.GetExternalRecentActivity()
+	if err != nil {
+		utils.InternalError(c, err.Error())
+		return
+	}
+	utils.OK(c, "Success", data)
+}

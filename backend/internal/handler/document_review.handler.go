@@ -3,9 +3,11 @@ package handler
 import (
 	"fmt"
 	"mime/multipart"
+	"strconv"
 	"strings"
 
 	"legal-riu-portal/internal/dto"
+	"legal-riu-portal/internal/entity"
 	"legal-riu-portal/internal/middleware"
 	"legal-riu-portal/internal/service"
 	"legal-riu-portal/internal/utils"
@@ -14,11 +16,12 @@ import (
 )
 
 type DocumentReviewHandler struct {
-	svc service.DocumentReviewService
+	svc         service.DocumentReviewService
+	auditLogSvc service.AuditLogService
 }
 
-func NewDocumentReviewHandler(svc service.DocumentReviewService) *DocumentReviewHandler {
-	return &DocumentReviewHandler{svc: svc}
+func NewDocumentReviewHandler(svc service.DocumentReviewService, auditLogSvc service.AuditLogService) *DocumentReviewHandler {
+	return &DocumentReviewHandler{svc: svc, auditLogSvc: auditLogSvc}
 }
 
 // GET /api/v1/review-documents
@@ -71,6 +74,8 @@ func (h *DocumentReviewHandler) Create(c *gin.Context) {
 			utils.InternalError(c, svcErr.Error())
 			return
 		}
+		middleware.SetAuditContext(c, entity.ActionUserUpdate, "document_review", dr.ID.String())
+		c.Set("audit_description", "Document review created")
 		utils.Created(c, "Pengajuan berhasil dibuat", dr)
 		return
 	}
@@ -107,6 +112,12 @@ func (h *DocumentReviewHandler) Create(c *gin.Context) {
 		utils.InternalError(c, err.Error())
 		return
 	}
+	middleware.SetAuditContext(c, entity.ActionUserUpdate, "document_review", dr.ID.String())
+	desc := "Document review created"
+	if len(files) > 0 {
+		desc = "Document review created with " + strconv.Itoa(len(files)) + " file(s)"
+	}
+	c.Set("audit_description", desc)
 	utils.Created(c, "Pengajuan berhasil dibuat", dr)
 }
 
@@ -124,6 +135,7 @@ func (h *DocumentReviewHandler) Update(c *gin.Context) {
 		utils.BadRequest(c, err.Error(), nil)
 		return
 	}
+	middleware.SetAuditContext(c, entity.ActionUserUpdate, "document_review", id)
 	utils.OK(c, "Pengajuan berhasil diupdate", dr)
 }
 
@@ -135,6 +147,7 @@ func (h *DocumentReviewHandler) Delete(c *gin.Context) {
 		utils.BadRequest(c, err.Error(), nil)
 		return
 	}
+	middleware.SetAuditContext(c, entity.ActionDelete, "document_review", id)
 	utils.OK(c, "Pengajuan berhasil dihapus", nil)
 }
 
@@ -151,6 +164,12 @@ func (h *DocumentReviewHandler) Resubmit(c *gin.Context) {
 		utils.BadRequest(c, err.Error(), nil)
 		return
 	}
+	middleware.SetAuditContext(c, entity.ActionUserUpdate, "document_review", id)
+	desc := "Document review resubmitted"
+	if len(files) > 0 {
+		desc = "Document review resubmitted with " + strconv.Itoa(len(files)) + " file(s)"
+	}
+	c.Set("audit_description", desc)
 	utils.OK(c, "Pengajuan berhasil diajukan ulang", dr)
 }
 
@@ -205,6 +224,8 @@ func (h *DocumentReviewHandler) AdminUpdateStatus(c *gin.Context) {
 		utils.BadRequest(c, err.Error(), nil)
 		return
 	}
+	desc := "Status changed to " + req.Status
+	middleware.SetAuditContextWithValues(c, entity.ActionStatusChange, "document_review", id, nil, &req.Status, &desc)
 	utils.OK(c, "Status berhasil diubah", nil)
 }
 
@@ -222,5 +243,8 @@ func (h *DocumentReviewHandler) AdminUploadResult(c *gin.Context) {
 		utils.InternalError(c, err.Error())
 		return
 	}
+	middleware.SetAuditContext(c, entity.ActionFileUpload, "document_review", id)
 	utils.OK(c, "Hasil review berhasil diupload", nil)
 }
+
+

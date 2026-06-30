@@ -7,14 +7,14 @@ export interface CreateUserData {
   password: string
   position: string
   division: string
-  role: 'USER' | 'ADMIN'
+  role: 'USER' | 'ADMIN' | 'LEGAL' | 'EXTERNAL'
 }
 
 export interface UpdateUserData {
   full_name: string
   position: string
   division: string
-  role: 'USER' | 'ADMIN'
+  role: 'USER' | 'ADMIN' | 'LEGAL' | 'EXTERNAL'
 }
 
 export const userService = {

@@ -13,6 +13,10 @@ type DashboardService interface {
 	GetUserRecentActivity(userID string) (map[string]interface{}, error)
 	GetAdminStats() (*dto.AdminDashboardStats, error)
 	GetAdminRecentActivity() (map[string]interface{}, error)
+	GetLegalStats() (*dto.AdminDashboardStats, error)
+	GetLegalRecentActivity() (map[string]interface{}, error)
+	GetExternalStats() (*dto.AdminDashboardStats, error)
+	GetExternalRecentActivity() (map[string]interface{}, error)
 }
 
 type dashboardService struct {
@@ -96,6 +100,72 @@ func (s *dashboardService) GetAdminStats() (*dto.AdminDashboardStats, error) {
 }
 
 func (s *dashboardService) GetAdminRecentActivity() (map[string]interface{}, error) {
+	legalOpinions, _ := s.repo.RecentAllLegalOpinions(5)
+	documentReviews, _ := s.repo.RecentAllDocumentReviews(5)
+
+	return map[string]interface{}{
+		"legal_opinions":   legalOpinions,
+		"document_reviews": documentReviews,
+	}, nil
+}
+
+func (s *dashboardService) GetLegalStats() (*dto.AdminDashboardStats, error) {
+	totalLO, _ := s.repo.CountAllLegalOpinions()
+	totalDR, _ := s.repo.CountAllDocumentReviews()
+
+	// Pending Review = SUBMITTED dari semua
+	loSubmitted, _ := s.repo.CountLegalOpinionsByStatus(entity.StatusSubmitted)
+	drSubmitted, _ := s.repo.CountDocumentReviewsByStatus(entity.StatusSubmitted)
+
+	loRevision, _ := s.repo.CountLegalOpinionsByStatus(entity.StatusNeedRevision)
+	drRevision, _ := s.repo.CountDocumentReviewsByStatus(entity.StatusNeedRevision)
+
+	loResub, _ := s.repo.CountLegalOpinionsByStatus(entity.StatusResubmitted)
+	drResub, _ := s.repo.CountDocumentReviewsByStatus(entity.StatusResubmitted)
+
+	return &dto.AdminDashboardStats{
+		TotalLegalOpinions:   totalLO,
+		TotalDocumentReviews: totalDR,
+		PendingReview:        loSubmitted + drSubmitted,
+		NeedRevision:         loRevision + drRevision,
+		Resubmitted:          loResub + drResub,
+	}, nil
+}
+
+func (s *dashboardService) GetLegalRecentActivity() (map[string]interface{}, error) {
+	legalOpinions, _ := s.repo.RecentAllLegalOpinions(5)
+	documentReviews, _ := s.repo.RecentAllDocumentReviews(5)
+
+	return map[string]interface{}{
+		"legal_opinions":   legalOpinions,
+		"document_reviews": documentReviews,
+	}, nil
+}
+
+func (s *dashboardService) GetExternalStats() (*dto.AdminDashboardStats, error) {
+	totalLO, _ := s.repo.CountAllLegalOpinions()
+	totalDR, _ := s.repo.CountAllDocumentReviews()
+
+	// Pending Review = SUBMITTED dari semua
+	loSubmitted, _ := s.repo.CountLegalOpinionsByStatus(entity.StatusSubmitted)
+	drSubmitted, _ := s.repo.CountDocumentReviewsByStatus(entity.StatusSubmitted)
+
+	loRevision, _ := s.repo.CountLegalOpinionsByStatus(entity.StatusNeedRevision)
+	drRevision, _ := s.repo.CountDocumentReviewsByStatus(entity.StatusNeedRevision)
+
+	loResub, _ := s.repo.CountLegalOpinionsByStatus(entity.StatusResubmitted)
+	drResub, _ := s.repo.CountDocumentReviewsByStatus(entity.StatusResubmitted)
+
+	return &dto.AdminDashboardStats{
+		TotalLegalOpinions:   totalLO,
+		TotalDocumentReviews: totalDR,
+		PendingReview:        loSubmitted + drSubmitted,
+		NeedRevision:         loRevision + drRevision,
+		Resubmitted:          loResub + drResub,
+	}, nil
+}
+
+func (s *dashboardService) GetExternalRecentActivity() (map[string]interface{}, error) {
 	legalOpinions, _ := s.repo.RecentAllLegalOpinions(5)
 	documentReviews, _ := s.repo.RecentAllDocumentReviews(5)
 

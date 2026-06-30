@@ -21,4 +21,24 @@ export const dashboardService = {
     const res = await api.get('/admin/dashboard/recent')
     return res.data.data
   },
+
+  getLegalStats: async (): Promise<AdminDashboardStats> => {
+    const res = await api.get<ApiResponse<AdminDashboardStats>>('/legal/dashboard/stats')
+    return res.data.data!
+  },
+
+  getLegalRecent: async (): Promise<{ legal_opinions: LegalOpinion[]; document_reviews: DocumentReview[] }> => {
+    const res = await api.get('/legal/dashboard/recent')
+    return res.data.data
+  },
+
+  getExternalStats: async (): Promise<AdminDashboardStats> => {
+    const res = await api.get<ApiResponse<AdminDashboardStats>>('/external/dashboard/stats')
+    return res.data.data!
+  },
+
+  getExternalRecent: async (): Promise<{ legal_opinions: LegalOpinion[]; document_reviews: DocumentReview[] }> => {
+    const res = await api.get('/external/dashboard/recent')
+    return res.data.data
+  },
 }

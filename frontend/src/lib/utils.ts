@@ -26,6 +26,14 @@ export function formatDateTime(dateString: string): string {
   })
 }
 
+export function formatCurrency(value: number): string {
+  return new Intl.NumberFormat('id-ID', {
+    style: 'currency',
+    currency: 'IDR',
+    maximumFractionDigits: 0,
+  }).format(value || 0)
+}
+
 // ─── File size formatting ─────────────────────────────────────────────────────
 export function formatFileSize(bytes: number): string {
   if (bytes === 0) return '0 B'

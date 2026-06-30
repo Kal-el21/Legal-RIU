@@ -5,20 +5,23 @@ import (
 
 	"legal-riu-portal/internal/config"
 	"legal-riu-portal/internal/dto"
+	"legal-riu-portal/internal/entity"
 	"legal-riu-portal/internal/middleware"
 	"legal-riu-portal/internal/service"
 	"legal-riu-portal/internal/utils"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 type AuthHandler struct {
-	authService service.AuthService
-	cfg         *config.Config
+	authService   service.AuthService
+	cfg           *config.Config
+	auditLogSvc   service.AuditLogService
 }
 
-func NewAuthHandler(authService service.AuthService, cfg *config.Config) *AuthHandler {
-	return &AuthHandler{authService: authService, cfg: cfg}
+func NewAuthHandler(authService service.AuthService, cfg *config.Config, auditLogSvc service.AuditLogService) *AuthHandler {
+	return &AuthHandler{authService: authService, cfg: cfg, auditLogSvc: auditLogSvc}
 }
 
 func getClientIP(c *gin.Context) string {
@@ -75,6 +78,8 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	}
 
 	h.setAuthCookies(c, res.AccessToken, res.RefreshToken)
+	userUUID, _ := uuid.Parse(res.User.ID)
+	_ = h.auditLogSvc.Log(userUUID, entity.ActionLogin, "auth", userUUID, nil, nil, nil, ip, ua)
 	utils.OK(c, "Login berhasil", res)
 }
 
@@ -121,7 +126,23 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 
 	_ = h.authService.Logout(req)
 	h.clearAuthCookies(c)
+	uid, _ := uuid.Parse(userIDFromToken(c))
+	if uid != uuid.Nil {
+		desc := "User logout"
+		_ = h.auditLogSvc.Log(uid, entity.ActionLogout, "auth", uid, nil, nil, &desc, c.ClientIP(), c.GetHeader("User-Agent"))
+	}
 	utils.OK(c, "Logout berhasil", nil)
+}
+
+func userIDFromToken(c *gin.Context) string {
+	if uid := c.GetString(middleware.ContextUserID); uid != "" {
+		return uid
+	}
+	return ""
+}
+
+func stringPtr(s string) *string {
+	return &s
 }
 
 // GET /api/v1/auth/me
@@ -148,7 +169,8 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 		utils.BadRequest(c, err.Error(), nil)
 		return
 	}
-
+	middleware.SetAuditContext(c, entity.ActionUserUpdate, "auth", userID)
+	c.Set("audit_description", "Password changed")
 	utils.OK(c, "Password berhasil diubah", nil)
 }
 
@@ -165,6 +187,7 @@ func (h *AuthHandler) UpdateProfile(c *gin.Context) {
 		utils.BadRequest(c, err.Error(), nil)
 		return
 	}
+	middleware.SetAuditContext(c, entity.ActionUserUpdate, "auth", userID)
 	utils.OK(c, "Profil berhasil diupdate", user)
 }
 
@@ -180,6 +203,8 @@ func (h *AuthHandler) UpdateNotification(c *gin.Context) {
 		utils.BadRequest(c, err.Error(), nil)
 		return
 	}
+	middleware.SetAuditContext(c, entity.ActionUserUpdate, "auth", userID)
+	c.Set("audit_description", "Notification preference updated")
 	utils.OK(c, "Preferensi notifikasi diperbarui", nil)
 }
 
@@ -195,9 +220,11 @@ func (h *AuthHandler) Toggle2FA(c *gin.Context) {
 		utils.BadRequest(c, err.Error(), nil)
 		return
 	}
+	middleware.SetAuditContext(c, entity.ActionUserUpdate, "auth", userID)
 	status := "diaktifkan"
 	if !req.Enabled {
 		status = "dinonaktifkan"
 	}
+	c.Set("audit_description", "Two-factor authentication " + status)
 	utils.OK(c, "Two-step login berhasil "+status, nil)
 }

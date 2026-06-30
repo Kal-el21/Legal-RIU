@@ -8,6 +8,7 @@ import (
 
 	"legal-riu-portal/internal/config"
 	"legal-riu-portal/internal/entity"
+	"legal-riu-portal/internal/seed"
 
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
@@ -22,9 +23,39 @@ func main() {
 		defer sqlDB.Close()
 	}
 
-	if err := db.AutoMigrate(&entity.User{}); err != nil {
-		log.Fatalf("Failed to migrate users table: %v", err)
+	if err := db.Migrator().DropTable(&entity.CaseChronology{}, &entity.LegalCase{}); err != nil {
+		log.Fatalf("Failed to drop legal_case tables: %v", err)
 	}
+	log.Println("Legal case tables recreated to accommodate PIC -> uuid migration")
+	if err := db.AutoMigrate(
+		&entity.User{},
+		&entity.RefreshToken{},
+		&entity.LegalOpinion{},
+		&entity.LegalOpinionAttachment{},
+		&entity.LegalOpinionResult{},
+		&entity.DocumentReview{},
+		&entity.DocumentReviewAttachment{},
+		&entity.DocumentReviewResult{},
+		&entity.Regency{},
+		&entity.Cedant{},
+		&entity.Division{},
+		&entity.LegalCase{},
+		&entity.CaseChronology{},
+		&entity.AuditLog{},
+	); err != nil {
+		log.Fatalf("Migration failed: %v", err)
+	}
+	log.Println("Database migrated successfully")
+
+	if err := seed.SeedRegencies(db); err != nil {
+		log.Fatalf("Regency seed failed: %v", err)
+	}
+	log.Println("Regencies seeded successfully")
+
+	if err := seed.SeedDivisions(db); err != nil {
+		log.Fatalf("Division seed failed: %v", err)
+	}
+	log.Println("Divisions seeded successfully")
 
 	email := getEnv("ADMIN_EMAIL", "admin@example.com")
 	password := getEnv("ADMIN_PASSWORD", "12345678")
