@@ -26,15 +26,17 @@ type LegalOpinionService interface {
 	UploadResult(id string, adminID string, req dto.UploadResultRequest, file *multipart.FileHeader) error
 	GetPresignedURL(filePath string) (string, error)
 	DownloadFile(filePath string) (*minio.Object, error)
+	GeneratePDF(id string) ([]byte, error)
 }
 
 type legalOpinionService struct {
 	repo    repository.LegalOpinionRepository
 	storage *storage.MinIOClient
+	pdfSvc  PDFService
 }
 
 func NewLegalOpinionService(repo repository.LegalOpinionRepository, s *storage.MinIOClient) LegalOpinionService {
-	return &legalOpinionService{repo: repo, storage: s}
+	return &legalOpinionService{repo: repo, storage: s, pdfSvc: NewPDFService()}
 }
 
 func (s *legalOpinionService) Create(userID string, req dto.CreateLegalOpinionRequest, files []*multipart.FileHeader) (*entity.LegalOpinion, error) {
@@ -209,6 +211,12 @@ func (s *legalOpinionService) UploadResult(id string, adminID string, req dto.Up
 		return errors.New("admin tidak valid")
 	}
 
+	// Get current legal opinion to check status
+	lo, err := s.repo.FindByID(uid)
+	if err != nil {
+		return errors.New("pengajuan tidak ditemukan")
+	}
+
 	ctx := context.Background()
 	objectPath, fileName, err := s.storage.UploadFile(ctx, "legal-opinions/results", file)
 	if err != nil {
@@ -222,7 +230,18 @@ func (s *legalOpinionService) UploadResult(id string, adminID string, req dto.Up
 		FilePath:       objectPath,
 		Notes:          req.Notes,
 	}
-	return s.repo.AddResult(result)
+	if err := s.repo.AddResult(result); err != nil {
+		return errors.New("gagal menyimpan hasil kajian")
+	}
+
+	// Auto-complete: If status is UNDER_REVIEW, automatically set to COMPLETED
+	if lo.Status == entity.StatusUnderReview {
+		if err := s.repo.UpdateStatus(uid, entity.StatusCompleted, ""); err != nil {
+			return errors.New("gagal mengupdate status ke COMPLETED")
+		}
+	}
+
+	return nil
 }
 
 func (s *legalOpinionService) GetPresignedURL(filePath string) (string, error) {
@@ -231,6 +250,20 @@ func (s *legalOpinionService) GetPresignedURL(filePath string) (string, error) {
 
 func (s *legalOpinionService) DownloadFile(filePath string) (*minio.Object, error) {
 	return s.storage.GetFileObject(context.Background(), filePath)
+}
+
+func (s *legalOpinionService) GeneratePDF(id string) ([]byte, error) {
+	uid, err := parseUUID(id)
+	if err != nil {
+		return nil, errors.New("ID tidak valid")
+	}
+
+	lo, err := s.repo.FindByID(uid)
+	if err != nil {
+		return nil, errors.New("pengajuan tidak ditemukan")
+	}
+
+	return s.pdfSvc.GenerateLegalOpinionPDF(lo)
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

@@ -106,6 +106,7 @@ func main() {
 	// Legal opinions — presign
 	protected.GET("/legal-opinions/presign", loHandler.GetPresignedURL)
 	protected.GET("/legal-opinions/download", loHandler.Download)
+	protected.GET("/legal-opinions/:id/pdf", loHandler.GeneratePDF)
 	protected.GET("/legal-opinions", loHandler.GetAll)
 	protected.POST("/legal-opinions", loHandler.Create)
 	protected.GET("/legal-opinions/:id", loHandler.GetByID)
@@ -132,6 +133,7 @@ func main() {
 
 	admin.PATCH("/legal-opinions/:id/status", loHandler.AdminUpdateStatus)
 	admin.POST("/legal-opinions/:id/result", loHandler.AdminUploadResult)
+	admin.GET("/legal-opinions/:id/pdf", loHandler.GeneratePDF)
 	admin.PATCH("/review-documents/:id/status", drHandler.AdminUpdateStatus)
 	admin.POST("/review-documents/:id/result", drHandler.AdminUploadResult)
 
@@ -152,6 +154,7 @@ func main() {
 
 	legal.PATCH("/legal-opinions/:id/status", loHandler.AdminUpdateStatus)
 	legal.POST("/legal-opinions/:id/result", loHandler.AdminUploadResult)
+	legal.GET("/legal-opinions/:id/pdf", loHandler.GeneratePDF)
 	legal.PATCH("/review-documents/:id/status", drHandler.AdminUpdateStatus)
 	legal.POST("/review-documents/:id/result", drHandler.AdminUploadResult)
 

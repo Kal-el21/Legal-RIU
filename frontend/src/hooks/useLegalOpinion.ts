@@ -85,3 +85,9 @@ export function useLegalUpdateStatus() {
     },
   })
 }
+
+export function useAdminDownloadPDF() {
+  return useMutation({
+    mutationFn: (id: string) => legalOpinionService.adminDownloadPDF(id),
+  })
+}

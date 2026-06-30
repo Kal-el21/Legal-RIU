@@ -1,12 +1,12 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useState } from 'react'
-import { ArrowLeft, FileText, MessageSquare, Upload, Download, CheckCircle } from 'lucide-react'
+import { ArrowLeft, FileText, MessageSquare, Upload, Download, CheckCircle, FileDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import StatusBadge from '@/components/common/StatusBadge'
-import { useLegalOpinion, useLegalUpdateStatus } from '@/hooks/useLegalOpinion'
+import { useLegalOpinion, useLegalUpdateStatus, useAdminDownloadPDF } from '@/hooks/useLegalOpinion'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { legalOpinionService } from '@/services/legal-opinion.service'
 import { formatDateTime, formatFileSize, validateFile } from '@/lib/utils'
@@ -35,6 +35,7 @@ export default function LegalLegalOpinionDetailPage() {
 
   const { data: lo, isLoading } = useLegalOpinion(id!)
   const updateStatus = useLegalUpdateStatus()
+  const downloadPDF = useAdminDownloadPDF()
 
   const [newStatus, setNewStatus] = useState('')
   const [adminNote, setAdminNote] = useState('')
@@ -83,6 +84,17 @@ export default function LegalLegalOpinionDetailPage() {
     URL.revokeObjectURL(url)
   }
 
+  const handleDownloadPDF = async () => {
+    if (!lo) return
+    const { blob, filename } = await downloadPDF.mutateAsync(id!)
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   if (isLoading) return <div className="p-12 text-center text-gray-400">Memuat data...</div>
   if (!lo) return <div className="p-12 text-center text-gray-500">Pengajuan tidak ditemukan</div>
 
@@ -102,6 +114,16 @@ export default function LegalLegalOpinionDetailPage() {
               {lo.ticket_number}
             </span>
             <StatusBadge status={status} />
+            <Button
+              onClick={handleDownloadPDF}
+              disabled={downloadPDF.isPending}
+              variant="outline"
+              size="sm"
+              className="ml-auto"
+            >
+              <FileDown className="w-4 h-4 mr-1" />
+              {downloadPDF.isPending ? 'Generating...' : 'Download PDF'}
+            </Button>
           </div>
           <h1 className="text-xl font-bold mt-2" style={{ color: '#0B2545' }}>{lo.title}</h1>
           <p className="text-sm text-gray-500 mt-0.5">
@@ -262,7 +284,7 @@ export default function LegalLegalOpinionDetailPage() {
               </div>
 
               {uploadResultMutation.isSuccess && (
-                <p className="text-xs text-green-600">File berhasil diupload!</p>
+                <p className="text-xs text-green-600">File berhasil diupload! Status otomatis diubah ke COMPLETED.</p>
               )}
 
               <Button

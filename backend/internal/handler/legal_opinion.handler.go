@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"bytes"
 	"fmt"
 	"mime/multipart"
 	"strconv"
@@ -249,6 +250,22 @@ func (h *LegalOpinionHandler) AdminUploadResult(c *gin.Context) {
 	}
 	middleware.SetAuditContext(c, entity.ActionFileUpload, "legal_opinion", id)
 	utils.OK(c, "Hasil kajian berhasil diupload", nil)
+}
+
+// GET /api/v1/legal-opinions/:id/pdf
+func (h *LegalOpinionHandler) GeneratePDF(c *gin.Context) {
+	id := c.Param("id")
+	pdfData, err := h.svc.GeneratePDF(id)
+	if err != nil {
+		utils.InternalError(c, err.Error())
+		return
+	}
+
+	lo, _ := h.svc.GetByID(id, middleware.GetUserID(c), middleware.GetUserRole(c))
+
+	c.DataFromReader(-1, -1, "application/pdf", bytes.NewReader(pdfData), map[string]string{
+		"Content-Disposition": fmt.Sprintf(`attachment; filename="legal-opinion-%s.pdf"`, lo.TicketNumber),
+	})
 }
 
 

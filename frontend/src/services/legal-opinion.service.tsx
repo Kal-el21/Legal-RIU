@@ -93,6 +93,21 @@ export const legalOpinionService = {
     await api.post(`/admin/legal-opinions/${id}/result`, form)
   },
 
+  adminDownloadPDF: async (id: string): Promise<{ blob: Blob; filename: string }> => {
+    const res = await api.get(`/admin/legal-opinions/${id}/pdf`, {
+      responseType: 'blob',
+    })
+
+    const contentDisposition = res.headers['content-disposition']
+    let filename = `legal-opinion-${id}.pdf`
+    if (contentDisposition) {
+      const match = contentDisposition.match(/filename="?([^"]+)"?/i)
+      if (match) filename = match[1]
+    }
+
+    return { blob: res.data, filename }
+  },
+
   legalUpdateStatus: async (id: string, data: { status: string; admin_note?: string }) => {
     await api.patch(`/legal/legal-opinions/${id}/status`, data)
   },
