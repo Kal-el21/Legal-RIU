@@ -1,6 +1,9 @@
 package handler
 
 import (
+	"strconv"
+
+	"legal-riu-portal/internal/dto"
 	"legal-riu-portal/internal/entity"
 	"legal-riu-portal/internal/service"
 	"legal-riu-portal/internal/utils"
@@ -16,36 +19,29 @@ func NewDivisionHandler(divisionService service.DivisionService) *DivisionHandle
 	return &DivisionHandler{divisionService: divisionService}
 }
 
-type DivisionResponse struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	CreatedAt   string `json:"created_at"`
-	UpdatedAt   string `json:"updated_at"`
-}
-
-func toDivisionResponse(d *entity.Division) DivisionResponse {
-	return DivisionResponse{
+func toDivisionResponse(d *entity.Division) dto.DivisionResponse {
+	return dto.DivisionResponse{
 		ID:          d.ID.String(),
 		Name:        d.Name,
 		Description: d.Description,
-		CreatedAt:   d.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
-		UpdatedAt:   d.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		CreatedAt:   d.CreatedAt,
+		UpdatedAt:   d.UpdatedAt,
 	}
 }
 
 func (h *DivisionHandler) GetAll(c *gin.Context) {
 	search := c.Query("search")
-	limit := 0
-	if l := c.Query("limit"); l != "" {
-		// parse limit if needed, for now just use 0 = unlimited
+	limit, err := strconv.Atoi(c.DefaultQuery("limit", "200"))
+	if err != nil {
+		utils.BadRequest(c, "Limit tidak valid", err.Error())
+		return
 	}
 	items, err := h.divisionService.GetAll(search, limit)
 	if err != nil {
 		utils.InternalError(c, err.Error())
 		return
 	}
-	response := make([]DivisionResponse, 0, len(items))
+	response := make([]dto.DivisionResponse, 0, len(items))
 	for i := range items {
 		response = append(response, toDivisionResponse(&items[i]))
 	}

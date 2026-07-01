@@ -1,5 +1,15 @@
 import api from './api'
-import type { ApiResponse, UserDashboardStats, AdminDashboardStats, LegalOpinion, DocumentReview } from '@/types'
+import type { ApiResponse, UserDashboardStats, AdminDashboardStats, LegalOpinion, DocumentReview, RemindersResponse } from '@/types'
+
+export interface ReminderParams {
+  page?: number
+  limit?: number
+}
+
+export interface MarkReminderReadPayload {
+  submission_type: string
+  submission_id: string
+}
 
 export const dashboardService = {
   getUserStats: async (): Promise<UserDashboardStats> => {
@@ -40,5 +50,18 @@ export const dashboardService = {
   getExternalRecent: async (): Promise<{ legal_opinions: LegalOpinion[]; document_reviews: DocumentReview[] }> => {
     const res = await api.get('/external/dashboard/recent')
     return res.data.data
+  },
+
+  getReminders: async (params?: ReminderParams): Promise<RemindersResponse> => {
+    const res = await api.get<ApiResponse<RemindersResponse>>('/dashboard/reminders', { params })
+    return res.data.data!
+  },
+
+  markReminderRead: async (payload: MarkReminderReadPayload): Promise<void> => {
+    await api.patch('/dashboard/reminders/read', payload)
+  },
+
+  markAllRemindersRead: async (): Promise<void> => {
+    await api.patch('/dashboard/reminders/read-all')
   },
 }

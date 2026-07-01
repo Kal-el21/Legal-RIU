@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Download, Edit, FileText, Plus, Trash2, Upload } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -23,6 +24,7 @@ const CASE_TYPE_LABEL: Record<string, string> = {
 export default function AdminLegalCaseDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const { data: legalCase, isLoading } = useLegalCase(id!)
   const deleteCase = useDeleteLegalCase()
   const createChronology = useCreateCaseChronology(id!)
@@ -64,17 +66,22 @@ export default function AdminLegalCaseDetailPage() {
     event.preventDefault()
     if (!agendaDate || !agenda.trim()) return
 
-    await createChronology.mutateAsync({
-      agenda_date: agendaDate,
-      agenda,
-      description,
-      files,
-    })
+    try {
+      await createChronology.mutateAsync({
+        agenda_date: agendaDate,
+        agenda,
+        description,
+        files,
+      })
 
-    setAgendaDate('')
-    setAgenda('')
-    setDescription('')
-    setFiles([])
+      setAgendaDate('')
+      setAgenda('')
+      setDescription('')
+      setFiles([])
+      setFileError('')
+    } catch {
+      // Error detail is rendered from the mutation state.
+    }
   }
 
   const handleDownload = async (path: string) => {
@@ -135,7 +142,19 @@ export default function AdminLegalCaseDetailPage() {
               <Info label="Status Terkini" value={legalCase.current_status || '-'} />
               <Info label="Tanggal" value={formatDate(legalCase.case_date)} />
               <Info label="Tingkat" value={legalCase.level} />
-              <Info label="Link Dokumen Pendukung" value={legalCase.document_link || '-'} link={legalCase.document_link} />
+              <DocumentUpload
+                label="Dokumen Pendukung"
+                documentLink={legalCase.document_link}
+                onUpload={async (file) => {
+                  await legalCaseService.uploadDocument(legalCase.id, file)
+                  await queryClient.invalidateQueries({ queryKey: ['legal-cases'] })
+                }}
+                onDelete={async () => {
+                  if (!window.confirm('Hapus dokumen pendukung?')) return
+                  await legalCaseService.deleteDocument(legalCase.id)
+                  await queryClient.invalidateQueries({ queryKey: ['legal-cases'] })
+                }}
+              />
             </div>
             <TextInfo label="Ringkasan Kasus / Perkara" value={legalCase.case_summary || '-'} />
             <TextInfo label="Spesifikasi Kasus" value={legalCase.specification || '-'} />
@@ -170,7 +189,7 @@ export default function AdminLegalCaseDetailPage() {
                 <Input type="date" value={agendaDate} onChange={(event) => setAgendaDate(event.target.value)} required />
               </Field>
               <Field label="Status Terkini">
-                <Input value={agenda} onChange={(event) => setAgenda(event.target.value)} placeholder="Status terkini" required />
+                <Textarea value={agenda} onChange={(event) => setAgenda(event.target.value)} placeholder="Status terkini" required />
               </Field>
               <Field label="Tindak Lanjut">
                 <Textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={4} placeholder="Tindak lanjut" />
@@ -320,6 +339,105 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     <div className="space-y-1.5">
       <Label className="text-sm font-medium text-gray-700">{label}</Label>
       {children}
+    </div>
+  )
+}
+
+function DocumentUpload({ label, documentLink, onUpload, onDelete }: {
+  label: string
+  documentLink?: string
+  onUpload: (file: File) => void
+  onDelete: () => void
+}) {
+  const [uploading, setUploading] = useState(false)
+  const [error, setError] = useState('')
+  const isExternalDocument = !!documentLink && /^https?:\/\//i.test(documentLink)
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const allowedExtensions = ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.jpg', '.jpeg', '.png']
+    const ext = '.' + file.name.split('.').pop()?.toLowerCase()
+    if (!allowedExtensions.includes(ext)) {
+      setError('Format file tidak didukung.')
+      e.target.value = ''
+      return
+    }
+    if (file.size > 100 * 1024 * 1024) {
+      setError('Ukuran file melebihi batas maksimal 100 MB.')
+      e.target.value = ''
+      return
+    }
+
+    setError('')
+    setUploading(true)
+    try {
+      await onUpload(file)
+    } catch (err) {
+      setError((err as Error)?.message ?? 'Gagal mengupload dokumen.')
+    } finally {
+      setUploading(false)
+      e.target.value = ''
+    }
+  }
+
+  const fileName = documentLink?.split('/').pop()
+
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-sm font-medium text-gray-700">{label}</Label>
+      {documentLink ? (
+        <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+          <FileText className="h-4 w-4 shrink-0 text-gray-400" />
+          <span className="min-w-0 flex-1 truncate text-xs text-gray-600">{fileName}</span>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              if (isExternalDocument) {
+                window.open(documentLink, '_blank', 'noopener,noreferrer')
+                return
+              }
+              legalCaseService.downloadFile(documentLink).then(({ blob, filename }) => {
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement('a')
+                a.href = url
+                a.download = filename
+                a.click()
+                URL.revokeObjectURL(url)
+              })
+            }}
+            className="h-7 px-2 text-xs"
+          >
+            <Download className="h-3 w-3" />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={onDelete}
+            className="h-7 px-2 text-xs text-red-600 hover:text-red-700"
+          >
+            <Trash2 className="h-3 w-3" />
+          </Button>
+        </div>
+      ) : (
+        <label className="flex cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed border-gray-200 p-4 hover:bg-gray-50">
+          <Upload className="h-5 w-5 text-gray-400" />
+          <span className="text-center text-xs text-gray-500">
+            {uploading ? 'Mengupload...' : 'Pilih dokumen untuk diupload'}
+          </span>
+          <input
+            type="file"
+            accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png"
+            className="hidden"
+            onChange={handleFileChange}
+            disabled={uploading}
+          />
+        </label>
+      )}
+      {error && <p className="text-xs text-red-500">{error}</p>}
     </div>
   )
 }

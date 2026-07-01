@@ -33,6 +33,7 @@ func (r *refreshTokenRepository) FindActiveByHash(tokenHash string) (*entity.Ref
 	var token entity.RefreshToken
 	err := r.db.
 		Preload("User").
+		Preload("User.DivisionRef").
 		Where("token_hash = ? AND revoked_at IS NULL AND expires_at > ?", tokenHash, time.Now()).
 		First(&token).Error
 	if err != nil {

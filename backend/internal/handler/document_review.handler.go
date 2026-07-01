@@ -246,5 +246,3 @@ func (h *DocumentReviewHandler) AdminUploadResult(c *gin.Context) {
 	middleware.SetAuditContext(c, entity.ActionFileUpload, "document_review", id)
 	utils.OK(c, "Hasil review berhasil diupload", nil)
 }
-
-

@@ -19,13 +19,13 @@ import (
 )
 
 type MinIOClient struct {
-	client        *minio.Client
-	publicClient  *minio.Client
-	bucket        string
-	expires       time.Duration
+	client       *minio.Client
+	publicClient *minio.Client
+	bucket       string
+	expires      time.Duration
 }
 
-const maxUploadSizeBytes = 25 * 1024 * 1024
+const maxUploadSizeBytes = 100 * 1024 * 1024
 
 var allowedUploadExtensions = map[string]bool{
 	".pdf":  true,
@@ -95,7 +95,7 @@ func InitMinIO(cfg *config.Config) *MinIOClient {
 }
 
 // UploadFile uploads a file to MinIO and returns the stored path
-func (m *MinIOClient) UploadFile(ctx context.Context, folder string, fileHeader *multipart.FileHeader) (string, string, error) {
+func (m *MinIOClient) UploadFile(ctx context.Context, folder string, fileHeader *multipart.FileHeader, customName ...string) (string, string, error) {
 	if err := validateUpload(fileHeader); err != nil {
 		return "", "", err
 	}
@@ -107,7 +107,14 @@ func (m *MinIOClient) UploadFile(ctx context.Context, folder string, fileHeader 
 	defer file.Close()
 
 	ext := filepath.Ext(fileHeader.Filename)
-	objectName := fmt.Sprintf("%s/%s%s", folder, uuid.New().String(), ext)
+	var objectName string
+	if len(customName) > 0 && customName[0] != "" {
+		sanitized := sanitizeFilename(customName[0])
+		timestamp := time.Now().Format("20060102-150405")
+		objectName = fmt.Sprintf("%s/%s-%s-%s%s", folder, sanitized, timestamp, uuid.New().String()[:8], ext)
+	} else {
+		objectName = fmt.Sprintf("%s/%s%s", folder, uuid.New().String(), ext)
+	}
 
 	_, err = m.client.PutObject(ctx, m.bucket, objectName, file, fileHeader.Size, minio.PutObjectOptions{
 		ContentType: fileHeader.Header.Get("Content-Type"),
@@ -117,6 +124,24 @@ func (m *MinIOClient) UploadFile(ctx context.Context, folder string, fileHeader 
 	}
 
 	return objectName, fileHeader.Filename, nil
+}
+
+func sanitizeFilename(name string) string {
+	ext := filepath.Ext(name)
+	base := strings.TrimSuffix(name, ext)
+	base = strings.ReplaceAll(base, " ", "_")
+	base = strings.ReplaceAll(base, ".", "_")
+	var result strings.Builder
+	for _, r := range base {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' || r == '-' {
+			result.WriteRune(r)
+		}
+	}
+	sanitized := result.String()
+	if sanitized == "" {
+		sanitized = "file"
+	}
+	return sanitized
 }
 
 func validateUpload(fileHeader *multipart.FileHeader) error {

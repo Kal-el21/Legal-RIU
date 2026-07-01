@@ -20,9 +20,9 @@ import {
   useUpdateDocumentReview,
   useDocumentReview,
 } from "@/hooks/useDocumentReview";
+import { useDivisions } from "@/hooks/useLegalCase";
 import { useAuthStore } from "@/store/auth.store";
 import { validateFile, formatFileSize } from "@/lib/utils";
-import { DIVISIONS } from "@/constants/divisions";
 
 const DOCUMENT_TYPES = [
   "Surat Perintah Kerja",
@@ -61,8 +61,10 @@ export default function ReviewDocumentFormPage() {
   const [fileErrors, setFileErrors] = useState<string[]>([]);
 
   const { data: existing } = useDocumentReview(id ?? "");
+  const { data: divisions = [] } = useDivisions();
   const createMutation = useCreateDocumentReview();
   const updateMutation = useUpdateDocumentReview();
+  const divisionOptions = divisions.map((division) => division.name);
 
   const {
     register,
@@ -189,7 +191,10 @@ export default function ReviewDocumentFormPage() {
                       <SelectValue placeholder="Pilih divisi" />
                     </SelectTrigger>
                     <SelectContent>
-                      {DIVISIONS.map((d) => (
+                      {field.value && !divisionOptions.includes(field.value) && (
+                        <SelectItem value={field.value}>{field.value}</SelectItem>
+                      )}
+                      {divisionOptions.map((d) => (
                         <SelectItem key={d} value={d}>
                           {d}
                         </SelectItem>

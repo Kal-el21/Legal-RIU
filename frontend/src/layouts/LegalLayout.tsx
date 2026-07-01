@@ -1,8 +1,11 @@
 import { Outlet, Link, useLocation } from 'react-router-dom'
 import { Scale, LayoutDashboard, FileText, FileSearch, Menu, ChevronRight, ChevronLeft } from 'lucide-react'
 import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { dashboardService } from '@/services/dashboard.service'
 import { cn } from '@/lib/utils'
 import SidebarUserButton from '@/components/common/SidebarUserButton'
+import NotificationDropdown from '@/components/common/NotificationDropdown'
 
 const NAV = [
   { label: 'Dashboard', href: '/legal', icon: LayoutDashboard, exact: true },
@@ -17,6 +20,13 @@ export default function LegalLayout() {
 
   const isActive = (href: string, exact?: boolean) =>
     exact ? location.pathname === href : location.pathname.startsWith(href)
+
+  const { data: reminders } = useQuery({
+    queryKey: ['dashboard', 'legal', 'reminders'],
+    queryFn: () => dashboardService.getReminders(),
+  })
+
+  const reminderCount = (reminders?.yellow?.length ?? 0) + (reminders?.red?.length ?? 0)
 
   return (
     <div className="min-h-screen flex" style={{ background: '#f8fafc' }}>
@@ -53,7 +63,14 @@ export default function LegalLayout() {
               )}
               title={sidebarCollapsed ? item.label : undefined}
             >
-              <item.icon className="w-4 h-4 flex-shrink-0" />
+              <span className="relative flex-shrink-0">
+                <item.icon className="w-4 h-4" />
+                {item.exact && reminderCount > 0 ? (
+                  <span className="absolute -top-1.5 -right-2 inline-flex items-center justify-center rounded-full text-[10px] font-bold px-1 min-w-[16px] h-4 bg-red-500 text-white border-2 border-[#0B2545]">
+                    {reminderCount}
+                  </span>
+                ) : null}
+              </span>
               {!sidebarCollapsed && item.label}
               {!sidebarCollapsed && isActive(item.href, item.exact) && <ChevronRight className="w-3.5 h-3.5 ml-auto opacity-60" />}
             </Link>
@@ -83,6 +100,7 @@ export default function LegalLayout() {
             {sidebarCollapsed ? <ChevronRight className="w-5 h-5 text-gray-600" /> : <ChevronLeft className="w-5 h-5 text-gray-600" />}
           </button>
           <div className="flex-1" />
+          <NotificationDropdown />
           <Link to="/" className="text-sm text-gray-500 hover:text-gray-700 transition-colors">
             ← Kembali ke Beranda
           </Link>

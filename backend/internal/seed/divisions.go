@@ -1,12 +1,11 @@
 package seed
 
 import (
-	"log"
-
 	"legal-riu-portal/internal/entity"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 var DEFAULT_DIVISIONS = []entity.Division{
@@ -30,32 +29,48 @@ var DEFAULT_DIVISIONS = []entity.Division{
 }
 
 func SeedDivisions(db *gorm.DB) error {
-	var count int64
-	if err := db.Model(&entity.Division{}).Count(&count).Error; err != nil {
-		return err
-	}
-	if count > 0 {
-		log.Println("Divisions already seeded")
-		return nil
-	}
-
 	divisions := make([]entity.Division, 0, len(DEFAULT_DIVISIONS))
 	for _, d := range DEFAULT_DIVISIONS {
 		divisions = append(divisions, entity.Division{
+			Base: entity.Base{
+				ID: uuid.NewSHA1(uuid.NameSpaceOID, []byte("division:"+d.Name)),
+			},
 			Name:        d.Name,
 			Description: d.Description,
 		})
 	}
-	if err := db.CreateInBatches(divisions, 100).Error; err != nil {
-		return err
-	}
-	return nil
+	return db.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "name"}},
+		DoNothing: true,
+	}).CreateInBatches(divisions, 100).Error
 }
 
 func FindDivisionIDByName(db *gorm.DB, name string) (uuid.UUID, error) {
 	var div entity.Division
-	if err := db.Where("name = ?", name).First(&div).Error; err != nil {
+	if err := db.Where("LOWER(name) = LOWER(?)", name).First(&div).Error; err != nil {
 		return uuid.Nil, err
 	}
 	return div.ID, nil
+}
+
+func BackfillUserDivisionIDs(db *gorm.DB) error {
+	var users []entity.User
+	if err := db.Where("division_id IS NULL AND division <> ''").Find(&users).Error; err != nil {
+		return err
+	}
+
+	for i := range users {
+		var division entity.Division
+		if err := db.Where("LOWER(name) = LOWER(?)", users[i].Division).First(&division).Error; err != nil {
+			continue
+		}
+		if err := db.Model(&entity.User{}).Where("id = ?", users[i].ID).Updates(map[string]interface{}{
+			"division":    division.Name,
+			"division_id": division.ID,
+		}).Error; err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

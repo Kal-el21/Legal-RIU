@@ -97,3 +97,16 @@ func (h *DashboardHandler) ExternalRecent(c *gin.Context) {
 	}
 	utils.OK(c, "Success", data)
 }
+
+// GET /api/v1/dashboard/reminders
+func (h *DashboardHandler) GetReminders(c *gin.Context) {
+	userID := middleware.GetUserID(c)
+	role := middleware.GetUserRole(c)
+	page, limit := parseReminderPagination(c)
+	result, err := h.svc.GetReminders(userID, role, page, limit)
+	if err != nil {
+		utils.InternalError(c, err.Error())
+		return
+	}
+	utils.OK(c, "Success", result)
+}

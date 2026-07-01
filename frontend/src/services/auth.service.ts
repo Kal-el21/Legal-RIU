@@ -27,9 +27,9 @@ export const authService = {
 }
 
 export const settingsService = {
-  updateProfile: async (data: { full_name: string; position: string; division: string }) => {
-    const res = await api.put('/settings/profile', data)
-    return res.data.data
+  updateProfile: async (data: { full_name: string; position: string; division: string }): Promise<User> => {
+    const res = await api.put<ApiResponse<User>>('/settings/profile', data)
+    return res.data.data!
   },
   updateNotifications: async (email_notifications: boolean) => {
     await api.put('/settings/notifications', { email_notifications })

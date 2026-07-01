@@ -96,6 +96,18 @@ export const legalCaseService = {
     await api.delete(`/admin/legal-cases/${caseID}/chronology/${chronologyID}`)
   },
 
+  uploadDocument: async (caseID: string, file: File) => {
+    const form = new FormData()
+    form.append('document', file)
+    const res = await api.post<ApiResponse<LegalCase>>(`/admin/legal-cases/${caseID}/upload-document`, form)
+    return res.data.data!
+  },
+
+  deleteDocument: async (caseID: string) => {
+    const res = await api.delete(`/admin/legal-cases/${caseID}/document`)
+    return res.data.data!
+  },
+
   downloadFile: async (path: string): Promise<{ blob: Blob; filename: string }> => {
     const res = await api.get('/admin/legal-cases/download', {
       params: { path },
@@ -128,7 +140,7 @@ export const legalCaseService = {
   },
 
   getDivisions: async (params?: { search?: string }) => {
-    const res = await api.get<ApiResponse<Division[]>>('/admin/divisions', { params })
+    const res = await api.get<ApiResponse<Division[]>>('/divisions', { params })
     return res.data.data ?? []
   },
 }

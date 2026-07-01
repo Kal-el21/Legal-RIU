@@ -131,4 +131,3 @@ func (h *UserHandler) ResetPassword(c *gin.Context) {
 	middleware.SetAuditContext(c, entity.ActionUserUpdate, "user", id)
 	utils.OK(c, "Password berhasil direset", nil)
 }
-

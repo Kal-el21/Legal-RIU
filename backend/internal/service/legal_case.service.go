@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"mime/multipart"
 	"path/filepath"
 	"strings"
@@ -31,6 +32,8 @@ type LegalCaseService interface {
 	UpdateChronology(caseID string, chronologyID string, req dto.UpdateCaseChronologyRequest, files []*multipart.FileHeader) (*dto.CaseChronologyResponse, error)
 	DeleteChronology(caseID string, chronologyID string) error
 	DownloadFile(filePath string) (*minio.Object, error)
+	UploadDocument(caseID string, file *multipart.FileHeader) (*dto.LegalCaseResponse, error)
+	DeleteDocument(caseID string) (*dto.LegalCaseResponse, error)
 
 	ListRegencies(search string, limit int) ([]dto.RegencyResponse, error)
 	ListCedants(search string, limit int) ([]dto.CedantResponse, error)
@@ -218,7 +221,7 @@ func (s *legalCaseService) CreateChronology(caseID string, req dto.CreateCaseChr
 	}
 
 	documents := append([]string{}, req.Documents...)
-	uploaded, err := s.uploadChronologyDocuments(files)
+	uploaded, err := s.uploadChronologyDocuments(caseID, files)
 	if err != nil {
 		return nil, err
 	}
@@ -231,6 +234,7 @@ func (s *legalCaseService) CreateChronology(caseID string, req dto.CreateCaseChr
 		Description: req.Description,
 		Documents:   encodeDocuments(documents),
 	}
+	chronology.ID = uuid.New()
 
 	if chronology.Agenda == "" {
 		return nil, errors.New("agenda wajib diisi")
@@ -265,7 +269,7 @@ func (s *legalCaseService) UpdateChronology(caseID string, chronologyID string, 
 	}
 
 	documents := append([]string{}, req.Documents...)
-	uploaded, err := s.uploadChronologyDocuments(files)
+	uploaded, err := s.uploadChronologyDocuments(caseID, files)
 	if err != nil {
 		return nil, err
 	}
@@ -307,6 +311,9 @@ func (s *legalCaseService) DeleteChronology(caseID string, chronologyID string) 
 }
 
 func (s *legalCaseService) DownloadFile(filePath string) (*minio.Object, error) {
+	if !strings.HasPrefix(filePath, "legal-cases/documents/") && !strings.HasPrefix(filePath, "legal-cases/chronologies/") {
+		return nil, errors.New("path file tidak valid")
+	}
 	return s.storage.GetFileObject(context.Background(), filePath)
 }
 
@@ -390,6 +397,66 @@ func (s *legalCaseService) DeleteCedant(id string) error {
 	return nil
 }
 
+func (s *legalCaseService) UploadDocument(caseID string, file *multipart.FileHeader) (*dto.LegalCaseResponse, error) {
+	uid, err := parseUUID(caseID)
+	if err != nil {
+		return nil, errors.New("ID kasus tidak valid")
+	}
+
+	legalCase, err := s.repo.FindByID(uid)
+	if err != nil {
+		return nil, errors.New("kasus tidak ditemukan")
+	}
+
+	oldDocumentLink := legalCase.DocumentLink
+
+	objectName, _, err := s.storage.UploadFile(context.Background(), "legal-cases/documents", file, fmt.Sprintf("case-%s", uid.String()))
+	if err != nil {
+		return nil, errors.New("gagal upload dokumen: " + err.Error())
+	}
+
+	legalCase.DocumentLink = objectName
+	if err := s.repo.Update(legalCase); err != nil {
+		_ = s.storage.DeleteFile(context.Background(), objectName)
+		return nil, errors.New("gagal menyimpan dokumen")
+	}
+
+	if oldDocumentLink != "" {
+		_ = s.storage.DeleteFile(context.Background(), oldDocumentLink)
+	}
+
+	response := toLegalCaseResponse(legalCase, true)
+	return &response, nil
+}
+
+func (s *legalCaseService) DeleteDocument(caseID string) (*dto.LegalCaseResponse, error) {
+	uid, err := parseUUID(caseID)
+	if err != nil {
+		return nil, errors.New("ID kasus tidak valid")
+	}
+
+	legalCase, err := s.repo.FindByID(uid)
+	if err != nil {
+		return nil, errors.New("kasus tidak ditemukan")
+	}
+
+	if legalCase.DocumentLink == "" {
+		response := toLegalCaseResponse(legalCase, true)
+		return &response, nil
+	}
+
+	oldDocumentLink := legalCase.DocumentLink
+	legalCase.DocumentLink = ""
+	if err := s.repo.Update(legalCase); err != nil {
+		return nil, errors.New("gagal memperbarui kasus")
+	}
+
+	_ = s.storage.DeleteFile(context.Background(), oldDocumentLink)
+
+	response := toLegalCaseResponse(legalCase, true)
+	return &response, nil
+}
+
 func (s *legalCaseService) buildLegalCase(req dto.CreateLegalCaseRequest) (*entity.LegalCase, error) {
 	caseDate, err := parseRequiredDate(req.CaseDate)
 	if err != nil {
@@ -417,6 +484,14 @@ func (s *legalCaseService) buildLegalCase(req dto.CreateLegalCaseRequest) (*enti
 		return nil, errors.New("jenis kasus tidak valid")
 	}
 
+	picID, err := parseUUID(req.PIC)
+	if err != nil {
+		return nil, errors.New("PIC tidak valid")
+	}
+	if _, err := s.repo.FindDivisionByID(picID); err != nil {
+		return nil, errors.New("PIC tidak ditemukan")
+	}
+
 	legalCase := &entity.LegalCase{
 		CaseName:          strings.TrimSpace(req.CaseName),
 		CaseSummary:       req.CaseSummary,
@@ -426,7 +501,7 @@ func (s *legalCaseService) buildLegalCase(req dto.CreateLegalCaseRequest) (*enti
 		CaseType:          caseType,
 		TechnicalReserve:  req.TechnicalReserve,
 		CaseValue:         req.CaseValue,
-		PIC:               parseDivisionID(strings.TrimSpace(req.PIC)),
+		PIC:               picID,
 		DocumentLink:      req.DocumentLink,
 		CurrentStatus:     strings.TrimSpace(req.CurrentStatus),
 		CaseDate:          caseDate,
@@ -442,15 +517,18 @@ func (s *legalCaseService) buildLegalCase(req dto.CreateLegalCaseRequest) (*enti
 	return legalCase, nil
 }
 
-func (s *legalCaseService) uploadChronologyDocuments(files []*multipart.FileHeader) ([]string, error) {
+func (s *legalCaseService) uploadChronologyDocuments(caseID string, files []*multipart.FileHeader) ([]string, error) {
 	if len(files) == 0 {
 		return nil, nil
 	}
 
 	paths := make([]string, 0, len(files))
 	for _, file := range files {
-		objectPath, _, err := s.storage.UploadFile(context.Background(), "legal-cases/chronologies", file)
+		objectPath, _, err := s.storage.UploadFile(context.Background(), "legal-cases/chronologies", file, fmt.Sprintf("case-%s-chron", caseID))
 		if err != nil {
+			for _, path := range paths {
+				_ = s.storage.DeleteFile(context.Background(), path)
+			}
 			return nil, errors.New("gagal mengupload dokumen: " + file.Filename)
 		}
 		paths = append(paths, objectPath)
@@ -558,14 +636,6 @@ func toLegalCaseResponse(legalCase *entity.LegalCase, includeChronologies bool) 
 	return response
 }
 
-func parseDivisionID(pic string) uuid.UUID {
-	parsed, err := uuid.Parse(pic)
-	if err == nil {
-		return parsed
-	}
-	return uuid.Nil
-}
-
 func toDivisionResponse(division *entity.Division) dto.DivisionResponse {
 	return dto.DivisionResponse{
 		ID:          division.ID.String(),
@@ -620,4 +690,3 @@ func toCedantResponse(cedant *entity.Cedant) dto.CedantResponse {
 func FileNameFromPath(filePath string) string {
 	return filepath.Base(filePath)
 }
-

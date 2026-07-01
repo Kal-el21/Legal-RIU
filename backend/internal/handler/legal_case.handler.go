@@ -117,6 +117,40 @@ func (h *LegalCaseHandler) Delete(c *gin.Context) {
 	utils.OK(c, "Kasus hukum berhasil dihapus", nil)
 }
 
+func (h *LegalCaseHandler) UploadDocument(c *gin.Context) {
+	id := c.Param("id")
+
+	file, err := c.FormFile("document")
+	if err != nil {
+		utils.BadRequest(c, "Dokumen wajib diupload", err.Error())
+		return
+	}
+
+	legalCase, err := h.svc.UploadDocument(id, file)
+	if err != nil {
+		utils.BadRequest(c, err.Error(), nil)
+		return
+	}
+
+	middleware.SetAuditContext(c, entity.ActionFileUpload, "legal_case", id)
+	c.Set("audit_description", "Legal case document uploaded")
+	utils.OK(c, "Dokumen berhasil diupload", legalCase)
+}
+
+func (h *LegalCaseHandler) DeleteDocument(c *gin.Context) {
+	id := c.Param("id")
+
+	legalCase, err := h.svc.DeleteDocument(id)
+	if err != nil {
+		utils.BadRequest(c, err.Error(), nil)
+		return
+	}
+
+	middleware.SetAuditContext(c, entity.ActionFileDelete, "legal_case", id)
+	c.Set("audit_description", "Legal case document deleted")
+	utils.OK(c, "Dokumen berhasil dihapus", legalCase)
+}
+
 func (h *LegalCaseHandler) ListChronologies(c *gin.Context) {
 	items, err := h.svc.ListChronologies(c.Param("id"))
 	if err != nil {
@@ -180,7 +214,7 @@ func (h *LegalCaseHandler) Download(c *gin.Context) {
 
 	obj, err := h.svc.DownloadFile(filePath)
 	if err != nil {
-		utils.InternalError(c, "Gagal mengambil file")
+		utils.BadRequest(c, err.Error(), nil)
 		return
 	}
 	defer obj.Close()
@@ -287,4 +321,3 @@ func bindChronologyRequest(c *gin.Context) (dto.CreateCaseChronologyRequest, []*
 
 	return req, files, true
 }
-

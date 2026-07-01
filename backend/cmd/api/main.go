@@ -21,11 +21,11 @@ func main() {
 	db := config.InitDatabase(cfg)
 	store := storage.InitMinIO(cfg)
 
-	if err := db.Migrator().DropTable(&entity.CaseChronology{}, &entity.LegalCase{}); err != nil {
-		log.Fatalf("Failed to drop legal_case tables: %v", err)
+	if err := seed.PrepareLegalCasePICMigration(db); err != nil {
+		log.Fatalf("Legal case PIC migration preparation failed: %v", err)
 	}
-	log.Println("Legal case tables recreated to accommodate PIC -> uuid migration")
 	if err := db.AutoMigrate(
+		&entity.Division{},
 		&entity.User{},
 		&entity.RefreshToken{},
 		&entity.LegalOpinion{},
@@ -36,10 +36,12 @@ func main() {
 		&entity.DocumentReviewResult{},
 		&entity.Regency{},
 		&entity.Cedant{},
-		&entity.Division{},
 		&entity.LegalCase{},
 		&entity.CaseChronology{},
 		&entity.AuditLog{},
+		&entity.NotificationSetting{},
+		&entity.NotificationRead{},
+		&entity.UserSettings{},
 	); err != nil {
 		log.Fatalf("Migration failed: %v", err)
 	}
@@ -52,6 +54,13 @@ func main() {
 		log.Fatalf("Division seed failed: %v", err)
 	}
 	log.Println("Divisions seeded successfully")
+	if err := seed.BackfillUserDivisionIDs(db); err != nil {
+		log.Fatalf("User division backfill failed: %v", err)
+	}
+	if err := seed.SeedNotificationSettings(db); err != nil {
+		log.Fatalf("Notification settings seed failed: %v", err)
+	}
+	log.Println("Notification settings seeded successfully")
 
 	// ── Repositories ─────────────────────────────────────────────────────────
 	userRepo := repository.NewUserRepository(db)
@@ -62,13 +71,15 @@ func main() {
 	auditLogRepo := repository.NewAuditLogRepository(db)
 	legalCaseRepo := repository.NewLegalCaseRepository(db)
 	divisionRepo := repository.NewDivisionRepository(db)
+	notificationSettingRepo := repository.NewNotificationSettingRepository(db)
 
 	// ── Services ─────────────────────────────────────────────────────────────
 	authSvc := service.NewAuthService(userRepo, refreshTokenRepo, cfg)
 	userSvc := service.NewUserService(userRepo)
 	loSvc := service.NewLegalOpinionService(loRepo, store)
 	drSvc := service.NewDocumentReviewService(drRepo, store)
-	dashSvc := service.NewDashboardService(dashRepo)
+	notificationSettingSvc := service.NewNotificationSettingService(notificationSettingRepo, dashRepo)
+	dashSvc := service.NewDashboardService(dashRepo, notificationSettingSvc)
 	auditLogSvc := service.NewAuditLogService(auditLogRepo)
 	legalCaseSvc := service.NewLegalCaseService(legalCaseRepo, store)
 	divisionSvc := service.NewDivisionService(divisionRepo)
@@ -82,6 +93,7 @@ func main() {
 	auditLogHandler := handler.NewAuditLogHandler(auditLogSvc, auditLogRepo)
 	legalCaseHandler := handler.NewLegalCaseHandler(legalCaseSvc, auditLogSvc)
 	divisionHandler := handler.NewDivisionHandler(divisionSvc)
+	notificationSettingHandler := handler.NewNotificationSettingHandler(notificationSettingSvc)
 
 	// ── Gin ──────────────────────────────────────────────────────────────────
 	if cfg.App.Env == "production" {
@@ -126,6 +138,10 @@ func main() {
 	// Dashboard
 	protected.GET("/dashboard/stats", dashHandler.UserStats)
 	protected.GET("/dashboard/recent", dashHandler.UserRecent)
+	protected.GET("/dashboard/reminders", dashHandler.GetReminders)
+	protected.PATCH("/dashboard/reminders/read", notificationSettingHandler.MarkReminderRead)
+	protected.PATCH("/dashboard/reminders/read-all", notificationSettingHandler.MarkAllRemindersRead)
+	protected.GET("/divisions", divisionHandler.GetAll)
 
 	// Legal opinions — presign
 	protected.GET("/legal-opinions/presign", loHandler.GetPresignedURL)
@@ -148,12 +164,13 @@ func main() {
 	protected.DELETE("/review-documents/:id", drHandler.Delete)
 	protected.POST("/review-documents/:id/resubmit", drHandler.Resubmit)
 
-	// ── Admin only ────────────────────────────────────────────────────────────
+	// ── Admin only ─────────────────────────────────────────────────────────────
 	admin := api.Group("/admin")
 	admin.Use(middleware.AuthMiddleware(cfg), middleware.RoleMiddleware("ADMIN"), middleware.AuditMiddleware(auditLogSvc), middleware.CSRFProtection())
 
 	admin.GET("/dashboard/stats", dashHandler.AdminStats)
 	admin.GET("/dashboard/recent", dashHandler.AdminRecent)
+	admin.GET("/dashboard/reminders", notificationSettingHandler.GetRemindersDashboard)
 
 	admin.GET("/legal-cases/regencies", legalCaseHandler.ListRegencies)
 	admin.GET("/legal-cases/cedants", legalCaseHandler.ListCedants)
@@ -162,6 +179,7 @@ func main() {
 	admin.DELETE("/legal-cases/cedants/:id", legalCaseHandler.DeleteCedant)
 	admin.GET("/divisions", divisionHandler.GetAll)
 	admin.POST("/divisions", divisionHandler.Create)
+	admin.GET("/divisions/:id", divisionHandler.GetByID)
 	admin.PUT("/divisions/:id", divisionHandler.Update)
 	admin.DELETE("/divisions/:id", divisionHandler.Delete)
 	admin.GET("/legal-cases/download", legalCaseHandler.Download)
@@ -171,6 +189,8 @@ func main() {
 	admin.GET("/legal-cases/:id", legalCaseHandler.GetByID)
 	admin.PUT("/legal-cases/:id", legalCaseHandler.Update)
 	admin.DELETE("/legal-cases/:id", legalCaseHandler.Delete)
+	admin.POST("/legal-cases/:id/upload-document", legalCaseHandler.UploadDocument)
+	admin.DELETE("/legal-cases/:id/document", legalCaseHandler.DeleteDocument)
 	admin.GET("/legal-cases/:id/chronology", legalCaseHandler.ListChronologies)
 	admin.POST("/legal-cases/:id/chronology", legalCaseHandler.CreateChronology)
 	admin.PUT("/legal-cases/:id/chronology/:chronId", legalCaseHandler.UpdateChronology)
@@ -189,13 +209,16 @@ func main() {
 	admin.POST("/users/:id/reset-password", userHandler.ResetPassword)
 
 	admin.GET("/audit-logs", auditLogHandler.GetAll)
+	admin.GET("/notification-settings", notificationSettingHandler.GetAll)
+	admin.PUT("/notification-settings/:id", notificationSettingHandler.Update)
 
-	// ── Legal ────────────────────────────────────────────────────────────────
+	// ── Legal ─────────────────────────────────────────────────────────────────
 	legal := api.Group("/legal")
 	legal.Use(middleware.AuthMiddleware(cfg), middleware.RoleMiddleware("LEGAL"), middleware.AuditMiddleware(auditLogSvc), middleware.CSRFProtection())
 
 	legal.GET("/dashboard/stats", dashHandler.LegalStats)
 	legal.GET("/dashboard/recent", dashHandler.LegalRecent)
+	legal.GET("/dashboard/reminders", notificationSettingHandler.GetLegalReminders)
 
 	legal.PATCH("/legal-opinions/:id/status", loHandler.AdminUpdateStatus)
 	legal.POST("/legal-opinions/:id/result", loHandler.AdminUploadResult)
@@ -214,6 +237,7 @@ func main() {
 
 	external.GET("/dashboard/stats", dashHandler.ExternalStats)
 	external.GET("/dashboard/recent", dashHandler.ExternalRecent)
+	external.GET("/dashboard/reminders", notificationSettingHandler.GetReminders)
 
 	external.GET("/legal-opinions", loHandler.GetAll)
 	external.GET("/legal-opinions/:id", loHandler.GetByID)
