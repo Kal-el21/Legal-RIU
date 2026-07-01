@@ -67,16 +67,26 @@ const (
 
 type User struct {
 	Base
-	FullName           string       `gorm:"not null" json:"full_name"`
-	Email              string       `gorm:"uniqueIndex;not null" json:"email"`
-	PasswordHash       string       `gorm:"not null" json:"-"`
+	FullName           string     `gorm:"not null" json:"full_name"`
+	Email              string     `gorm:"uniqueIndex;not null" json:"email"`
+	PasswordHash       string     `gorm:"not null" json:"-"`
 	AuthType           UserAuthType `gorm:"type:varchar(20);not null;default:'LOCAL'" json:"auth_type"`
-	Position           string       `gorm:"not null" json:"position"`
-	Division           string       `gorm:"not null" json:"division"`
+	Position           string     `gorm:"not null" json:"position"`
+	Division           string     `gorm:"not null" json:"division"`
+	DivisionID         *uuid.UUID `gorm:"type:uuid;index" json:"division_id,omitempty"`
+	DivisionRef        Division   `gorm:"foreignKey:DivisionID;constraint:OnUpdate:CASCADE,OnDelete:SET NULL;" json:"division_ref,omitempty"`
 	Role               UserRole     `gorm:"not null;default:'USER'" json:"role"`
 	Status             UserStatus   `gorm:"not null;default:'ACTIVE'" json:"status"`
 	EmailNotifications bool         `gorm:"not null;default:true" json:"email_notifications"`
 	TwoFAEnabled       bool         `gorm:"not null;default:false" json:"two_fa_enabled"`
+}
+
+func (u *User) IsLDAP() bool {
+	return u.AuthType == AuthTypeLDAP
+}
+
+func (u *User) IsLocal() bool {
+	return u.AuthType == "" || u.AuthType == AuthTypeLocal
 }
 
 func (u *User) IsLDAP() bool {
@@ -254,7 +264,7 @@ type LegalCase struct {
 	CaseType          LegalCaseType    `gorm:"size:20;not null;index" json:"case_type"`
 	TechnicalReserve  string           `gorm:"size:255" json:"technical_reserve"`
 	CaseValue         float64          `gorm:"type:decimal(18,2)" json:"case_value"`
-	PIC               uuid.UUID        `gorm:"type:uuid;not null;index" json:"pic"`
+	PIC               uuid.UUID        `gorm:"type:uuid;index" json:"pic"`
 	PICDivision       Division         `gorm:"foreignKey:PIC" json:"pic_division,omitempty"`
 	DocumentLink      string           `gorm:"size:500" json:"document_link"`
 	CurrentStatus     string           `gorm:"size:100;index" json:"current_status"`
@@ -271,7 +281,7 @@ type CaseChronology struct {
 	CaseID      uuid.UUID `gorm:"type:uuid;not null;index" json:"case_id"`
 	LegalCase   LegalCase `gorm:"foreignKey:CaseID" json:"legal_case,omitempty"`
 	AgendaDate  time.Time `gorm:"not null;index" json:"agenda_date"`
-	Agenda      string    `gorm:"size:255;not null" json:"agenda"`
+	Agenda      string    `gorm:"type:text;not null" json:"agenda"`
 	Description string    `gorm:"type:text" json:"description"`
 	Documents   string    `gorm:"type:text" json:"-"`
 }
@@ -320,4 +330,31 @@ func (s *UserSettings) BeforeCreate(tx *gorm.DB) error {
 		s.ID = uuid.New()
 	}
 	return nil
+}
+
+type NotificationSetting struct {
+	ID             uuid.UUID `gorm:"type:uuid;primaryKey" json:"id"`
+	SubmissionType string    `gorm:"size:50;not null" json:"submission_type"`
+	WarningLevel   string    `gorm:"size:20;not null" json:"warning_level"`
+	DaysThreshold  int       `gorm:"not null" json:"days_threshold"`
+	IsActive       bool      `gorm:"default:true" json:"is_active"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+}
+
+func (n *NotificationSetting) BeforeCreate(tx *gorm.DB) error {
+	if n.ID == uuid.Nil {
+		n.ID = uuid.New()
+	}
+	return nil
+}
+
+type NotificationRead struct {
+	Base
+	UserID         uuid.UUID  `gorm:"type:uuid;not null;uniqueIndex:idx_notification_reads_user_submission" json:"user_id"`
+	User           User       `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	SubmissionType string     `gorm:"size:50;not null;uniqueIndex:idx_notification_reads_user_submission" json:"submission_type"`
+	SubmissionID   uuid.UUID  `gorm:"type:uuid;not null;uniqueIndex:idx_notification_reads_user_submission" json:"submission_id"`
+	IsRead         bool       `gorm:"not null;default:true" json:"is_read"`
+	ReadAt         *time.Time `json:"read_at"`
 }

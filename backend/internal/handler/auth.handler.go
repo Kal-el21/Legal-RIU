@@ -15,9 +15,9 @@ import (
 )
 
 type AuthHandler struct {
-	authService   service.AuthService
-	cfg           *config.Config
-	auditLogSvc   service.AuditLogService
+	authService service.AuthService
+	cfg         *config.Config
+	auditLogSvc service.AuditLogService
 }
 
 func NewAuthHandler(authService service.AuthService, cfg *config.Config, auditLogSvc service.AuditLogService) *AuthHandler {
@@ -40,13 +40,13 @@ func (h *AuthHandler) setAuthCookies(c *gin.Context, accessToken, refreshToken s
 	isProduction := h.cfg.App.Env == "production"
 
 	// Access token - convert hours to seconds
-	accessMaxAge := h.cfg.JWT.ExpiresHours * int(time.Hour / time.Second)
+	accessMaxAge := h.cfg.JWT.ExpiresHours * int(time.Hour/time.Second)
 	if accessMaxAge <= 0 {
 		accessMaxAge = 3600 // 1 hour default
 	}
 
 	// Refresh token
-	refreshMaxAge := h.cfg.JWT.RefreshExpiresHours * int(time.Hour / time.Second)
+	refreshMaxAge := h.cfg.JWT.RefreshExpiresHours * int(time.Hour/time.Second)
 	if refreshMaxAge <= 0 {
 		refreshMaxAge = 604800 // 7 days default
 	}
@@ -225,6 +225,6 @@ func (h *AuthHandler) Toggle2FA(c *gin.Context) {
 	if !req.Enabled {
 		status = "dinonaktifkan"
 	}
-	c.Set("audit_description", "Two-factor authentication " + status)
+	c.Set("audit_description", "Two-factor authentication "+status)
 	utils.OK(c, "Two-step login berhasil "+status, nil)
 }

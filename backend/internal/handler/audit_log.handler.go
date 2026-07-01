@@ -14,8 +14,8 @@ import (
 )
 
 type AuditLogHandler struct {
-	auditLogSvc   service.AuditLogService
-	auditLogRepo  repository.AuditLogRepository
+	auditLogSvc  service.AuditLogService
+	auditLogRepo repository.AuditLogRepository
 }
 
 func NewAuditLogHandler(auditLogSvc service.AuditLogService, auditLogRepo repository.AuditLogRepository) *AuditLogHandler {
@@ -23,18 +23,18 @@ func NewAuditLogHandler(auditLogSvc service.AuditLogService, auditLogRepo reposi
 }
 
 type AuditLogResponse struct {
-	ID          string                `json:"id"`
-	UserID      string                `json:"user_id"`
-	User        *dto.UserResponse     `json:"user,omitempty"`
-	Action      entity.AuditAction    `json:"action"`
-	EntityType  string                `json:"entity_type"`
-	EntityID    string                `json:"entity_id"`
-	OldValue    *string               `json:"old_value,omitempty"`
-	NewValue    *string               `json:"new_value,omitempty"`
-	Description *string               `json:"description,omitempty"`
-	IPAddress   string                `json:"ip_address"`
-	UserAgent   string                `json:"user_agent"`
-	CreatedAt   time.Time             `json:"created_at"`
+	ID          string             `json:"id"`
+	UserID      string             `json:"user_id"`
+	User        *dto.UserResponse  `json:"user,omitempty"`
+	Action      entity.AuditAction `json:"action"`
+	EntityType  string             `json:"entity_type"`
+	EntityID    string             `json:"entity_id"`
+	OldValue    *string            `json:"old_value,omitempty"`
+	NewValue    *string            `json:"new_value,omitempty"`
+	Description *string            `json:"description,omitempty"`
+	IPAddress   string             `json:"ip_address"`
+	UserAgent   string             `json:"user_agent"`
+	CreatedAt   time.Time          `json:"created_at"`
 }
 
 // GET /api/v1/admin/audit-logs
@@ -85,10 +85,10 @@ func (h *AuditLogHandler) GetAll(c *gin.Context) {
 	totalPages := int((total + int64(filters.Limit) - 1) / int64(filters.Limit))
 
 	response := map[string]interface{}{
-		"items": items,
-		"total": total,
-		"page":  filters.Page,
-		"limit": filters.Limit,
+		"items":       items,
+		"total":       total,
+		"page":        filters.Page,
+		"limit":       filters.Limit,
 		"total_pages": totalPages,
 	}
 

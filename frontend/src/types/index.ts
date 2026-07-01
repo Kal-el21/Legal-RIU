@@ -50,6 +50,8 @@ export interface User {
   email: string
   position: string
   division: string
+  division_id?: string
+  division_detail?: Division
   role: UserRole
   status: UserStatus
   email_notifications: boolean
@@ -267,4 +269,44 @@ export interface AuditLogFilters {
   search?: string
   page: number
   limit: number
+}
+
+export type WarningLevel = 'NONE' | 'YELLOW' | 'RED'
+
+export interface NotificationSetting {
+  id: string
+  submission_type: 'legal_opinion' | 'document_review' | 'ALL'
+  warning_level: WarningLevel
+  days_threshold: number
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface ReminderItem {
+  id: string
+  submission_type: string
+  ticket_number: string
+  title: string
+  status: string
+  submitted_at: string
+  last_updated_at?: string | null
+  days_since_submission: number
+  days_since_last_update: number
+  warning_level: WarningLevel
+  warning_color: string
+  is_read: boolean
+  assigned_legal_name?: string
+}
+
+export interface RemindersResponse {
+  yellow: ReminderItem[]
+  red: ReminderItem[]
+  none: ReminderItem[]
+  items: ReminderItem[]
+  total: number
+  unread_total: number
+  page: number
+  limit: number
+  total_pages: number
 }

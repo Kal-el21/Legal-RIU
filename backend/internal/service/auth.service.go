@@ -272,7 +272,13 @@ func (s *authService) UpdateProfile(userID string, req dto.UpdateProfileRequest)
 	if err != nil {
 		return nil, errors.New("user tidak valid")
 	}
-	if err := s.userRepo.UpdateProfile(uid, req.FullName, req.Position, req.Division); err != nil {
+
+	divisionName, divisionID, err := resolveDivisionSelection(s.userRepo, req.Division)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.userRepo.UpdateProfile(uid, req.FullName, req.Position, divisionName, divisionID); err != nil {
 		return nil, errors.New("gagal mengupdate profil")
 	}
 	user, _ := s.userRepo.FindByID(uid)

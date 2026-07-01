@@ -30,16 +30,18 @@ type ChangePasswordRequest struct {
 // ─── User ─────────────────────────────────────────────────────────────────────
 
 type UserResponse struct {
-	ID                 string `json:"id"`
-	FullName           string `json:"full_name"`
-	Email              string `json:"email"`
-	AuthType           string `json:"auth_type"`
-	Position           string `json:"position"`
-	Division           string `json:"division"`
-	Role               string `json:"role"`
-	Status             string `json:"status"`
-	EmailNotifications bool   `json:"email_notifications"`
-	TwoFAEnabled       bool   `json:"two_fa_enabled"`
+	ID                 string            `json:"id"`
+	FullName           string            `json:"full_name"`
+	Email              string            `json:"email"`
+	AuthType           string            `json:"auth_type"`
+	Position           string            `json:"position"`
+	Division           string            `json:"division"`
+	DivisionID         string            `json:"division_id,omitempty"`
+	DivisionDetail     *DivisionResponse `json:"division_detail,omitempty"`
+	Role               string            `json:"role"`
+	Status             string            `json:"status"`
+	EmailNotifications bool              `json:"email_notifications"`
+	TwoFAEnabled       bool              `json:"two_fa_enabled"`
 }
 
 type CreateUserRequest struct {

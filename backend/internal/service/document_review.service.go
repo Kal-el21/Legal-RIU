@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"mime/multipart"
 
 	"legal-riu-portal/internal/dto"
@@ -204,7 +205,7 @@ func (s *documentReviewService) UploadResult(id string, adminID string, req dto.
 	}
 
 	ctx := context.Background()
-	objectPath, fileName, err := s.storage.UploadFile(ctx, "document-reviews/results", file)
+	objectPath, fileName, err := s.storage.UploadFile(ctx, "document-reviews/results", file, fmt.Sprintf("review-result-%s", uid.String()))
 	if err != nil {
 		return errors.New("gagal mengupload hasil review")
 	}
@@ -230,7 +231,7 @@ func (s *documentReviewService) DownloadFile(filePath string) (*minio.Object, er
 func (s *documentReviewService) uploadAttachments(drID uuid.UUID, files []*multipart.FileHeader, round int) error {
 	ctx := context.Background()
 	for _, file := range files {
-		objectPath, fileName, err := s.storage.UploadFile(ctx, "document-reviews/attachments", file)
+		objectPath, fileName, err := s.storage.UploadFile(ctx, "document-reviews/attachments", file, fmt.Sprintf("review-att-%s", drID.String()))
 		if err != nil {
 			return errors.New("gagal mengupload file: " + file.Filename)
 		}

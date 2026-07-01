@@ -8,9 +8,9 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useUsers, useCreateUser, useUpdateUser, useUpdateUserStatus, useResetPassword, useDeleteUser } from '@/hooks/useUser'
+import { useDivisions } from '@/hooks/useLegalCase'
 import { formatDate } from '@/lib/utils'
 import type { User } from '@/types'
-import { DIVISIONS } from '@/constants/divisions'
 
 // ── Schemas ───────────────────────────────────────────────────────────────────
 
@@ -79,6 +79,7 @@ export default function UserManagementPage() {
   const [selected, setSelected] = useState<User | null>(null)
 
   const { data, isLoading } = useUsers({ page, limit: 10, search })
+  const { data: divisions = [] } = useDivisions()
   const createMutation = useCreateUser()
   const updateMutation = useUpdateUser()
   const statusMutation = useUpdateUserStatus()
@@ -88,10 +89,11 @@ export default function UserManagementPage() {
   const createForm = useForm<CreateForm>({ resolver: zodResolver(createSchema), defaultValues: { role: 'USER' } })
   const editForm = useForm<EditForm>({ resolver: zodResolver(editSchema) })
   const resetForm = useForm<ResetForm>({ resolver: zodResolver(resetSchema) })
+  const divisionOptions = divisions.map((division) => ({ value: division.id, label: division.name }))
 
   const openEdit = (user: User) => {
     setSelected(user)
-    editForm.reset({ full_name: user.full_name, position: user.position, division: user.division, role: user.role })
+    editForm.reset({ full_name: user.full_name, position: user.position, division: user.division_id || user.division, role: user.role })
     setModal('edit')
   }
 
@@ -131,6 +133,17 @@ export default function UserManagementPage() {
     if (!confirm(`Hapus user ${user.full_name}?`)) return
     await deleteMutation.mutateAsync(user.id)
   }
+
+  const renderDivisionOptions = (currentValue?: string) => (
+    <>
+      {currentValue && !divisionOptions.some((division) => division.value === currentValue) && (
+        <SelectItem value={currentValue}>{selected?.division ?? currentValue}</SelectItem>
+      )}
+      {divisionOptions.map((division) => (
+        <SelectItem key={division.value} value={division.value}>{division.label}</SelectItem>
+      ))}
+    </>
+  )
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -290,7 +303,7 @@ export default function UserManagementPage() {
                      <Select onValueChange={field.onChange} value={field.value}>
                        <SelectTrigger><SelectValue placeholder="Pilih divisi" /></SelectTrigger>
                        <SelectContent>
-                         {DIVISIONS.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                         {renderDivisionOptions(field.value)}
                        </SelectContent>
                      </Select>
                    )}
@@ -347,7 +360,7 @@ export default function UserManagementPage() {
                    <Select onValueChange={field.onChange} value={field.value}>
                      <SelectTrigger><SelectValue placeholder="Pilih divisi" /></SelectTrigger>
                      <SelectContent>
-                       {DIVISIONS.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                       {renderDivisionOptions(field.value)}
                      </SelectContent>
                    </Select>
                  )}

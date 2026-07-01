@@ -14,6 +14,7 @@ import LoginPage from '@/pages/auth/LoginPage'
 
 import UserDashboardPage from '@/pages/dashboard/UserDashboardPage'
 import SettingsPage from '@/pages/settings/SettingsPage'
+import NotificationListPage from '@/components/common/NotificationListPage'
 import LegalOpinionListPage from '@/pages/dashboard/legal-opinions/LegalOpinionListPage'
 import LegalOpinionFormPage from '@/pages/dashboard/legal-opinions/LegalOpinionFormPage'
 import LegalOpinionDetailPage from '@/pages/dashboard/legal-opinions/LegalOpinionDetailPage'
@@ -89,6 +90,7 @@ export const router = createBrowserRouter([
         children: [
           { path: '/dashboard', element: <UserDashboardPage /> },
           { path: '/dashboard/settings', element: <SettingsPage /> },
+          { path: '/dashboard/notifications', element: <NotificationListPage /> },
           { path: '/dashboard/legal-opinions', element: <LegalOpinionListPage /> },
           { path: '/dashboard/legal-opinions/new', element: <LegalOpinionFormPage /> },
           { path: '/dashboard/legal-opinions/:id', element: <LegalOpinionDetailPage /> },
@@ -111,6 +113,7 @@ export const router = createBrowserRouter([
         children: [
           { path: '/admin', element: <AdminDashboardPage /> },
           { path: '/admin/settings', element: <SettingsPage /> },
+          { path: '/admin/notifications', element: <NotificationListPage /> },
           { path: '/admin/legal-opinions', element: <AdminLegalOpinionListPage /> },
           { path: '/admin/legal-opinions/:id', element: <AdminLegalOpinionDetailPage /> },
           { path: '/admin/review-documents', element: <AdminReviewDocumentListPage /> },
@@ -133,6 +136,7 @@ export const router = createBrowserRouter([
         children: [
           { path: '/legal', element: <LegalDashboardPage /> },
           { path: '/legal/settings', element: <SettingsPage /> },
+          { path: '/legal/notifications', element: <NotificationListPage /> },
           { path: '/legal/legal-opinions', element: <LegalLegalOpinionListPage /> },
           { path: '/legal/legal-opinions/:id', element: <LegalLegalOpinionDetailPage /> },
           { path: '/legal/review-documents', element: <LegalReviewDocumentListPage /> },
@@ -151,6 +155,7 @@ export const router = createBrowserRouter([
         children: [
           { path: '/external', element: <ExternalDashboardPage /> },
           { path: '/external/settings', element: <SettingsPage /> },
+          { path: '/external/notifications', element: <NotificationListPage /> },
           { path: '/external/legal-opinions', element: <ExternalLegalOpinionListPage /> },
           { path: '/external/legal-opinions/:id', element: <ExternalLegalOpinionDetailPage /> },
           { path: '/external/review-documents', element: <ExternalReviewDocumentListPage /> },
