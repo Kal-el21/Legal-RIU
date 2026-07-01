@@ -39,6 +39,8 @@ func main() {
 		&entity.LegalCase{},
 		&entity.CaseChronology{},
 		&entity.AuditLog{},
+		&entity.NotificationSetting{},
+		&entity.UserSettings{},
 	); err != nil {
 		log.Fatalf("Migration failed: %v", err)
 	}
@@ -54,6 +56,10 @@ func main() {
 	if err := seed.BackfillUserDivisionIDs(db); err != nil {
 		log.Fatalf("User division backfill failed: %v", err)
 	}
+	if err := seed.SeedNotificationSettings(db); err != nil {
+		log.Fatalf("Notification settings seed failed: %v", err)
+	}
+	log.Println("Notification settings seeded successfully")
 
 	// ── Repositories ─────────────────────────────────────────────────────────
 	userRepo := repository.NewUserRepository(db)
@@ -64,13 +70,15 @@ func main() {
 	auditLogRepo := repository.NewAuditLogRepository(db)
 	legalCaseRepo := repository.NewLegalCaseRepository(db)
 	divisionRepo := repository.NewDivisionRepository(db)
+	notificationSettingRepo := repository.NewNotificationSettingRepository(db)
 
 	// ── Services ─────────────────────────────────────────────────────────────
 	authSvc := service.NewAuthService(userRepo, refreshTokenRepo, cfg)
 	userSvc := service.NewUserService(userRepo)
 	loSvc := service.NewLegalOpinionService(loRepo, store)
 	drSvc := service.NewDocumentReviewService(drRepo, store)
-	dashSvc := service.NewDashboardService(dashRepo)
+	notificationSettingSvc := service.NewNotificationSettingService(notificationSettingRepo, dashRepo)
+	dashSvc := service.NewDashboardService(dashRepo, notificationSettingSvc)
 	auditLogSvc := service.NewAuditLogService(auditLogRepo)
 	legalCaseSvc := service.NewLegalCaseService(legalCaseRepo, store)
 	divisionSvc := service.NewDivisionService(divisionRepo)
@@ -84,6 +92,7 @@ func main() {
 	auditLogHandler := handler.NewAuditLogHandler(auditLogSvc, auditLogRepo)
 	legalCaseHandler := handler.NewLegalCaseHandler(legalCaseSvc, auditLogSvc)
 	divisionHandler := handler.NewDivisionHandler(divisionSvc)
+	notificationSettingHandler := handler.NewNotificationSettingHandler(notificationSettingSvc)
 
 	// ── Gin ──────────────────────────────────────────────────────────────────
 	if cfg.App.Env == "production" {
@@ -128,6 +137,7 @@ func main() {
 	// Dashboard
 	protected.GET("/dashboard/stats", dashHandler.UserStats)
 	protected.GET("/dashboard/recent", dashHandler.UserRecent)
+	protected.GET("/dashboard/reminders", dashHandler.GetReminders)
 	protected.GET("/divisions", divisionHandler.GetAll)
 
 	// Legal opinions — presign
@@ -151,12 +161,13 @@ func main() {
 	protected.DELETE("/review-documents/:id", drHandler.Delete)
 	protected.POST("/review-documents/:id/resubmit", drHandler.Resubmit)
 
-	// ── Admin only ────────────────────────────────────────────────────────────
+	// ── Admin only ─────────────────────────────────────────────────────────────
 	admin := api.Group("/admin")
 	admin.Use(middleware.AuthMiddleware(cfg), middleware.RoleMiddleware("ADMIN"), middleware.AuditMiddleware(auditLogSvc), middleware.CSRFProtection())
 
 	admin.GET("/dashboard/stats", dashHandler.AdminStats)
 	admin.GET("/dashboard/recent", dashHandler.AdminRecent)
+	admin.GET("/dashboard/reminders", notificationSettingHandler.GetRemindersDashboard)
 
 	admin.GET("/legal-cases/regencies", legalCaseHandler.ListRegencies)
 	admin.GET("/legal-cases/cedants", legalCaseHandler.ListCedants)
@@ -195,13 +206,16 @@ func main() {
 	admin.POST("/users/:id/reset-password", userHandler.ResetPassword)
 
 	admin.GET("/audit-logs", auditLogHandler.GetAll)
+	admin.GET("/notification-settings", notificationSettingHandler.GetAll)
+	admin.PUT("/notification-settings/:id", notificationSettingHandler.Update)
 
-	// ── Legal ────────────────────────────────────────────────────────────────
+	// ── Legal ─────────────────────────────────────────────────────────────────
 	legal := api.Group("/legal")
 	legal.Use(middleware.AuthMiddleware(cfg), middleware.RoleMiddleware("LEGAL"), middleware.AuditMiddleware(auditLogSvc), middleware.CSRFProtection())
 
 	legal.GET("/dashboard/stats", dashHandler.LegalStats)
 	legal.GET("/dashboard/recent", dashHandler.LegalRecent)
+	legal.GET("/dashboard/reminders", notificationSettingHandler.GetLegalReminders)
 
 	legal.PATCH("/legal-opinions/:id/status", loHandler.AdminUpdateStatus)
 	legal.POST("/legal-opinions/:id/result", loHandler.AdminUploadResult)

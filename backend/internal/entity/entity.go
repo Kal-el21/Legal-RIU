@@ -310,3 +310,20 @@ func (s *UserSettings) BeforeCreate(tx *gorm.DB) error {
 	}
 	return nil
 }
+
+type NotificationSetting struct {
+	ID             uuid.UUID `gorm:"type:uuid;primaryKey" json:"id"`
+	SubmissionType string    `gorm:"size:50;not null" json:"submission_type"`
+	WarningLevel   string    `gorm:"size:20;not null" json:"warning_level"`
+	DaysThreshold  int       `gorm:"not null" json:"days_threshold"`
+	IsActive       bool      `gorm:"default:true" json:"is_active"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+}
+
+func (n *NotificationSetting) BeforeCreate(tx *gorm.DB) error {
+	if n.ID == uuid.Nil {
+		n.ID = uuid.New()
+	}
+	return nil
+}

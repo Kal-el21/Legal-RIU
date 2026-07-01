@@ -267,5 +267,3 @@ func (h *LegalOpinionHandler) GeneratePDF(c *gin.Context) {
 		"Content-Disposition": fmt.Sprintf(`attachment; filename="legal-opinion-%s.pdf"`, lo.TicketNumber),
 	})
 }
-
-

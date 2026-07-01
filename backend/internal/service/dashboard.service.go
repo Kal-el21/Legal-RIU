@@ -17,14 +17,16 @@ type DashboardService interface {
 	GetLegalRecentActivity() (map[string]interface{}, error)
 	GetExternalStats() (*dto.AdminDashboardStats, error)
 	GetExternalRecentActivity() (map[string]interface{}, error)
+	GetReminders(userID string, role string) (*dto.RemindersResponse, error)
 }
 
 type dashboardService struct {
-	repo repository.DashboardRepository
+	repo                repository.DashboardRepository
+	notificationSetting NotificationSettingService
 }
 
-func NewDashboardService(repo repository.DashboardRepository) DashboardService {
-	return &dashboardService{repo: repo}
+func NewDashboardService(repo repository.DashboardRepository, notificationSettingService NotificationSettingService) DashboardService {
+	return &dashboardService{repo: repo, notificationSetting: notificationSettingService}
 }
 
 func (s *dashboardService) GetUserStats(userID string) (*dto.UserDashboardStats, error) {
@@ -173,4 +175,8 @@ func (s *dashboardService) GetExternalRecentActivity() (map[string]interface{}, 
 		"legal_opinions":   legalOpinions,
 		"document_reviews": documentReviews,
 	}, nil
+}
+
+func (s *dashboardService) GetReminders(userID string, role string) (*dto.RemindersResponse, error) {
+	return s.notificationSetting.GetReminders(userID, role)
 }

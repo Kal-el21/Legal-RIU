@@ -41,6 +41,8 @@ func main() {
 		&entity.LegalCase{},
 		&entity.CaseChronology{},
 		&entity.AuditLog{},
+		&entity.NotificationSetting{},
+		&entity.UserSettings{},
 	); err != nil {
 		log.Fatalf("Migration failed: %v", err)
 	}
@@ -59,6 +61,11 @@ func main() {
 	if err := seed.BackfillUserDivisionIDs(db); err != nil {
 		log.Fatalf("User division backfill failed: %v", err)
 	}
+
+	if err := seed.SeedNotificationSettings(db); err != nil {
+		log.Fatalf("Notification settings seed failed: %v", err)
+	}
+	log.Println("Notification settings seeded successfully")
 
 	email := getEnv("ADMIN_EMAIL", "admin@example.com")
 	password := getEnv("ADMIN_PASSWORD", "12345678")

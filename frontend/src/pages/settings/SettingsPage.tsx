@@ -2,8 +2,8 @@ import { useState } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { useMutation } from '@tanstack/react-query'
-import { User, Bell, Shield, CheckCircle, Eye, EyeOff, Lock, Mail, ToggleLeft, ToggleRight } from 'lucide-react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { User, Bell, Shield, CheckCircle, Eye, EyeOff, Lock, Mail, ToggleLeft, ToggleRight, Settings, AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -12,6 +12,8 @@ import { useDivisions } from '@/hooks/useLegalCase'
 import { useAuthStore } from '@/store/auth.store'
 import { settingsService } from '@/services/auth.service'
 import { authService } from '@/services/auth.service'
+import { notificationSettingService } from '@/services/notification-setting.service'
+import type { NotificationSetting } from '@/types'
 import { cn } from '@/lib/utils'
 
 // ── Schemas ───────────────────────────────────────────────────────────────────
@@ -364,8 +366,146 @@ const TABS = [
   { id: 'security', label: 'Keamanan', icon: Shield },
 ]
 
+const ADMIN_TABS = [
+  { id: 'profile', label: 'Profil', icon: User },
+  { id: 'notifications', label: 'Notifikasi', icon: Bell },
+  { id: 'security', label: 'Keamanan', icon: Shield },
+  { id: 'notification-settings', label: 'Konfigurasi Notifikasi', icon: Settings },
+]
+
+function AdminNotificationSettingsTab() {
+  const { user } = useAuthStore()
+  const queryClient = useQueryClient()
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editValue, setEditValue] = useState<number>(0)
+  const [editActive, setEditActive] = useState<boolean>(true)
+
+  const { data: settings = [], isLoading } = useQuery({
+    queryKey: ['notification-settings'],
+    queryFn: notificationSettingService.getAll,
+  })
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, days_threshold, is_active }: { id: string; days_threshold: number; is_active?: boolean }) =>
+      notificationSettingService.update(id, { days_threshold, is_active }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notification-settings'] })
+      setEditingId(null)
+    },
+  })
+
+  const startEdit = (setting: NotificationSetting) => {
+    setEditingId(setting.id)
+    setEditValue(setting.days_threshold)
+    setEditActive(setting.is_active)
+  }
+
+  const saveEdit = (id: string) => {
+    if (editValue < 1) return
+    updateMutation.mutate({ id, days_threshold: editValue, is_active: editActive })
+  }
+
+  const grouped = settings.reduce<Record<string, NotificationSetting[]>>((acc, setting) => {
+    if (!acc[setting.submission_type]) acc[setting.submission_type] = []
+    acc[setting.submission_type].push(setting)
+    return acc
+  }, {})
+
+  const label = (type: string) => {
+    if (type === 'legal_opinion') return 'Legal Opinion'
+    if (type === 'document_review') return 'Document Review'
+    return type
+  }
+
+  if (user?.role !== 'ADMIN') return null
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <h3 className="text-sm font-semibold text-gray-900 mb-1">Konfigurasi Notifikasi</h3>
+        <p className="text-sm text-gray-500">Atur durasi threshold untuk setiap level notifikasi. Perubahan langsung berdampak ke seluruh sistem.</p>
+      </div>
+
+      {isLoading ? (
+        <p className="text-sm text-gray-500">Memuat konfigurasi...</p>
+      ) : (
+        <div className="space-y-4">
+          {Object.entries(grouped).map(([type, items]) => (
+            <div key={type} className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+              <div className="px-5 py-3 border-b border-gray-50">
+                <p className="text-sm font-semibold text-gray-900">{label(type)}</p>
+              </div>
+              <div className="divide-y divide-gray-50">
+                {items.map((setting) => (
+                  <div key={setting.id} className="px-5 py-3 flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                        setting.warning_level === 'YELLOW' ? 'bg-amber-100' : 'bg-red-100'
+                      }`}>
+                        <AlertTriangle className={`w-4 h-4 ${
+                          setting.warning_level === 'YELLOW' ? 'text-amber-600' : 'text-red-600'
+                        }`} />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">
+                          {setting.warning_level === 'YELLOW' ? 'Peringatan Kuning' : 'Peringatan Merah'}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {setting.warning_level === 'YELLOW' ? 'Perlu perhatian' : 'Terlambat'} — aktif: {setting.is_active ? 'Ya' : 'Tidak'}
+                        </p>
+                      </div>
+                    </div>
+
+                    {editingId === setting.id ? (
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="number"
+                          min={1}
+                          value={editValue}
+                          onChange={(e) => setEditValue(parseInt(e.target.value || '0', 10))}
+                          className="w-20 h-8 text-xs"
+                        />
+                        <span className="text-xs text-gray-500">hari</span>
+                        <Button
+                          size="sm"
+                          disabled={editValue < 1 || updateMutation.isPending}
+                          className="text-white text-xs h-8"
+                          style={{ background: '#C8102E' }}
+                          onClick={() => saveEdit(setting.id)}
+                        >
+                          Simpan
+                        </Button>
+                        <Button size="sm" variant="outline" className="text-xs h-8" onClick={() => setEditingId(null)}>
+                          Batal
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm font-semibold text-gray-900">{setting.days_threshold} hari</span>
+                        <Button size="sm" variant="outline" className="text-xs h-8" onClick={() => startEdit(setting)}>
+                          Edit
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {updateMutation.isSuccess && <SuccessAlert message="Konfigurasi notifikasi berhasil diperbarui!" />}
+      {updateMutation.isError && <ErrorAlert message={(updateMutation.error as Error)?.message ?? 'Gagal memperbarui'} />}
+    </div>
+  )
+}
+
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState('profile')
+  const { user } = useAuthStore()
+
+  const tabs = user?.role === 'ADMIN' ? ADMIN_TABS : TABS
 
   return (
     <div className="p-6 max-w-2xl mx-auto">
@@ -375,11 +515,11 @@ export default function SettingsPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 p-1 rounded-xl bg-gray-100 mb-6">
-        {TABS.map((tab) => (
+      <div className="flex gap-1 p-1 rounded-xl bg-gray-100 mb-6 overflow-x-auto">
+        {tabs.map((tab) => (
           <button key={tab.id} onClick={() => setActiveTab(tab.id)}
             className={cn(
-              'flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all',
+              'flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all whitespace-nowrap',
               activeTab === tab.id
                 ? 'bg-white text-gray-900 shadow-sm'
                 : 'text-gray-500 hover:text-gray-700'
@@ -395,6 +535,7 @@ export default function SettingsPage() {
         {activeTab === 'profile' && <ProfileTab />}
         {activeTab === 'notifications' && <NotificationTab />}
         {activeTab === 'security' && <SecurityTab />}
+        {activeTab === 'notification-settings' && <AdminNotificationSettingsTab />}
       </div>
     </div>
   )

@@ -16,3 +16,24 @@ type AdminDashboardStats struct {
 	NeedRevision         int64 `json:"need_revision"`
 	Resubmitted          int64 `json:"resubmitted"`
 }
+
+type ReminderItem struct {
+	ID                  string  `json:"id"`
+	SubmissionType      string  `json:"submission_type"`
+	TicketNumber        string  `json:"ticket_number"`
+	Title               string  `json:"title"`
+	Status              string  `json:"status"`
+	SubmittedAt         string  `json:"submitted_at"`
+	LastUpdatedAt       *string `json:"last_updated_at"`
+	DaysSinceSubmission int     `json:"days_since_submission"`
+	DaysSinceLastUpdate int     `json:"days_since_last_update"`
+	WarningLevel        string  `json:"warning_level"`
+	WarningColor        string  `json:"warning_color"`
+	AssignedLegalName   string  `json:"assigned_legal_name,omitempty"`
+}
+
+type RemindersResponse struct {
+	Yellow []ReminderItem `json:"yellow"`
+	Red    []ReminderItem `json:"red"`
+	None   []ReminderItem `json:"none"`
+}
