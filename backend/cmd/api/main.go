@@ -40,6 +40,7 @@ func main() {
 		&entity.CaseChronology{},
 		&entity.AuditLog{},
 		&entity.NotificationSetting{},
+		&entity.NotificationRead{},
 		&entity.UserSettings{},
 	); err != nil {
 		log.Fatalf("Migration failed: %v", err)
@@ -138,6 +139,8 @@ func main() {
 	protected.GET("/dashboard/stats", dashHandler.UserStats)
 	protected.GET("/dashboard/recent", dashHandler.UserRecent)
 	protected.GET("/dashboard/reminders", dashHandler.GetReminders)
+	protected.PATCH("/dashboard/reminders/read", notificationSettingHandler.MarkReminderRead)
+	protected.PATCH("/dashboard/reminders/read-all", notificationSettingHandler.MarkAllRemindersRead)
 	protected.GET("/divisions", divisionHandler.GetAll)
 
 	// Legal opinions — presign
@@ -234,6 +237,7 @@ func main() {
 
 	external.GET("/dashboard/stats", dashHandler.ExternalStats)
 	external.GET("/dashboard/recent", dashHandler.ExternalRecent)
+	external.GET("/dashboard/reminders", notificationSettingHandler.GetReminders)
 
 	external.GET("/legal-opinions", loHandler.GetAll)
 	external.GET("/legal-opinions/:id", loHandler.GetByID)

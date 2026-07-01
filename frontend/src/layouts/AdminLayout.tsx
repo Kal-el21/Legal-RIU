@@ -3,6 +3,7 @@ import { Scale, LayoutDashboard, FileText, FileSearch, Users, Menu, ChevronRight
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
 import SidebarUserButton from '@/components/common/SidebarUserButton'
+import NotificationDropdown from '@/components/common/NotificationDropdown'
 
 const NAV = [
   { label: 'Dashboard', href: '/admin', icon: LayoutDashboard, exact: true },
@@ -86,6 +87,7 @@ export default function AdminLayout() {
             {sidebarCollapsed ? <ChevronRight className="w-5 h-5 text-gray-600" /> : <ChevronLeft className="w-5 h-5 text-gray-600" />}
           </button>
           <div className="flex-1" />
+          <NotificationDropdown />
           <Link to="/" className="text-sm text-gray-500 hover:text-gray-700 transition-colors">
             ← Kembali ke Beranda
           </Link>

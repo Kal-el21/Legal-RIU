@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"sort"
 	"time"
 
 	"legal-riu-portal/internal/dto"
@@ -17,7 +18,9 @@ type NotificationSettingService interface {
 	Update(id string, req dto.UpdateNotificationSettingRequest) (*dto.NotificationSettingResponse, error)
 	GetActiveSettings() (map[string]map[string]*entity.NotificationSetting, error)
 	GetThresholdFor(submissionType, warningLevel string) (int, error)
-	GetReminders(userID string, role string) (*dto.RemindersResponse, error)
+	GetReminders(userID string, role string, page int, limit int) (*dto.RemindersResponse, error)
+	MarkReminderRead(userID string, submissionType string, submissionID string) error
+	MarkAllRemindersRead(userID string, role string) error
 }
 
 type notificationSettingService struct {
@@ -149,7 +152,71 @@ const (
 	WarningLevelRed    WarningLevel = "RED"
 )
 
-func (s *notificationSettingService) GetReminders(userID string, role string) (*dto.RemindersResponse, error) {
+func (s *notificationSettingService) GetReminders(userID string, role string, page int, limit int) (*dto.RemindersResponse, error) {
+	uid, err := uuid.Parse(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := s.buildReminderResponse(uid, role)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.applyReminderReadState(result, uid); err != nil {
+		return nil, err
+	}
+	s.applyReminderPagination(result, page, limit)
+	return result, nil
+}
+
+func (s *notificationSettingService) MarkReminderRead(userID string, submissionType string, submissionID string) error {
+	uid, err := uuid.Parse(userID)
+	if err != nil {
+		return errors.New("user tidak valid")
+	}
+	submissionUUID, err := uuid.Parse(submissionID)
+	if err != nil {
+		return errors.New("submission tidak valid")
+	}
+	if submissionType != "legal_opinion" && submissionType != "document_review" {
+		return errors.New("tipe submission tidak valid")
+	}
+
+	return s.repo.MarkNotificationRead(uid, submissionType, submissionUUID)
+}
+
+func (s *notificationSettingService) MarkAllRemindersRead(userID string, role string) error {
+	uid, err := uuid.Parse(userID)
+	if err != nil {
+		return errors.New("user tidak valid")
+	}
+
+	result, err := s.buildReminderResponse(uid, role)
+	if err != nil {
+		return err
+	}
+
+	items := make([]dto.ReminderItem, 0, len(result.Red)+len(result.Yellow))
+	items = append(items, result.Red...)
+	items = append(items, result.Yellow...)
+
+	reads := make([]entity.NotificationRead, 0, len(items))
+	for _, item := range items {
+		submissionID, err := uuid.Parse(item.ID)
+		if err != nil {
+			return errors.New("submission tidak valid")
+		}
+		reads = append(reads, entity.NotificationRead{
+			SubmissionType: item.SubmissionType,
+			SubmissionID:   submissionID,
+		})
+	}
+
+	return s.repo.MarkNotificationsRead(uid, reads)
+}
+
+func (s *notificationSettingService) buildReminderResponse(userID uuid.UUID, role string) (*dto.RemindersResponse, error) {
 	settings, err := s.GetActiveSettings()
 	if err != nil {
 		return nil, err
@@ -181,18 +248,14 @@ func (s *notificationSettingService) GetReminders(userID string, role string) (*
 		None:   []dto.ReminderItem{},
 	}
 
-	if role == "ADMIN" {
+	if role == "ADMIN" || role == "LEGAL" {
 		if err := s.loadAllReminders(result, yellowThresholds, redThresholds); err != nil {
 			return nil, err
 		}
 		return result, nil
 	}
 
-	uid, err := uuid.Parse(userID)
-	if err != nil {
-		return nil, err
-	}
-	if err := s.loadUserReminders(result, uid, yellowThresholds, redThresholds); err != nil {
+	if err := s.loadUserReminders(result, userID, yellowThresholds, redThresholds); err != nil {
 		return nil, err
 	}
 	return result, nil
@@ -260,9 +323,10 @@ func (s *notificationSettingService) mapLOToReminder(lo *entity.LegalOpinion, ye
 		name = lo.User.FullName
 	}
 
-	lastUpdatedStr := ""
+	var lastUpdatedStr *string
 	if lastUpdatedAt != nil {
-		lastUpdatedStr = lastUpdatedAt.Format(time.RFC3339)
+		value := lastUpdatedAt.Format(time.RFC3339)
+		lastUpdatedStr = &value
 	}
 
 	return dto.ReminderItem{
@@ -272,7 +336,7 @@ func (s *notificationSettingService) mapLOToReminder(lo *entity.LegalOpinion, ye
 		Title:               lo.Title,
 		Status:              string(lo.Status),
 		SubmittedAt:         submittedAt.Format(time.RFC3339),
-		LastUpdatedAt:       &lastUpdatedStr,
+		LastUpdatedAt:       lastUpdatedStr,
 		DaysSinceSubmission: daysSinceSubmission,
 		DaysSinceLastUpdate: daysSinceLastUpdate,
 		WarningLevel:        string(level),
@@ -301,9 +365,10 @@ func (s *notificationSettingService) mapDRToReminder(dr *entity.DocumentReview, 
 		name = dr.User.FullName
 	}
 
-	lastUpdatedStr := ""
+	var lastUpdatedStr *string
 	if lastUpdatedAt != nil {
-		lastUpdatedStr = lastUpdatedAt.Format(time.RFC3339)
+		value := lastUpdatedAt.Format(time.RFC3339)
+		lastUpdatedStr = &value
 	}
 
 	return dto.ReminderItem{
@@ -313,7 +378,7 @@ func (s *notificationSettingService) mapDRToReminder(dr *entity.DocumentReview, 
 		Title:               dr.DocumentName,
 		Status:              string(dr.Status),
 		SubmittedAt:         submittedAt.Format(time.RFC3339),
-		LastUpdatedAt:       &lastUpdatedStr,
+		LastUpdatedAt:       lastUpdatedStr,
 		DaysSinceSubmission: daysSinceSubmission,
 		DaysSinceLastUpdate: daysSinceLastUpdate,
 		WarningLevel:        string(level),
@@ -354,4 +419,76 @@ func (s *notificationSettingService) appendReminder(result *dto.RemindersRespons
 	default:
 		result.None = append(result.None, *item)
 	}
+}
+
+func (s *notificationSettingService) applyReminderReadState(result *dto.RemindersResponse, userID uuid.UUID) error {
+	reads, err := s.repo.GetNotificationReadsByUser(userID)
+	if err != nil {
+		return err
+	}
+
+	readMap := make(map[string]bool, len(reads))
+	for _, read := range reads {
+		readMap[read.SubmissionType+":"+read.SubmissionID.String()] = read.IsRead
+	}
+
+	apply := func(items []dto.ReminderItem) {
+		for i := range items {
+			items[i].IsRead = readMap[items[i].SubmissionType+":"+items[i].ID]
+		}
+	}
+
+	apply(result.Red)
+	apply(result.Yellow)
+	apply(result.None)
+	return nil
+}
+
+func (s *notificationSettingService) applyReminderPagination(result *dto.RemindersResponse, page int, limit int) {
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 {
+		limit = 10
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
+	items := make([]dto.ReminderItem, 0, len(result.Red)+len(result.Yellow))
+	items = append(items, result.Red...)
+	items = append(items, result.Yellow...)
+
+	sort.SliceStable(items, func(i, j int) bool {
+		return items[i].SubmittedAt > items[j].SubmittedAt
+	})
+
+	total := len(items)
+	unreadTotal := 0
+	for _, item := range items {
+		if !item.IsRead {
+			unreadTotal++
+		}
+	}
+	totalPages := 0
+	if total > 0 {
+		totalPages = (total + limit - 1) / limit
+	}
+
+	start := (page - 1) * limit
+	if start >= total {
+		result.Items = []dto.ReminderItem{}
+	} else {
+		end := start + limit
+		if end > total {
+			end = total
+		}
+		result.Items = items[start:end]
+	}
+
+	result.Total = total
+	result.UnreadTotal = unreadTotal
+	result.Page = page
+	result.Limit = limit
+	result.TotalPages = totalPages
 }

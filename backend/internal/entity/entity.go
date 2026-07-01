@@ -327,3 +327,13 @@ func (n *NotificationSetting) BeforeCreate(tx *gorm.DB) error {
 	}
 	return nil
 }
+
+type NotificationRead struct {
+	Base
+	UserID         uuid.UUID  `gorm:"type:uuid;not null;uniqueIndex:idx_notification_reads_user_submission" json:"user_id"`
+	User           User       `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	SubmissionType string     `gorm:"size:50;not null;uniqueIndex:idx_notification_reads_user_submission" json:"submission_type"`
+	SubmissionID   uuid.UUID  `gorm:"type:uuid;not null;uniqueIndex:idx_notification_reads_user_submission" json:"submission_id"`
+	IsRead         bool       `gorm:"not null;default:true" json:"is_read"`
+	ReadAt         *time.Time `json:"read_at"`
+}

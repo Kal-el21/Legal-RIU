@@ -29,11 +29,23 @@ type ReminderItem struct {
 	DaysSinceLastUpdate int     `json:"days_since_last_update"`
 	WarningLevel        string  `json:"warning_level"`
 	WarningColor        string  `json:"warning_color"`
+	IsRead              bool    `json:"is_read"`
 	AssignedLegalName   string  `json:"assigned_legal_name,omitempty"`
 }
 
 type RemindersResponse struct {
-	Yellow []ReminderItem `json:"yellow"`
-	Red    []ReminderItem `json:"red"`
-	None   []ReminderItem `json:"none"`
+	Yellow      []ReminderItem `json:"yellow"`
+	Red         []ReminderItem `json:"red"`
+	None        []ReminderItem `json:"none"`
+	Items       []ReminderItem `json:"items"`
+	Total       int            `json:"total"`
+	UnreadTotal int            `json:"unread_total"`
+	Page        int            `json:"page"`
+	Limit       int            `json:"limit"`
+	TotalPages  int            `json:"total_pages"`
+}
+
+type MarkReminderReadRequest struct {
+	SubmissionType string `json:"submission_type" binding:"required"`
+	SubmissionID   string `json:"submission_id" binding:"required"`
 }

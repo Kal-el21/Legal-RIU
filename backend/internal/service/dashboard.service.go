@@ -17,7 +17,7 @@ type DashboardService interface {
 	GetLegalRecentActivity() (map[string]interface{}, error)
 	GetExternalStats() (*dto.AdminDashboardStats, error)
 	GetExternalRecentActivity() (map[string]interface{}, error)
-	GetReminders(userID string, role string) (*dto.RemindersResponse, error)
+	GetReminders(userID string, role string, page int, limit int) (*dto.RemindersResponse, error)
 }
 
 type dashboardService struct {
@@ -177,6 +177,6 @@ func (s *dashboardService) GetExternalRecentActivity() (map[string]interface{}, 
 	}, nil
 }
 
-func (s *dashboardService) GetReminders(userID string, role string) (*dto.RemindersResponse, error) {
-	return s.notificationSetting.GetReminders(userID, role)
+func (s *dashboardService) GetReminders(userID string, role string, page int, limit int) (*dto.RemindersResponse, error) {
+	return s.notificationSetting.GetReminders(userID, role, page, limit)
 }

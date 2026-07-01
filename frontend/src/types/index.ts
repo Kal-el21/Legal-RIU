@@ -290,11 +290,12 @@ export interface ReminderItem {
   title: string
   status: string
   submitted_at: string
-  last_updated_at?: string
+  last_updated_at?: string | null
   days_since_submission: number
   days_since_last_update: number
   warning_level: WarningLevel
   warning_color: string
+  is_read: boolean
   assigned_legal_name?: string
 }
 
@@ -302,4 +303,10 @@ export interface RemindersResponse {
   yellow: ReminderItem[]
   red: ReminderItem[]
   none: ReminderItem[]
+  items: ReminderItem[]
+  total: number
+  unread_total: number
+  page: number
+  limit: number
+  total_pages: number
 }
