@@ -46,6 +46,11 @@ func (s *userService) Create(req dto.CreateUserRequest) (*dto.UserResponse, erro
 		return nil, errors.New("gagal membuat user")
 	}
 
+	divisionName, divisionID, err := resolveDivisionSelection(s.userRepo, req.Division)
+	if err != nil {
+		return nil, err
+	}
+
 	role := entity.RoleUser
 	switch req.Role {
 	case "ADMIN":
@@ -61,7 +66,8 @@ func (s *userService) Create(req dto.CreateUserRequest) (*dto.UserResponse, erro
 		Email:        req.Email,
 		PasswordHash: string(hash),
 		Position:     req.Position,
-		Division:     req.Division,
+		Division:     divisionName,
+		DivisionID:   divisionID,
 		Role:         role,
 		Status:       entity.UserActive,
 	}
@@ -70,7 +76,13 @@ func (s *userService) Create(req dto.CreateUserRequest) (*dto.UserResponse, erro
 		return nil, errors.New("gagal membuat user")
 	}
 
-	res := toUserResponse(user)
+	created, err := s.userRepo.FindByID(user.ID)
+	if err != nil {
+		res := toUserResponse(user)
+		return &res, nil
+	}
+
+	res := toUserResponse(created)
 	return &res, nil
 }
 
@@ -85,9 +97,15 @@ func (s *userService) Update(id string, req dto.UpdateUserRequest) (*dto.UserRes
 		return nil, errors.New("user tidak ditemukan")
 	}
 
+	divisionName, divisionID, err := resolveDivisionSelection(s.userRepo, req.Division)
+	if err != nil {
+		return nil, err
+	}
+
 	user.FullName = req.FullName
 	user.Position = req.Position
-	user.Division = req.Division
+	user.Division = divisionName
+	user.DivisionID = divisionID
 
 	if req.Role != "" {
 		switch req.Role {
@@ -106,7 +124,13 @@ func (s *userService) Update(id string, req dto.UpdateUserRequest) (*dto.UserRes
 		return nil, errors.New("gagal mengupdate user")
 	}
 
-	res := toUserResponse(user)
+	updated, err := s.userRepo.FindByID(uid)
+	if err != nil {
+		res := toUserResponse(user)
+		return &res, nil
+	}
+
+	res := toUserResponse(updated)
 	return &res, nil
 }
 

@@ -50,6 +50,8 @@ export interface User {
   email: string
   position: string
   division: string
+  division_id?: string
+  division_detail?: Division
   role: UserRole
   status: UserStatus
   email_notifications: boolean

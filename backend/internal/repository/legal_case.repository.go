@@ -42,6 +42,8 @@ type LegalCaseRepository interface {
 	CreateCedant(cedant *entity.Cedant) error
 	UpdateCedant(cedant *entity.Cedant) error
 	DeleteCedant(id uuid.UUID) error
+
+	FindDivisionByID(id uuid.UUID) (*entity.Division, error)
 }
 
 type legalCaseRepository struct {
@@ -140,11 +142,11 @@ func (r *legalCaseRepository) FindChronology(caseID uuid.UUID, chronologyID uuid
 }
 
 func (r *legalCaseRepository) CreateChronology(chronology *entity.CaseChronology) error {
-	return r.db.Create(chronology).Error
+	return r.db.Omit("LegalCase").Create(chronology).Error
 }
 
 func (r *legalCaseRepository) UpdateChronology(chronology *entity.CaseChronology) error {
-	return r.db.Save(chronology).Error
+	return r.db.Omit("LegalCase").Save(chronology).Error
 }
 
 func (r *legalCaseRepository) DeleteChronology(caseID uuid.UUID, chronologyID uuid.UUID) error {
@@ -206,6 +208,15 @@ func (r *legalCaseRepository) UpdateCedant(cedant *entity.Cedant) error {
 
 func (r *legalCaseRepository) DeleteCedant(id uuid.UUID) error {
 	return r.db.Delete(&entity.Cedant{}, "id = ?", id).Error
+}
+
+func (r *legalCaseRepository) FindDivisionByID(id uuid.UUID) (*entity.Division, error) {
+	var division entity.Division
+	err := r.db.Where("id = ?", id).First(&division).Error
+	if err != nil {
+		return nil, err
+	}
+	return &division, nil
 }
 
 func applyLegalCaseFilter(query *gorm.DB, filter LegalCaseFilter) *gorm.DB {

@@ -125,6 +125,11 @@ api.interceptors.response.use(
       }
     }
 
+    const responseData = error.response?.data as ApiResponse<unknown> | undefined
+    if (responseData?.message) {
+      error.message = responseData.message
+    }
+
     return Promise.reject(error)
   }
 )

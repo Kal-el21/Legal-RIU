@@ -16,9 +16,11 @@ type UserRepository interface {
 	UpdateStatus(id uuid.UUID, status entity.UserStatus) error
 	Delete(id uuid.UUID) error
 	UpdatePassword(id uuid.UUID, passwordHash string) error
-	UpdateProfile(id uuid.UUID, fullName, position, division string) error
+	UpdateProfile(id uuid.UUID, fullName, position, division string, divisionID *uuid.UUID) error
 	UpdateNotificationPref(id uuid.UUID, emailNotif bool) error
 	UpdateTwoFA(id uuid.UUID, enabled bool) error
+	FindDivisionByID(id uuid.UUID) (*entity.Division, error)
+	FindDivisionByName(name string) (*entity.Division, error)
 }
 
 type userRepository struct {
@@ -31,7 +33,10 @@ func NewUserRepository(db *gorm.DB) UserRepository {
 
 func (r *userRepository) FindByEmail(email string) (*entity.User, error) {
 	var user entity.User
-	err := r.db.Where("email = ? AND deleted_at IS NULL", email).First(&user).Error
+	err := r.db.
+		Preload("DivisionRef").
+		Where("email = ? AND deleted_at IS NULL", email).
+		First(&user).Error
 	if err != nil {
 		return nil, err
 	}
@@ -40,7 +45,10 @@ func (r *userRepository) FindByEmail(email string) (*entity.User, error) {
 
 func (r *userRepository) FindByID(id uuid.UUID) (*entity.User, error) {
 	var user entity.User
-	err := r.db.Where("id = ? AND deleted_at IS NULL", id).First(&user).Error
+	err := r.db.
+		Preload("DivisionRef").
+		Where("id = ? AND deleted_at IS NULL", id).
+		First(&user).Error
 	if err != nil {
 		return nil, err
 	}
@@ -52,14 +60,14 @@ func (r *userRepository) Create(user *entity.User) error {
 }
 
 func (r *userRepository) Update(user *entity.User) error {
-	return r.db.Save(user).Error
+	return r.db.Omit("DivisionRef").Save(user).Error
 }
 
 func (r *userRepository) FindAll(page, limit int, search string) ([]entity.User, int64, error) {
 	var users []entity.User
 	var total int64
 
-	query := r.db.Model(&entity.User{})
+	query := r.db.Preload("DivisionRef").Model(&entity.User{})
 	if search != "" {
 		query = query.Where("full_name ILIKE ? OR email ILIKE ?", "%"+search+"%", "%"+search+"%")
 	}
@@ -81,11 +89,12 @@ func (r *userRepository) UpdatePassword(id uuid.UUID, passwordHash string) error
 	return r.db.Model(&entity.User{}).Where("id = ?", id).Update("password_hash", passwordHash).Error
 }
 
-func (r *userRepository) UpdateProfile(id uuid.UUID, fullName, position, division string) error {
+func (r *userRepository) UpdateProfile(id uuid.UUID, fullName, position, division string, divisionID *uuid.UUID) error {
 	return r.db.Model(&entity.User{}).Where("id = ?", id).Updates(map[string]interface{}{
-		"full_name": fullName,
-		"position":  position,
-		"division":  division,
+		"full_name":   fullName,
+		"position":    position,
+		"division":    division,
+		"division_id": divisionID,
 	}).Error
 }
 
@@ -95,4 +104,20 @@ func (r *userRepository) UpdateNotificationPref(id uuid.UUID, emailNotif bool) e
 
 func (r *userRepository) UpdateTwoFA(id uuid.UUID, enabled bool) error {
 	return r.db.Model(&entity.User{}).Where("id = ?", id).Update("two_fa_enabled", enabled).Error
+}
+
+func (r *userRepository) FindDivisionByID(id uuid.UUID) (*entity.Division, error) {
+	var division entity.Division
+	if err := r.db.Where("id = ?", id).First(&division).Error; err != nil {
+		return nil, err
+	}
+	return &division, nil
+}
+
+func (r *userRepository) FindDivisionByName(name string) (*entity.Division, error) {
+	var division entity.Division
+	if err := r.db.Where("LOWER(name) = LOWER(?)", name).First(&division).Error; err != nil {
+		return nil, err
+	}
+	return &division, nil
 }

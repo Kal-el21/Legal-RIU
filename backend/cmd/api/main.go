@@ -21,11 +21,11 @@ func main() {
 	db := config.InitDatabase(cfg)
 	store := storage.InitMinIO(cfg)
 
-	if err := db.Migrator().DropTable(&entity.CaseChronology{}, &entity.LegalCase{}); err != nil {
-		log.Fatalf("Failed to drop legal_case tables: %v", err)
+	if err := seed.PrepareLegalCasePICMigration(db); err != nil {
+		log.Fatalf("Legal case PIC migration preparation failed: %v", err)
 	}
-	log.Println("Legal case tables recreated to accommodate PIC -> uuid migration")
 	if err := db.AutoMigrate(
+		&entity.Division{},
 		&entity.User{},
 		&entity.RefreshToken{},
 		&entity.LegalOpinion{},
@@ -36,7 +36,6 @@ func main() {
 		&entity.DocumentReviewResult{},
 		&entity.Regency{},
 		&entity.Cedant{},
-		&entity.Division{},
 		&entity.LegalCase{},
 		&entity.CaseChronology{},
 		&entity.AuditLog{},
@@ -52,6 +51,9 @@ func main() {
 		log.Fatalf("Division seed failed: %v", err)
 	}
 	log.Println("Divisions seeded successfully")
+	if err := seed.BackfillUserDivisionIDs(db); err != nil {
+		log.Fatalf("User division backfill failed: %v", err)
+	}
 
 	// ── Repositories ─────────────────────────────────────────────────────────
 	userRepo := repository.NewUserRepository(db)
@@ -126,6 +128,7 @@ func main() {
 	// Dashboard
 	protected.GET("/dashboard/stats", dashHandler.UserStats)
 	protected.GET("/dashboard/recent", dashHandler.UserRecent)
+	protected.GET("/divisions", divisionHandler.GetAll)
 
 	// Legal opinions — presign
 	protected.GET("/legal-opinions/presign", loHandler.GetPresignedURL)
@@ -162,6 +165,7 @@ func main() {
 	admin.DELETE("/legal-cases/cedants/:id", legalCaseHandler.DeleteCedant)
 	admin.GET("/divisions", divisionHandler.GetAll)
 	admin.POST("/divisions", divisionHandler.Create)
+	admin.GET("/divisions/:id", divisionHandler.GetByID)
 	admin.PUT("/divisions/:id", divisionHandler.Update)
 	admin.DELETE("/divisions/:id", divisionHandler.Delete)
 	admin.GET("/legal-cases/download", legalCaseHandler.Download)
@@ -171,6 +175,8 @@ func main() {
 	admin.GET("/legal-cases/:id", legalCaseHandler.GetByID)
 	admin.PUT("/legal-cases/:id", legalCaseHandler.Update)
 	admin.DELETE("/legal-cases/:id", legalCaseHandler.Delete)
+	admin.POST("/legal-cases/:id/upload-document", legalCaseHandler.UploadDocument)
+	admin.DELETE("/legal-cases/:id/document", legalCaseHandler.DeleteDocument)
 	admin.GET("/legal-cases/:id/chronology", legalCaseHandler.ListChronologies)
 	admin.POST("/legal-cases/:id/chronology", legalCaseHandler.CreateChronology)
 	admin.PUT("/legal-cases/:id/chronology/:chronId", legalCaseHandler.UpdateChronology)

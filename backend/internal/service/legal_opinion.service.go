@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"mime/multipart"
 
 	"legal-riu-portal/internal/dto"
@@ -218,7 +219,7 @@ func (s *legalOpinionService) UploadResult(id string, adminID string, req dto.Up
 	}
 
 	ctx := context.Background()
-	objectPath, fileName, err := s.storage.UploadFile(ctx, "legal-opinions/results", file)
+	objectPath, fileName, err := s.storage.UploadFile(ctx, "legal-opinions/results", file, fmt.Sprintf("opinion-result-%s", lo.ID.String()))
 	if err != nil {
 		return errors.New("gagal mengupload hasil kajian")
 	}
@@ -271,7 +272,7 @@ func (s *legalOpinionService) GeneratePDF(id string) ([]byte, error) {
 func (s *legalOpinionService) uploadAttachments(loID uuid.UUID, files []*multipart.FileHeader, round int) error {
 	ctx := context.Background()
 	for _, file := range files {
-		objectPath, fileName, err := s.storage.UploadFile(ctx, "legal-opinions/attachments", file)
+		objectPath, fileName, err := s.storage.UploadFile(ctx, "legal-opinions/attachments", file, fmt.Sprintf("opinion-att-%s", loID.String()))
 		if err != nil {
 			return errors.New("gagal mengupload file: " + file.Filename)
 		}

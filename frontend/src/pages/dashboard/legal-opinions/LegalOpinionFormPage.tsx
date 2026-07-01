@@ -10,9 +10,9 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useCreateLegalOpinion, useUpdateLegalOpinion, useLegalOpinion } from '@/hooks/useLegalOpinion'
+import { useDivisions } from '@/hooks/useLegalCase'
 import { useAuthStore } from '@/store/auth.store'
 import { validateFile, formatFileSize } from '@/lib/utils'
-import { DIVISIONS } from '@/constants/divisions'
 
 const LEGAL_TYPES = [
   'Permasalahan Hukum',
@@ -47,8 +47,10 @@ export default function LegalOpinionFormPage() {
   const [fileErrors, setFileErrors] = useState<string[]>([])
 
   const { data: existing } = useLegalOpinion(id ?? '')
+  const { data: divisions = [] } = useDivisions()
   const createMutation = useCreateLegalOpinion()
   const updateMutation = useUpdateLegalOpinion()
+  const divisionOptions = divisions.map((division) => division.name)
 
   const { register, handleSubmit, watch, setValue, reset, control, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -142,7 +144,10 @@ export default function LegalOpinionFormPage() {
                   <Select onValueChange={field.onChange} value={field.value}>
                     <SelectTrigger><SelectValue placeholder="Pilih divisi" /></SelectTrigger>
                     <SelectContent>
-                      {DIVISIONS.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                      {field.value && !divisionOptions.includes(field.value) && (
+                        <SelectItem value={field.value}>{field.value}</SelectItem>
+                      )}
+                      {divisionOptions.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 )}

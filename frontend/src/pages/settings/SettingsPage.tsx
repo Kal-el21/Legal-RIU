@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useForm } from 'react-hook-form'
+import { Controller, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useMutation } from '@tanstack/react-query'
@@ -7,6 +7,8 @@ import { User, Bell, Shield, CheckCircle, Eye, EyeOff, Lock, Mail, ToggleLeft, T
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { useDivisions } from '@/hooks/useLegalCase'
 import { useAuthStore } from '@/store/auth.store'
 import { settingsService } from '@/services/auth.service'
 import { authService } from '@/services/auth.service'
@@ -72,15 +74,17 @@ function ErrorAlert({ message }: { message: string }) {
 
 function ProfileTab() {
   const { user, updateUser } = useAuthStore()
+  const { data: divisions = [] } = useDivisions()
 
-  const { register, handleSubmit, formState: { errors } } = useForm<ProfileForm>({
+  const { control, register, handleSubmit, formState: { errors } } = useForm<ProfileForm>({
     resolver: zodResolver(profileSchema),
     defaultValues: {
       full_name: user?.full_name ?? '',
       position: user?.position ?? '',
-      division: user?.division ?? '',
+      division: user?.division_id || user?.division || '',
     },
   })
+  const divisionOptions = divisions.map((division) => ({ value: division.id, label: division.name }))
 
   const mutation = useMutation({
     mutationFn: (data: ProfileForm) => settingsService.updateProfile(data),
@@ -116,7 +120,23 @@ function ProfileTab() {
             <Input {...register('position')} placeholder="Jabatan Anda" />
           </Field>
           <Field label="Divisi" error={errors.division?.message}>
-            <Input {...register('division')} placeholder="Divisi Anda" />
+            <Controller
+              name="division"
+              control={control}
+              render={({ field }) => (
+                <Select onValueChange={field.onChange} value={field.value}>
+                  <SelectTrigger><SelectValue placeholder="Pilih divisi" /></SelectTrigger>
+                  <SelectContent>
+                    {field.value && !divisionOptions.some((division) => division.value === field.value) && (
+                      <SelectItem value={field.value}>{user?.division ?? field.value}</SelectItem>
+                    )}
+                    {divisionOptions.map((division) => (
+                      <SelectItem key={division.value} value={division.value}>{division.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
           </Field>
         </div>
 

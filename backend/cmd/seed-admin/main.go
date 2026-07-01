@@ -23,11 +23,11 @@ func main() {
 		defer sqlDB.Close()
 	}
 
-	if err := db.Migrator().DropTable(&entity.CaseChronology{}, &entity.LegalCase{}); err != nil {
-		log.Fatalf("Failed to drop legal_case tables: %v", err)
+	if err := seed.PrepareLegalCasePICMigration(db); err != nil {
+		log.Fatalf("Legal case PIC migration preparation failed: %v", err)
 	}
-	log.Println("Legal case tables recreated to accommodate PIC -> uuid migration")
 	if err := db.AutoMigrate(
+		&entity.Division{},
 		&entity.User{},
 		&entity.RefreshToken{},
 		&entity.LegalOpinion{},
@@ -38,7 +38,6 @@ func main() {
 		&entity.DocumentReviewResult{},
 		&entity.Regency{},
 		&entity.Cedant{},
-		&entity.Division{},
 		&entity.LegalCase{},
 		&entity.CaseChronology{},
 		&entity.AuditLog{},
@@ -57,16 +56,24 @@ func main() {
 	}
 	log.Println("Divisions seeded successfully")
 
+	if err := seed.BackfillUserDivisionIDs(db); err != nil {
+		log.Fatalf("User division backfill failed: %v", err)
+	}
+
 	email := getEnv("ADMIN_EMAIL", "admin@example.com")
 	password := getEnv("ADMIN_PASSWORD", "12345678")
+	adminDivision := getEnv("ADMIN_DIVISION", "Legal, compliance and risk management division")
 
 	admin := entity.User{
 		FullName: getEnv("ADMIN_FULL_NAME", "Super Admin"),
 		Email:    email,
 		Position: getEnv("ADMIN_POSITION", "Administrator"),
-		Division: getEnv("ADMIN_DIVISION", "Legal"),
+		Division: adminDivision,
 		Role:     entity.RoleAdmin,
 		Status:   entity.UserActive,
+	}
+	if divisionID, err := seed.FindDivisionIDByName(db, adminDivision); err == nil {
+		admin.DivisionID = &divisionID
 	}
 
 	var existing entity.User
@@ -78,6 +85,10 @@ func main() {
 		}
 		if existing.Status != entity.UserActive {
 			updates["status"] = entity.UserActive
+		}
+		if admin.DivisionID != nil && (existing.DivisionID == nil || *existing.DivisionID != *admin.DivisionID) {
+			updates["division"] = admin.Division
+			updates["division_id"] = admin.DivisionID
 		}
 
 		if len(updates) > 0 {
