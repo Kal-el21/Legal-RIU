@@ -136,33 +136,37 @@ func main() {
 	protected.PUT("/settings/two-fa", authHandler.Toggle2FA)
 
 	// Dashboard
-	protected.GET("/dashboard/stats", dashHandler.UserStats)
-	protected.GET("/dashboard/recent", dashHandler.UserRecent)
-	protected.GET("/dashboard/reminders", dashHandler.GetReminders)
-	protected.PATCH("/dashboard/reminders/read", notificationSettingHandler.MarkReminderRead)
-	protected.PATCH("/dashboard/reminders/read-all", notificationSettingHandler.MarkAllRemindersRead)
 	protected.GET("/divisions", divisionHandler.GetAll)
 
+	userOnly := protected.Group("")
+	userOnly.Use(middleware.RoleMiddleware("USER"))
+
+	userOnly.GET("/dashboard/stats", dashHandler.UserStats)
+	userOnly.GET("/dashboard/recent", dashHandler.UserRecent)
+	userOnly.GET("/dashboard/reminders", dashHandler.GetReminders)
+	userOnly.PATCH("/dashboard/reminders/read", notificationSettingHandler.MarkReminderRead)
+	userOnly.PATCH("/dashboard/reminders/read-all", notificationSettingHandler.MarkAllRemindersRead)
+
 	// Legal opinions — presign
-	protected.GET("/legal-opinions/presign", loHandler.GetPresignedURL)
-	protected.GET("/legal-opinions/download", loHandler.Download)
-	protected.GET("/legal-opinions/:id/pdf", loHandler.GeneratePDF)
-	protected.GET("/legal-opinions", loHandler.GetAll)
-	protected.POST("/legal-opinions", loHandler.Create)
-	protected.GET("/legal-opinions/:id", loHandler.GetByID)
-	protected.PUT("/legal-opinions/:id", loHandler.Update)
-	protected.DELETE("/legal-opinions/:id", loHandler.Delete)
-	protected.POST("/legal-opinions/:id/resubmit", loHandler.Resubmit)
+	userOnly.GET("/legal-opinions/presign", loHandler.GetPresignedURL)
+	userOnly.GET("/legal-opinions/download", loHandler.Download)
+	userOnly.GET("/legal-opinions/:id/pdf", loHandler.GeneratePDF)
+	userOnly.GET("/legal-opinions", loHandler.GetAll)
+	userOnly.POST("/legal-opinions", loHandler.Create)
+	userOnly.GET("/legal-opinions/:id", loHandler.GetByID)
+	userOnly.PUT("/legal-opinions/:id", loHandler.Update)
+	userOnly.DELETE("/legal-opinions/:id", loHandler.Delete)
+	userOnly.POST("/legal-opinions/:id/resubmit", loHandler.Resubmit)
 
 	// Review documents
-	protected.GET("/review-documents/presign", drHandler.GetPresignedURL)
-	protected.GET("/review-documents/download", drHandler.Download)
-	protected.GET("/review-documents", drHandler.GetAll)
-	protected.POST("/review-documents", drHandler.Create)
-	protected.GET("/review-documents/:id", drHandler.GetByID)
-	protected.PUT("/review-documents/:id", drHandler.Update)
-	protected.DELETE("/review-documents/:id", drHandler.Delete)
-	protected.POST("/review-documents/:id/resubmit", drHandler.Resubmit)
+	userOnly.GET("/review-documents/presign", drHandler.GetPresignedURL)
+	userOnly.GET("/review-documents/download", drHandler.Download)
+	userOnly.GET("/review-documents", drHandler.GetAll)
+	userOnly.POST("/review-documents", drHandler.Create)
+	userOnly.GET("/review-documents/:id", drHandler.GetByID)
+	userOnly.PUT("/review-documents/:id", drHandler.Update)
+	userOnly.DELETE("/review-documents/:id", drHandler.Delete)
+	userOnly.POST("/review-documents/:id/resubmit", drHandler.Resubmit)
 
 	// ── Admin only ─────────────────────────────────────────────────────────────
 	admin := api.Group("/admin")
@@ -171,6 +175,17 @@ func main() {
 	admin.GET("/dashboard/stats", dashHandler.AdminStats)
 	admin.GET("/dashboard/recent", dashHandler.AdminRecent)
 	admin.GET("/dashboard/reminders", notificationSettingHandler.GetRemindersDashboard)
+	admin.PATCH("/dashboard/reminders/read", notificationSettingHandler.MarkReminderRead)
+	admin.PATCH("/dashboard/reminders/read-all", notificationSettingHandler.MarkAllRemindersRead)
+
+	admin.GET("/legal-opinions/presign", loHandler.GetPresignedURL)
+	admin.GET("/legal-opinions/download", loHandler.Download)
+	admin.GET("/legal-opinions", loHandler.GetAll)
+	admin.GET("/legal-opinions/:id", loHandler.GetByID)
+	admin.GET("/review-documents/presign", drHandler.GetPresignedURL)
+	admin.GET("/review-documents/download", drHandler.Download)
+	admin.GET("/review-documents", drHandler.GetAll)
+	admin.GET("/review-documents/:id", drHandler.GetByID)
 
 	admin.GET("/legal-cases/regencies", legalCaseHandler.ListRegencies)
 	admin.GET("/legal-cases/cedants", legalCaseHandler.ListCedants)
@@ -219,33 +234,56 @@ func main() {
 	legal.GET("/dashboard/stats", dashHandler.LegalStats)
 	legal.GET("/dashboard/recent", dashHandler.LegalRecent)
 	legal.GET("/dashboard/reminders", notificationSettingHandler.GetLegalReminders)
+	legal.PATCH("/dashboard/reminders/read", notificationSettingHandler.MarkReminderRead)
+	legal.PATCH("/dashboard/reminders/read-all", notificationSettingHandler.MarkAllRemindersRead)
 
+	legal.GET("/legal-opinions/presign", loHandler.GetPresignedURL)
+	legal.GET("/legal-opinions/download", loHandler.Download)
+	legal.GET("/legal-opinions", loHandler.GetAll)
+	legal.GET("/legal-opinions/:id", loHandler.GetByID)
 	legal.PATCH("/legal-opinions/:id/status", loHandler.AdminUpdateStatus)
 	legal.POST("/legal-opinions/:id/result", loHandler.AdminUploadResult)
 	legal.GET("/legal-opinions/:id/pdf", loHandler.GeneratePDF)
+	legal.GET("/review-documents/presign", drHandler.GetPresignedURL)
+	legal.GET("/review-documents/download", drHandler.Download)
+	legal.GET("/review-documents", drHandler.GetAll)
+	legal.GET("/review-documents/:id", drHandler.GetByID)
 	legal.PATCH("/review-documents/:id/status", drHandler.AdminUpdateStatus)
 	legal.POST("/review-documents/:id/result", drHandler.AdminUploadResult)
 
-	legal.GET("/legal-opinions", loHandler.GetAll)
-	legal.GET("/legal-opinions/:id", loHandler.GetByID)
-	legal.GET("/review-documents", drHandler.GetAll)
-	legal.GET("/review-documents/:id", drHandler.GetByID)
+	registerLegalCaseRoutes(legal, legalCaseHandler)
+
+	legal.GET("/audit-logs", auditLogHandler.GetAll)
 
 	// ─── External ─────────────────────────────────────────────────────────────
 	external := api.Group("/external")
 	external.Use(middleware.AuthMiddleware(cfg), middleware.RoleMiddleware("EXTERNAL"), middleware.AuditMiddleware(auditLogSvc), middleware.CSRFProtection())
 
-	external.GET("/dashboard/stats", dashHandler.ExternalStats)
-	external.GET("/dashboard/recent", dashHandler.ExternalRecent)
-	external.GET("/dashboard/reminders", notificationSettingHandler.GetReminders)
-
-	external.GET("/legal-opinions", loHandler.GetAll)
-	external.GET("/legal-opinions/:id", loHandler.GetByID)
-	external.GET("/review-documents", drHandler.GetAll)
-	external.GET("/review-documents/:id", drHandler.GetByID)
+	registerLegalCaseRoutes(external, legalCaseHandler)
 
 	log.Printf("Server running on port %s", cfg.App.Port)
 	if err := r.Run(":" + cfg.App.Port); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}
+}
+
+func registerLegalCaseRoutes(group *gin.RouterGroup, legalCaseHandler *handler.LegalCaseHandler) {
+	group.GET("/legal-cases/regencies", legalCaseHandler.ListRegencies)
+	group.GET("/legal-cases/cedants", legalCaseHandler.ListCedants)
+	group.POST("/legal-cases/cedants", legalCaseHandler.CreateCedant)
+	group.PUT("/legal-cases/cedants/:id", legalCaseHandler.UpdateCedant)
+	group.DELETE("/legal-cases/cedants/:id", legalCaseHandler.DeleteCedant)
+	group.GET("/legal-cases/download", legalCaseHandler.Download)
+	group.GET("/legal-cases/latest", legalCaseHandler.GetLatest)
+	group.GET("/legal-cases", legalCaseHandler.GetAll)
+	group.POST("/legal-cases", legalCaseHandler.Create)
+	group.GET("/legal-cases/:id", legalCaseHandler.GetByID)
+	group.PUT("/legal-cases/:id", legalCaseHandler.Update)
+	group.DELETE("/legal-cases/:id", legalCaseHandler.Delete)
+	group.POST("/legal-cases/:id/upload-document", legalCaseHandler.UploadDocument)
+	group.DELETE("/legal-cases/:id/document", legalCaseHandler.DeleteDocument)
+	group.GET("/legal-cases/:id/chronology", legalCaseHandler.ListChronologies)
+	group.POST("/legal-cases/:id/chronology", legalCaseHandler.CreateChronology)
+	group.PUT("/legal-cases/:id/chronology/:chronId", legalCaseHandler.UpdateChronology)
+	group.DELETE("/legal-cases/:id/chronology/:chronId", legalCaseHandler.DeleteChronology)
 }

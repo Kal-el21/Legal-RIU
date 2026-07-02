@@ -16,6 +16,10 @@ func parseUUID(id string) (uuid.UUID, error) {
 	return uuid.Parse(id)
 }
 
+func canAccessAllSubmissions(role string) bool {
+	return role == string(entity.RoleAdmin) || role == string(entity.RoleLegal)
+}
+
 func toUserResponse(user *entity.User) dto.UserResponse {
 	division := user.Division
 	divisionID := ""

@@ -1,5 +1,13 @@
 import { Navigate, Outlet } from 'react-router-dom'
 import { useAuthStore } from '@/store/auth.store'
+import type { UserRole } from '@/types'
+
+function getRoleHome(role?: UserRole) {
+  if (role === 'ADMIN') return '/admin'
+  if (role === 'LEGAL') return '/legal'
+  if (role === 'EXTERNAL') return '/external/legal-cases'
+  return '/dashboard'
+}
 
 // Redirect to login if not authenticated
 export function PrivateRoute() {
@@ -11,7 +19,7 @@ export function PrivateRoute() {
 export function AdminRoute() {
   const { isAuthenticated, user } = useAuthStore()
   if (!isAuthenticated) return <Navigate to="/login" replace />
-  if (user?.role !== 'ADMIN') return <Navigate to="/dashboard" replace />
+  if (user?.role !== 'ADMIN') return <Navigate to={getRoleHome(user?.role)} replace />
   return <Outlet />
 }
 
@@ -19,7 +27,7 @@ export function AdminRoute() {
 export function LegalRoute() {
   const { isAuthenticated, user } = useAuthStore()
   if (!isAuthenticated) return <Navigate to="/login" replace />
-  if (user?.role !== 'LEGAL') return <Navigate to="/dashboard" replace />
+  if (user?.role !== 'LEGAL') return <Navigate to={getRoleHome(user?.role)} replace />
   return <Outlet />
 }
 
@@ -27,7 +35,15 @@ export function LegalRoute() {
 export function ExternalRoute() {
   const { isAuthenticated, user } = useAuthStore()
   if (!isAuthenticated) return <Navigate to="/login" replace />
-  if (user?.role !== 'EXTERNAL') return <Navigate to="/dashboard" replace />
+  if (user?.role !== 'EXTERNAL') return <Navigate to={getRoleHome(user?.role)} replace />
+  return <Outlet />
+}
+
+// User route - for regular USER role users
+export function UserRoute() {
+  const { isAuthenticated, user } = useAuthStore()
+  if (!isAuthenticated) return <Navigate to="/login" replace />
+  if (user?.role !== 'USER') return <Navigate to={getRoleHome(user?.role)} replace />
   return <Outlet />
 }
 
@@ -35,7 +51,5 @@ export function ExternalRoute() {
 export function GuestRoute() {
   const { isAuthenticated, user } = useAuthStore()
   if (!isAuthenticated) return <Outlet />
-  if (user?.role === 'ADMIN') return <Navigate to="/admin" replace />
-  if (user?.role === 'LEGAL') return <Navigate to="/legal" replace />
-  return <Navigate to="/dashboard" replace />
+  return <Navigate to={getRoleHome(user?.role)} replace />
 }

@@ -94,8 +94,8 @@ func (s *legalOpinionService) GetByID(id string, userID string, role string) (*e
 		return nil, errors.New("pengajuan tidak ditemukan")
 	}
 
-	// User can only see their own submissions (BR-001)
-	if role != string(entity.RoleAdmin) && lo.UserID.String() != userID {
+	// Regular users can only see their own submissions (BR-001).
+	if !canAccessAllSubmissions(role) && lo.UserID.String() != userID {
 		return nil, errors.New("pengajuan tidak ditemukan")
 	}
 
@@ -104,7 +104,7 @@ func (s *legalOpinionService) GetByID(id string, userID string, role string) (*e
 
 func (s *legalOpinionService) GetAll(userID string, role string, query dto.LegalOpinionListQuery) ([]entity.LegalOpinion, int64, error) {
 	var filterUserID *uuid.UUID
-	if role != string(entity.RoleAdmin) {
+	if !canAccessAllSubmissions(role) {
 		uid, err := parseUUID(userID)
 		if err != nil {
 			return nil, 0, errors.New("user tidak valid")

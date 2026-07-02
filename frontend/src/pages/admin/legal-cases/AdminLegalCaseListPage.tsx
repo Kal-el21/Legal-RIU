@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useDeleteLegalCase, useLatestLegalCase, useLegalCases, useLegalCase } from '@/hooks/useLegalCase'
 import { formatDate, formatDateTime } from '@/lib/utils'
+import { getLegalCaseRouteBase } from '@/services/legal-case.service'
 import type { CaseChronology, LegalCase } from '@/types'
 import LegalCaseFormDialog from './components/LegalCaseFormDialog'
 
@@ -69,6 +70,7 @@ export default function AdminLegalCaseListPage() {
   const { data: latest } = useLatestLegalCase()
   const deleteMutation = useDeleteLegalCase()
   const { data: hoveredCase } = useLegalCase(hoveredCaseId ?? '')
+  const caseRouteBase = getLegalCaseRouteBase()
 
   const handleEdit = (legalCase: LegalCase) => {
     setEditingCase(legalCase)
@@ -195,7 +197,7 @@ export default function AdminLegalCaseListPage() {
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex justify-end gap-1">
-                      <Link to={`/admin/legal-cases/${item.id}`} className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700" title="View">
+                      <Link to={`${caseRouteBase}/${item.id}`} className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700" title="View">
                         <Eye className="h-4 w-4" />
                       </Link>
                       <button onClick={() => handleEdit(item)} className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700" title="Edit">
@@ -227,6 +229,7 @@ export default function AdminLegalCaseListPage() {
         <HoverPreview
           caseData={hoveredCase}
           latestChronology={latestChronology}
+          caseRouteBase={caseRouteBase}
         />
       )}
 
@@ -235,7 +238,7 @@ export default function AdminLegalCaseListPage() {
   )
 }
 
-function HoverPreview({ caseData, latestChronology }: { caseData: LegalCase; latestChronology?: CaseChronology }) {
+function HoverPreview({ caseData, latestChronology, caseRouteBase }: { caseData: LegalCase; latestChronology?: CaseChronology; caseRouteBase: string }) {
   return (
     <div className="fixed right-6 top-1/2 z-50 w-80 -translate-y-1/2 rounded-xl border border-gray-200 bg-white shadow-xl">
       <div className="border-b border-gray-100 px-4 py-3">
@@ -282,7 +285,7 @@ function HoverPreview({ caseData, latestChronology }: { caseData: LegalCase; lat
               )}
               {caseData.chronologies && caseData.chronologies.length > 4 && (
                 <Link
-                  to={`/admin/legal-cases/${caseData.id}`}
+                  to={`${caseRouteBase}/${caseData.id}`}
                   className="inline-flex items-center gap-1 text-xs text-[#C8102E] hover:underline pl-5"
                 >
                   Lihat semua kronologi

@@ -1,14 +1,11 @@
 import { Outlet, Link, useLocation } from 'react-router-dom'
-import { Scale, LayoutDashboard, FileText, FileSearch, Menu, ChevronRight, ChevronLeft } from 'lucide-react'
+import { Scale, Menu, ChevronRight, ChevronLeft } from 'lucide-react'
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
 import SidebarUserButton from '@/components/common/SidebarUserButton'
-import NotificationDropdown from '@/components/common/NotificationDropdown'
 
 const NAV = [
-  { label: 'Dashboard', href: '/external', icon: LayoutDashboard, exact: true },
-  { label: 'Legal Opinion', href: '/external/legal-opinions', icon: FileText },
-  { label: 'Review Dokumen', href: '/external/review-documents', icon: FileSearch },
+  { label: 'Manajemen Kasus', href: '/external/legal-cases', icon: Scale, exact: false },
 ]
 
 export default function ExternalLayout() {
@@ -84,7 +81,6 @@ export default function ExternalLayout() {
             {sidebarCollapsed ? <ChevronRight className="w-5 h-5 text-gray-600" /> : <ChevronLeft className="w-5 h-5 text-gray-600" />}
           </button>
           <div className="flex-1" />
-          <NotificationDropdown />
           <Link to="/" className="text-sm text-gray-500 hover:text-gray-700 transition-colors">
             ← Kembali ke Beranda
           </Link>

@@ -26,6 +26,14 @@ export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
+  const dashboardPath =
+    user?.role === 'ADMIN'
+      ? '/admin'
+      : user?.role === 'LEGAL'
+        ? '/legal'
+        : user?.role === 'EXTERNAL'
+          ? '/external/legal-cases'
+          : '/dashboard'
 
   return (
     <nav className="sticky top-0 z-50 bg-white border-b border-gray-100 shadow-sm">
@@ -94,7 +102,7 @@ export default function Navbar() {
               </Link>
             ) : (
               <div className="flex items-center gap-2">
-<Link to={user?.role === 'ADMIN' ? '/admin' : user?.role === 'LEGAL' ? '/legal' : '/external'}
+<Link to={dashboardPath}
                    className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors">
                    <LayoutDashboard className="w-4 h-4" /> Dashboard
                  </Link>
@@ -168,7 +176,7 @@ export default function Navbar() {
               </Link>
             ) : (
               <div className="space-y-1">
-<Link to={user?.role === 'ADMIN' ? '/admin' : user?.role === 'LEGAL' ? '/legal' : '/external'} onClick={() => setMobileOpen(false)}
+<Link to={dashboardPath} onClick={() => setMobileOpen(false)}
                    className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
                    <LayoutDashboard className="w-4 h-4" /> Dashboard
                  </Link>
