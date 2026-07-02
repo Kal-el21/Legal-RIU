@@ -5,6 +5,7 @@ import type { UserRole } from '@/types'
 function getRoleHome(role?: UserRole) {
   if (role === 'ADMIN') return '/admin'
   if (role === 'LEGAL') return '/legal'
+  if (role === 'LEGAL_AU') return '/legal-au'
   if (role === 'EXTERNAL') return '/external/legal-cases'
   return '/dashboard'
 }
@@ -28,6 +29,14 @@ export function LegalRoute() {
   const { isAuthenticated, user } = useAuthStore()
   if (!isAuthenticated) return <Navigate to="/login" replace />
   if (user?.role !== 'LEGAL') return <Navigate to={getRoleHome(user?.role)} replace />
+  return <Outlet />
+}
+
+// Legal AU route - for LEGAL_AU role users
+export function LegalAURoute() {
+  const { isAuthenticated, user } = useAuthStore()
+  if (!isAuthenticated) return <Navigate to="/login" replace />
+  if (user?.role !== 'LEGAL_AU') return <Navigate to={getRoleHome(user?.role)} replace />
   return <Outlet />
 }
 

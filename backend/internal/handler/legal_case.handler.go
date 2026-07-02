@@ -9,19 +9,37 @@ import (
 	"legal-riu-portal/internal/dto"
 	"legal-riu-portal/internal/entity"
 	"legal-riu-portal/internal/middleware"
+	"legal-riu-portal/internal/repository"
 	"legal-riu-portal/internal/service"
 	"legal-riu-portal/internal/utils"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 type LegalCaseHandler struct {
 	svc         service.LegalCaseService
 	auditLogSvc service.AuditLogService
+	userRepo    repository.UserRepository
 }
 
-func NewLegalCaseHandler(svc service.LegalCaseService, auditLogSvc service.AuditLogService) *LegalCaseHandler {
-	return &LegalCaseHandler{svc: svc, auditLogSvc: auditLogSvc}
+func NewLegalCaseHandler(svc service.LegalCaseService, auditLogSvc service.AuditLogService, userRepo repository.UserRepository) *LegalCaseHandler {
+	return &LegalCaseHandler{svc: svc, auditLogSvc: auditLogSvc, userRepo: userRepo}
+}
+
+func (h *LegalCaseHandler) getCompanyID(c *gin.Context) *uuid.UUID {
+	userID := middleware.GetUserID(c)
+	user, err := h.userRepo.FindByID(mustParseUUID(userID))
+	if err != nil {
+		return nil
+	}
+	if user.CompanyID == nil {
+		return nil
+	}
+	if user.Company.IsInternal {
+		return nil
+	}
+	return user.CompanyID
 }
 
 func (h *LegalCaseHandler) GetAll(c *gin.Context) {
@@ -37,7 +55,8 @@ func (h *LegalCaseHandler) GetAll(c *gin.Context) {
 		query.Limit = 10
 	}
 
-	items, total, err := h.svc.GetAll(query)
+	companyID := h.getCompanyID(c)
+	items, total, err := h.svc.GetAll(companyID, query)
 	if err != nil {
 		utils.BadRequest(c, err.Error(), nil)
 		return
@@ -53,7 +72,8 @@ func (h *LegalCaseHandler) GetAll(c *gin.Context) {
 }
 
 func (h *LegalCaseHandler) GetLatest(c *gin.Context) {
-	legalCase, err := h.svc.GetLatest()
+	companyID := h.getCompanyID(c)
+	legalCase, err := h.svc.GetLatest(companyID)
 	if err != nil {
 		utils.OK(c, "Success", nil)
 		return
@@ -62,7 +82,8 @@ func (h *LegalCaseHandler) GetLatest(c *gin.Context) {
 }
 
 func (h *LegalCaseHandler) GetByID(c *gin.Context) {
-	legalCase, err := h.svc.GetByID(c.Param("id"))
+	companyID := h.getCompanyID(c)
+	legalCase, err := h.svc.GetByID(companyID, c.Param("id"))
 	if err != nil {
 		utils.NotFound(c, err.Error())
 		return
@@ -77,7 +98,17 @@ func (h *LegalCaseHandler) Create(c *gin.Context) {
 		return
 	}
 
-	legalCase, err := h.svc.Create(req)
+	userID := middleware.GetUserID(c)
+	user, err := h.userRepo.FindByID(mustParseUUID(userID))
+	if err != nil {
+		utils.BadRequest(c, "User tidak ditemukan", nil)
+		return
+	}
+	if user.CompanyID != nil && user.Company.IsInternal {
+		req.CompanyID = user.CompanyID.String()
+	}
+
+	legalCase, err := h.svc.Create(user.CompanyID, req)
 	if err != nil {
 		utils.BadRequest(c, err.Error(), nil)
 		return
@@ -288,7 +319,63 @@ func (h *LegalCaseHandler) DeleteCedant(c *gin.Context) {
 	}
 
 	middleware.SetAuditContext(c, entity.ActionDelete, "cedant", id)
+	c.Set("audit_description", "Cedant deleted")
 	utils.OK(c, "Cedant berhasil dihapus", nil)
+}
+
+func (h *LegalCaseHandler) UpdateStatus(c *gin.Context) {
+	id := c.Param("id")
+	var body struct {
+		Status string `json:"current_status" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		utils.BadRequest(c, "Validasi gagal", err.Error())
+		return
+	}
+
+	companyID := h.getCompanyID(c)
+	legalCase, err := h.svc.GetByID(companyID, id)
+	if err != nil {
+		utils.NotFound(c, err.Error())
+		return
+	}
+	if companyID != nil && legalCase.CompanyID != companyID.String() {
+		utils.Forbidden(c, "Anda tidak memiliki akses ke kasus ini")
+		return
+	}
+
+	existing, err := h.svc.GetByID(companyID, id)
+	if err != nil {
+		utils.NotFound(c, err.Error())
+		return
+	}
+	existing.CurrentStatus = body.Status
+	_, err = h.svc.Update(id, dto.UpdateLegalCaseRequest{
+		CaseName:          existing.CaseName,
+		CaseSummary:       existing.CaseSummary,
+		RelatedPartyID:    existing.RelatedPartyID,
+		CategoryID:        existing.CategoryID,
+		Specification:     existing.Specification,
+		CaseTypeID:        existing.CaseTypeID,
+		TechnicalReserve:  existing.TechnicalReserve,
+		CaseValue:         existing.CaseValue,
+		PIC:               existing.PIC,
+		DocumentLink:      existing.DocumentLink,
+		CurrentStatus:     body.Status,
+		CaseDate:          existing.CaseDate.Format("2006-01-02"),
+		Level:             existing.Level,
+		AdditionalNotes:   existing.AdditionalNotes,
+		LocationRegencyID: existing.LocationRegencyID,
+		CompanyID:         existing.CompanyID,
+	})
+	if err != nil {
+		utils.BadRequest(c, err.Error(), nil)
+		return
+	}
+
+	middleware.SetAuditContext(c, entity.ActionStatusChange, "legal_case", existing.ID)
+	c.Set("audit_description", "Legal case status updated")
+	utils.OK(c, "Status kasus berhasil diupdate", nil)
 }
 
 func bindChronologyRequest(c *gin.Context) (dto.CreateCaseChronologyRequest, []*multipart.FileHeader, bool) {
@@ -320,4 +407,12 @@ func bindChronologyRequest(c *gin.Context) (dto.CreateCaseChronologyRequest, []*
 	}
 
 	return req, files, true
+}
+
+func mustParseUUID(value string) uuid.UUID {
+	parsed, err := uuid.Parse(value)
+	if err != nil {
+		return uuid.Nil
+	}
+	return parsed
 }

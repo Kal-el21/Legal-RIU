@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useUsers, useCreateUser, useUpdateUser, useUpdateUserStatus, useResetPassword, useDeleteUser } from '@/hooks/useUser'
-import { useDivisions } from '@/hooks/useLegalCase'
+import { useCompanies, useDivisions } from '@/hooks/useLegalCase'
 import { formatDate } from '@/lib/utils'
 import type { User } from '@/types'
 
@@ -20,14 +20,32 @@ const createSchema = z.object({
   password: z.string().min(8, 'Minimal 8 karakter'),
   position: z.string().min(1, 'Wajib diisi'),
   division: z.string().min(1, 'Wajib diisi'),
-  role: z.enum(['USER', 'ADMIN', 'LEGAL', 'EXTERNAL']),
+  role: z.enum(['USER', 'ADMIN', 'LEGAL', 'EXTERNAL', 'LEGAL_AU']),
+  company_id: z.string().optional(),
+}).refine((data) => {
+  if (data.role === 'LEGAL_AU' && !data.company_id) {
+    return false
+  }
+  return true
+}, {
+  message: 'Perusahaan wajib dipilih untuk role LEGAL_AU',
+  path: ['company_id'],
 })
 
 const editSchema = z.object({
   full_name: z.string().min(1, 'Wajib diisi'),
   position: z.string().min(1, 'Wajib diisi'),
   division: z.string().min(1, 'Wajib diisi'),
-  role: z.enum(['USER', 'ADMIN', 'LEGAL', 'EXTERNAL']),
+  role: z.enum(['USER', 'ADMIN', 'LEGAL', 'EXTERNAL', 'LEGAL_AU']),
+  company_id: z.string().optional(),
+}).refine((data) => {
+  if (data.role === 'LEGAL_AU' && !data.company_id) {
+    return false
+  }
+  return true
+}, {
+  message: 'Perusahaan wajib dipilih untuk role LEGAL_AU',
+  path: ['company_id'],
 })
 
 const resetSchema = z.object({
@@ -80,20 +98,47 @@ export default function UserManagementPage() {
 
   const { data, isLoading } = useUsers({ page, limit: 10, search })
   const { data: divisions = [] } = useDivisions()
+  const { data: companies = [] } = useCompanies()
   const createMutation = useCreateUser()
   const updateMutation = useUpdateUser()
   const statusMutation = useUpdateUserStatus()
   const resetMutation = useResetPassword()
   const deleteMutation = useDeleteUser()
 
-  const createForm = useForm<CreateForm>({ resolver: zodResolver(createSchema), defaultValues: { role: 'USER' } })
+  const createForm = useForm<CreateForm>({ resolver: zodResolver(createSchema), defaultValues: { role: 'USER', company_id: '' } })
   const editForm = useForm<EditForm>({ resolver: zodResolver(editSchema) })
   const resetForm = useForm<ResetForm>({ resolver: zodResolver(resetSchema) })
   const divisionOptions = divisions.map((division) => ({ value: division.id, label: division.name }))
+  const companyOptions = companies.map((company) => ({ value: company.id, label: company.name }))
+
+  const createRole = createForm.watch('role')
+  const editRole = editForm.watch('role')
+
+  const getDefaultCompanyForRole = (role: string) => {
+    if (role === 'EXTERNAL') return ''
+    const riu = companies.find((c) => c.email_domain === 'indonesiare.co.id')
+    return riu?.id || companies[0]?.id || ''
+  }
+
+  const handleCreateRoleChange = (role: string) => {
+    if (role === 'EXTERNAL') {
+      createForm.setValue('company_id', '')
+    } else if (!createForm.getValues('company_id')) {
+      createForm.setValue('company_id', getDefaultCompanyForRole(role))
+    }
+  }
+
+  const handleEditRoleChange = (role: string) => {
+    if (role === 'EXTERNAL') {
+      editForm.setValue('company_id', '')
+    } else if (!editForm.getValues('company_id')) {
+      editForm.setValue('company_id', getDefaultCompanyForRole(role))
+    }
+  }
 
   const openEdit = (user: User) => {
     setSelected(user)
-    editForm.reset({ full_name: user.full_name, position: user.position, division: user.division_id || user.division, role: user.role })
+    editForm.reset({ full_name: user.full_name, position: user.position, division: user.division_id || user.division, role: user.role, company_id: user.company_id })
     setModal('edit')
   }
 
@@ -103,7 +148,7 @@ export default function UserManagementPage() {
     setModal('reset')
   }
 
-  const closeModal = () => { setModal(null); setSelected(null); createForm.reset({ role: 'USER' }) }
+  const closeModal = () => { setModal(null); setSelected(null); createForm.reset({ role: 'USER', company_id: getDefaultCompanyForRole('USER') }) }
 
   const onCreateSubmit = async (data: CreateForm) => {
     await createMutation.mutateAsync(data)
@@ -291,47 +336,64 @@ export default function UserManagementPage() {
             <Field label="Password" error={createForm.formState.errors.password?.message}>
               <Input {...createForm.register('password')} type="password" placeholder="Min. 8 karakter" />
             </Field>
-<div className="grid grid-cols-2 gap-4">
-               <Field label="Posisi Jabatan" error={createForm.formState.errors.position?.message}>
-                 <Input {...createForm.register('position')} placeholder="Jabatan" />
-               </Field>
-               <Field label="Divisi" error={createForm.formState.errors.division?.message}>
-                 <Controller
-                   name="division"
-                   control={createForm.control}
-                   render={({ field }) => (
-                     <Select onValueChange={field.onChange} value={field.value}>
-                       <SelectTrigger><SelectValue placeholder="Pilih divisi" /></SelectTrigger>
-                       <SelectContent>
-                         {renderDivisionOptions(field.value)}
-                       </SelectContent>
-                     </Select>
-                   )}
-                 />
-               </Field>
-             </div>
-<Field label="Role" error={createForm.formState.errors.role?.message}>
-               <Controller
-                 name="role"
-                 control={createForm.control}
-                 render={({ field }) => (
-                   <Select onValueChange={field.onChange} value={field.value}>
-                     <SelectTrigger><SelectValue placeholder="Pilih role" /></SelectTrigger>
-                     <SelectContent>
-                       <SelectItem value="USER">User</SelectItem>
-                       <SelectItem value="LEGAL">Legal</SelectItem>
-                       <SelectItem value="EXTERNAL">External User</SelectItem>
-                       <SelectItem value="ADMIN">Admin</SelectItem>
-                     </SelectContent>
-                   </Select>
-                 )}
-               />
-             </Field>
-             {createMutation.isError && createMutation.error && (
-              <p className="text-xs text-red-500">
-                {(createMutation.error as any)?.response?.data?.message || (createMutation.error as Error)?.message}
-              </p>
-            )}
+ <div className="grid grid-cols-2 gap-4">
+                <Field label="Posisi Jabatan" error={createForm.formState.errors.position?.message}>
+                  <Input {...createForm.register('position')} placeholder="Jabatan" />
+                </Field>
+                <Field label="Divisi" error={createForm.formState.errors.division?.message}>
+                  <Controller
+                    name="division"
+                    control={createForm.control}
+                    render={({ field }) => (
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <SelectTrigger><SelectValue placeholder="Pilih divisi" /></SelectTrigger>
+                        <SelectContent>
+                          {renderDivisionOptions(field.value)}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
+                </Field>
+              </div>
+              <Field label="Role" error={createForm.formState.errors.role?.message}>
+                <Controller
+                  name="role"
+                  control={createForm.control}
+                  render={({ field }) => (
+                    <Select onValueChange={(value) => { field.onChange(value); handleCreateRoleChange(value) }} value={field.value}>
+                      <SelectTrigger><SelectValue placeholder="Pilih role" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="USER">User</SelectItem>
+                        <SelectItem value="LEGAL">Legal</SelectItem>
+                        <SelectItem value="EXTERNAL">External User</SelectItem>
+                        <SelectItem value="ADMIN">Admin</SelectItem>
+                        <SelectItem value="LEGAL_AU">Legal AU</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+              </Field>
+              {createRole !== 'EXTERNAL' && (
+                <Field label="Perusahaan" error={createForm.formState.errors.company_id?.message}>
+                  <Controller
+                    name="company_id"
+                    control={createForm.control}
+                    render={({ field }) => (
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <SelectTrigger><SelectValue placeholder="Pilih perusahaan" /></SelectTrigger>
+                        <SelectContent>
+                          {companyOptions.map((company) => <SelectItem key={company.value} value={company.value}>{company.label}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
+                </Field>
+              )}
+              {createMutation.isError && createMutation.error && (
+               <p className="text-xs text-red-500">
+                 {(createMutation.error as any)?.response?.data?.message || (createMutation.error as Error)?.message}
+               </p>
+             )}
             <div className="flex gap-2 pt-2">
               <Button type="button" variant="outline" className="flex-1" onClick={closeModal}>Batal</Button>
               <Button type="submit" disabled={createMutation.isPending} className="flex-1 text-white" style={{ background: '#C8102E' }}>
@@ -352,40 +414,71 @@ export default function UserManagementPage() {
             <Field label="Posisi Jabatan" error={editForm.formState.errors.position?.message}>
               <Input {...editForm.register('position')} />
             </Field>
-<Field label="Divisi" error={editForm.formState.errors.division?.message}>
-               <Controller
-                 name="division"
-                 control={editForm.control}
-                 render={({ field }) => (
-                   <Select onValueChange={field.onChange} value={field.value}>
-                     <SelectTrigger><SelectValue placeholder="Pilih divisi" /></SelectTrigger>
-                     <SelectContent>
-                       {renderDivisionOptions(field.value)}
-                     </SelectContent>
-                   </Select>
-                 )}
-               />
-             </Field>
-<Field label="Role" error={editForm.formState.errors.role?.message}>
-               <Controller
-                 name="role"
-                 control={editForm.control}
-                 render={({ field }) => (
-                   <Select onValueChange={field.onChange} value={field.value}>
-                     <SelectTrigger><SelectValue /></SelectTrigger>
-                     <SelectContent>
-                       <SelectItem value="USER">User</SelectItem>
-                       <SelectItem value="LEGAL">Legal</SelectItem>
-                       <SelectItem value="EXTERNAL">External User</SelectItem>
-                       <SelectItem value="ADMIN">Admin</SelectItem>
-                     </SelectContent>
-                   </Select>
-                 )}
-               />
-             </Field>
-             {updateMutation.isError && (
-              <p className="text-xs text-red-500">{(updateMutation.error as Error)?.message}</p>
-            )}
+ <Field label="Divisi" error={editForm.formState.errors.division?.message}>
+                <Controller
+                  name="division"
+                  control={editForm.control}
+                  render={({ field }) => (
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <SelectTrigger><SelectValue placeholder="Pilih divisi" /></SelectTrigger>
+                      <SelectContent>
+                        {renderDivisionOptions(field.value)}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+              </Field>
+              <Field label="Perusahaan" error={editForm.formState.errors.company_id?.message}>
+                <Controller
+                  name="company_id"
+                  control={editForm.control}
+                  render={({ field }) => (
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <SelectTrigger><SelectValue placeholder="Pilih perusahaan" /></SelectTrigger>
+                      <SelectContent>
+                        {companyOptions.map((company) => <SelectItem key={company.value} value={company.value}>{company.label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                   )}
+                 />
+               </Field>
+               <Field label="Role" error={editForm.formState.errors.role?.message}>
+                 <Controller
+                   name="role"
+                   control={editForm.control}
+                   render={({ field }) => (
+                     <Select onValueChange={(value) => { field.onChange(value); handleEditRoleChange(value) }} value={field.value}>
+                       <SelectTrigger><SelectValue /></SelectTrigger>
+                       <SelectContent>
+                         <SelectItem value="USER">User</SelectItem>
+                         <SelectItem value="LEGAL">Legal</SelectItem>
+                         <SelectItem value="EXTERNAL">External User</SelectItem>
+                         <SelectItem value="ADMIN">Admin</SelectItem>
+                         <SelectItem value="LEGAL_AU">Legal AU</SelectItem>
+                       </SelectContent>
+                     </Select>
+                   )}
+                 />
+               </Field>
+               {editRole !== 'EXTERNAL' && (
+                 <Field label="Perusahaan" error={editForm.formState.errors.company_id?.message}>
+                   <Controller
+                     name="company_id"
+                     control={editForm.control}
+                     render={({ field }) => (
+                       <Select onValueChange={field.onChange} value={field.value}>
+                         <SelectTrigger><SelectValue placeholder="Pilih perusahaan" /></SelectTrigger>
+                         <SelectContent>
+                           {companyOptions.map((company) => <SelectItem key={company.value} value={company.value}>{company.label}</SelectItem>)}
+                         </SelectContent>
+                       </Select>
+                     )}
+                   />
+                 </Field>
+               )}
+              {updateMutation.isError && (
+               <p className="text-xs text-red-500">{(updateMutation.error as Error)?.message}</p>
+             )}
             <div className="flex gap-2 pt-2">
               <Button type="button" variant="outline" className="flex-1" onClick={closeModal}>Batal</Button>
               <Button type="submit" disabled={updateMutation.isPending} className="flex-1 text-white" style={{ background: '#0B2545' }}>

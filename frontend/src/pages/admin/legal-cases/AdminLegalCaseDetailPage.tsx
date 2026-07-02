@@ -12,15 +12,6 @@ import { formatCurrency, formatDate, formatDateTime, formatFileSize, validateFil
 import type { CaseChronology } from '@/types'
 import LegalCaseFormDialog from './components/LegalCaseFormDialog'
 
-const CASE_TYPE_LABEL: Record<string, string> = {
-  NON_LITIGASI: 'Non Litigasi',
-  PERDATA: 'Perdata',
-  PIDANA: 'Pidana',
-  TIPEKOR: 'Tipekor',
-  ARBITRASE: 'Arbitrase',
-  TUN: 'TUN',
-}
-
 export default function AdminLegalCaseDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
@@ -133,9 +124,9 @@ export default function AdminLegalCaseDetailPage() {
           <Section title="Informasi Umum">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <Info label="Nama Kasus" value={legalCase.case_name} />
-              <Info label="Jenis Kasus" value={CASE_TYPE_LABEL[legalCase.case_type] ?? legalCase.case_type} />
+              <Info label="Jenis Kasus" value={legalCase.case_type?.label ?? legalCase.case_type_id} />
               <Info label="Pihak Terkait" value={legalCase.related_party?.name ?? '-'} />
-              <Info label="Kategori Kasus" value={legalCase.category} />
+              <Info label="Kategori Kasus" value={legalCase.category?.label ?? legalCase.category_id} />
               <Info label="Lokasi" value={legalCase.location_regency?.label ?? '-'} />
               <Info label="Penanggung Jawab" value={legalCase.pic_division?.name ?? legalCase.pic ?? '-'} />
               <Info label="Cadangan Teknis" value={legalCase.technical_reserve || '-'} />

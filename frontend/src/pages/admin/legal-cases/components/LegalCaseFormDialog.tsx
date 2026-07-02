@@ -10,32 +10,16 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import SearchableSelect from '@/components/common/SearchableSelect'
-import { useCedants, useCreateCedant, useCreateLegalCase, useDivisions, useRegencies, useUpdateLegalCase } from '@/hooks/useLegalCase'
+import { useCedants, useCompanies, useCreateCedant, useCreateLegalCase, useDivisions, useRegencies, useUpdateLegalCase, useCaseTypes, useCaseCategories } from '@/hooks/useLegalCase'
 import type { LegalCase } from '@/types'
-
-const CASE_TYPES = [
-  { label: 'Non Litigasi', value: 'NON_LITIGASI' },
-  { label: 'Perdata', value: 'PERDATA' },
-  { label: 'Pidana', value: 'PIDANA' },
-  { label: 'Tipekor', value: 'TIPEKOR' },
-  { label: 'Arbitrase', value: 'ARBITRASE' },
-  { label: 'TUN', value: 'TUN' },
-]
-
-const CASE_CATEGORIES = [
-  { label: 'Life', value: 'Life' },
-  { label: 'BPPDAN', value: 'BPPDAN' },
-  { label: 'Property', value: 'Property' },
-  { label: 'COB (IFRS)', value: 'COB' },
-]
 
 const schema = z.object({
   case_name: z.string().min(1, 'Wajib diisi'),
   case_summary: z.string().optional(),
   related_party_id: z.string().min(1, 'Pilih pihak terkait'),
-  category: z.string().min(1, 'Wajib diisi'),
+  category_id: z.string().min(1, 'Wajib diisi'),
   specification: z.string().optional(),
-  case_type: z.string().min(1, 'Pilih jenis kasus'),
+  case_type_id: z.string().min(1, 'Pilih jenis kasus'),
   technical_reserve: z.string().optional(),
   case_value: z.number().min(0, 'Nilai tidak valid'),
   pic: z.string().min(1, 'Pilih PIC'),
@@ -45,6 +29,7 @@ const schema = z.object({
   level: z.string().min(1, 'Wajib diisi'),
   additional_notes: z.string().optional(),
   location_regency_id: z.string().min(1, 'Pilih kabupaten/kota'),
+  company_id: z.string().min(1, 'Wajib diisi'),
 })
 
 type FormData = z.infer<typeof schema>
@@ -60,6 +45,9 @@ export default function LegalCaseFormDialog({ open, onOpenChange, legalCase }: L
   const { data: cedants = [] } = useCedants({ limit: 200 })
   const { data: regencies = [] } = useRegencies({ limit: 500 })
   const { data: divisions = [] } = useDivisions()
+  const { data: companies = [] } = useCompanies()
+  const { data: caseTypes = [] } = useCaseTypes()
+  const { data: caseCategories = [] } = useCaseCategories()
   const createLegalCase = useCreateLegalCase()
   const updateLegalCase = useUpdateLegalCase()
   const createCedant = useCreateCedant()
@@ -137,6 +125,20 @@ export default function LegalCaseFormDialog({ open, onOpenChange, legalCase }: L
             <Field label="Tanggal" error={errors.case_date?.message}>
               <Input type="date" {...register('case_date')} />
             </Field>
+            <Field label="Perusahaan" error={errors.company_id?.message}>
+              <Controller
+                name="company_id"
+                control={control}
+                render={({ field }) => (
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <SelectTrigger className="w-full"><SelectValue placeholder="Pilih perusahaan" /></SelectTrigger>
+                    <SelectContent>
+                      {companies.map((item) => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+            </Field>
             <Field label="Pihak Terkait" error={errors.related_party_id?.message}>
               <Controller
                 name="related_party_id"
@@ -188,29 +190,29 @@ export default function LegalCaseFormDialog({ open, onOpenChange, legalCase }: L
               </div>
             )}
 
-            <Field label="Kategori" error={errors.category?.message}>
+            <Field label="Kategori" error={errors.category_id?.message}>
               <Controller
-                name="category"
+                name="category_id"
                 control={control}
                 render={({ field }) => (
                   <Select onValueChange={field.onChange} value={field.value}>
                     <SelectTrigger className="w-full"><SelectValue placeholder="Pilih kategori" /></SelectTrigger>
                     <SelectContent>
-                      {CASE_CATEGORIES.map((item) => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}
+                      {caseCategories.map((item) => <SelectItem key={item.id} value={item.id}>{item.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 )}
               />
             </Field>
-            <Field label="Jenis Kasus" error={errors.case_type?.message}>
+            <Field label="Jenis Kasus" error={errors.case_type_id?.message}>
               <Controller
-                name="case_type"
+                name="case_type_id"
                 control={control}
                 render={({ field }) => (
                   <Select onValueChange={field.onChange} value={field.value}>
                     <SelectTrigger className="w-full"><SelectValue placeholder="Pilih jenis kasus" /></SelectTrigger>
                     <SelectContent>
-                      {CASE_TYPES.map((item) => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}
+                      {caseTypes.map((item) => <SelectItem key={item.id} value={item.id}>{item.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 )}
@@ -283,9 +285,9 @@ function emptyDefaults(): FormData {
     case_name: '',
     case_summary: '',
     related_party_id: '',
-    category: '',
+    category_id: '',
     specification: '',
-    case_type: '',
+    case_type_id: '',
     technical_reserve: '',
     case_value: 0,
     pic: '',
@@ -295,6 +297,7 @@ function emptyDefaults(): FormData {
     level: '',
     additional_notes: '',
     location_regency_id: '',
+    company_id: '',
   }
 }
 
@@ -303,9 +306,9 @@ function valuesFromLegalCase(legalCase: LegalCase): FormData {
     case_name: legalCase.case_name,
     case_summary: legalCase.case_summary ?? '',
     related_party_id: legalCase.related_party_id,
-    category: legalCase.category,
+    category_id: legalCase.category_id,
     specification: legalCase.specification ?? '',
-    case_type: legalCase.case_type,
+    case_type_id: legalCase.case_type_id,
     technical_reserve: legalCase.technical_reserve ?? '',
     case_value: legalCase.case_value ?? 0,
     pic: legalCase.pic,
@@ -315,6 +318,7 @@ function valuesFromLegalCase(legalCase: LegalCase): FormData {
     level: legalCase.level,
     additional_notes: legalCase.additional_notes ?? '',
     location_regency_id: legalCase.location_regency_id,
+    company_id: legalCase.company_id,
   }
 }
 

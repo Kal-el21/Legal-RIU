@@ -9,6 +9,10 @@ const KEYS = {
   regencies: (params?: object) => [...KEYS.all, 'regencies', params] as const,
   cedants: (params?: object) => [...KEYS.all, 'cedants', params] as const,
   divisions: (params?: object) => [...KEYS.all, 'divisions', params] as const,
+  caseTypes: () => [...KEYS.all, 'case-types'] as const,
+  caseCategories: () => [...KEYS.all, 'case-categories'] as const,
+  companies: () => [...KEYS.all, 'companies'] as const,
+  purposeTypes: () => [...KEYS.all, 'purpose-types'] as const,
 }
 
 export function useLegalCases(params?: LegalCaseFilters) {
@@ -113,5 +117,153 @@ export function useDivisions(params?: { search?: string }) {
   return useQuery({
     queryKey: KEYS.divisions(params),
     queryFn: () => legalCaseService.getDivisions(params),
+  })
+}
+
+export function useCaseTypes() {
+  return useQuery({
+    queryKey: KEYS.caseTypes(),
+    queryFn: () => legalCaseService.getCaseTypes(),
+  })
+}
+
+export function useCaseCategories() {
+  return useQuery({
+    queryKey: KEYS.caseCategories(),
+    queryFn: () => legalCaseService.getCaseCategories(),
+  })
+}
+
+export function useCompanies() {
+  return useQuery({
+    queryKey: KEYS.companies(),
+    queryFn: () => legalCaseService.getCompanies(),
+  })
+}
+
+export function usePurposeTypes() {
+  return useQuery({
+    queryKey: KEYS.purposeTypes(),
+    queryFn: () => legalCaseService.getPurposeTypes(),
+  })
+}
+
+export function useCreateCompany() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: { name: string; email_domain: string; is_internal: boolean }) => legalCaseService.createCompany(data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEYS.companies() })
+    },
+  })
+}
+
+export function useUpdateCompany() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: { name: string; email_domain: string; is_internal: boolean } }) => legalCaseService.updateCompany(id, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEYS.companies() })
+    },
+  })
+}
+
+export function useDeleteCompany() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => legalCaseService.deleteCompany(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEYS.companies() })
+    },
+  })
+}
+
+export function useCreatePurposeType() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: { name: string; description?: string; is_active?: boolean }) => legalCaseService.createPurposeType(data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEYS.purposeTypes() })
+    },
+  })
+}
+
+export function useUpdatePurposeType() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: { name: string; description?: string; is_active?: boolean } }) => legalCaseService.updatePurposeType(id, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEYS.purposeTypes() })
+    },
+  })
+}
+
+export function useDeletePurposeType() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => legalCaseService.deletePurposeType(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEYS.purposeTypes() })
+    },
+  })
+}
+
+export function useCreateCaseType() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: { code: string; label: string; is_active?: boolean }) => legalCaseService.createCaseType(data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEYS.caseTypes() })
+    },
+  })
+}
+
+export function useUpdateCaseType() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: { code: string; label: string; is_active?: boolean } }) => legalCaseService.updateCaseType(id, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEYS.caseTypes() })
+    },
+  })
+}
+
+export function useDeleteCaseType() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => legalCaseService.deleteCaseType(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEYS.caseTypes() })
+    },
+  })
+}
+
+export function useCreateCaseCategory() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: { code: string; label: string; is_active?: boolean }) => legalCaseService.createCaseCategory(data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEYS.caseCategories() })
+    },
+  })
+}
+
+export function useUpdateCaseCategory() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: { code: string; label: string; is_active?: boolean } }) => legalCaseService.updateCaseCategory(id, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEYS.caseCategories() })
+    },
+  })
+}
+
+export function useDeleteCaseCategory() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => legalCaseService.deleteCaseCategory(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEYS.caseCategories() })
+    },
   })
 }

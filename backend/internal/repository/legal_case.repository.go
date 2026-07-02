@@ -10,14 +10,15 @@ import (
 )
 
 type LegalCaseFilter struct {
-	Search   string
-	Status   string
-	CaseType string
-	Level    string
-	DateFrom *time.Time
-	DateTo   *time.Time
-	Page     int
-	Limit    int
+	Search    string
+	Status    string
+	CaseType  string
+	Level     string
+	CompanyID *uuid.UUID
+	DateFrom  *time.Time
+	DateTo    *time.Time
+	Page      int
+	Limit     int
 }
 
 type LegalCaseRepository interface {
@@ -44,6 +45,8 @@ type LegalCaseRepository interface {
 	DeleteCedant(id uuid.UUID) error
 
 	FindDivisionByID(id uuid.UUID) (*entity.Division, error)
+	FindCaseTypeByID(id uuid.UUID) (*entity.CaseType, error)
+	FindCaseCategoryByID(id uuid.UUID) (*entity.CaseCategory, error)
 }
 
 type legalCaseRepository struct {
@@ -74,6 +77,9 @@ func (r *legalCaseRepository) FindAll(filter LegalCaseFilter) ([]entity.LegalCas
 		Preload("RelatedParty").
 		Preload("LocationRegency").
 		Preload("PICDivision").
+		Preload("CaseTypeRef").
+		Preload("CategoryRef").
+		Preload("Company").
 		Order("case_date DESC, updated_at DESC").
 		Offset((page - 1) * limit).
 		Limit(limit).
@@ -88,6 +94,9 @@ func (r *legalCaseRepository) FindLatest() (*entity.LegalCase, error) {
 		Preload("RelatedParty").
 		Preload("LocationRegency").
 		Preload("PICDivision").
+		Preload("CaseTypeRef").
+		Preload("CategoryRef").
+		Preload("Company").
 		Order("case_date DESC, updated_at DESC").
 		First(&legalCase).Error
 	if err != nil {
@@ -102,6 +111,9 @@ func (r *legalCaseRepository) FindByID(id uuid.UUID) (*entity.LegalCase, error) 
 		Preload("RelatedParty").
 		Preload("LocationRegency").
 		Preload("PICDivision").
+		Preload("CaseTypeRef").
+		Preload("CategoryRef").
+		Preload("Company").
 		Preload("Chronologies", func(db *gorm.DB) *gorm.DB {
 			return db.Order("agenda_date DESC, updated_at DESC")
 		}).
@@ -219,16 +231,37 @@ func (r *legalCaseRepository) FindDivisionByID(id uuid.UUID) (*entity.Division, 
 	return &division, nil
 }
 
+func (r *legalCaseRepository) FindCaseTypeByID(id uuid.UUID) (*entity.CaseType, error) {
+	var ct entity.CaseType
+	err := r.db.Where("id = ?", id).First(&ct).Error
+	if err != nil {
+		return nil, err
+	}
+	return &ct, nil
+}
+
+func (r *legalCaseRepository) FindCaseCategoryByID(id uuid.UUID) (*entity.CaseCategory, error) {
+	var cc entity.CaseCategory
+	err := r.db.Where("id = ?", id).First(&cc).Error
+	if err != nil {
+		return nil, err
+	}
+	return &cc, nil
+}
+
 func applyLegalCaseFilter(query *gorm.DB, filter LegalCaseFilter) *gorm.DB {
 	if filter.Search != "" {
 		like := "%" + filter.Search + "%"
-		query = query.Where("case_name ILIKE ? OR case_summary ILIKE ? OR category ILIKE ?", like, like, like)
+		query = query.Where("case_name ILIKE ? OR case_summary ILIKE ?", like, like)
 	}
 	if filter.Status != "" {
 		query = query.Where("current_status = ?", filter.Status)
 	}
+	if filter.CompanyID != nil {
+		query = query.Where("company_id = ?", *filter.CompanyID)
+	}
 	if filter.CaseType != "" {
-		query = query.Where("case_type = ?", filter.CaseType)
+		query = query.Joins("JOIN case_types ON case_types.id = legal_cases.case_type_id").Where("case_types.code = ?", filter.CaseType)
 	}
 	if filter.Level != "" {
 		query = query.Where("level = ?", filter.Level)

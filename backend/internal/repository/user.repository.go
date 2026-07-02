@@ -21,6 +21,9 @@ type UserRepository interface {
 	UpdateTwoFA(id uuid.UUID, enabled bool) error
 	FindDivisionByID(id uuid.UUID) (*entity.Division, error)
 	FindDivisionByName(name string) (*entity.Division, error)
+	FindCompanyByID(id uuid.UUID) (*entity.Company, error)
+	FindCompanyByDomain(domain string) (*entity.Company, error)
+	FindFirstCompany() (*entity.Company, error)
 }
 
 type userRepository struct {
@@ -35,6 +38,8 @@ func (r *userRepository) FindByEmail(email string) (*entity.User, error) {
 	var user entity.User
 	err := r.db.
 		Preload("DivisionRef").
+		Preload("Company").
+		Preload("PurposeType").
 		Where("email = ? AND deleted_at IS NULL", email).
 		First(&user).Error
 	if err != nil {
@@ -47,6 +52,8 @@ func (r *userRepository) FindByID(id uuid.UUID) (*entity.User, error) {
 	var user entity.User
 	err := r.db.
 		Preload("DivisionRef").
+		Preload("Company").
+		Preload("PurposeType").
 		Where("id = ? AND deleted_at IS NULL", id).
 		First(&user).Error
 	if err != nil {
@@ -67,7 +74,7 @@ func (r *userRepository) FindAll(page, limit int, search string) ([]entity.User,
 	var users []entity.User
 	var total int64
 
-	query := r.db.Preload("DivisionRef").Model(&entity.User{})
+	query := r.db.Preload("DivisionRef").Preload("Company").Preload("PurposeType").Model(&entity.User{})
 	if search != "" {
 		query = query.Where("full_name ILIKE ? OR email ILIKE ?", "%"+search+"%", "%"+search+"%")
 	}
@@ -120,4 +127,28 @@ func (r *userRepository) FindDivisionByName(name string) (*entity.Division, erro
 		return nil, err
 	}
 	return &division, nil
+}
+
+func (r *userRepository) FindCompanyByID(id uuid.UUID) (*entity.Company, error) {
+	var company entity.Company
+	if err := r.db.Where("id = ?", id).First(&company).Error; err != nil {
+		return nil, err
+	}
+	return &company, nil
+}
+
+func (r *userRepository) FindCompanyByDomain(domain string) (*entity.Company, error) {
+	var company entity.Company
+	if err := r.db.Where("LOWER(email_domain) = LOWER(?)", domain).First(&company).Error; err != nil {
+		return nil, err
+	}
+	return &company, nil
+}
+
+func (r *userRepository) FindFirstCompany() (*entity.Company, error) {
+	var company entity.Company
+	if err := r.db.First(&company).Error; err != nil {
+		return nil, err
+	}
+	return &company, nil
 }
