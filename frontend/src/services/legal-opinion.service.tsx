@@ -1,4 +1,5 @@
 import api from './api'
+import { useAuthStore } from '@/store/auth.store'
 import type { ApiResponse, LegalOpinion, PaginatedData } from '@/types'
 
 export interface CreateLegalOpinionData {
@@ -15,14 +16,22 @@ export interface CreateLegalOpinionData {
   attachments?: File[]
 }
 
+function getLegalOpinionEndpoint() {
+  const role = useAuthStore.getState().user?.role
+  const pathname = typeof window === 'undefined' ? '' : window.location.pathname
+  if (role === 'ADMIN' || pathname.startsWith('/admin')) return '/admin/legal-opinions'
+  if (role === 'LEGAL' || pathname.startsWith('/legal')) return '/legal/legal-opinions'
+  return '/legal-opinions'
+}
+
 export const legalOpinionService = {
   getAll: async (params?: { page?: number; limit?: number; status?: string }) => {
-    const res = await api.get<ApiResponse<PaginatedData<LegalOpinion>>>('/legal-opinions', { params })
+    const res = await api.get<ApiResponse<PaginatedData<LegalOpinion>>>(getLegalOpinionEndpoint(), { params })
     return res.data.data!
   },
 
   getByID: async (id: string) => {
-    const res = await api.get<ApiResponse<LegalOpinion>>(`/legal-opinions/${id}`)
+    const res = await api.get<ApiResponse<LegalOpinion>>(`${getLegalOpinionEndpoint()}/${id}`)
     return res.data.data!
   },
 
@@ -62,12 +71,12 @@ export const legalOpinionService = {
   },
 
   getPresignedURL: async (path: string) => {
-    const res = await api.get<ApiResponse<{ url: string }>>('/legal-opinions/presign', { params: { path } })
+    const res = await api.get<ApiResponse<{ url: string }>>(`${getLegalOpinionEndpoint()}/presign`, { params: { path } })
     return res.data.data!.url
   },
 
   downloadFile: async (path: string): Promise<{ blob: Blob; filename: string }> => {
-    const res = await api.get('/legal-opinions/download', {
+    const res = await api.get(`${getLegalOpinionEndpoint()}/download`, {
       params: { path },
       responseType: 'blob',
     })
@@ -94,7 +103,7 @@ export const legalOpinionService = {
   },
 
   adminDownloadPDF: async (id: string): Promise<{ blob: Blob; filename: string }> => {
-    const res = await api.get(`/admin/legal-opinions/${id}/pdf`, {
+    const res = await api.get(`${getLegalOpinionEndpoint()}/${id}/pdf`, {
       responseType: 'blob',
     })
 

@@ -1,4 +1,5 @@
 import api from './api'
+import { useAuthStore } from '@/store/auth.store'
 import type { ApiResponse, DocumentReview, PaginatedData } from '@/types'
 
 export interface CreateDocumentReviewData {
@@ -16,17 +17,25 @@ export interface CreateDocumentReviewData {
   attachments?: File[]
 }
 
+function getDocumentReviewEndpoint() {
+  const role = useAuthStore.getState().user?.role
+  const pathname = typeof window === 'undefined' ? '' : window.location.pathname
+  if (role === 'ADMIN' || pathname.startsWith('/admin')) return '/admin/review-documents'
+  if (role === 'LEGAL' || pathname.startsWith('/legal')) return '/legal/review-documents'
+  return '/review-documents'
+}
+
 export const documentReviewService = {
   getAll: async (params?: { page?: number; limit?: number; status?: string }) => {
     const res = await api.get<ApiResponse<PaginatedData<DocumentReview>>>(
-      '/review-documents',
+      getDocumentReviewEndpoint(),
       { params }
     )
     return res.data.data!
   },
 
   getByID: async (id: string) => {
-    const res = await api.get<ApiResponse<DocumentReview>>(`/review-documents/${id}`)
+    const res = await api.get<ApiResponse<DocumentReview>>(`${getDocumentReviewEndpoint()}/${id}`)
     return res.data.data!
   },
 
@@ -73,7 +82,7 @@ export const documentReviewService = {
   },
 
   getPresignedURL: async (path: string) => {
-    const res = await api.get<ApiResponse<{ url: string }>>('/review-documents/presign', {
+    const res = await api.get<ApiResponse<{ url: string }>>(`${getDocumentReviewEndpoint()}/presign`, {
       params: { path },
     })
 
@@ -81,7 +90,7 @@ export const documentReviewService = {
   },
 
   downloadFile: async (path: string): Promise<{ blob: Blob; filename: string }> => {
-    const res = await api.get('/review-documents/download', {
+    const res = await api.get(`${getDocumentReviewEndpoint()}/download`, {
       params: { path },
       responseType: 'blob',
     })

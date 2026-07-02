@@ -91,7 +91,7 @@ func (s *documentReviewService) GetByID(id string, userID string, role string) (
 		return nil, errors.New("pengajuan tidak ditemukan")
 	}
 
-	if role != string(entity.RoleAdmin) && dr.UserID.String() != userID {
+	if !canAccessAllSubmissions(role) && dr.UserID.String() != userID {
 		return nil, errors.New("pengajuan tidak ditemukan")
 	}
 
@@ -100,7 +100,7 @@ func (s *documentReviewService) GetByID(id string, userID string, role string) (
 
 func (s *documentReviewService) GetAll(userID string, role string, query dto.DocumentReviewListQuery) ([]entity.DocumentReview, int64, error) {
 	var filterUserID *uuid.UUID
-	if role != string(entity.RoleAdmin) {
+	if !canAccessAllSubmissions(role) {
 		uid, err := parseUUID(userID)
 		if err != nil {
 			return nil, 0, errors.New("user tidak valid")

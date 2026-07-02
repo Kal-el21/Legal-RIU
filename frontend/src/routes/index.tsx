@@ -1,5 +1,5 @@
 import { createBrowserRouter } from 'react-router-dom'
-import { GuestRoute, PrivateRoute, AdminRoute, LegalRoute, ExternalRoute } from './guards'
+import { GuestRoute, PrivateRoute, UserRoute, AdminRoute, LegalRoute, ExternalRoute } from './guards'
 
 import PublicLayout from '@/layouts/PublicLayout'
 import DashboardLayout from '@/layouts/DashboardLayout'
@@ -38,12 +38,6 @@ import LegalLegalOpinionDetailPage from '@/pages/legal/legal-opinions/LegalOpini
 import LegalReviewDocumentListPage from '@/pages/legal/review-documents/ReviewDocumentListPage'
 import LegalReviewDocumentDetailPage from '@/pages/legal/review-documents/ReviewDocumentDetailPage'
 
-import ExternalDashboardPage from '@/pages/external/ExternalDashboardPage'
-import ExternalLegalOpinionListPage from '@/pages/external/legal-opinions/LegalOpinionListPage'
-import ExternalLegalOpinionDetailPage from '@/pages/external/legal-opinions/LegalOpinionDetailPage'
-import ExternalReviewDocumentListPage from '@/pages/external/review-documents/ReviewDocumentListPage'
-import ExternalReviewDocumentDetailPage from '@/pages/external/review-documents/ReviewDocumentDetailPage'
-
 const notFoundElement = (
   <div className="flex items-center justify-center min-h-[60vh]">
     <h1 className="text-2xl font-semibold text-gray-400">404 - Halaman tidak ditemukan</h1>
@@ -60,7 +54,7 @@ export const router = createBrowserRouter([
   },
 
   {
-    element: <PrivateRoute />,
+    element: <UserRoute />,
     children: [
       {
         element: <PublicLayout />,
@@ -141,6 +135,9 @@ export const router = createBrowserRouter([
           { path: '/legal/legal-opinions/:id', element: <LegalLegalOpinionDetailPage /> },
           { path: '/legal/review-documents', element: <LegalReviewDocumentListPage /> },
           { path: '/legal/review-documents/:id', element: <LegalReviewDocumentDetailPage /> },
+          { path: '/legal/legal-cases', element: <AdminLegalCaseListPage /> },
+          { path: '/legal/legal-cases/:id', element: <AdminLegalCaseDetailPage /> },
+          { path: '/legal/audit-logs', element: <AuditLogPage /> },
         ],
       },
     ],
@@ -153,13 +150,10 @@ export const router = createBrowserRouter([
       {
         element: <ExternalLayout />,
         children: [
-          { path: '/external', element: <ExternalDashboardPage /> },
+          { path: '/external', element: <AdminLegalCaseListPage /> },
           { path: '/external/settings', element: <SettingsPage /> },
-          { path: '/external/notifications', element: <NotificationListPage /> },
-          { path: '/external/legal-opinions', element: <ExternalLegalOpinionListPage /> },
-          { path: '/external/legal-opinions/:id', element: <ExternalLegalOpinionDetailPage /> },
-          { path: '/external/review-documents', element: <ExternalReviewDocumentListPage /> },
-          { path: '/external/review-documents/:id', element: <ExternalReviewDocumentDetailPage /> },
+          { path: '/external/legal-cases', element: <AdminLegalCaseListPage /> },
+          { path: '/external/legal-cases/:id', element: <AdminLegalCaseDetailPage /> },
         ],
       },
     ],

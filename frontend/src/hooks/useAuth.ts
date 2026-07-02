@@ -17,7 +17,7 @@ export function useLogin() {
       } else if (res.user.role === 'LEGAL') {
         navigate('/legal')
       } else if (res.user.role === 'EXTERNAL') {
-        navigate('/external')
+        navigate('/external/legal-cases')
       } else {
         navigate('/dashboard')
       }

@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useCreateCaseChronology, useDeleteCaseChronology, useDeleteLegalCase, useLegalCase } from '@/hooks/useLegalCase'
-import { legalCaseService } from '@/services/legal-case.service'
+import { getLegalCaseRouteBase, legalCaseService } from '@/services/legal-case.service'
 import { formatCurrency, formatDate, formatDateTime, formatFileSize, validateFile } from '@/lib/utils'
 import type { CaseChronology } from '@/types'
 import LegalCaseFormDialog from './components/LegalCaseFormDialog'
@@ -29,6 +29,7 @@ export default function AdminLegalCaseDetailPage() {
   const deleteCase = useDeleteLegalCase()
   const createChronology = useCreateCaseChronology(id!)
   const deleteChronology = useDeleteCaseChronology(id!)
+  const caseRouteBase = getLegalCaseRouteBase()
 
   const [editOpen, setEditOpen] = useState(false)
   const [agendaDate, setAgendaDate] = useState('')
@@ -40,7 +41,7 @@ export default function AdminLegalCaseDetailPage() {
   const handleDeleteCase = async () => {
     if (!id || !window.confirm('Hapus kasus hukum ini?')) return
     await deleteCase.mutateAsync(id)
-    navigate('/admin/legal-cases')
+    navigate(caseRouteBase)
   }
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -106,7 +107,7 @@ export default function AdminLegalCaseDetailPage() {
     <div className="p-6 max-w-6xl mx-auto">
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-start gap-3">
-          <button onClick={() => navigate('/admin/legal-cases')} className="mt-0.5 rounded-lg p-2 hover:bg-gray-100" title="Kembali">
+          <button onClick={() => navigate(caseRouteBase)} className="mt-0.5 rounded-lg p-2 hover:bg-gray-100" title="Kembali">
             <ArrowLeft className="h-5 w-5 text-gray-600" />
           </button>
           <div>
