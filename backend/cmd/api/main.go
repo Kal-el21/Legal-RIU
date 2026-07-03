@@ -39,9 +39,11 @@ func main() {
 	caseTypeRepo := repository.NewCaseTypeRepository(db)
 	caseCategoryRepo := repository.NewCaseCategoryRepository(db)
 	materialRepo := repository.NewLegalMaterialRepository(db)
+	permissionRepo := repository.NewPermissionRepository(db)
 
 	// ── Services ─────────────────────────────────────────────────────────────
-	authSvc := service.NewAuthService(userRepo, refreshTokenRepo, cfg)
+	permissionSvc := service.NewPermissionService(permissionRepo, userRepo)
+	authSvc := service.NewAuthService(userRepo, refreshTokenRepo, cfg, permissionSvc)
 	userSvc := service.NewUserService(userRepo)
 	loSvc := service.NewLegalOpinionService(loRepo, store)
 	drSvc := service.NewDocumentReviewService(drRepo, store)
@@ -71,6 +73,7 @@ func main() {
 	caseTypeHandler := handler.NewCaseTypeHandler(caseTypeSvc)
 	caseCategoryHandler := handler.NewCaseCategoryHandler(caseCategorySvc)
 	materialHandler := handler.NewLegalMaterialHandler(materialSvc)
+	permissionHandler := handler.NewPermissionHandler(permissionSvc)
 
 	// ── Gin ──────────────────────────────────────────────────────────────────
 	if cfg.App.Env == "production" {
@@ -99,12 +102,16 @@ func main() {
 	api.POST("/auth/login", loginLimiter.Middleware(), authHandler.Login)
 	api.POST("/auth/refresh", loginLimiter.Middleware(), authHandler.RefreshToken)
 	api.POST("/auth/logout", authHandler.Logout)
+	requirePermission := func(codes ...string) gin.HandlerFunc {
+		return middleware.RequirePermission(permissionSvc, codes...)
+	}
 
 	// ── Protected ─────────────────────────────────────────────────────────────
 	protected := api.Group("")
-	protected.Use(middleware.AuthMiddleware(cfg), middleware.AuditMiddleware(auditLogSvc), middleware.CSRFProtection())
+	protected.Use(middleware.AuthMiddleware(cfg), middleware.PermissionContextMiddleware(permissionSvc), middleware.AuditMiddleware(auditLogSvc), middleware.CSRFProtection())
 
 	protected.GET("/auth/me", authHandler.Me)
+	protected.GET("/auth/permissions", authHandler.Permissions)
 	protected.POST("/auth/change-password", authHandler.ChangePassword)
 
 	// Settings
@@ -114,40 +121,45 @@ func main() {
 
 	// Dashboard
 	protected.GET("/divisions", divisionHandler.GetAll)
+	protected.GET("/companies", requirePermission("case_management.view", "case_management.create", "master_data.view"), companyHandler.GetAll)
+	protected.GET("/case-types", requirePermission("case_management.view", "case_management.create", "master_data.view"), caseTypeHandler.GetAll)
+	protected.GET("/case-categories", requirePermission("case_management.view", "case_management.create", "master_data.view"), caseCategoryHandler.GetAll)
 
 	userOnly := protected.Group("")
 	userOnly.Use(middleware.RoleMiddleware("USER"))
 
-	userOnly.GET("/dashboard/stats", dashHandler.UserStats)
-	userOnly.GET("/dashboard/recent", dashHandler.UserRecent)
-	userOnly.GET("/dashboard/reminders", dashHandler.GetReminders)
-	userOnly.PATCH("/dashboard/reminders/read", notificationSettingHandler.MarkReminderRead)
-	userOnly.PATCH("/dashboard/reminders/read-all", notificationSettingHandler.MarkAllRemindersRead)
+	userOnly.GET("/dashboard/stats", requirePermission("dashboard.user.view"), dashHandler.UserStats)
+	userOnly.GET("/dashboard/recent", requirePermission("dashboard.user.view"), dashHandler.UserRecent)
+	userOnly.GET("/dashboard/reminders", requirePermission("dashboard.user.view"), dashHandler.GetReminders)
+	userOnly.PATCH("/dashboard/reminders/read", requirePermission("dashboard.user.view"), notificationSettingHandler.MarkReminderRead)
+	userOnly.PATCH("/dashboard/reminders/read-all", requirePermission("dashboard.user.view"), notificationSettingHandler.MarkAllRemindersRead)
 
 	// Legal opinions — presign
-	userOnly.GET("/legal-opinions/presign", loHandler.GetPresignedURL)
-	userOnly.GET("/legal-opinions/download", loHandler.Download)
-	userOnly.GET("/legal-opinions/:id/pdf", loHandler.GeneratePDF)
-	userOnly.GET("/legal-opinions", loHandler.GetAll)
-	userOnly.POST("/legal-opinions", loHandler.Create)
-	userOnly.GET("/legal-opinions/:id", loHandler.GetByID)
-	userOnly.PUT("/legal-opinions/:id", loHandler.Update)
-	userOnly.DELETE("/legal-opinions/:id", loHandler.Delete)
-	userOnly.POST("/legal-opinions/:id/resubmit", loHandler.Resubmit)
+	userOnly.GET("/legal-opinions/presign", requirePermission("legal_opinion.view.own", "legal_opinion.view.all"), loHandler.GetPresignedURL)
+	userOnly.GET("/legal-opinions/download", requirePermission("legal_opinion.download.all", "legal_opinion.view.own", "legal_opinion.view.all"), loHandler.Download)
+	userOnly.GET("/legal-opinions/:id/pdf", requirePermission("legal_opinion.download.all", "legal_opinion.view.own", "legal_opinion.view.all"), loHandler.GeneratePDF)
+	userOnly.GET("/legal-opinions", requirePermission("legal_opinion.view.own", "legal_opinion.view.all"), loHandler.GetAll)
+	userOnly.POST("/legal-opinions", requirePermission("legal_opinion.create.own"), loHandler.Create)
+	userOnly.GET("/legal-opinions/:id", requirePermission("legal_opinion.view.own", "legal_opinion.view.all"), loHandler.GetByID)
+	userOnly.PUT("/legal-opinions/:id", requirePermission("legal_opinion.update.own"), loHandler.Update)
+	userOnly.DELETE("/legal-opinions/:id", requirePermission("legal_opinion.delete.own"), loHandler.Delete)
+	userOnly.POST("/legal-opinions/:id/resubmit", requirePermission("legal_opinion.resubmit.own"), loHandler.Resubmit)
 
 	// Review documents
-	userOnly.GET("/review-documents/presign", drHandler.GetPresignedURL)
-	userOnly.GET("/review-documents/download", drHandler.Download)
-	userOnly.GET("/review-documents", drHandler.GetAll)
-	userOnly.POST("/review-documents", drHandler.Create)
-	userOnly.GET("/review-documents/:id", drHandler.GetByID)
-	userOnly.PUT("/review-documents/:id", drHandler.Update)
-	userOnly.DELETE("/review-documents/:id", drHandler.Delete)
-	userOnly.POST("/review-documents/:id/resubmit", drHandler.Resubmit)
+	userOnly.GET("/review-documents/presign", requirePermission("document_review.view.own", "document_review.view.all"), drHandler.GetPresignedURL)
+	userOnly.GET("/review-documents/download", requirePermission("document_review.download.all", "document_review.view.own", "document_review.view.all"), drHandler.Download)
+	userOnly.GET("/review-documents", requirePermission("document_review.view.own", "document_review.view.all"), drHandler.GetAll)
+	userOnly.POST("/review-documents", requirePermission("document_review.create.own"), drHandler.Create)
+	userOnly.GET("/review-documents/:id", requirePermission("document_review.view.own", "document_review.view.all"), drHandler.GetByID)
+	userOnly.PUT("/review-documents/:id", requirePermission("document_review.update.own"), drHandler.Update)
+	userOnly.DELETE("/review-documents/:id", requirePermission("document_review.delete.own"), drHandler.Delete)
+	userOnly.POST("/review-documents/:id/resubmit", requirePermission("document_review.resubmit.own"), drHandler.Resubmit)
+
+	registerLegalCaseRoutes(userOnly, legalCaseHandler, requirePermission)
 
 	// ── Admin only ─────────────────────────────────────────────────────────────
 	admin := api.Group("/admin")
-	admin.Use(middleware.AuthMiddleware(cfg), middleware.RoleMiddleware("ADMIN"), middleware.AuditMiddleware(auditLogSvc), middleware.CSRFProtection())
+	admin.Use(middleware.AuthMiddleware(cfg), middleware.PermissionContextMiddleware(permissionSvc), middleware.RoleMiddleware("ADMIN"), middleware.AuditMiddleware(auditLogSvc), middleware.CSRFProtection())
 
 	admin.GET("/dashboard/stats", dashHandler.AdminStats)
 	admin.GET("/dashboard/recent", dashHandler.AdminRecent)
@@ -227,6 +239,9 @@ func main() {
 
 	admin.GET("/users", userHandler.GetAll)
 	admin.POST("/users", userHandler.Create)
+	admin.GET("/permissions", requirePermission("user_management.manage_permissions"), permissionHandler.GetCatalog)
+	admin.GET("/users/:id/permissions", requirePermission("user_management.manage_permissions"), permissionHandler.GetUserAccess)
+	admin.PUT("/users/:id/permissions", requirePermission("user_management.manage_permissions"), permissionHandler.UpdateUserAccess)
 	admin.PUT("/users/:id", userHandler.Update)
 	admin.PATCH("/users/:id/status", userHandler.UpdateStatus)
 	admin.POST("/users/:id/reset-password", userHandler.ResetPassword)
@@ -243,66 +258,66 @@ func main() {
 
 	// ── Legal ─────────────────────────────────────────────────────────────────
 	legal := api.Group("/legal")
-	legal.Use(middleware.AuthMiddleware(cfg), middleware.RoleMiddleware("LEGAL"), middleware.AuditMiddleware(auditLogSvc), middleware.CSRFProtection())
+	legal.Use(middleware.AuthMiddleware(cfg), middleware.PermissionContextMiddleware(permissionSvc), middleware.RoleMiddleware("LEGAL"), middleware.AuditMiddleware(auditLogSvc), middleware.CSRFProtection())
 
-	legal.GET("/dashboard/stats", dashHandler.LegalStats)
-	legal.GET("/dashboard/recent", dashHandler.LegalRecent)
-	legal.GET("/dashboard/reminders", notificationSettingHandler.GetLegalReminders)
+	legal.GET("/dashboard/stats", requirePermission("dashboard.legal.view"), dashHandler.LegalStats)
+	legal.GET("/dashboard/recent", requirePermission("dashboard.legal.view"), dashHandler.LegalRecent)
+	legal.GET("/dashboard/reminders", requirePermission("dashboard.legal.view"), notificationSettingHandler.GetLegalReminders)
 	legal.PATCH("/dashboard/reminders/read", notificationSettingHandler.MarkReminderRead)
 	legal.PATCH("/dashboard/reminders/read-all", notificationSettingHandler.MarkAllRemindersRead)
 
-	legal.GET("/legal-opinions/presign", loHandler.GetPresignedURL)
-	legal.GET("/legal-opinions/download", loHandler.Download)
-	legal.GET("/legal-opinions", loHandler.GetAll)
-	legal.GET("/legal-opinions/:id", loHandler.GetByID)
-	legal.PATCH("/legal-opinions/:id/status", loHandler.AdminUpdateStatus)
-	legal.POST("/legal-opinions/:id/result", loHandler.AdminUploadResult)
-	legal.GET("/legal-opinions/:id/pdf", loHandler.GeneratePDF)
-	legal.GET("/review-documents/presign", drHandler.GetPresignedURL)
-	legal.GET("/review-documents/download", drHandler.Download)
-	legal.GET("/review-documents", drHandler.GetAll)
-	legal.GET("/review-documents/:id", drHandler.GetByID)
-	legal.PATCH("/review-documents/:id/status", drHandler.AdminUpdateStatus)
-	legal.POST("/review-documents/:id/result", drHandler.AdminUploadResult)
+	legal.GET("/legal-opinions/presign", requirePermission("legal_opinion.view.all"), loHandler.GetPresignedURL)
+	legal.GET("/legal-opinions/download", requirePermission("legal_opinion.download.all", "legal_opinion.view.all"), loHandler.Download)
+	legal.GET("/legal-opinions", requirePermission("legal_opinion.view.all"), loHandler.GetAll)
+	legal.GET("/legal-opinions/:id", requirePermission("legal_opinion.view.all"), loHandler.GetByID)
+	legal.PATCH("/legal-opinions/:id/status", requirePermission("legal_opinion.update_status.all"), loHandler.AdminUpdateStatus)
+	legal.POST("/legal-opinions/:id/result", requirePermission("legal_opinion.upload_result.all"), loHandler.AdminUploadResult)
+	legal.GET("/legal-opinions/:id/pdf", requirePermission("legal_opinion.download.all", "legal_opinion.view.all"), loHandler.GeneratePDF)
+	legal.GET("/review-documents/presign", requirePermission("document_review.view.all"), drHandler.GetPresignedURL)
+	legal.GET("/review-documents/download", requirePermission("document_review.download.all", "document_review.view.all"), drHandler.Download)
+	legal.GET("/review-documents", requirePermission("document_review.view.all"), drHandler.GetAll)
+	legal.GET("/review-documents/:id", requirePermission("document_review.view.all"), drHandler.GetByID)
+	legal.PATCH("/review-documents/:id/status", requirePermission("document_review.update_status.all"), drHandler.AdminUpdateStatus)
+	legal.POST("/review-documents/:id/result", requirePermission("document_review.upload_result.all"), drHandler.AdminUploadResult)
 
-	registerLegalCaseRoutes(legal, legalCaseHandler)
+	registerLegalCaseRoutes(legal, legalCaseHandler, requirePermission)
 
-	legal.GET("/audit-logs", auditLogHandler.GetAll)
+	legal.GET("/audit-logs", requirePermission("audit_log.view"), auditLogHandler.GetAll)
 
-	legal.GET("/materials", materialHandler.GetAll)
-	legal.GET("/materials/:id", materialHandler.GetByID)
-	legal.POST("/materials", materialHandler.Create)
-	legal.PUT("/materials/:id", materialHandler.Update)
-	legal.DELETE("/materials/:id", materialHandler.Delete)
+	legal.GET("/materials", requirePermission("legal_material.view", "legal_material.manage"), materialHandler.GetAll)
+	legal.GET("/materials/:id", requirePermission("legal_material.view", "legal_material.manage"), materialHandler.GetByID)
+	legal.POST("/materials", requirePermission("legal_material.manage"), materialHandler.Create)
+	legal.PUT("/materials/:id", requirePermission("legal_material.manage"), materialHandler.Update)
+	legal.DELETE("/materials/:id", requirePermission("legal_material.manage"), materialHandler.Delete)
 
 	// ─── Legal AU ─────────────────────────────────────────────────────────────
 	legalAU := api.Group("/legal-au")
-	legalAU.Use(middleware.AuthMiddleware(cfg), middleware.RoleMiddleware("LEGAL_AU"), middleware.AuditMiddleware(auditLogSvc), middleware.CSRFProtection())
+	legalAU.Use(middleware.AuthMiddleware(cfg), middleware.PermissionContextMiddleware(permissionSvc), middleware.RoleMiddleware("LEGAL_AU"), middleware.AuditMiddleware(auditLogSvc), middleware.CSRFProtection())
 
-	legalAU.GET("/cases", legalCaseHandler.GetAll)
-	legalAU.GET("/cases/:id", legalCaseHandler.GetByID)
-	legalAU.PATCH("/cases/:id/status", legalCaseHandler.UpdateStatus)
-	legalAU.POST("/cases/:id/chronology", legalCaseHandler.CreateChronology)
-	legalAU.PUT("/cases/:id/chronology/:chronId", legalCaseHandler.UpdateChronology)
-	legalAU.DELETE("/cases/:id/chronology/:chronId", legalCaseHandler.DeleteChronology)
+	legalAU.GET("/cases", requirePermission("case_management.view"), legalCaseHandler.GetAll)
+	legalAU.GET("/cases/:id", requirePermission("case_management.view"), legalCaseHandler.GetByID)
+	legalAU.PATCH("/cases/:id/status", requirePermission("case_management.update_status"), legalCaseHandler.UpdateStatus)
+	legalAU.POST("/cases/:id/chronology", requirePermission("case_management.manage_chronology"), legalCaseHandler.CreateChronology)
+	legalAU.PUT("/cases/:id/chronology/:chronId", requirePermission("case_management.manage_chronology"), legalCaseHandler.UpdateChronology)
+	legalAU.DELETE("/cases/:id/chronology/:chronId", requirePermission("case_management.manage_chronology"), legalCaseHandler.DeleteChronology)
 
-	legalAU.GET("/materials", materialHandler.GetAll)
-	legalAU.GET("/materials/:id", materialHandler.GetByID)
-	legalAU.POST("/materials", materialHandler.Create)
-	legalAU.PUT("/materials/:id", materialHandler.Update)
-	legalAU.DELETE("/materials/:id", materialHandler.Delete)
+	legalAU.GET("/materials", requirePermission("legal_material.view", "legal_material.manage"), materialHandler.GetAll)
+	legalAU.GET("/materials/:id", requirePermission("legal_material.view", "legal_material.manage"), materialHandler.GetByID)
+	legalAU.POST("/materials", requirePermission("legal_material.manage"), materialHandler.Create)
+	legalAU.PUT("/materials/:id", requirePermission("legal_material.manage"), materialHandler.Update)
+	legalAU.DELETE("/materials/:id", requirePermission("legal_material.manage"), materialHandler.Delete)
 
 	// ─── External ─────────────────────────────────────────────────────────────
 	external := api.Group("/external")
-	external.Use(middleware.AuthMiddleware(cfg), middleware.RoleMiddleware("EXTERNAL"), middleware.AuditMiddleware(auditLogSvc), middleware.CSRFProtection())
+	external.Use(middleware.AuthMiddleware(cfg), middleware.PermissionContextMiddleware(permissionSvc), middleware.RoleMiddleware("EXTERNAL"), middleware.AuditMiddleware(auditLogSvc), middleware.CSRFProtection())
 
-	registerLegalCaseRoutes(external, legalCaseHandler)
+	registerLegalCaseRoutes(external, legalCaseHandler, requirePermission)
 
 	// ── Public materials ──────────────────────────────────────────────────────
 	protectedMaterials := api.Group("")
-	protectedMaterials.Use(middleware.AuthMiddleware(cfg))
-	protectedMaterials.GET("/materials", materialHandler.GetAll)
-	protectedMaterials.GET("/materials/:id", materialHandler.GetByID)
+	protectedMaterials.Use(middleware.AuthMiddleware(cfg), middleware.PermissionContextMiddleware(permissionSvc))
+	protectedMaterials.GET("/materials", requirePermission("legal_material.view", "legal_material.manage"), materialHandler.GetAll)
+	protectedMaterials.GET("/materials/:id", requirePermission("legal_material.view", "legal_material.manage"), materialHandler.GetByID)
 
 	log.Printf("Server running on port %s", cfg.App.Port)
 	if err := r.Run(":" + cfg.App.Port); err != nil {
@@ -310,23 +325,23 @@ func main() {
 	}
 }
 
-func registerLegalCaseRoutes(group *gin.RouterGroup, legalCaseHandler *handler.LegalCaseHandler) {
-	group.GET("/legal-cases/regencies", legalCaseHandler.ListRegencies)
-	group.GET("/legal-cases/cedants", legalCaseHandler.ListCedants)
-	group.POST("/legal-cases/cedants", legalCaseHandler.CreateCedant)
-	group.PUT("/legal-cases/cedants/:id", legalCaseHandler.UpdateCedant)
-	group.DELETE("/legal-cases/cedants/:id", legalCaseHandler.DeleteCedant)
-	group.GET("/legal-cases/download", legalCaseHandler.Download)
-	group.GET("/legal-cases/latest", legalCaseHandler.GetLatest)
-	group.GET("/legal-cases", legalCaseHandler.GetAll)
-	group.POST("/legal-cases", legalCaseHandler.Create)
-	group.GET("/legal-cases/:id", legalCaseHandler.GetByID)
-	group.PUT("/legal-cases/:id", legalCaseHandler.Update)
-	group.DELETE("/legal-cases/:id", legalCaseHandler.Delete)
-	group.POST("/legal-cases/:id/upload-document", legalCaseHandler.UploadDocument)
-	group.DELETE("/legal-cases/:id/document", legalCaseHandler.DeleteDocument)
-	group.GET("/legal-cases/:id/chronology", legalCaseHandler.ListChronologies)
-	group.POST("/legal-cases/:id/chronology", legalCaseHandler.CreateChronology)
-	group.PUT("/legal-cases/:id/chronology/:chronId", legalCaseHandler.UpdateChronology)
-	group.DELETE("/legal-cases/:id/chronology/:chronId", legalCaseHandler.DeleteChronology)
+func registerLegalCaseRoutes(group *gin.RouterGroup, legalCaseHandler *handler.LegalCaseHandler, requirePermission func(...string) gin.HandlerFunc) {
+	group.GET("/legal-cases/regencies", requirePermission("case_management.view", "case_management.create"), legalCaseHandler.ListRegencies)
+	group.GET("/legal-cases/cedants", requirePermission("case_management.view", "case_management.create"), legalCaseHandler.ListCedants)
+	group.POST("/legal-cases/cedants", requirePermission("case_management.manage_reference"), legalCaseHandler.CreateCedant)
+	group.PUT("/legal-cases/cedants/:id", requirePermission("case_management.manage_reference"), legalCaseHandler.UpdateCedant)
+	group.DELETE("/legal-cases/cedants/:id", requirePermission("case_management.manage_reference"), legalCaseHandler.DeleteCedant)
+	group.GET("/legal-cases/download", requirePermission("case_management.view", "case_management.manage_document"), legalCaseHandler.Download)
+	group.GET("/legal-cases/latest", requirePermission("case_management.view"), legalCaseHandler.GetLatest)
+	group.GET("/legal-cases", requirePermission("case_management.view"), legalCaseHandler.GetAll)
+	group.POST("/legal-cases", requirePermission("case_management.create"), legalCaseHandler.Create)
+	group.GET("/legal-cases/:id", requirePermission("case_management.view"), legalCaseHandler.GetByID)
+	group.PUT("/legal-cases/:id", requirePermission("case_management.update"), legalCaseHandler.Update)
+	group.DELETE("/legal-cases/:id", requirePermission("case_management.delete"), legalCaseHandler.Delete)
+	group.POST("/legal-cases/:id/upload-document", requirePermission("case_management.manage_document"), legalCaseHandler.UploadDocument)
+	group.DELETE("/legal-cases/:id/document", requirePermission("case_management.manage_document"), legalCaseHandler.DeleteDocument)
+	group.GET("/legal-cases/:id/chronology", requirePermission("case_management.view", "case_management.manage_chronology"), legalCaseHandler.ListChronologies)
+	group.POST("/legal-cases/:id/chronology", requirePermission("case_management.manage_chronology"), legalCaseHandler.CreateChronology)
+	group.PUT("/legal-cases/:id/chronology/:chronId", requirePermission("case_management.manage_chronology"), legalCaseHandler.UpdateChronology)
+	group.DELETE("/legal-cases/:id/chronology/:chronId", requirePermission("case_management.manage_chronology"), legalCaseHandler.DeleteChronology)
 }

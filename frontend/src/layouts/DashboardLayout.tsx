@@ -1,23 +1,30 @@
 import { Outlet, Link, useLocation } from 'react-router-dom'
-import { Scale, LayoutDashboard, FileText, FileSearch, Menu, ChevronRight, ChevronLeft } from 'lucide-react'
+import { Scale, LayoutDashboard, FileText, FileSearch, Menu, ChevronRight, ChevronLeft, BriefcaseBusiness } from 'lucide-react'
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
 import SidebarUserButton from '@/components/common/SidebarUserButton'
 import NotificationDropdown from '@/components/common/NotificationDropdown'
+import { useAuthStore } from '@/store/auth.store'
 
 const NAV = [
-  { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, exact: true },
-  { label: 'Legal Opinion', href: '/dashboard/legal-opinions', icon: FileText },
-  { label: 'Review Dokumen', href: '/dashboard/review-documents', icon: FileSearch },
+  { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, exact: true, permissions: ['dashboard.user.view'] },
+  { label: 'Legal Opinion', href: '/dashboard/legal-opinions', icon: FileText, permissions: ['legal_opinion.view.own', 'legal_opinion.view.all'] },
+  { label: 'Review Dokumen', href: '/dashboard/review-documents', icon: FileSearch, permissions: ['document_review.view.own', 'document_review.view.all'] },
+  { label: 'Case Management', href: '/dashboard/legal-cases', icon: BriefcaseBusiness, permissions: ['case_management.view'] },
 ]
 
 export default function DashboardLayout() {
   const location = useLocation()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const permissions = useAuthStore((state) => state.permissions)
+  const user = useAuthStore((state) => state.user)
 
   const isActive = (href: string, exact?: boolean) =>
     exact ? location.pathname === href : location.pathname.startsWith(href)
+  const navItems = NAV.filter((item) =>
+    user?.role === 'ADMIN' || item.permissions.some((permission) => permissions.includes(permission))
+  )
 
   return (
     <div className="min-h-screen flex" style={{ background: '#f8fafc' }}>
@@ -43,7 +50,7 @@ export default function DashboardLayout() {
         </div>
 
         <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-          {NAV.map((item) => (
+          {navItems.map((item) => (
             <Link key={item.href} to={item.href} onClick={() => setSidebarOpen(false)}
               className={cn(
                 'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all',

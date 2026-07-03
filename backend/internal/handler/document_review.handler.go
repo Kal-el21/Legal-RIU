@@ -32,7 +32,7 @@ func (h *DocumentReviewHandler) GetAll(c *gin.Context) {
 		return
 	}
 	userID := middleware.GetUserID(c)
-	role := middleware.GetUserRole(c)
+	role := middleware.RoleWithAllAccess(c, "document_review.view.all")
 	items, total, err := h.svc.GetAll(userID, role, query)
 	if err != nil {
 		utils.InternalError(c, err.Error())
@@ -51,7 +51,7 @@ func (h *DocumentReviewHandler) GetAll(c *gin.Context) {
 func (h *DocumentReviewHandler) GetByID(c *gin.Context) {
 	id := c.Param("id")
 	userID := middleware.GetUserID(c)
-	role := middleware.GetUserRole(c)
+	role := middleware.RoleWithAllAccess(c, "document_review.view.all")
 	dr, err := h.svc.GetByID(id, userID, role)
 	if err != nil {
 		utils.NotFound(c, err.Error())

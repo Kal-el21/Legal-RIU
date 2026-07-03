@@ -43,10 +43,17 @@ export interface ChronologyFormData {
 export function getLegalCaseRouteBase() {
   const role = useAuthStore.getState().user?.role
   const pathname = typeof window === 'undefined' ? '' : window.location.pathname
+  if (role === 'USER' || pathname.startsWith('/dashboard')) return '/legal-cases'
   if (role === 'LEGAL' || pathname.startsWith('/legal')) return '/legal/legal-cases'
   if (role === 'EXTERNAL' || pathname.startsWith('/external')) return '/external/legal-cases'
   if (role === 'LEGAL_AU' || pathname.startsWith('/legal-au')) return '/legal-au/cases'
   return '/admin/legal-cases'
+}
+
+function getReferenceRouteBase(resource: 'companies' | 'case-types' | 'case-categories' | 'purpose-types') {
+  const role = useAuthStore.getState().user?.role
+  const pathname = typeof window === 'undefined' ? '' : window.location.pathname
+  return role === 'ADMIN' || pathname.startsWith('/admin') ? `/admin/${resource}` : `/${resource}`
 }
 
 export const legalCaseService = {
@@ -156,22 +163,22 @@ export const legalCaseService = {
   },
 
   getCaseTypes: async () => {
-    const res = await api.get<ApiResponse<CaseType[]>>('/admin/case-types')
+    const res = await api.get<ApiResponse<CaseType[]>>(getReferenceRouteBase('case-types'))
     return res.data.data ?? []
   },
 
   getCaseCategories: async () => {
-    const res = await api.get<ApiResponse<CaseCategory[]>>('/admin/case-categories')
+    const res = await api.get<ApiResponse<CaseCategory[]>>(getReferenceRouteBase('case-categories'))
     return res.data.data ?? []
   },
 
   getCompanies: async () => {
-    const res = await api.get<ApiResponse<Company[]>>('/admin/companies')
+    const res = await api.get<ApiResponse<Company[]>>(getReferenceRouteBase('companies'))
     return res.data.data ?? []
   },
 
   getPurposeTypes: async () => {
-    const res = await api.get<ApiResponse<PurposeType[]>>('/admin/purpose-types')
+    const res = await api.get<ApiResponse<PurposeType[]>>(getReferenceRouteBase('purpose-types'))
     return res.data.data ?? []
   },
 

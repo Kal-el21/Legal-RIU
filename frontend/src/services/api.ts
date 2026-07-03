@@ -104,7 +104,7 @@ api.interceptors.response.use(
         originalRequest._retry = true
 
         const refreshed = await refreshSession()
-        useAuthStore.getState().setAuth(refreshed.user)
+        useAuthStore.getState().setAuth(refreshed.user, refreshed.permissions ?? [])
 
         return api(originalRequest)
       } catch {

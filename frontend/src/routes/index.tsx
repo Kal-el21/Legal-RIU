@@ -112,6 +112,8 @@ export const router = createBrowserRouter([
           { path: '/dashboard/review-documents/new', element: <ReviewDocumentFormPage /> },
           { path: '/dashboard/review-documents/:id', element: <ReviewDocumentDetailPage /> },
           { path: '/dashboard/review-documents/:id/edit', element: <ReviewDocumentFormPage /> },
+          { path: '/dashboard/legal-cases', element: <AdminLegalCaseListPage /> },
+          { path: '/dashboard/legal-cases/:id', element: <AdminLegalCaseDetailPage /> },
         ],
       },
     ],

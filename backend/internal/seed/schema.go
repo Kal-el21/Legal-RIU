@@ -3,8 +3,8 @@ package seed
 import (
 	"errors"
 
-	"legal-riu-portal/internal/entity"
 	"gorm.io/gorm"
+	"legal-riu-portal/internal/entity"
 )
 
 func PrepareLegalCasePICMigration(db *gorm.DB) error {
@@ -176,6 +176,9 @@ func RunAllMigrationsAndSeeds(db *gorm.DB) error {
 		&entity.Division{},
 		&entity.User{},
 		&entity.RefreshToken{},
+		&entity.Permission{},
+		&entity.RolePermission{},
+		&entity.UserPermissionOverride{},
 		&entity.LegalOpinion{},
 		&entity.LegalOpinionAttachment{},
 		&entity.LegalOpinionResult{},
@@ -224,6 +227,9 @@ func RunAllMigrationsAndSeeds(db *gorm.DB) error {
 		return err
 	}
 	if err := SeedCaseCategories(db); err != nil {
+		return err
+	}
+	if err := SeedPermissions(db); err != nil {
 		return err
 	}
 	if err := BackfillLegalCaseDefaults(db); err != nil {

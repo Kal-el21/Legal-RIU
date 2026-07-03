@@ -33,7 +33,7 @@ func (h *LegalOpinionHandler) GetAll(c *gin.Context) {
 		return
 	}
 	userID := middleware.GetUserID(c)
-	role := middleware.GetUserRole(c)
+	role := middleware.RoleWithAllAccess(c, "legal_opinion.view.all")
 	items, total, err := h.svc.GetAll(userID, role, query)
 	if err != nil {
 		utils.InternalError(c, err.Error())
@@ -52,7 +52,7 @@ func (h *LegalOpinionHandler) GetAll(c *gin.Context) {
 func (h *LegalOpinionHandler) GetByID(c *gin.Context) {
 	id := c.Param("id")
 	userID := middleware.GetUserID(c)
-	role := middleware.GetUserRole(c)
+	role := middleware.RoleWithAllAccess(c, "legal_opinion.view.all")
 	lo, err := h.svc.GetByID(id, userID, role)
 	if err != nil {
 		utils.NotFound(c, err.Error())
@@ -261,7 +261,7 @@ func (h *LegalOpinionHandler) GeneratePDF(c *gin.Context) {
 		return
 	}
 
-	lo, _ := h.svc.GetByID(id, middleware.GetUserID(c), middleware.GetUserRole(c))
+	lo, _ := h.svc.GetByID(id, middleware.GetUserID(c), middleware.RoleWithAllAccess(c, "legal_opinion.view.all"))
 
 	c.DataFromReader(-1, -1, "application/pdf", bytes.NewReader(pdfData), map[string]string{
 		"Content-Disposition": fmt.Sprintf(`attachment; filename="legal-opinion-%s.pdf"`, lo.TicketNumber),

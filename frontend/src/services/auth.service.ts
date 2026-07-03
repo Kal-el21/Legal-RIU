@@ -21,6 +21,11 @@ export const authService = {
     return res.data.data!
   },
 
+  permissions: async (): Promise<string[]> => {
+    const res = await api.get<ApiResponse<string[]>>('/auth/permissions')
+    return res.data.data ?? []
+  },
+
   changePassword: async (data: { current_password: string; new_password: string }): Promise<void> => {
     await api.post('/auth/change-password', data)
   },

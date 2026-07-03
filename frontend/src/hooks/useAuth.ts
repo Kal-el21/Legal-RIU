@@ -11,11 +11,13 @@ export function useLogin() {
   return useMutation({
     mutationFn: (data: LoginRequest) => authService.login(data),
     onSuccess: (res) => {
-      setAuth(res.user)
+      setAuth(res.user, res.permissions ?? [])
       if (res.user.role === 'ADMIN') {
         navigate('/admin')
       } else if (res.user.role === 'LEGAL') {
         navigate('/legal')
+      } else if (res.user.role === 'LEGAL_AU') {
+        navigate('/legal-au')
       } else if (res.user.role === 'EXTERNAL') {
         navigate('/external/legal-cases')
       } else {
