@@ -29,7 +29,7 @@ func SeedCompanies(db *gorm.DB) error {
 		})
 	}
 	return db.Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "email_domain"}},
+		Columns:   []clause.Column{{Name: "id"}},
 		DoNothing: true,
 	}).CreateInBatches(companies, 100).Error
 }
