@@ -7,7 +7,6 @@ import (
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 )
 
 var DEFAULT_COMPANIES = []entity.Company{
@@ -17,21 +16,26 @@ var DEFAULT_COMPANIES = []entity.Company{
 }
 
 func SeedCompanies(db *gorm.DB) error {
-	companies := make([]entity.Company, 0, len(DEFAULT_COMPANIES))
 	for _, c := range DEFAULT_COMPANIES {
-		companies = append(companies, entity.Company{
-			Base: entity.Base{
-				ID: uuid.NewSHA1(uuid.NameSpaceOID, []byte("company:"+c.EmailDomain)),
-			},
-			Name:        c.Name,
-			EmailDomain: c.EmailDomain,
-			IsInternal:  c.IsInternal,
-		})
+		var existing entity.Company
+		if err := db.Where("email_domain = ?", c.EmailDomain).First(&existing).Error; err != nil {
+			if err == gorm.ErrRecordNotFound {
+				if err := db.Create(&entity.Company{
+					Base: entity.Base{
+						ID: uuid.NewSHA1(uuid.NameSpaceOID, []byte("company:"+c.EmailDomain)),
+					},
+					Name:        c.Name,
+					EmailDomain: c.EmailDomain,
+					IsInternal:  c.IsInternal,
+				}).Error; err != nil {
+					return err
+				}
+			} else {
+				return err
+			}
+		}
 	}
-	return db.Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "id"}},
-		DoNothing: true,
-	}).CreateInBatches(companies, 100).Error
+	return nil
 }
 
 func FindCompanyIDByDomain(db *gorm.DB, email string) (uuid.UUID, error) {

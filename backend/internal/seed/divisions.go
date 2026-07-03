@@ -5,7 +5,6 @@ import (
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 )
 
 var DEFAULT_DIVISIONS = []entity.Division{
@@ -29,20 +28,25 @@ var DEFAULT_DIVISIONS = []entity.Division{
 }
 
 func SeedDivisions(db *gorm.DB) error {
-	divisions := make([]entity.Division, 0, len(DEFAULT_DIVISIONS))
 	for _, d := range DEFAULT_DIVISIONS {
-		divisions = append(divisions, entity.Division{
-			Base: entity.Base{
-				ID: uuid.NewSHA1(uuid.NameSpaceOID, []byte("division:"+d.Name)),
-			},
-			Name:        d.Name,
-			Description: d.Description,
-		})
+		var existing entity.Division
+		if err := db.Where("name = ?", d.Name).First(&existing).Error; err != nil {
+			if err == gorm.ErrRecordNotFound {
+				if err := db.Create(&entity.Division{
+					Base: entity.Base{
+						ID: uuid.NewSHA1(uuid.NameSpaceOID, []byte("division:"+d.Name)),
+					},
+					Name:        d.Name,
+					Description: d.Description,
+				}).Error; err != nil {
+					return err
+				}
+			} else {
+				return err
+			}
+		}
 	}
-	return db.Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "id"}},
-		DoNothing: true,
-	}).CreateInBatches(divisions, 100).Error
+	return nil
 }
 
 func FindDivisionIDByName(db *gorm.DB, name string) (uuid.UUID, error) {

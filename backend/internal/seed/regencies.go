@@ -9,7 +9,6 @@ import (
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 )
 
 //go:embed data/kabupaten.md
@@ -21,10 +20,20 @@ func SeedRegencies(db *gorm.DB) error {
 		return nil
 	}
 
-	return db.Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "id"}},
-		DoNothing: true,
-	}).CreateInBatches(regencies, 100).Error
+	for _, r := range regencies {
+		var existing entity.Regency
+		if err := db.Where("name = ? AND province = ?", r.Name, r.Province).First(&existing).Error; err != nil {
+			if err == gorm.ErrRecordNotFound {
+				if err := db.Create(&r).Error; err != nil {
+					return err
+				}
+			} else {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
 
 func parseRegencies(markdown string) []entity.Regency {

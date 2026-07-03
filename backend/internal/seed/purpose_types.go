@@ -5,7 +5,6 @@ import (
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 )
 
 var DEFAULT_PURPOSE_TYPES = []entity.PurposeType{
@@ -15,19 +14,24 @@ var DEFAULT_PURPOSE_TYPES = []entity.PurposeType{
 }
 
 func SeedPurposeTypes(db *gorm.DB) error {
-	items := make([]entity.PurposeType, 0, len(DEFAULT_PURPOSE_TYPES))
 	for _, pt := range DEFAULT_PURPOSE_TYPES {
-		items = append(items, entity.PurposeType{
-			Base: entity.Base{
-				ID: uuid.NewSHA1(uuid.NameSpaceOID, []byte("purpose_type:"+pt.Name)),
-			},
-			Name:        pt.Name,
-			Description: pt.Description,
-			IsActive:    pt.IsActive,
-		})
+		var existing entity.PurposeType
+		if err := db.Where("name = ?", pt.Name).First(&existing).Error; err != nil {
+			if err == gorm.ErrRecordNotFound {
+				if err := db.Create(&entity.PurposeType{
+					Base: entity.Base{
+						ID: uuid.NewSHA1(uuid.NameSpaceOID, []byte("purpose_type:"+pt.Name)),
+					},
+					Name:        pt.Name,
+					Description: pt.Description,
+					IsActive:    pt.IsActive,
+				}).Error; err != nil {
+					return err
+				}
+			} else {
+				return err
+			}
+		}
 	}
-	return db.Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "id"}},
-		DoNothing: true,
-	}).CreateInBatches(items, 100).Error
+	return nil
 }

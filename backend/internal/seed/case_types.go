@@ -5,7 +5,6 @@ import (
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 )
 
 var DEFAULT_CASE_TYPES = []entity.CaseType{
@@ -18,19 +17,24 @@ var DEFAULT_CASE_TYPES = []entity.CaseType{
 }
 
 func SeedCaseTypes(db *gorm.DB) error {
-	items := make([]entity.CaseType, 0, len(DEFAULT_CASE_TYPES))
 	for _, ct := range DEFAULT_CASE_TYPES {
-		items = append(items, entity.CaseType{
-			Base: entity.Base{
-				ID: uuid.NewSHA1(uuid.NameSpaceOID, []byte("case_type:"+ct.Code)),
-			},
-			Code:     ct.Code,
-			Label:    ct.Label,
-			IsActive: ct.IsActive,
-		})
+		var existing entity.CaseType
+		if err := db.Where("code = ?", ct.Code).First(&existing).Error; err != nil {
+			if err == gorm.ErrRecordNotFound {
+				if err := db.Create(&entity.CaseType{
+					Base: entity.Base{
+						ID: uuid.NewSHA1(uuid.NameSpaceOID, []byte("case_type:"+ct.Code)),
+					},
+					Code:     ct.Code,
+					Label:    ct.Label,
+					IsActive: ct.IsActive,
+				}).Error; err != nil {
+					return err
+				}
+			} else {
+				return err
+			}
+		}
 	}
-	return db.Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "id"}},
-		DoNothing: true,
-	}).CreateInBatches(items, 100).Error
+	return nil
 }
