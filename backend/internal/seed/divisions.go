@@ -29,17 +29,31 @@ var DEFAULT_DIVISIONS = []entity.Division{
 
 func SeedDivisions(db *gorm.DB) error {
 	for _, d := range DEFAULT_DIVISIONS {
+		expectedID := uuid.NewSHA1(uuid.NameSpaceOID, []byte("division:"+d.Name))
+
 		var existing entity.Division
-		if err := db.Where("name = ?", d.Name).First(&existing).Error; err != nil {
+		if err := db.Where("id = ?", expectedID).First(&existing).Error; err != nil {
 			if err == gorm.ErrRecordNotFound {
-				if err := db.Create(&entity.Division{
-					Base: entity.Base{
-						ID: uuid.NewSHA1(uuid.NameSpaceOID, []byte("division:"+d.Name)),
-					},
-					Name:        d.Name,
-					Description: d.Description,
-				}).Error; err != nil {
-					return err
+				if err := db.Where("name = ?", d.Name).First(&existing).Error; err != nil {
+					if err == gorm.ErrRecordNotFound {
+						if err := db.Create(&entity.Division{
+							Base: entity.Base{
+								ID: expectedID,
+							},
+							Name:        d.Name,
+							Description: d.Description,
+						}).Error; err != nil {
+							return err
+						}
+					} else {
+						return err
+					}
+				} else {
+					if err := db.Model(&existing).Updates(entity.Division{
+						Description: d.Description,
+					}).Error; err != nil {
+						return err
+					}
 				}
 			} else {
 				return err

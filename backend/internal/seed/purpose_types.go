@@ -15,18 +15,33 @@ var DEFAULT_PURPOSE_TYPES = []entity.PurposeType{
 
 func SeedPurposeTypes(db *gorm.DB) error {
 	for _, pt := range DEFAULT_PURPOSE_TYPES {
+		expectedID := uuid.NewSHA1(uuid.NameSpaceOID, []byte("purpose_type:"+pt.Name))
+
 		var existing entity.PurposeType
-		if err := db.Where("name = ?", pt.Name).First(&existing).Error; err != nil {
+		if err := db.Where("id = ?", expectedID).First(&existing).Error; err != nil {
 			if err == gorm.ErrRecordNotFound {
-				if err := db.Create(&entity.PurposeType{
-					Base: entity.Base{
-						ID: uuid.NewSHA1(uuid.NameSpaceOID, []byte("purpose_type:"+pt.Name)),
-					},
-					Name:        pt.Name,
-					Description: pt.Description,
-					IsActive:    pt.IsActive,
-				}).Error; err != nil {
-					return err
+				if err := db.Where("name = ?", pt.Name).First(&existing).Error; err != nil {
+					if err == gorm.ErrRecordNotFound {
+						if err := db.Create(&entity.PurposeType{
+							Base: entity.Base{
+								ID: expectedID,
+							},
+							Name:        pt.Name,
+							Description: pt.Description,
+							IsActive:    pt.IsActive,
+						}).Error; err != nil {
+							return err
+						}
+					} else {
+						return err
+					}
+				} else {
+					if err := db.Model(&existing).Updates(entity.PurposeType{
+						Description: pt.Description,
+						IsActive:    pt.IsActive,
+					}).Error; err != nil {
+						return err
+					}
 				}
 			} else {
 				return err
