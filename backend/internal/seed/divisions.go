@@ -40,7 +40,7 @@ func SeedDivisions(db *gorm.DB) error {
 		})
 	}
 	return db.Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "name"}},
+		Columns:   []clause.Column{{Name: "id"}},
 		DoNothing: true,
 	}).CreateInBatches(divisions, 100).Error
 }
@@ -62,6 +62,9 @@ func BackfillUserDivisionIDs(db *gorm.DB) error {
 	for i := range users {
 		var division entity.Division
 		if err := db.Where("LOWER(name) = LOWER(?)", users[i].Division).First(&division).Error; err != nil {
+			continue
+		}
+		if division.ID == uuid.Nil {
 			continue
 		}
 		if err := db.Model(&entity.User{}).Where("id = ?", users[i].ID).Updates(map[string]interface{}{
