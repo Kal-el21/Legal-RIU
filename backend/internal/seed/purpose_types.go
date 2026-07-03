@@ -27,7 +27,7 @@ func SeedPurposeTypes(db *gorm.DB) error {
 		})
 	}
 	return db.Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "id"}},
+		Columns:   []clause.Column{{Name: "name"}},
 		DoNothing: true,
 	}).CreateInBatches(items, 100).Error
 }

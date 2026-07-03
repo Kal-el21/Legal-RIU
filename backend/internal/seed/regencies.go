@@ -22,7 +22,7 @@ func SeedRegencies(db *gorm.DB) error {
 	}
 
 	return db.Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "id"}},
+		Columns:   []clause.Column{{Name: "name"}, {Name: "province"}},
 		DoNothing: true,
 	}).CreateInBatches(regencies, 100).Error
 }
