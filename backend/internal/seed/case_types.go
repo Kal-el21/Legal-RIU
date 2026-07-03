@@ -18,18 +18,33 @@ var DEFAULT_CASE_TYPES = []entity.CaseType{
 
 func SeedCaseTypes(db *gorm.DB) error {
 	for _, ct := range DEFAULT_CASE_TYPES {
+		expectedID := uuid.NewSHA1(uuid.NameSpaceOID, []byte("case_type:"+ct.Code))
+
 		var existing entity.CaseType
-		if err := db.Where("code = ?", ct.Code).First(&existing).Error; err != nil {
+		if err := db.Where("id = ?", expectedID).First(&existing).Error; err != nil {
 			if err == gorm.ErrRecordNotFound {
-				if err := db.Create(&entity.CaseType{
-					Base: entity.Base{
-						ID: uuid.NewSHA1(uuid.NameSpaceOID, []byte("case_type:"+ct.Code)),
-					},
-					Code:     ct.Code,
-					Label:    ct.Label,
-					IsActive: ct.IsActive,
-				}).Error; err != nil {
-					return err
+				if err := db.Where("code = ?", ct.Code).First(&existing).Error; err != nil {
+					if err == gorm.ErrRecordNotFound {
+						if err := db.Create(&entity.CaseType{
+							Base: entity.Base{
+								ID: expectedID,
+							},
+							Code:     ct.Code,
+							Label:    ct.Label,
+							IsActive: ct.IsActive,
+						}).Error; err != nil {
+							return err
+						}
+					} else {
+						return err
+					}
+				} else {
+					if err := db.Model(&existing).Updates(entity.CaseType{
+						Label:    ct.Label,
+						IsActive: ct.IsActive,
+					}).Error; err != nil {
+						return err
+					}
 				}
 			} else {
 				return err

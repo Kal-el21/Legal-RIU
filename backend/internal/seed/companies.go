@@ -17,18 +17,33 @@ var DEFAULT_COMPANIES = []entity.Company{
 
 func SeedCompanies(db *gorm.DB) error {
 	for _, c := range DEFAULT_COMPANIES {
+		expectedID := uuid.NewSHA1(uuid.NameSpaceOID, []byte("company:"+c.EmailDomain))
+
 		var existing entity.Company
-		if err := db.Where("email_domain = ?", c.EmailDomain).First(&existing).Error; err != nil {
+		if err := db.Where("id = ?", expectedID).First(&existing).Error; err != nil {
 			if err == gorm.ErrRecordNotFound {
-				if err := db.Create(&entity.Company{
-					Base: entity.Base{
-						ID: uuid.NewSHA1(uuid.NameSpaceOID, []byte("company:"+c.EmailDomain)),
-					},
-					Name:        c.Name,
-					EmailDomain: c.EmailDomain,
-					IsInternal:  c.IsInternal,
-				}).Error; err != nil {
-					return err
+				if err := db.Where("email_domain = ?", c.EmailDomain).First(&existing).Error; err != nil {
+					if err == gorm.ErrRecordNotFound {
+						if err := db.Create(&entity.Company{
+							Base: entity.Base{
+								ID: expectedID,
+							},
+							Name:        c.Name,
+							EmailDomain: c.EmailDomain,
+							IsInternal:  c.IsInternal,
+						}).Error; err != nil {
+							return err
+						}
+					} else {
+						return err
+					}
+				} else {
+					if err := db.Model(&existing).Updates(entity.Company{
+						Name:       c.Name,
+						IsInternal: c.IsInternal,
+					}).Error; err != nil {
+						return err
+					}
 				}
 			} else {
 				return err
