@@ -152,7 +152,7 @@ export default function LegalOpinionDetailPage() {
                   <FileText className="w-4 h-4 text-gray-400 flex-shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-gray-700 truncate">{att.file_name}</p>
-                    <p className="text-xs text-gray-400">{formatFileSize(att.file_size)} · Round {att.upload_round}</p>
+                    <p className="text-xs text-gray-400">{formatFileSize(att.file_size)} · Round {att.upload_round} · Diupload {formatDateTime(att.created_at)}</p>
                   </div>
                   <button onClick={() => handleDownload(att.file_path)}
                     className="p-1.5 rounded-lg hover:bg-gray-200 transition-colors text-gray-400 hover:text-gray-600">
@@ -168,19 +168,20 @@ export default function LegalOpinionDetailPage() {
         {canDownload && (
           <Card title="Hasil Kajian">
             <div className="space-y-2">
-              {lo.results?.map((res) => (
-                <div key={res.id} className="flex items-center gap-3 p-3 rounded-lg bg-green-50 border border-green-100">
-                  <FileText className="w-4 h-4 text-green-500 flex-shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-gray-700 truncate">{res.file_name}</p>
-                    {res.notes && <p className="text-xs text-gray-500 mt-0.5">{res.notes}</p>}
-                  </div>
-                  <Button size="sm" onClick={() => handleDownload(res.file_path)}
-                    className="flex items-center gap-1.5 text-white text-xs" style={{ background: '#0B2545' }}>
-                    <Download className="w-3.5 h-3.5" /> Unduh
-                  </Button>
-                </div>
-              ))}
+{lo.results?.map((res) => (
+                 <div key={res.id} className="flex items-center gap-3 p-3 rounded-lg bg-green-50 border border-green-100">
+                   <FileText className="w-4 h-4 text-green-500 flex-shrink-0" />
+                   <div className="flex-1 min-w-0">
+                     <p className="text-sm text-gray-700 truncate">{res.file_name}</p>
+                     <p className="text-xs text-gray-500 mt-0.5">Diupload oleh {res.uploader?.full_name} · {formatDateTime(res.created_at)}</p>
+                     {res.notes && <p className="text-xs text-gray-500 mt-0.5 italic">{res.notes}</p>}
+                   </div>
+                   <Button size="sm" onClick={() => handleDownload(res.file_path)}
+                     className="flex items-center gap-1.5 text-white text-xs" style={{ background: '#0B2545' }}>
+                     <Download className="w-3.5 h-3.5" /> Unduh
+                   </Button>
+                 </div>
+               ))}
             </div>
           </Card>
         )}

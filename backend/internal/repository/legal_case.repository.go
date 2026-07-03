@@ -27,6 +27,7 @@ type LegalCaseRepository interface {
 	FindLatest() (*entity.LegalCase, error)
 	FindByID(id uuid.UUID) (*entity.LegalCase, error)
 	Update(legalCase *entity.LegalCase) error
+	UpdateStatus(id uuid.UUID, status string, statusUpdatedAt *time.Time) error
 	Delete(id uuid.UUID) error
 
 	ListChronologies(caseID uuid.UUID) ([]entity.CaseChronology, error)
@@ -127,6 +128,14 @@ func (r *legalCaseRepository) FindByID(id uuid.UUID) (*entity.LegalCase, error) 
 
 func (r *legalCaseRepository) Update(legalCase *entity.LegalCase) error {
 	return r.db.Save(legalCase).Error
+}
+
+func (r *legalCaseRepository) UpdateStatus(id uuid.UUID, status string, statusUpdatedAt *time.Time) error {
+	updates := map[string]interface{}{"current_status": status}
+	if statusUpdatedAt != nil {
+		updates["status_updated_at"] = statusUpdatedAt
+	}
+	return r.db.Model(&entity.LegalCase{}).Where("id = ?", id).Updates(updates).Error
 }
 
 func (r *legalCaseRepository) Delete(id uuid.UUID) error {

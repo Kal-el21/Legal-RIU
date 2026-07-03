@@ -15,25 +15,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  useCreateDocumentReview,
-  useUpdateDocumentReview,
-  useDocumentReview,
-} from "@/hooks/useDocumentReview";
+import { useCreateDocumentReview, useUpdateDocumentReview, useDocumentReview } from "@/hooks/useDocumentReview";
 import { useDivisions } from "@/hooks/useLegalCase";
+import { useDocumentTypes } from "@/hooks/useDocumentType";
 import { useAuthStore } from "@/store/auth.store";
 import { validateFile, formatFileSize } from "@/lib/utils";
-
-const DOCUMENT_TYPES = [
-  "Surat Perintah Kerja",
-  "Perjanjian Kerjasama Non Teknik",
-  "Kontrak Treaty",
-  "Kontrak Retro",
-  "Pembatalan Perjanjian",
-  "Nota Kesepahaman",
-  "Surat",
-  "Lain-Lain",
-];
 
 const schema = z.object({
   requestor_name: z.string().min(1, "Wajib diisi"),
@@ -62,9 +48,11 @@ export default function ReviewDocumentFormPage() {
 
   const { data: existing } = useDocumentReview(id ?? "");
   const { data: divisions = [] } = useDivisions();
+  const { data: documentTypes = [] } = useDocumentTypes();
   const createMutation = useCreateDocumentReview();
   const updateMutation = useUpdateDocumentReview();
   const divisionOptions = divisions.map((division) => division.name);
+  const documentTypeOptions = documentTypes.filter(dt => dt.is_active).map(dt => dt.label)
 
   const {
     register,
@@ -270,7 +258,7 @@ export default function ReviewDocumentFormPage() {
                   <SelectValue placeholder="Pilih jenis dokumen" />
                 </SelectTrigger>
                 <SelectContent>
-                  {DOCUMENT_TYPES.map((t) => (
+                  {documentTypeOptions.map((t) => (
                     <SelectItem key={t} value={t}>
                       {t}
                     </SelectItem>

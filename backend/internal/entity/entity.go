@@ -135,6 +135,7 @@ type LegalOpinion struct {
 	Chronology        string                   `gorm:"type:text;not null" json:"chronology"`
 	Question          string                   `gorm:"type:text;not null" json:"question"`
 	Status            SubmissionStatus         `gorm:"not null;default:'SUBMITTED'" json:"status"`
+	StatusUpdatedAt   *time.Time               `json:"status_updated_at,omitempty"`
 	AdminNote         string                   `gorm:"type:text" json:"admin_note"`
 	Attachments       []LegalOpinionAttachment `gorm:"foreignKey:LegalOpinionID" json:"attachments,omitempty"`
 	Results           []LegalOpinionResult     `gorm:"foreignKey:LegalOpinionID" json:"results,omitempty"`
@@ -194,6 +195,7 @@ type DocumentReview struct {
 	DocumentTypeOther string                     `json:"document_type_other"`
 	AdditionalNote    string                     `gorm:"type:text" json:"additional_note"`
 	Status            SubmissionStatus           `gorm:"not null;default:'SUBMITTED'" json:"status"`
+	StatusUpdatedAt   *time.Time                 `json:"status_updated_at,omitempty"`
 	AdminNote         string                     `gorm:"type:text" json:"admin_note"`
 	Attachments       []DocumentReviewAttachment `gorm:"foreignKey:DocumentReviewID" json:"attachments,omitempty"`
 	Results           []DocumentReviewResult     `gorm:"foreignKey:DocumentReviewID" json:"results,omitempty"`
@@ -311,6 +313,7 @@ type LegalCase struct {
 	PICDivision       Division         `gorm:"foreignKey:PIC" json:"pic_division,omitempty"`
 	DocumentLink      string           `gorm:"size:500" json:"document_link"`
 	CurrentStatus     string           `gorm:"size:100;index" json:"current_status"`
+	StatusUpdatedAt   *time.Time       `json:"status_updated_at,omitempty"`
 	CaseDate          time.Time        `gorm:"not null;index" json:"case_date"`
 	Level             string           `gorm:"size:100;not null;index" json:"level"`
 	AdditionalNotes   string           `gorm:"type:text" json:"additional_notes"`

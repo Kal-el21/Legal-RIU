@@ -8,6 +8,7 @@ import NotificationDropdown from '@/components/common/NotificationDropdown'
 const DATA_MASTER_ITEMS = [
   { label: 'Perusahaan', href: '/admin/companies', icon: Building2 },
   { label: 'Tujuan Pembuatan', href: '/admin/purpose-types', icon: Target },
+  { label: 'Jenis Dokumen', href: '/admin/document-types', icon: FileText },
   { label: 'Jenis Kasus', href: '/admin/case-types', icon: Briefcase },
   { label: 'Kategori', href: '/admin/case-categories', icon: FolderOpen },
   { label: 'Kabupaten/Kota', href: '/admin/regencies', icon: MapPin },

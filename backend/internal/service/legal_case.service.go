@@ -25,6 +25,7 @@ type LegalCaseService interface {
 	GetLatest(companyID *uuid.UUID) (*dto.LegalCaseResponse, error)
 	GetByID(companyID *uuid.UUID, id string) (*dto.LegalCaseResponse, error)
 	Update(id string, req dto.UpdateLegalCaseRequest) (*dto.LegalCaseResponse, error)
+	UpdateStatus(id string, status string) error
 	Delete(id string) error
 
 	ListChronologies(caseID string) ([]dto.CaseChronologyResponse, error)
@@ -171,6 +172,16 @@ func (s *legalCaseService) Update(id string, req dto.UpdateLegalCaseRequest) (*d
 	}
 	response := toLegalCaseResponse(legalCase, true)
 	return &response, nil
+}
+
+func (s *legalCaseService) UpdateStatus(id string, status string) error {
+	uid, err := parseUUID(id)
+	if err != nil {
+		return errors.New("ID tidak valid")
+	}
+
+	now := time.Now()
+	return s.repo.UpdateStatus(uid, status, &now)
 }
 
 func (s *legalCaseService) Delete(id string) error {

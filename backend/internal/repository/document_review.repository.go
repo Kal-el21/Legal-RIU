@@ -85,7 +85,8 @@ func (r *documentReviewRepository) Delete(id uuid.UUID) error {
 }
 
 func (r *documentReviewRepository) UpdateStatus(id uuid.UUID, status entity.SubmissionStatus, adminNote string) error {
-	updates := map[string]interface{}{"status": status}
+	now := time.Now()
+	updates := map[string]interface{}{"status": status, "status_updated_at": now}
 	if adminNote != "" {
 		updates["admin_note"] = adminNote
 	}

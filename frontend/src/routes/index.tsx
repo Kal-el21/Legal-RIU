@@ -35,6 +35,7 @@ import AuditLogPage from '@/pages/admin/AuditLogPage'
 
 import CompanyManagementPage from '@/pages/admin/companies/CompanyManagementPage'
 import PurposeTypeManagementPage from '@/pages/admin/purpose-types/PurposeTypeManagementPage'
+import DocumentTypeManagementPage from '@/pages/admin/document-types/DocumentTypeManagementPage'
 import CaseTypeManagementPage from '@/pages/admin/case-types/CaseTypeManagementPage'
 import CaseCategoryManagementPage from '@/pages/admin/case-categories/CaseCategoryManagementPage'
 import RegencyManagementPage from '@/pages/admin/regencies/RegencyManagementPage'
@@ -138,8 +139,9 @@ export const router = createBrowserRouter([
           { path: '/admin/users', element: <UserManagementPage /> },
           { path: '/admin/audit-logs', element: <AuditLogPage /> },
           { path: '/admin/companies', element: <CompanyManagementPage /> },
-          { path: '/admin/purpose-types', element: <PurposeTypeManagementPage /> },
-          { path: '/admin/case-types', element: <CaseTypeManagementPage /> },
+{ path: '/admin/purpose-types', element: <PurposeTypeManagementPage /> },
+           { path: '/admin/document-types', element: <DocumentTypeManagementPage /> },
+           { path: '/admin/case-types', element: <CaseTypeManagementPage /> },
           { path: '/admin/case-categories', element: <CaseCategoryManagementPage /> },
           { path: '/admin/regencies', element: <RegencyManagementPage /> },
           { path: '/admin/cedants', element: <CedantManagementPage /> },

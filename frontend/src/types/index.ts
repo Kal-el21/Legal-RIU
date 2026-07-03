@@ -18,7 +18,7 @@ export type LegalType =
   | 'Perjanjian Reasuransi (Treaty/Fakultatif)'
   | 'Lain-Lain'
 
-export type DocumentType =
+export type DocumentTypeValue =
   | 'Surat Perintah Kerja'
   | 'Perjanjian Kerjasama Non Teknik'
   | 'Kontrak Treaty'
@@ -60,6 +60,15 @@ export interface CaseType {
 export interface CaseCategory {
   id: string
   code: string
+  label: string
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface DocumentType {
+  id: string
+  name: string
   label: string
   is_active: boolean
   created_at: string
@@ -137,6 +146,7 @@ export interface LegalOpinion {
   results?: SubmissionResult[]
   created_at: string
   updated_at: string
+  status_updated_at?: string
 }
 
 export interface DocumentReview {
@@ -152,7 +162,7 @@ export interface DocumentReview {
   document_name: string
   second_party: string
   third_party?: string
-  document_type: DocumentType | string
+  document_type: DocumentTypeValue | string
   document_type_other?: string
   additional_note?: string
   status: SubmissionStatus
@@ -161,6 +171,7 @@ export interface DocumentReview {
   results?: SubmissionResult[]
   created_at: string
   updated_at: string
+  status_updated_at?: string
 }
 
 export interface Regency {
@@ -225,6 +236,7 @@ export interface LegalCase {
   chronologies?: CaseChronology[]
   created_at: string
   updated_at: string
+  status_updated_at?: string
 }
 
 // ─── API Response wrappers ────────────────────────────────────────────────────

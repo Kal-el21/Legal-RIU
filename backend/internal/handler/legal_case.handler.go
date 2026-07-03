@@ -344,36 +344,12 @@ func (h *LegalCaseHandler) UpdateStatus(c *gin.Context) {
 		return
 	}
 
-	existing, err := h.svc.GetByID(companyID, id)
-	if err != nil {
-		utils.NotFound(c, err.Error())
-		return
-	}
-	existing.CurrentStatus = body.Status
-	_, err = h.svc.Update(id, dto.UpdateLegalCaseRequest{
-		CaseName:          existing.CaseName,
-		CaseSummary:       existing.CaseSummary,
-		RelatedPartyID:    existing.RelatedPartyID,
-		CategoryID:        existing.CategoryID,
-		Specification:     existing.Specification,
-		CaseTypeID:        existing.CaseTypeID,
-		TechnicalReserve:  existing.TechnicalReserve,
-		CaseValue:         existing.CaseValue,
-		PIC:               existing.PIC,
-		DocumentLink:      existing.DocumentLink,
-		CurrentStatus:     body.Status,
-		CaseDate:          existing.CaseDate.Format("2006-01-02"),
-		Level:             existing.Level,
-		AdditionalNotes:   existing.AdditionalNotes,
-		LocationRegencyID: existing.LocationRegencyID,
-		CompanyID:         existing.CompanyID,
-	})
-	if err != nil {
+	if err := h.svc.UpdateStatus(id, body.Status); err != nil {
 		utils.BadRequest(c, err.Error(), nil)
 		return
 	}
 
-	middleware.SetAuditContext(c, entity.ActionStatusChange, "legal_case", existing.ID)
+	middleware.SetAuditContext(c, entity.ActionStatusChange, "legal_case", id)
 	c.Set("audit_description", "Legal case status updated")
 	utils.OK(c, "Status kasus berhasil diupdate", nil)
 }

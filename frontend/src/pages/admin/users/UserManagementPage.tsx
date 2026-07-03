@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useUsers, useCreateUser, useUpdateUser, useUpdateUserStatus, useResetPassword, useDeleteUser } from '@/hooks/useUser'
-import { useCompanies, useDivisions } from '@/hooks/useLegalCase'
+import { useCompanies, useDivisions, usePurposeTypes } from '@/hooks/useLegalCase'
 import { formatDate } from '@/lib/utils'
 import type { User } from '@/types'
 import UserPermissionModal from './UserPermissionModal'
@@ -23,6 +23,7 @@ const createSchema = z.object({
   division: z.string().min(1, 'Wajib diisi'),
   role: z.enum(['USER', 'ADMIN', 'LEGAL', 'EXTERNAL', 'LEGAL_AU']),
   company_id: z.string().optional(),
+  purpose_type_id: z.string().optional(),
 }).refine((data) => {
   if (data.role === 'LEGAL_AU' && !data.company_id) {
     return false
@@ -39,6 +40,7 @@ const editSchema = z.object({
   division: z.string().min(1, 'Wajib diisi'),
   role: z.enum(['USER', 'ADMIN', 'LEGAL', 'EXTERNAL', 'LEGAL_AU']),
   company_id: z.string().optional(),
+  purpose_type_id: z.string().optional(),
 }).refine((data) => {
   if (data.role === 'LEGAL_AU' && !data.company_id) {
     return false
@@ -100,6 +102,7 @@ export default function UserManagementPage() {
   const { data, isLoading } = useUsers({ page, limit: 10, search })
   const { data: divisions = [] } = useDivisions()
   const { data: companies = [] } = useCompanies()
+  const { data: purposeTypes = [] } = usePurposeTypes()
   const createMutation = useCreateUser()
   const updateMutation = useUpdateUser()
   const statusMutation = useUpdateUserStatus()
@@ -111,6 +114,7 @@ export default function UserManagementPage() {
   const resetForm = useForm<ResetForm>({ resolver: zodResolver(resetSchema) })
   const divisionOptions = divisions.map((division) => ({ value: division.id, label: division.name }))
   const companyOptions = companies.map((company) => ({ value: company.id, label: company.name }))
+  const purposeTypeOptions = purposeTypes.filter(pt => pt.is_active).map((pt) => ({ value: pt.id, label: pt.name }))
 
   const createRole = createForm.watch('role')
   const editRole = editForm.watch('role')
@@ -139,7 +143,7 @@ export default function UserManagementPage() {
 
   const openEdit = (user: User) => {
     setSelected(user)
-    editForm.reset({ full_name: user.full_name, position: user.position, division: user.division_id || user.division, role: user.role, company_id: user.company_id })
+    editForm.reset({ full_name: user.full_name, position: user.position, division: user.division_id || user.division, role: user.role, company_id: user.company_id, purpose_type_id: user.purpose_type_id })
     setModal('edit')
   }
 
@@ -399,6 +403,22 @@ export default function UserManagementPage() {
                   />
                 </Field>
               )}
+              {createRole === 'EXTERNAL' && (
+                <Field label="Tujuan Pembuatan" error={createForm.formState.errors.purpose_type_id?.message}>
+                  <Controller
+                    name="purpose_type_id"
+                    control={createForm.control}
+                    render={({ field }) => (
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <SelectTrigger><SelectValue placeholder="Pilih tujuan" /></SelectTrigger>
+                        <SelectContent>
+                          {purposeTypeOptions.map((pt) => <SelectItem key={pt.value} value={pt.value}>{pt.label}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
+                </Field>
+              )}
               {createMutation.isError && createMutation.error && (
                <p className="text-xs text-red-500">
                  {(createMutation.error as any)?.response?.data?.message || (createMutation.error as Error)?.message}
@@ -424,7 +444,7 @@ export default function UserManagementPage() {
             <Field label="Posisi Jabatan" error={editForm.formState.errors.position?.message}>
               <Input {...editForm.register('position')} />
             </Field>
- <Field label="Divisi" error={editForm.formState.errors.division?.message}>
+<Field label="Divisi" error={editForm.formState.errors.division?.message}>
                 <Controller
                   name="division"
                   control={editForm.control}
@@ -438,54 +458,56 @@ export default function UserManagementPage() {
                   )}
                 />
               </Field>
-              <Field label="Perusahaan" error={editForm.formState.errors.company_id?.message}>
+              <Field label="Role" error={editForm.formState.errors.role?.message}>
                 <Controller
-                  name="company_id"
+                  name="role"
                   control={editForm.control}
                   render={({ field }) => (
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <SelectTrigger><SelectValue placeholder="Pilih perusahaan" /></SelectTrigger>
+                    <Select onValueChange={(value) => { field.onChange(value); handleEditRoleChange(value) }} value={field.value}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        {companyOptions.map((company) => <SelectItem key={company.value} value={company.value}>{company.label}</SelectItem>)}
+                        <SelectItem value="USER">User</SelectItem>
+                        <SelectItem value="LEGAL">Legal</SelectItem>
+                        <SelectItem value="EXTERNAL">External User</SelectItem>
+                        <SelectItem value="ADMIN">Admin</SelectItem>
+                        <SelectItem value="LEGAL_AU">Legal AU</SelectItem>
                       </SelectContent>
                     </Select>
-                   )}
-                 />
-               </Field>
-               <Field label="Role" error={editForm.formState.errors.role?.message}>
-                 <Controller
-                   name="role"
-                   control={editForm.control}
-                   render={({ field }) => (
-                     <Select onValueChange={(value) => { field.onChange(value); handleEditRoleChange(value) }} value={field.value}>
-                       <SelectTrigger><SelectValue /></SelectTrigger>
-                       <SelectContent>
-                         <SelectItem value="USER">User</SelectItem>
-                         <SelectItem value="LEGAL">Legal</SelectItem>
-                         <SelectItem value="EXTERNAL">External User</SelectItem>
-                         <SelectItem value="ADMIN">Admin</SelectItem>
-                         <SelectItem value="LEGAL_AU">Legal AU</SelectItem>
-                       </SelectContent>
-                     </Select>
-                   )}
-                 />
-               </Field>
-               {editRole !== 'EXTERNAL' && (
-                 <Field label="Perusahaan" error={editForm.formState.errors.company_id?.message}>
-                   <Controller
-                     name="company_id"
-                     control={editForm.control}
-                     render={({ field }) => (
-                       <Select onValueChange={field.onChange} value={field.value}>
-                         <SelectTrigger><SelectValue placeholder="Pilih perusahaan" /></SelectTrigger>
-                         <SelectContent>
-                           {companyOptions.map((company) => <SelectItem key={company.value} value={company.value}>{company.label}</SelectItem>)}
-                         </SelectContent>
-                       </Select>
-                     )}
-                   />
-                 </Field>
-               )}
+                  )}
+                />
+              </Field>
+              {editRole !== 'EXTERNAL' && (
+                <Field label="Perusahaan" error={editForm.formState.errors.company_id?.message}>
+                  <Controller
+                    name="company_id"
+                    control={editForm.control}
+                    render={({ field }) => (
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <SelectTrigger><SelectValue placeholder="Pilih perusahaan" /></SelectTrigger>
+                        <SelectContent>
+                          {companyOptions.map((company) => <SelectItem key={company.value} value={company.value}>{company.label}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
+                </Field>
+              )}
+              {editRole === 'EXTERNAL' && (
+                <Field label="Tujuan Pembuatan" error={editForm.formState.errors.purpose_type_id?.message}>
+                  <Controller
+                    name="purpose_type_id"
+                    control={editForm.control}
+                    render={({ field }) => (
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <SelectTrigger><SelectValue placeholder="Pilih tujuan" /></SelectTrigger>
+                        <SelectContent>
+                          {purposeTypeOptions.map((pt) => <SelectItem key={pt.value} value={pt.value}>{pt.label}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
+                </Field>
+              )}
               {updateMutation.isError && (
                <p className="text-xs text-red-500">{(updateMutation.error as Error)?.message}</p>
              )}
