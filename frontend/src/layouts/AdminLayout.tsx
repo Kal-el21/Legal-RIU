@@ -1,9 +1,19 @@
 import { Outlet, Link, useLocation } from 'react-router-dom'
-import { Scale, LayoutDashboard, FileText, FileSearch, Users, Menu, ChevronRight, ChevronLeft, ScrollText } from 'lucide-react'
+import { Scale, LayoutDashboard, FileText, FileSearch, Users, Menu, ChevronRight, ChevronLeft, ScrollText, Building2, Target, Briefcase, MapPin, UserCog, FolderOpen } from 'lucide-react'
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
 import SidebarUserButton from '@/components/common/SidebarUserButton'
 import NotificationDropdown from '@/components/common/NotificationDropdown'
+
+const DATA_MASTER_ITEMS = [
+  { label: 'Perusahaan', href: '/admin/companies', icon: Building2 },
+  { label: 'Tujuan Pembuatan', href: '/admin/purpose-types', icon: Target },
+  { label: 'Jenis Kasus', href: '/admin/case-types', icon: Briefcase },
+  { label: 'Kategori', href: '/admin/case-categories', icon: FolderOpen },
+  { label: 'Kabupaten/Kota', href: '/admin/regencies', icon: MapPin },
+  { label: 'Cedant', href: '/admin/cedants', icon: UserCog },
+  { label: 'Divisi', href: '/admin/divisions', icon: Users },
+]
 
 const NAV = [
   { label: 'Dashboard', href: '/admin', icon: LayoutDashboard, exact: true },
@@ -18,6 +28,7 @@ export default function AdminLayout() {
   const location = useLocation()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [dataMasterOpen, setDataMasterOpen] = useState(false)
 
   const isActive = (href: string, exact?: boolean) =>
     exact ? location.pathname === href : location.pathname.startsWith(href)
@@ -62,6 +73,50 @@ export default function AdminLayout() {
               {!sidebarCollapsed && isActive(item.href, item.exact) && <ChevronRight className="w-3.5 h-3.5 ml-auto opacity-60" />}
             </Link>
           ))}
+
+          <div className="pt-2">
+            <button
+              onClick={() => setDataMasterOpen(!dataMasterOpen)}
+              className={cn(
+                'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all w-full',
+                'text-white/50 hover:bg-white/5 hover:text-white'
+              )}
+            >
+              <FolderOpen className="w-4 h-4 flex-shrink-0" />
+              {!sidebarCollapsed && <span>Data Master</span>}
+              {!sidebarCollapsed && <ChevronRight className={cn('w-3.5 h-3.5 ml-auto opacity-60 transition-transform', dataMasterOpen && 'rotate-90')} />}
+            </button>
+            {dataMasterOpen && !sidebarCollapsed && (
+              <div className="ml-4 mt-1 space-y-0.5">
+                {DATA_MASTER_ITEMS.map((item) => (
+                  <Link key={item.href} to={item.href} onClick={() => setSidebarOpen(false)}
+                    className={cn(
+                      'flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all',
+                      isActive(item.href)
+                        ? 'bg-white/10 text-white'
+                        : 'text-white/50 hover:bg-white/5 hover:text-white'
+                    )}
+                  >
+                    <item.icon className="w-3.5 h-3.5 flex-shrink-0" />
+                    {item.label}
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <Link to="/admin/materials" onClick={() => setSidebarOpen(false)}
+            className={cn(
+              'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all mt-2',
+              isActive('/admin/materials')
+                ? 'bg-white/10 text-white'
+                : 'text-white/50 hover:bg-white/5 hover:text-white'
+            )}
+            title={sidebarCollapsed ? 'Materi Legal' : undefined}
+          >
+            <FileText className="w-4 h-4 flex-shrink-0" />
+            {!sidebarCollapsed && 'Materi Legal'}
+          </Link>
         </nav>
 
         <SidebarUserButton settingsPath="/admin/settings" dark={true} collapsed={sidebarCollapsed} />

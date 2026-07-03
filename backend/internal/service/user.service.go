@@ -7,6 +7,7 @@ import (
 	"legal-riu-portal/internal/entity"
 	"legal-riu-portal/internal/repository"
 
+	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -59,17 +60,35 @@ func (s *userService) Create(req dto.CreateUserRequest) (*dto.UserResponse, erro
 		role = entity.RoleLegal
 	case "EXTERNAL":
 		role = entity.RoleExternal
+	case "LEGAL_AU":
+		role = entity.RoleLegalAU
+	}
+
+	companyID, err := resolveCompanySelection(s.userRepo, string(role), req.CompanyID)
+	if err != nil {
+		return nil, err
+	}
+
+	var purposeTypeID *uuid.UUID
+	if req.PurposeTypeID != "" {
+		pid, err := uuid.Parse(req.PurposeTypeID)
+		if err != nil {
+			return nil, errors.New("ID tujuan pembuatan tidak valid")
+		}
+		purposeTypeID = &pid
 	}
 
 	user := &entity.User{
-		FullName:     req.FullName,
-		Email:        req.Email,
-		PasswordHash: string(hash),
-		Position:     req.Position,
-		Division:     divisionName,
-		DivisionID:   divisionID,
-		Role:         role,
-		Status:       entity.UserActive,
+		FullName:      req.FullName,
+		Email:         req.Email,
+		PasswordHash:  string(hash),
+		Position:      req.Position,
+		Division:      divisionName,
+		DivisionID:    divisionID,
+		Role:          role,
+		Status:        entity.UserActive,
+		CompanyID:     companyID,
+		PurposeTypeID: purposeTypeID,
 	}
 
 	if err := s.userRepo.Create(user); err != nil {
@@ -115,9 +134,27 @@ func (s *userService) Update(id string, req dto.UpdateUserRequest) (*dto.UserRes
 			user.Role = entity.RoleLegal
 		case "EXTERNAL":
 			user.Role = entity.RoleExternal
+		case "LEGAL_AU":
+			user.Role = entity.RoleLegalAU
 		default:
 			user.Role = entity.RoleUser
 		}
+	}
+
+	companyID, err := resolveCompanySelection(s.userRepo, string(user.Role), req.CompanyID)
+	if err != nil {
+		return nil, err
+	}
+	user.CompanyID = companyID
+
+	if req.PurposeTypeID != "" {
+		pid, err := uuid.Parse(req.PurposeTypeID)
+		if err != nil {
+			return nil, errors.New("ID tujuan pembuatan tidak valid")
+		}
+		user.PurposeTypeID = &pid
+	} else {
+		user.PurposeTypeID = nil
 	}
 
 	if err := s.userRepo.Update(user); err != nil {

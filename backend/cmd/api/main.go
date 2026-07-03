@@ -4,7 +4,6 @@ import (
 	"log"
 
 	"legal-riu-portal/internal/config"
-	"legal-riu-portal/internal/entity"
 	"legal-riu-portal/internal/handler"
 	"legal-riu-portal/internal/middleware"
 	"legal-riu-portal/internal/repository"
@@ -21,46 +20,9 @@ func main() {
 	db := config.InitDatabase(cfg)
 	store := storage.InitMinIO(cfg)
 
-	if err := seed.PrepareLegalCasePICMigration(db); err != nil {
-		log.Fatalf("Legal case PIC migration preparation failed: %v", err)
+	if err := seed.RunAllMigrationsAndSeeds(db); err != nil {
+		log.Fatalf("Migration and seed failed: %v", err)
 	}
-	if err := db.AutoMigrate(
-		&entity.Division{},
-		&entity.User{},
-		&entity.RefreshToken{},
-		&entity.LegalOpinion{},
-		&entity.LegalOpinionAttachment{},
-		&entity.LegalOpinionResult{},
-		&entity.DocumentReview{},
-		&entity.DocumentReviewAttachment{},
-		&entity.DocumentReviewResult{},
-		&entity.Regency{},
-		&entity.Cedant{},
-		&entity.LegalCase{},
-		&entity.CaseChronology{},
-		&entity.AuditLog{},
-		&entity.NotificationSetting{},
-		&entity.NotificationRead{},
-		&entity.UserSettings{},
-	); err != nil {
-		log.Fatalf("Migration failed: %v", err)
-	}
-	log.Println("Database migrated successfully")
-	if err := seed.SeedRegencies(db); err != nil {
-		log.Fatalf("Regency seed failed: %v", err)
-	}
-	log.Println("Regencies seeded successfully")
-	if err := seed.SeedDivisions(db); err != nil {
-		log.Fatalf("Division seed failed: %v", err)
-	}
-	log.Println("Divisions seeded successfully")
-	if err := seed.BackfillUserDivisionIDs(db); err != nil {
-		log.Fatalf("User division backfill failed: %v", err)
-	}
-	if err := seed.SeedNotificationSettings(db); err != nil {
-		log.Fatalf("Notification settings seed failed: %v", err)
-	}
-	log.Println("Notification settings seeded successfully")
 
 	// ── Repositories ─────────────────────────────────────────────────────────
 	userRepo := repository.NewUserRepository(db)
@@ -72,6 +34,11 @@ func main() {
 	legalCaseRepo := repository.NewLegalCaseRepository(db)
 	divisionRepo := repository.NewDivisionRepository(db)
 	notificationSettingRepo := repository.NewNotificationSettingRepository(db)
+	companyRepo := repository.NewCompanyRepository(db)
+	purposeTypeRepo := repository.NewPurposeTypeRepository(db)
+	caseTypeRepo := repository.NewCaseTypeRepository(db)
+	caseCategoryRepo := repository.NewCaseCategoryRepository(db)
+	materialRepo := repository.NewLegalMaterialRepository(db)
 
 	// ── Services ─────────────────────────────────────────────────────────────
 	authSvc := service.NewAuthService(userRepo, refreshTokenRepo, cfg)
@@ -83,6 +50,11 @@ func main() {
 	auditLogSvc := service.NewAuditLogService(auditLogRepo)
 	legalCaseSvc := service.NewLegalCaseService(legalCaseRepo, store)
 	divisionSvc := service.NewDivisionService(divisionRepo)
+	companySvc := service.NewCompanyService(companyRepo)
+	purposeTypeSvc := service.NewPurposeTypeService(purposeTypeRepo)
+	caseTypeSvc := service.NewCaseTypeService(caseTypeRepo)
+	caseCategorySvc := service.NewCaseCategoryService(caseCategoryRepo)
+	materialSvc := service.NewLegalMaterialService(materialRepo)
 
 	// ── Handlers ─────────────────────────────────────────────────────────────
 	authHandler := handler.NewAuthHandler(authSvc, cfg, auditLogSvc)
@@ -91,9 +63,14 @@ func main() {
 	drHandler := handler.NewDocumentReviewHandler(drSvc, auditLogSvc)
 	dashHandler := handler.NewDashboardHandler(dashSvc)
 	auditLogHandler := handler.NewAuditLogHandler(auditLogSvc, auditLogRepo)
-	legalCaseHandler := handler.NewLegalCaseHandler(legalCaseSvc, auditLogSvc)
+	legalCaseHandler := handler.NewLegalCaseHandler(legalCaseSvc, auditLogSvc, userRepo)
 	divisionHandler := handler.NewDivisionHandler(divisionSvc)
 	notificationSettingHandler := handler.NewNotificationSettingHandler(notificationSettingSvc)
+	companyHandler := handler.NewCompanyHandler(companySvc)
+	purposeTypeHandler := handler.NewPurposeTypeHandler(purposeTypeSvc)
+	caseTypeHandler := handler.NewCaseTypeHandler(caseTypeSvc)
+	caseCategoryHandler := handler.NewCaseCategoryHandler(caseCategorySvc)
+	materialHandler := handler.NewLegalMaterialHandler(materialSvc)
 
 	// ── Gin ──────────────────────────────────────────────────────────────────
 	if cfg.App.Env == "production" {
@@ -197,6 +174,37 @@ func main() {
 	admin.GET("/divisions/:id", divisionHandler.GetByID)
 	admin.PUT("/divisions/:id", divisionHandler.Update)
 	admin.DELETE("/divisions/:id", divisionHandler.Delete)
+
+	admin.GET("/companies", companyHandler.GetAll)
+	admin.GET("/companies/:id", companyHandler.GetByID)
+	admin.POST("/companies", companyHandler.Create)
+	admin.PUT("/companies/:id", companyHandler.Update)
+	admin.DELETE("/companies/:id", companyHandler.Delete)
+
+	admin.GET("/purpose-types", purposeTypeHandler.GetAll)
+	admin.GET("/purpose-types/:id", purposeTypeHandler.GetByID)
+	admin.POST("/purpose-types", purposeTypeHandler.Create)
+	admin.PUT("/purpose-types/:id", purposeTypeHandler.Update)
+	admin.DELETE("/purpose-types/:id", purposeTypeHandler.Delete)
+
+	admin.GET("/case-types", caseTypeHandler.GetAll)
+	admin.GET("/case-types/:id", caseTypeHandler.GetByID)
+	admin.POST("/case-types", caseTypeHandler.Create)
+	admin.PUT("/case-types/:id", caseTypeHandler.Update)
+	admin.DELETE("/case-types/:id", caseTypeHandler.Delete)
+
+	admin.GET("/case-categories", caseCategoryHandler.GetAll)
+	admin.GET("/case-categories/:id", caseCategoryHandler.GetByID)
+	admin.POST("/case-categories", caseCategoryHandler.Create)
+	admin.PUT("/case-categories/:id", caseCategoryHandler.Update)
+	admin.DELETE("/case-categories/:id", caseCategoryHandler.Delete)
+
+	admin.GET("/regencies", legalCaseHandler.ListRegencies)
+	admin.GET("/cedants", legalCaseHandler.ListCedants)
+	admin.POST("/cedants", legalCaseHandler.CreateCedant)
+	admin.PUT("/cedants/:id", legalCaseHandler.UpdateCedant)
+	admin.DELETE("/cedants/:id", legalCaseHandler.DeleteCedant)
+
 	admin.GET("/legal-cases/download", legalCaseHandler.Download)
 	admin.GET("/legal-cases/latest", legalCaseHandler.GetLatest)
 	admin.GET("/legal-cases", legalCaseHandler.GetAll)
@@ -227,6 +235,12 @@ func main() {
 	admin.GET("/notification-settings", notificationSettingHandler.GetAll)
 	admin.PUT("/notification-settings/:id", notificationSettingHandler.Update)
 
+	admin.GET("/materials", materialHandler.GetAll)
+	admin.GET("/materials/:id", materialHandler.GetByID)
+	admin.POST("/materials", materialHandler.Create)
+	admin.PUT("/materials/:id", materialHandler.Update)
+	admin.DELETE("/materials/:id", materialHandler.Delete)
+
 	// ── Legal ─────────────────────────────────────────────────────────────────
 	legal := api.Group("/legal")
 	legal.Use(middleware.AuthMiddleware(cfg), middleware.RoleMiddleware("LEGAL"), middleware.AuditMiddleware(auditLogSvc), middleware.CSRFProtection())
@@ -255,11 +269,40 @@ func main() {
 
 	legal.GET("/audit-logs", auditLogHandler.GetAll)
 
+	legal.GET("/materials", materialHandler.GetAll)
+	legal.GET("/materials/:id", materialHandler.GetByID)
+	legal.POST("/materials", materialHandler.Create)
+	legal.PUT("/materials/:id", materialHandler.Update)
+	legal.DELETE("/materials/:id", materialHandler.Delete)
+
+	// ─── Legal AU ─────────────────────────────────────────────────────────────
+	legalAU := api.Group("/legal-au")
+	legalAU.Use(middleware.AuthMiddleware(cfg), middleware.RoleMiddleware("LEGAL_AU"), middleware.AuditMiddleware(auditLogSvc), middleware.CSRFProtection())
+
+	legalAU.GET("/cases", legalCaseHandler.GetAll)
+	legalAU.GET("/cases/:id", legalCaseHandler.GetByID)
+	legalAU.PATCH("/cases/:id/status", legalCaseHandler.UpdateStatus)
+	legalAU.POST("/cases/:id/chronology", legalCaseHandler.CreateChronology)
+	legalAU.PUT("/cases/:id/chronology/:chronId", legalCaseHandler.UpdateChronology)
+	legalAU.DELETE("/cases/:id/chronology/:chronId", legalCaseHandler.DeleteChronology)
+
+	legalAU.GET("/materials", materialHandler.GetAll)
+	legalAU.GET("/materials/:id", materialHandler.GetByID)
+	legalAU.POST("/materials", materialHandler.Create)
+	legalAU.PUT("/materials/:id", materialHandler.Update)
+	legalAU.DELETE("/materials/:id", materialHandler.Delete)
+
 	// ─── External ─────────────────────────────────────────────────────────────
 	external := api.Group("/external")
 	external.Use(middleware.AuthMiddleware(cfg), middleware.RoleMiddleware("EXTERNAL"), middleware.AuditMiddleware(auditLogSvc), middleware.CSRFProtection())
 
 	registerLegalCaseRoutes(external, legalCaseHandler)
+
+	// ── Public materials ──────────────────────────────────────────────────────
+	protectedMaterials := api.Group("")
+	protectedMaterials.Use(middleware.AuthMiddleware(cfg))
+	protectedMaterials.GET("/materials", materialHandler.GetAll)
+	protectedMaterials.GET("/materials/:id", materialHandler.GetByID)
 
 	log.Printf("Server running on port %s", cfg.App.Port)
 	if err := r.Run(":" + cfg.App.Port); err != nil {

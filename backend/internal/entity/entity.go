@@ -28,13 +28,13 @@ func (b *Base) BeforeCreate(tx *gorm.DB) error {
 type UserRole string
 type UserStatus string
 type SubmissionStatus string
-type LegalCaseType string
 
 const (
 	RoleUser     UserRole = "USER"
 	RoleAdmin    UserRole = "ADMIN"
 	RoleLegal    UserRole = "LEGAL"
 	RoleExternal UserRole = "EXTERNAL"
+	RoleLegalAU  UserRole = "LEGAL_AU"
 
 	UserActive   UserStatus = "ACTIVE"
 	UserInactive UserStatus = "INACTIVE"
@@ -45,18 +45,6 @@ const (
 	StatusRejected     SubmissionStatus = "REJECTED"
 	StatusResubmitted  SubmissionStatus = "RESUBMITTED"
 	StatusCompleted    SubmissionStatus = "COMPLETED"
-
-	CaseTypeNonLitigasi LegalCaseType = "NON_LITIGASI"
-	CaseTypePerdata     LegalCaseType = "PERDATA"
-	CaseTypePidana      LegalCaseType = "PIDANA"
-	CaseTypeTipekor     LegalCaseType = "TIPEKOR"
-	CaseTypeArbitrase   LegalCaseType = "ARBITRASE"
-	CaseTypeTUN         LegalCaseType = "TUN"
-
-	CaseCategoryLife     string = "Life"
-	CaseCategoryBPPDAN   string = "BPPDAN"
-	CaseCategoryProperty string = "Property"
-	CaseCategoryCOB      string = "COB"
 )
 
 // ─── User ─────────────────────────────────────────────────────────────────────
@@ -74,6 +62,10 @@ type User struct {
 	Status             UserStatus `gorm:"not null;default:'ACTIVE'" json:"status"`
 	EmailNotifications bool       `gorm:"not null;default:true" json:"email_notifications"`
 	TwoFAEnabled       bool       `gorm:"not null;default:false" json:"two_fa_enabled"`
+	CompanyID          *uuid.UUID `gorm:"type:uuid;index" json:"company_id,omitempty"`
+	Company            Company    `gorm:"foreignKey:CompanyID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT;" json:"company,omitempty"`
+	PurposeTypeID      *uuid.UUID `gorm:"type:uuid;index" json:"purpose_type_id,omitempty"`
+	PurposeType        PurposeType `gorm:"foreignKey:PurposeTypeID;constraint:OnUpdate:CASCADE,OnDelete:SET NULL;" json:"purpose_type,omitempty"`
 }
 
 type RefreshToken struct {
@@ -213,6 +205,43 @@ func (r *DocumentReviewResult) BeforeCreate(tx *gorm.DB) error {
 
 // Case Management
 
+type Company struct {
+	Base
+	Name        string `gorm:"size:255;not null;uniqueIndex" json:"name"`
+	EmailDomain string `gorm:"size:255;not null;uniqueIndex" json:"email_domain"`
+	IsInternal  bool   `gorm:"not null;default:true" json:"is_internal"`
+}
+
+type PurposeType struct {
+	Base
+	Name        string `gorm:"size:255;not null;uniqueIndex" json:"name"`
+	Description string `gorm:"type:text" json:"description"`
+	IsActive    bool   `gorm:"not null;default:true" json:"is_active"`
+}
+
+type CaseType struct {
+	Base
+	Code     string `gorm:"size:50;not null;uniqueIndex" json:"code"`
+	Label    string `gorm:"size:255;not null;uniqueIndex" json:"label"`
+	IsActive bool   `gorm:"not null;default:true" json:"is_active"`
+}
+
+type CaseCategory struct {
+	Base
+	Code     string `gorm:"size:50;not null;uniqueIndex" json:"code"`
+	Label    string `gorm:"size:255;not null;uniqueIndex" json:"label"`
+	IsActive bool   `gorm:"not null;default:true" json:"is_active"`
+}
+
+type LegalMaterial struct {
+	Base
+	Title       string `gorm:"size:255;not null;index" json:"title"`
+	Excerpt     string `gorm:"size:500" json:"excerpt"`
+	Content     string `gorm:"type:text;not null" json:"content"`
+	CreatedBy   uuid.UUID `gorm:"type:uuid;not null;index" json:"created_by"`
+	UpdatedBy   uuid.UUID `gorm:"type:uuid;not null;index" json:"updated_by"`
+}
+
 type Regency struct {
 	Base
 	Name     string `gorm:"size:255;not null;uniqueIndex:idx_regencies_name_province" json:"name"`
@@ -238,9 +267,11 @@ type LegalCase struct {
 	CaseSummary       string           `gorm:"type:text" json:"case_summary"`
 	RelatedPartyID    uuid.UUID        `gorm:"type:uuid;not null;index" json:"related_party_id"`
 	RelatedParty      Cedant           `gorm:"foreignKey:RelatedPartyID" json:"related_party,omitempty"`
-	Category          string           `gorm:"size:100;not null;index" json:"category"`
+	CategoryID        *uuid.UUID      `gorm:"type:uuid;index" json:"category_id,omitempty"`
+	CategoryRef       CaseCategory     `gorm:"foreignKey:CategoryID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT;" json:"category_ref,omitempty"`
 	Specification     string           `gorm:"type:text" json:"specification"`
-	CaseType          LegalCaseType    `gorm:"size:20;not null;index" json:"case_type"`
+	CaseTypeID        *uuid.UUID      `gorm:"type:uuid;index" json:"case_type_id,omitempty"`
+	CaseTypeRef       CaseType         `gorm:"foreignKey:CaseTypeID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT;" json:"case_type_ref,omitempty"`
 	TechnicalReserve  string           `gorm:"size:255" json:"technical_reserve"`
 	CaseValue         float64          `gorm:"type:decimal(18,2)" json:"case_value"`
 	PIC               uuid.UUID        `gorm:"type:uuid;index" json:"pic"`
@@ -252,6 +283,8 @@ type LegalCase struct {
 	AdditionalNotes   string           `gorm:"type:text" json:"additional_notes"`
 	LocationRegencyID uuid.UUID        `gorm:"type:uuid;not null;index" json:"location_regency_id"`
 	LocationRegency   Regency          `gorm:"foreignKey:LocationRegencyID" json:"location_regency,omitempty"`
+	CompanyID         *uuid.UUID      `gorm:"type:uuid;index" json:"company_id,omitempty"`
+	Company           Company          `gorm:"foreignKey:CompanyID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT;" json:"company,omitempty"`
 	Chronologies      []CaseChronology `gorm:"foreignKey:CaseID" json:"chronologies,omitempty"`
 }
 

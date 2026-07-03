@@ -1,11 +1,12 @@
 import { createBrowserRouter } from 'react-router-dom'
-import { GuestRoute, PrivateRoute, UserRoute, AdminRoute, LegalRoute, ExternalRoute } from './guards'
+import { GuestRoute, PrivateRoute, UserRoute, AdminRoute, LegalRoute, LegalAURoute, ExternalRoute } from './guards'
 
 import PublicLayout from '@/layouts/PublicLayout'
 import DashboardLayout from '@/layouts/DashboardLayout'
 import AdminLayout from '@/layouts/AdminLayout'
 import LegalLayout from '@/layouts/LegalLayout'
 import ExternalLayout from '@/layouts/ExternalLayout'
+import LegalAULayout from '@/layouts/LegalAULayout'
 
 import HomePage from '@/pages/public/HomePage'
 import AktaPerusahaanPage from '@/pages/public/AktaPerusahaanPage'
@@ -32,11 +33,28 @@ import AdminLegalCaseListPage from '@/pages/admin/legal-cases/AdminLegalCaseList
 import AdminLegalCaseDetailPage from '@/pages/admin/legal-cases/AdminLegalCaseDetailPage'
 import AuditLogPage from '@/pages/admin/AuditLogPage'
 
+import CompanyManagementPage from '@/pages/admin/companies/CompanyManagementPage'
+import PurposeTypeManagementPage from '@/pages/admin/purpose-types/PurposeTypeManagementPage'
+import CaseTypeManagementPage from '@/pages/admin/case-types/CaseTypeManagementPage'
+import CaseCategoryManagementPage from '@/pages/admin/case-categories/CaseCategoryManagementPage'
+import RegencyManagementPage from '@/pages/admin/regencies/RegencyManagementPage'
+import CedantManagementPage from '@/pages/admin/cedants/CedantManagementPage'
+import DivisionManagementPage from '@/pages/admin/divisions/DivisionManagementPage'
+
+import MaterialManagementPage from '@/pages/admin/materials/MaterialManagementPage'
+import MaterialListingPage from '@/pages/public/MaterialListingPage'
+import MaterialFormPage from '@/pages/materials/MaterialFormPage'
+
 import LegalDashboardPage from '@/pages/legal/LegalDashboardPage'
 import LegalLegalOpinionListPage from '@/pages/legal/legal-opinions/LegalOpinionListPage'
 import LegalLegalOpinionDetailPage from '@/pages/legal/legal-opinions/LegalOpinionDetailPage'
 import LegalReviewDocumentListPage from '@/pages/legal/review-documents/ReviewDocumentListPage'
 import LegalReviewDocumentDetailPage from '@/pages/legal/review-documents/ReviewDocumentDetailPage'
+import LegalMaterialManagementPage from '@/pages/legal/materials/LegalMaterialManagementPage'
+
+import LegalAUCaseListPage from '@/pages/legal-au/legal-cases/LegalAUCaseListPage'
+import LegalAUCaseDetailPage from '@/pages/legal-au/legal-cases/LegalAUCaseDetailPage'
+import LegalAUMaterialManagementPage from '@/pages/legal-au/materials/LegalAUMaterialManagementPage'
 
 const notFoundElement = (
   <div className="flex items-center justify-center min-h-[60vh]">
@@ -53,8 +71,9 @@ export const router = createBrowserRouter([
     ],
   },
 
+  // ─── Authenticated public pages ──────────────────────────────────────────
   {
-    element: <UserRoute />,
+    element: <PrivateRoute />,
     children: [
       {
         element: <PublicLayout />,
@@ -62,7 +81,7 @@ export const router = createBrowserRouter([
           { path: '/akta-perusahaan', element: <AktaPerusahaanPage /> },
           { path: '/asset-perusahaan', element: <ComingSoonPage title="Asset Perusahaan" /> },
           { path: '/sk-sop-legal', element: <ComingSoonPage title="SK SOP Legal" /> },
-          { path: '/materi-legal', element: <ComingSoonPage title="Materi Legal" /> },
+          { path: '/materi-legal', element: <MaterialListingPage /> },
           { path: '/profil-legal', element: <ComingSoonPage title="Profil Legal" /> },
         ],
       },
@@ -77,7 +96,7 @@ export const router = createBrowserRouter([
 
   // ─── User dashboard ───────────────────────────────────────────────────────
   {
-    element: <PrivateRoute />,
+    element: <UserRoute />,
     children: [
       {
         element: <DashboardLayout />,
@@ -116,6 +135,16 @@ export const router = createBrowserRouter([
           { path: '/admin/legal-cases/:id', element: <AdminLegalCaseDetailPage /> },
           { path: '/admin/users', element: <UserManagementPage /> },
           { path: '/admin/audit-logs', element: <AuditLogPage /> },
+          { path: '/admin/companies', element: <CompanyManagementPage /> },
+          { path: '/admin/purpose-types', element: <PurposeTypeManagementPage /> },
+          { path: '/admin/case-types', element: <CaseTypeManagementPage /> },
+          { path: '/admin/case-categories', element: <CaseCategoryManagementPage /> },
+          { path: '/admin/regencies', element: <RegencyManagementPage /> },
+          { path: '/admin/cedants', element: <CedantManagementPage /> },
+          { path: '/admin/divisions', element: <DivisionManagementPage /> },
+          { path: '/admin/materials', element: <MaterialManagementPage /> },
+          { path: '/admin/materials/new', element: <MaterialFormPage /> },
+          { path: '/admin/materials/:id', element: <MaterialFormPage /> },
         ],
       },
     ],
@@ -138,6 +167,27 @@ export const router = createBrowserRouter([
           { path: '/legal/legal-cases', element: <AdminLegalCaseListPage /> },
           { path: '/legal/legal-cases/:id', element: <AdminLegalCaseDetailPage /> },
           { path: '/legal/audit-logs', element: <AuditLogPage /> },
+          { path: '/legal/materials', element: <LegalMaterialManagementPage /> },
+          { path: '/legal/materials/new', element: <MaterialFormPage /> },
+          { path: '/legal/materials/:id', element: <MaterialFormPage /> },
+        ],
+      },
+    ],
+  },
+
+  // ─── Legal AU ────────────────────────────────────────────────────────────
+  {
+    element: <LegalAURoute />,
+    children: [
+      {
+        element: <LegalAULayout />,
+        children: [
+          { path: '/legal-au', element: <LegalAUCaseListPage /> },
+          { path: '/legal-au/cases', element: <LegalAUCaseListPage /> },
+          { path: '/legal-au/cases/:id', element: <LegalAUCaseDetailPage /> },
+          { path: '/legal-au/materials', element: <LegalAUMaterialManagementPage /> },
+          { path: '/legal-au/materials/new', element: <MaterialFormPage /> },
+          { path: '/legal-au/materials/:id', element: <MaterialFormPage /> },
         ],
       },
     ],

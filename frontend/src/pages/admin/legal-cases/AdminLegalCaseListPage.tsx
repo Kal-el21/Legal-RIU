@@ -180,12 +180,12 @@ export default function AdminLegalCaseListPage() {
                     <p className="text-xs text-gray-400">{formatDate(item.case_date)} - {item.level}</p>
                   </td>
                   <td className="px-6 py-4">
-                    <span className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${CASE_CATEGORY_COLOR[item.category] ?? 'bg-gray-100 text-gray-700'}`}>
-                      {item.category}
+                    <span className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${item.category ? CASE_CATEGORY_COLOR[item.category.code] ?? 'bg-gray-100 text-gray-700' : 'bg-gray-100 text-gray-700'}`}>
+                      {item.category?.label ?? '-'}
                     </span>
                   </td>
                   <td className="px-6 py-4">
-                    <CaseTypeBadge type={item.case_type} />
+                    <CaseTypeBadge type={item.case_type?.code ?? ''} />
                   </td>
                   <td className="px-6 py-4">
                     <span className="inline-flex max-w-[150px] truncate rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600">

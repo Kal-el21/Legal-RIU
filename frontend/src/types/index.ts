@@ -1,6 +1,6 @@
 // ─── Enums ───────────────────────────────────────────────────────────────────
 
-export type UserRole = 'USER' | 'ADMIN' | 'LEGAL' | 'EXTERNAL'
+export type UserRole = 'USER' | 'ADMIN' | 'LEGAL' | 'EXTERNAL' | 'LEGAL_AU'
 export type UserStatus = 'ACTIVE' | 'INACTIVE'
 
 export type SubmissionStatus =
@@ -28,21 +28,54 @@ export type DocumentType =
   | 'Surat'
   | 'Lain-Lain'
 
-export type LegalCaseType =
-  | 'NON_LITIGASI'
-  | 'PERDATA'
-  | 'PIDANA'
-  | 'TIPEKOR'
-  | 'ARBITRASE'
-  | 'TUN'
-
-export type CaseCategory =
-  | 'Life'
-  | 'BPPDAN'
-  | 'Property'
-  | 'COB'
-
 // ─── Entities ─────────────────────────────────────────────────────────────────
+
+export interface Company {
+  id: string
+  name: string
+  email_domain: string
+  is_internal: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface PurposeType {
+  id: string
+  name: string
+  description?: string
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface CaseType {
+  id: string
+  code: string
+  label: string
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface CaseCategory {
+  id: string
+  code: string
+  label: string
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface LegalMaterial {
+  id: string
+  title: string
+  excerpt?: string
+  content: string
+  created_by: string
+  updated_by: string
+  created_at: string
+  updated_at: string
+}
 
 export interface User {
   id: string
@@ -56,6 +89,10 @@ export interface User {
   status: UserStatus
   email_notifications: boolean
   two_fa_enabled: boolean
+  company_id: string
+  company_detail?: Company
+  purpose_type_id?: string
+  purpose_type_detail?: PurposeType
   created_at: string
   updated_at: string
 }
@@ -167,9 +204,11 @@ export interface LegalCase {
   case_summary?: string
   related_party_id: string
   related_party?: Cedant
-  category: CaseCategory
+  category_id: string
+  category?: CaseCategory
   specification?: string
-  case_type: LegalCaseType | string
+  case_type_id: string
+  case_type?: CaseType
   technical_reserve?: string
   case_value: number
   pic: string
@@ -181,6 +220,8 @@ export interface LegalCase {
   additional_notes?: string
   location_regency_id: string
   location_regency?: Regency
+  company_id: string
+  company?: Company
   chronologies?: CaseChronology[]
   created_at: string
   updated_at: string

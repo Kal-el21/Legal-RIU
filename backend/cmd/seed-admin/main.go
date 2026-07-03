@@ -4,12 +4,12 @@ import (
 	"errors"
 	"log"
 	"os"
-	"strings"
 
 	"legal-riu-portal/internal/config"
 	"legal-riu-portal/internal/entity"
 	"legal-riu-portal/internal/seed"
 
+	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
@@ -23,63 +23,40 @@ func main() {
 		defer sqlDB.Close()
 	}
 
-	if err := seed.PrepareLegalCasePICMigration(db); err != nil {
-		log.Fatalf("Legal case PIC migration preparation failed: %v", err)
+	if err := seed.RunAllMigrationsAndSeeds(db); err != nil {
+		log.Fatalf("Migration and seed failed: %v", err)
 	}
-	if err := db.AutoMigrate(
-		&entity.Division{},
-		&entity.User{},
-		&entity.RefreshToken{},
-		&entity.LegalOpinion{},
-		&entity.LegalOpinionAttachment{},
-		&entity.LegalOpinionResult{},
-		&entity.DocumentReview{},
-		&entity.DocumentReviewAttachment{},
-		&entity.DocumentReviewResult{},
-		&entity.Regency{},
-		&entity.Cedant{},
-		&entity.LegalCase{},
-		&entity.CaseChronology{},
-		&entity.AuditLog{},
-		&entity.NotificationSetting{},
-		&entity.UserSettings{},
-	); err != nil {
-		log.Fatalf("Migration failed: %v", err)
-	}
-	log.Println("Database migrated successfully")
-
-	if err := seed.SeedRegencies(db); err != nil {
-		log.Fatalf("Regency seed failed: %v", err)
-	}
-	log.Println("Regencies seeded successfully")
-
-	if err := seed.SeedDivisions(db); err != nil {
-		log.Fatalf("Division seed failed: %v", err)
-	}
-	log.Println("Divisions seeded successfully")
-
-	if err := seed.BackfillUserDivisionIDs(db); err != nil {
-		log.Fatalf("User division backfill failed: %v", err)
-	}
-
-	if err := seed.SeedNotificationSettings(db); err != nil {
-		log.Fatalf("Notification settings seed failed: %v", err)
-	}
-	log.Println("Notification settings seeded successfully")
 
 	email := getEnv("ADMIN_EMAIL", "admin@example.com")
 	password := getEnv("ADMIN_PASSWORD", "12345678")
 	adminDivision := getEnv("ADMIN_DIVISION", "Legal, compliance and risk management division")
 
-	admin := entity.User{
-		FullName: getEnv("ADMIN_FULL_NAME", "Super Admin"),
-		Email:    email,
-		Position: getEnv("ADMIN_POSITION", "Administrator"),
-		Division: adminDivision,
-		Role:     entity.RoleAdmin,
-		Status:   entity.UserActive,
+	companyID, err := seed.FindCompanyIDByDomain(db, email)
+	if err != nil {
+		log.Printf("Admin email domain does not match any company, using first available company: %v", err)
+		companyID, err = seed.FindFirstCompanyID(db)
+		if err != nil {
+			log.Fatalf("Failed to find fallback company for admin: %v", err)
+		}
 	}
-	if divisionID, err := seed.FindDivisionIDByName(db, adminDivision); err == nil {
+
+	divisionID, err := seed.FindDivisionIDByName(db, adminDivision)
+	if err != nil {
+		log.Printf("Admin division not found, leaving division_id empty: %v", err)
+	}
+
+	admin := entity.User{
+		FullName:           getEnv("ADMIN_FULL_NAME", "Super Admin"),
+		Email:              email,
+		Position:           getEnv("ADMIN_POSITION", "Administrator"),
+		Division:           adminDivision,
+		Role:               entity.RoleAdmin,
+		Status:             entity.UserActive,
+		EmailNotifications: true,
+		TwoFAEnabled:       false,
+		CompanyID:          &companyID,
+	}
+	if divisionID != uuid.Nil {
 		admin.DivisionID = &divisionID
 	}
 
@@ -92,6 +69,21 @@ func main() {
 		}
 		if existing.Status != entity.UserActive {
 			updates["status"] = entity.UserActive
+		}
+		if existing.EmailNotifications != true {
+			updates["email_notifications"] = true
+		}
+		if existing.TwoFAEnabled != false {
+			updates["two_fa_enabled"] = false
+		}
+		if companyID != uuid.Nil {
+			if existing.CompanyID == nil || *existing.CompanyID != companyID {
+				updates["company_id"] = companyID
+			}
+		} else {
+			if existing.CompanyID != nil {
+				updates["company_id"] = nil
+			}
 		}
 		if admin.DivisionID != nil && (existing.DivisionID == nil || *existing.DivisionID != *admin.DivisionID) {
 			updates["division"] = admin.Division
@@ -126,16 +118,8 @@ func main() {
 	log.Printf("Admin user %s created successfully", email)
 }
 
-func requiredEnv(key string) string {
-	value := strings.TrimSpace(os.Getenv(key))
-	if value == "" {
-		log.Fatalf("%s is required", key)
-	}
-	return value
-}
-
 func getEnv(key, fallback string) string {
-	value := strings.TrimSpace(os.Getenv(key))
+	value := os.Getenv(key)
 	if value == "" {
 		return fallback
 	}

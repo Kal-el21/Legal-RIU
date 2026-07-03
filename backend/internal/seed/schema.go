@@ -3,6 +3,7 @@ package seed
 import (
 	"errors"
 
+	"legal-riu-portal/internal/entity"
 	"gorm.io/gorm"
 )
 
@@ -37,4 +38,203 @@ func PrepareLegalCasePICMigration(db *gorm.DB) error {
 	}
 
 	return db.Exec(`ALTER TABLE legal_cases RENAME COLUMN pic TO pic_legacy`).Error
+}
+
+func BackfillLegalCaseTypeCategory(db *gorm.DB) error {
+	var caseTypeColCount int64
+	if err := db.Raw(`
+		SELECT COUNT(*)
+		FROM information_schema.columns
+		WHERE table_schema = current_schema()
+			AND table_name = 'legal_cases'
+			AND column_name = 'case_type'
+	`).Scan(&caseTypeColCount).Error; err != nil {
+		return err
+	}
+	if caseTypeColCount == 0 {
+		return nil
+	}
+
+	var categoryColCount int64
+	if err := db.Raw(`
+		SELECT COUNT(*)
+		FROM information_schema.columns
+		WHERE table_schema = current_schema()
+			AND table_name = 'legal_cases'
+			AND column_name = 'category'
+	`).Scan(&categoryColCount).Error; err != nil {
+		return err
+	}
+	if categoryColCount == 0 {
+		return nil
+	}
+
+	return db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Exec(`
+			UPDATE legal_cases lc
+			SET case_type_id = ct.id
+			FROM case_types ct
+			WHERE lc.case_type = ct.code
+		`).Error; err != nil {
+			return err
+		}
+
+		if err := tx.Exec(`
+			UPDATE legal_cases lc
+			SET category_id = cc.id
+			FROM case_categories cc
+			WHERE lc.category = cc.code
+		`).Error; err != nil {
+			return err
+		}
+
+		return nil
+	})
+}
+
+func DropOldLegalCaseColumns(db *gorm.DB) error {
+	var caseTypeColCount int64
+	if err := db.Raw(`
+		SELECT COUNT(*)
+		FROM information_schema.columns
+		WHERE table_schema = current_schema()
+			AND table_name = 'legal_cases'
+			AND column_name = 'case_type'
+	`).Scan(&caseTypeColCount).Error; err != nil {
+		return err
+	}
+	if caseTypeColCount == 0 {
+		return nil
+	}
+
+	var categoryColCount int64
+	if err := db.Raw(`
+		SELECT COUNT(*)
+		FROM information_schema.columns
+		WHERE table_schema = current_schema()
+			AND table_name = 'legal_cases'
+			AND column_name = 'category'
+	`).Scan(&categoryColCount).Error; err != nil {
+		return err
+	}
+	if categoryColCount == 0 {
+		return nil
+	}
+
+	if err := db.Exec(`ALTER TABLE legal_cases DROP COLUMN case_type`).Error; err != nil {
+		return err
+	}
+	return db.Exec(`ALTER TABLE legal_cases DROP COLUMN category`).Error
+}
+
+func BackfillLegalCaseDefaults(db *gorm.DB) error {
+	if err := db.Exec(`
+		UPDATE legal_cases
+		SET category_id = (SELECT id FROM case_categories LIMIT 1)
+		WHERE category_id IS NULL
+	`).Error; err != nil {
+		return err
+	}
+
+	if err := db.Exec(`
+		UPDATE legal_cases
+		SET case_type_id = (SELECT id FROM case_types LIMIT 1)
+		WHERE case_type_id IS NULL
+	`).Error; err != nil {
+		return err
+	}
+
+	if err := db.Exec(`
+		UPDATE legal_cases
+		SET company_id = (SELECT id FROM companies LIMIT 1)
+		WHERE company_id IS NULL
+	`).Error; err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func EnforceLegalCaseNotNull(db *gorm.DB) error {
+	if err := db.Exec(`ALTER TABLE legal_cases ALTER COLUMN category_id SET NOT NULL`).Error; err != nil {
+		return err
+	}
+	if err := db.Exec(`ALTER TABLE legal_cases ALTER COLUMN case_type_id SET NOT NULL`).Error; err != nil {
+		return err
+	}
+	if err := db.Exec(`ALTER TABLE legal_cases ALTER COLUMN company_id SET NOT NULL`).Error; err != nil {
+		return err
+	}
+	return nil
+}
+
+func RunAllMigrationsAndSeeds(db *gorm.DB) error {
+	if err := PrepareLegalCasePICMigration(db); err != nil {
+		return err
+	}
+	if err := db.AutoMigrate(
+		&entity.Division{},
+		&entity.User{},
+		&entity.RefreshToken{},
+		&entity.LegalOpinion{},
+		&entity.LegalOpinionAttachment{},
+		&entity.LegalOpinionResult{},
+		&entity.DocumentReview{},
+		&entity.DocumentReviewAttachment{},
+		&entity.DocumentReviewResult{},
+		&entity.Regency{},
+		&entity.Cedant{},
+		&entity.LegalCase{},
+		&entity.CaseChronology{},
+		&entity.AuditLog{},
+		&entity.NotificationSetting{},
+		&entity.UserSettings{},
+		&entity.Company{},
+		&entity.PurposeType{},
+		&entity.CaseType{},
+		&entity.CaseCategory{},
+		&entity.LegalMaterial{},
+	); err != nil {
+		return err
+	}
+
+	if err := BackfillLegalCaseTypeCategory(db); err != nil {
+		return err
+	}
+	if err := DropOldLegalCaseColumns(db); err != nil {
+		return err
+	}
+
+	if err := SeedRegencies(db); err != nil {
+		return err
+	}
+	if err := SeedDivisions(db); err != nil {
+		return err
+	}
+	if err := BackfillUserDivisionIDs(db); err != nil {
+		return err
+	}
+	if err := SeedCompanies(db); err != nil {
+		return err
+	}
+	if err := SeedPurposeTypes(db); err != nil {
+		return err
+	}
+	if err := SeedCaseTypes(db); err != nil {
+		return err
+	}
+	if err := SeedCaseCategories(db); err != nil {
+		return err
+	}
+	if err := BackfillLegalCaseDefaults(db); err != nil {
+		return err
+	}
+	if err := EnforceLegalCaseNotNull(db); err != nil {
+		return err
+	}
+	if err := SeedNotificationSettings(db); err != nil {
+		return err
+	}
+
+	return nil
 }

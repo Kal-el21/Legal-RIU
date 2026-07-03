@@ -1,6 +1,6 @@
 import api from './api'
 import { useAuthStore } from '@/store/auth.store'
-import type { ApiResponse, CaseChronology, Cedant, Division, LegalCase, PaginatedData, Regency } from '@/types'
+import type { ApiResponse, CaseChronology, Cedant, Company, Division, LegalCase, PaginatedData, Regency, CaseType, CaseCategory, PurposeType } from '@/types'
 
 export interface LegalCaseFilters {
   page?: number
@@ -17,9 +17,9 @@ export interface LegalCaseFormData {
   case_name: string
   case_summary?: string
   related_party_id: string
-  category: string
+  category_id: string
   specification?: string
-  case_type: string
+  case_type_id: string
   technical_reserve?: string
   case_value: number
   pic: string
@@ -29,6 +29,7 @@ export interface LegalCaseFormData {
   level: string
   additional_notes?: string
   location_regency_id: string
+  company_id: string
 }
 
 export interface ChronologyFormData {
@@ -44,6 +45,7 @@ export function getLegalCaseRouteBase() {
   const pathname = typeof window === 'undefined' ? '' : window.location.pathname
   if (role === 'LEGAL' || pathname.startsWith('/legal')) return '/legal/legal-cases'
   if (role === 'EXTERNAL' || pathname.startsWith('/external')) return '/external/legal-cases'
+  if (role === 'LEGAL_AU' || pathname.startsWith('/legal-au')) return '/legal-au/cases'
   return '/admin/legal-cases'
 }
 
@@ -151,5 +153,81 @@ export const legalCaseService = {
   getDivisions: async (params?: { search?: string }) => {
     const res = await api.get<ApiResponse<Division[]>>('/divisions', { params })
     return res.data.data ?? []
+  },
+
+  getCaseTypes: async () => {
+    const res = await api.get<ApiResponse<CaseType[]>>('/admin/case-types')
+    return res.data.data ?? []
+  },
+
+  getCaseCategories: async () => {
+    const res = await api.get<ApiResponse<CaseCategory[]>>('/admin/case-categories')
+    return res.data.data ?? []
+  },
+
+  getCompanies: async () => {
+    const res = await api.get<ApiResponse<Company[]>>('/admin/companies')
+    return res.data.data ?? []
+  },
+
+  getPurposeTypes: async () => {
+    const res = await api.get<ApiResponse<PurposeType[]>>('/admin/purpose-types')
+    return res.data.data ?? []
+  },
+
+  createCompany: async (data: { name: string; email_domain: string; is_internal: boolean }) => {
+    const res = await api.post<ApiResponse<Company>>('/admin/companies', data)
+    return res.data.data!
+  },
+
+  updateCompany: async (id: string, data: { name: string; email_domain: string; is_internal: boolean }) => {
+    const res = await api.put<ApiResponse<Company>>(`/admin/companies/${id}`, data)
+    return res.data.data!
+  },
+
+  deleteCompany: async (id: string) => {
+    await api.delete(`/admin/companies/${id}`)
+  },
+
+  createPurposeType: async (data: { name: string; description?: string; is_active?: boolean }) => {
+    const res = await api.post<ApiResponse<PurposeType>>('/admin/purpose-types', data)
+    return res.data.data!
+  },
+
+  updatePurposeType: async (id: string, data: { name: string; description?: string; is_active?: boolean }) => {
+    const res = await api.put<ApiResponse<PurposeType>>(`/admin/purpose-types/${id}`, data)
+    return res.data.data!
+  },
+
+  deletePurposeType: async (id: string) => {
+    await api.delete(`/admin/purpose-types/${id}`)
+  },
+
+  createCaseType: async (data: { code: string; label: string; is_active?: boolean }) => {
+    const res = await api.post<ApiResponse<CaseType>>('/admin/case-types', data)
+    return res.data.data!
+  },
+
+  updateCaseType: async (id: string, data: { code: string; label: string; is_active?: boolean }) => {
+    const res = await api.put<ApiResponse<CaseType>>(`/admin/case-types/${id}`, data)
+    return res.data.data!
+  },
+
+  deleteCaseType: async (id: string) => {
+    await api.delete(`/admin/case-types/${id}`)
+  },
+
+  createCaseCategory: async (data: { code: string; label: string; is_active?: boolean }) => {
+    const res = await api.post<ApiResponse<CaseCategory>>('/admin/case-categories', data)
+    return res.data.data!
+  },
+
+  updateCaseCategory: async (id: string, data: { code: string; label: string; is_active?: boolean }) => {
+    const res = await api.put<ApiResponse<CaseCategory>>(`/admin/case-categories/${id}`, data)
+    return res.data.data!
+  },
+
+  deleteCaseCategory: async (id: string) => {
+    await api.delete(`/admin/case-categories/${id}`)
   },
 }

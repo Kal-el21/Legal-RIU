@@ -20,10 +20,10 @@ import (
 )
 
 type LegalCaseService interface {
-	Create(req dto.CreateLegalCaseRequest) (*dto.LegalCaseResponse, error)
-	GetAll(query dto.LegalCaseListQuery) ([]dto.LegalCaseResponse, int64, error)
-	GetLatest() (*dto.LegalCaseResponse, error)
-	GetByID(id string) (*dto.LegalCaseResponse, error)
+	Create(companyID *uuid.UUID, req dto.CreateLegalCaseRequest) (*dto.LegalCaseResponse, error)
+	GetAll(companyID *uuid.UUID, query dto.LegalCaseListQuery) ([]dto.LegalCaseResponse, int64, error)
+	GetLatest(companyID *uuid.UUID) (*dto.LegalCaseResponse, error)
+	GetByID(companyID *uuid.UUID, id string) (*dto.LegalCaseResponse, error)
 	Update(id string, req dto.UpdateLegalCaseRequest) (*dto.LegalCaseResponse, error)
 	Delete(id string) error
 
@@ -51,8 +51,8 @@ func NewLegalCaseService(repo repository.LegalCaseRepository, s *storage.MinIOCl
 	return &legalCaseService{repo: repo, storage: s}
 }
 
-func (s *legalCaseService) Create(req dto.CreateLegalCaseRequest) (*dto.LegalCaseResponse, error) {
-	legalCase, err := s.buildLegalCase(req)
+func (s *legalCaseService) Create(companyID *uuid.UUID, req dto.CreateLegalCaseRequest) (*dto.LegalCaseResponse, error) {
+	legalCase, err := s.buildLegalCase(companyID, req)
 	if err != nil {
 		return nil, err
 	}
@@ -69,7 +69,7 @@ func (s *legalCaseService) Create(req dto.CreateLegalCaseRequest) (*dto.LegalCas
 	return &response, nil
 }
 
-func (s *legalCaseService) GetAll(query dto.LegalCaseListQuery) ([]dto.LegalCaseResponse, int64, error) {
+func (s *legalCaseService) GetAll(companyID *uuid.UUID, query dto.LegalCaseListQuery) ([]dto.LegalCaseResponse, int64, error) {
 	dateFrom, err := parseOptionalDate(query.DateFrom)
 	if err != nil {
 		return nil, 0, errors.New("tanggal awal tidak valid")
@@ -80,14 +80,15 @@ func (s *legalCaseService) GetAll(query dto.LegalCaseListQuery) ([]dto.LegalCase
 	}
 
 	filter := repository.LegalCaseFilter{
-		Search:   query.Search,
-		Status:   query.Status,
-		CaseType: query.CaseType,
-		Level:    query.Level,
-		DateFrom: dateFrom,
-		DateTo:   dateTo,
-		Page:     query.Page,
-		Limit:    query.Limit,
+		Search:    query.Search,
+		Status:    query.Status,
+		CaseType:  query.CaseType,
+		Level:     query.Level,
+		CompanyID: companyID,
+		DateFrom:  dateFrom,
+		DateTo:    dateTo,
+		Page:      query.Page,
+		Limit:     query.Limit,
 	}
 
 	items, total, err := s.repo.FindAll(filter)
@@ -103,16 +104,17 @@ func (s *legalCaseService) GetAll(query dto.LegalCaseListQuery) ([]dto.LegalCase
 	return responses, total, nil
 }
 
-func (s *legalCaseService) GetLatest() (*dto.LegalCaseResponse, error) {
-	legalCase, err := s.repo.FindLatest()
-	if err != nil {
+func (s *legalCaseService) GetLatest(companyID *uuid.UUID) (*dto.LegalCaseResponse, error) {
+	filter := repository.LegalCaseFilter{CompanyID: companyID, Limit: 1}
+	items, _, err := s.repo.FindAll(filter)
+	if err != nil || len(items) == 0 {
 		return nil, errors.New("kasus terbaru tidak ditemukan")
 	}
-	response := toLegalCaseResponse(legalCase, false)
+	response := toLegalCaseResponse(&items[0], false)
 	return &response, nil
 }
 
-func (s *legalCaseService) GetByID(id string) (*dto.LegalCaseResponse, error) {
+func (s *legalCaseService) GetByID(companyID *uuid.UUID, id string) (*dto.LegalCaseResponse, error) {
 	uid, err := parseUUID(id)
 	if err != nil {
 		return nil, errors.New("ID tidak valid")
@@ -138,7 +140,7 @@ func (s *legalCaseService) Update(id string, req dto.UpdateLegalCaseRequest) (*d
 		return nil, errors.New("kasus hukum tidak ditemukan")
 	}
 
-	updated, err := s.buildLegalCase(req)
+	updated, err := s.buildLegalCase(existing.CompanyID, req)
 	if err != nil {
 		return nil, err
 	}
@@ -146,9 +148,9 @@ func (s *legalCaseService) Update(id string, req dto.UpdateLegalCaseRequest) (*d
 	existing.CaseName = updated.CaseName
 	existing.CaseSummary = updated.CaseSummary
 	existing.RelatedPartyID = updated.RelatedPartyID
-	existing.Category = updated.Category
+	existing.CategoryID = updated.CategoryID
 	existing.Specification = updated.Specification
-	existing.CaseType = updated.CaseType
+	existing.CaseTypeID = updated.CaseTypeID
 	existing.TechnicalReserve = updated.TechnicalReserve
 	existing.CaseValue = updated.CaseValue
 	existing.PIC = updated.PIC
@@ -457,7 +459,7 @@ func (s *legalCaseService) DeleteDocument(caseID string) (*dto.LegalCaseResponse
 	return &response, nil
 }
 
-func (s *legalCaseService) buildLegalCase(req dto.CreateLegalCaseRequest) (*entity.LegalCase, error) {
+func (s *legalCaseService) buildLegalCase(companyID *uuid.UUID, req dto.CreateLegalCaseRequest) (*entity.LegalCase, error) {
 	caseDate, err := parseRequiredDate(req.CaseDate)
 	if err != nil {
 		return nil, errors.New("tanggal kasus tidak valid")
@@ -479,9 +481,20 @@ func (s *legalCaseService) buildLegalCase(req dto.CreateLegalCaseRequest) (*enti
 		return nil, errors.New("lokasi kabupaten/kota tidak ditemukan")
 	}
 
-	caseType := entity.LegalCaseType(req.CaseType)
-	if !isValidLegalCaseType(caseType) {
+	categoryID, err := parseUUID(req.CategoryID)
+	if err != nil {
+		return nil, errors.New("kategori tidak valid")
+	}
+	if _, err := s.repo.FindCaseCategoryByID(categoryID); err != nil {
+		return nil, errors.New("kategori tidak ditemukan")
+	}
+
+	caseTypeID, err := parseUUID(req.CaseTypeID)
+	if err != nil {
 		return nil, errors.New("jenis kasus tidak valid")
+	}
+	if _, err := s.repo.FindCaseTypeByID(caseTypeID); err != nil {
+		return nil, errors.New("jenis kasus tidak ditemukan")
 	}
 
 	picID, err := parseUUID(req.PIC)
@@ -496,9 +509,9 @@ func (s *legalCaseService) buildLegalCase(req dto.CreateLegalCaseRequest) (*enti
 		CaseName:          strings.TrimSpace(req.CaseName),
 		CaseSummary:       req.CaseSummary,
 		RelatedPartyID:    relatedPartyID,
-		Category:          strings.TrimSpace(req.Category),
+		CategoryID:        &categoryID,
 		Specification:     req.Specification,
-		CaseType:          caseType,
+		CaseTypeID:        &caseTypeID,
 		TechnicalReserve:  req.TechnicalReserve,
 		CaseValue:         req.CaseValue,
 		PIC:               picID,
@@ -508,9 +521,10 @@ func (s *legalCaseService) buildLegalCase(req dto.CreateLegalCaseRequest) (*enti
 		Level:             strings.TrimSpace(req.Level),
 		AdditionalNotes:   req.AdditionalNotes,
 		LocationRegencyID: locationRegencyID,
+		CompanyID:         companyID,
 	}
 
-	if legalCase.CaseName == "" || legalCase.Category == "" || legalCase.PIC == uuid.Nil || legalCase.Level == "" {
+	if legalCase.CaseName == "" || legalCase.PIC == uuid.Nil || legalCase.Level == "" {
 		return nil, errors.New("field wajib belum lengkap")
 	}
 
@@ -559,20 +573,6 @@ func parseOptionalDate(value string) (*time.Time, error) {
 	return &parsed, nil
 }
 
-func isValidLegalCaseType(caseType entity.LegalCaseType) bool {
-	switch caseType {
-	case entity.CaseTypeNonLitigasi,
-		entity.CaseTypePerdata,
-		entity.CaseTypePidana,
-		entity.CaseTypeTipekor,
-		entity.CaseTypeArbitrase,
-		entity.CaseTypeTUN:
-		return true
-	default:
-		return false
-	}
-}
-
 func encodeDocuments(documents []string) string {
 	if len(documents) == 0 {
 		return "[]"
@@ -596,14 +596,27 @@ func decodeDocuments(value string) []string {
 }
 
 func toLegalCaseResponse(legalCase *entity.LegalCase, includeChronologies bool) dto.LegalCaseResponse {
+	categoryID := ""
+	if legalCase.CategoryID != nil {
+		categoryID = legalCase.CategoryID.String()
+	}
+	caseTypeID := ""
+	if legalCase.CaseTypeID != nil {
+		caseTypeID = legalCase.CaseTypeID.String()
+	}
+	companyID := ""
+	if legalCase.CompanyID != nil {
+		companyID = legalCase.CompanyID.String()
+	}
+
 	response := dto.LegalCaseResponse{
 		ID:                legalCase.ID.String(),
 		CaseName:          legalCase.CaseName,
 		CaseSummary:       legalCase.CaseSummary,
 		RelatedPartyID:    legalCase.RelatedPartyID.String(),
-		Category:          legalCase.Category,
+		CategoryID:        categoryID,
 		Specification:     legalCase.Specification,
-		CaseType:          string(legalCase.CaseType),
+		CaseTypeID:        caseTypeID,
 		TechnicalReserve:  legalCase.TechnicalReserve,
 		CaseValue:         legalCase.CaseValue,
 		PIC:               legalCase.PIC.String(),
@@ -613,6 +626,7 @@ func toLegalCaseResponse(legalCase *entity.LegalCase, includeChronologies bool) 
 		Level:             legalCase.Level,
 		AdditionalNotes:   legalCase.AdditionalNotes,
 		LocationRegencyID: legalCase.LocationRegencyID.String(),
+		CompanyID:         companyID,
 		CreatedAt:         legalCase.CreatedAt,
 		UpdatedAt:         legalCase.UpdatedAt,
 		PICDivision:       toDivisionResponsePointer(&legalCase.PICDivision),
@@ -626,6 +640,18 @@ func toLegalCaseResponse(legalCase *entity.LegalCase, includeChronologies bool) 
 		location := toRegencyResponse(&legalCase.LocationRegency)
 		response.LocationRegency = &location
 	}
+	if legalCase.CaseTypeRef.ID != uuid.Nil {
+		caseType := toCaseTypeResponse(&legalCase.CaseTypeRef)
+		response.CaseType = &caseType
+	}
+	if legalCase.CategoryRef.ID != uuid.Nil {
+		category := toCaseCategoryResponse(&legalCase.CategoryRef)
+		response.Category = &category
+	}
+	if legalCase.Company.ID != uuid.Nil {
+		company := toCompanyResponse(&legalCase.Company)
+		response.Company = &company
+	}
 	if includeChronologies {
 		response.Chronologies = make([]dto.CaseChronologyResponse, 0, len(legalCase.Chronologies))
 		for i := range legalCase.Chronologies {
@@ -634,24 +660,6 @@ func toLegalCaseResponse(legalCase *entity.LegalCase, includeChronologies bool) 
 	}
 
 	return response
-}
-
-func toDivisionResponse(division *entity.Division) dto.DivisionResponse {
-	return dto.DivisionResponse{
-		ID:          division.ID.String(),
-		Name:        division.Name,
-		Description: division.Description,
-		CreatedAt:   division.CreatedAt,
-		UpdatedAt:   division.UpdatedAt,
-	}
-}
-
-func toDivisionResponsePointer(division *entity.Division) *dto.DivisionResponse {
-	if division == nil || division.ID == uuid.Nil {
-		return nil
-	}
-	resp := toDivisionResponse(division)
-	return &resp
 }
 
 func toCaseChronologyResponse(chronology *entity.CaseChronology) dto.CaseChronologyResponse {
