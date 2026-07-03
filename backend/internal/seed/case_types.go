@@ -30,7 +30,7 @@ func SeedCaseTypes(db *gorm.DB) error {
 		})
 	}
 	return db.Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "code"}, {Name: "label"}},
+		Columns:   []clause.Column{{Name: "id"}},
 		DoNothing: true,
 	}).CreateInBatches(items, 100).Error
 }
