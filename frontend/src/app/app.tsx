@@ -25,7 +25,19 @@ export default function App() {
         },
       })
       .then((res) => {
-        useAuthStore.getState().setAuth(res.data.data!)
+        const user = res.data.data!
+        api
+          .get<ApiResponse<string[]>>('/auth/permissions', {
+            headers: {
+              'X-Skip-Auth-Redirect': 'true',
+            },
+          })
+          .then((permissionRes) => {
+            useAuthStore.getState().setAuth(user, permissionRes.data.data ?? [])
+          })
+          .catch(() => {
+            useAuthStore.getState().setAuth(user)
+          })
       })
       .catch(() => {
         // Ignore. User belum login atau session expired.

@@ -19,6 +19,7 @@ type AuthService interface {
 	RefreshToken(req dto.RefreshTokenRequest) (*dto.LoginResponse, error)
 	Logout(req dto.LogoutRequest) error
 	GetUserByID(id string) (*dto.UserResponse, error)
+	GetPermissions(userID string) ([]string, error)
 	ChangePassword(userID string, req dto.ChangePasswordRequest) error
 	UpdateProfile(userID string, req dto.UpdateProfileRequest) (*dto.UserResponse, error)
 	UpdateNotification(userID string, req dto.UpdateNotificationRequest) error
@@ -29,10 +30,11 @@ type authService struct {
 	userRepo         repository.UserRepository
 	refreshTokenRepo repository.RefreshTokenRepository
 	cfg              *config.Config
+	permissionSvc    PermissionService
 }
 
-func NewAuthService(userRepo repository.UserRepository, refreshTokenRepo repository.RefreshTokenRepository, cfg *config.Config) AuthService {
-	return &authService{userRepo: userRepo, refreshTokenRepo: refreshTokenRepo, cfg: cfg}
+func NewAuthService(userRepo repository.UserRepository, refreshTokenRepo repository.RefreshTokenRepository, cfg *config.Config, permissionSvc PermissionService) AuthService {
+	return &authService{userRepo: userRepo, refreshTokenRepo: refreshTokenRepo, cfg: cfg, permissionSvc: permissionSvc}
 }
 
 func (s *authService) Login(req dto.LoginRequest, ipAddress, userAgent *string) (*dto.LoginResponse, error) {
@@ -91,6 +93,22 @@ func (s *authService) GetUserByID(id string) (*dto.UserResponse, error) {
 
 	res := toUserResponse(user)
 	return &res, nil
+}
+
+func (s *authService) GetPermissions(userID string) ([]string, error) {
+	uid, err := parseUUID(userID)
+	if err != nil {
+		return nil, errors.New("user tidak ditemukan")
+	}
+
+	user, err := s.userRepo.FindByID(uid)
+	if err != nil {
+		return nil, errors.New("user tidak ditemukan")
+	}
+	if s.permissionSvc == nil {
+		return []string{}, nil
+	}
+	return s.permissionSvc.GetEffectivePermissionCodes(user.ID.String(), string(user.Role))
 }
 
 func (s *authService) ChangePassword(userID string, req dto.ChangePasswordRequest) error {
@@ -194,10 +212,16 @@ func (s *authService) issueTokens(user *entity.User, ipAddress, userAgent *strin
 		return nil, errors.New("gagal menyimpan sesi")
 	}
 
+	permissions := []string{}
+	if s.permissionSvc != nil {
+		permissions, _ = s.permissionSvc.GetEffectivePermissionCodes(user.ID.String(), string(user.Role))
+	}
+
 	return &dto.LoginResponse{
 		Token:        accessToken,
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 		User:         toUserResponse(user),
+		Permissions:  permissions,
 	}, nil
 }

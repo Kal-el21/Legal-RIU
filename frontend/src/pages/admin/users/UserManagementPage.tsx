@@ -11,6 +11,7 @@ import { useUsers, useCreateUser, useUpdateUser, useUpdateUserStatus, useResetPa
 import { useCompanies, useDivisions } from '@/hooks/useLegalCase'
 import { formatDate } from '@/lib/utils'
 import type { User } from '@/types'
+import UserPermissionModal from './UserPermissionModal'
 
 // ── Schemas ───────────────────────────────────────────────────────────────────
 
@@ -93,7 +94,7 @@ function Field({ label, error, children }: { label: string; error?: string; chil
 export default function UserManagementPage() {
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
-  const [modal, setModal] = useState<'create' | 'edit' | 'reset' | null>(null)
+  const [modal, setModal] = useState<'create' | 'edit' | 'reset' | 'permissions' | null>(null)
   const [selected, setSelected] = useState<User | null>(null)
 
   const { data, isLoading } = useUsers({ page, limit: 10, search })
@@ -146,6 +147,11 @@ export default function UserManagementPage() {
     setSelected(user)
     resetForm.reset()
     setModal('reset')
+  }
+
+  const openPermissions = (user: User) => {
+    setSelected(user)
+    setModal('permissions')
   }
 
   const closeModal = () => { setModal(null); setSelected(null); createForm.reset({ role: 'USER', company_id: getDefaultCompanyForRole('USER') }) }
@@ -284,6 +290,10 @@ export default function UserManagementPage() {
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-1 justify-end">
+                      <button onClick={() => openPermissions(user)} title="Permission"
+                        className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-700">
+                        <Shield className="w-4 h-4" />
+                      </button>
                       <button onClick={() => openEdit(user)} title="Edit"
                         className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-700">
                         <Edit className="w-4 h-4" />
@@ -490,6 +500,10 @@ export default function UserManagementPage() {
       )}
 
       {/* ── Reset Password Modal ─────────────────────────────────────────── */}
+      {modal === 'permissions' && selected && (
+        <UserPermissionModal user={selected} onClose={closeModal} />
+      )}
+
       {modal === 'reset' && selected && (
         <Modal title={`Reset Password — ${selected.full_name}`} onClose={closeModal}>
           <form onSubmit={resetForm.handleSubmit(onResetSubmit)} className="space-y-4">

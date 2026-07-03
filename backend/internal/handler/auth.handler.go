@@ -156,6 +156,17 @@ func (h *AuthHandler) Me(c *gin.Context) {
 	utils.OK(c, "Success", user)
 }
 
+// GET /api/v1/auth/permissions
+func (h *AuthHandler) Permissions(c *gin.Context) {
+	userID := middleware.GetUserID(c)
+	permissions, err := h.authService.GetPermissions(userID)
+	if err != nil {
+		utils.NotFound(c, "User tidak ditemukan")
+		return
+	}
+	utils.OK(c, "Success", permissions)
+}
+
 // POST /api/v1/auth/change-password
 func (h *AuthHandler) ChangePassword(c *gin.Context) {
 	var req dto.ChangePasswordRequest

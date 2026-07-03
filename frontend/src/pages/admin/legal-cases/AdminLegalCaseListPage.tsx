@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useDeleteLegalCase, useLatestLegalCase, useLegalCases, useLegalCase } from '@/hooks/useLegalCase'
 import { formatDate, formatDateTime } from '@/lib/utils'
 import { getLegalCaseRouteBase } from '@/services/legal-case.service'
+import { useAuthStore } from '@/store/auth.store'
 import type { CaseChronology, LegalCase } from '@/types'
 import LegalCaseFormDialog from './components/LegalCaseFormDialog'
 
@@ -71,6 +72,10 @@ export default function AdminLegalCaseListPage() {
   const deleteMutation = useDeleteLegalCase()
   const { data: hoveredCase } = useLegalCase(hoveredCaseId ?? '')
   const caseRouteBase = getLegalCaseRouteBase()
+  const hasPermission = useAuthStore((state) => state.hasPermission)
+  const canCreate = hasPermission('case_management.create')
+  const canUpdate = hasPermission('case_management.update')
+  const canDelete = hasPermission('case_management.delete')
 
   const handleEdit = (legalCase: LegalCase) => {
     setEditingCase(legalCase)
@@ -103,10 +108,12 @@ export default function AdminLegalCaseListPage() {
             </div>
           </div>
         </div>
-        <Button onClick={handleCreate} className="text-white" style={{ background: '#C8102E' }}>
-          <Plus className="h-4 w-4" />
-          Tambah Kasus
-        </Button>
+        {canCreate && (
+          <Button onClick={handleCreate} className="text-white" style={{ background: '#C8102E' }}>
+            <Plus className="h-4 w-4" />
+            Tambah Kasus
+          </Button>
+        )}
       </div>
 
       <section className="mb-5 rounded-2xl border border-gray-100 bg-white p-5">
@@ -200,12 +207,16 @@ export default function AdminLegalCaseListPage() {
                       <Link to={`${caseRouteBase}/${item.id}`} className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700" title="View">
                         <Eye className="h-4 w-4" />
                       </Link>
-                      <button onClick={() => handleEdit(item)} className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700" title="Edit">
-                        <Edit className="h-4 w-4" />
-                      </button>
-                      <button onClick={() => handleDelete(item.id)} className="rounded-lg p-2 text-gray-400 hover:bg-red-50 hover:text-red-600" title="Delete">
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                      {canUpdate && (
+                        <button onClick={() => handleEdit(item)} className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700" title="Edit">
+                          <Edit className="h-4 w-4" />
+                        </button>
+                      )}
+                      {canDelete && (
+                        <button onClick={() => handleDelete(item.id)} className="rounded-lg p-2 text-gray-400 hover:bg-red-50 hover:text-red-600" title="Delete">
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>

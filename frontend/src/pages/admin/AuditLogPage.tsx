@@ -13,6 +13,7 @@ const ACTION_COLORS: Record<AuditAction, { bg: string; text: string }> = {
   LOGOUT:        { bg: '#EDE9FE', text: '#5B21B6' },
   DELETE:        { bg: '#FEE2E2', text: '#991B1B' },
   FILE_DELETE:   { bg: '#FEE2E2', text: '#991B1B' },
+  PERMISSION_UPDATE: { bg: '#ECFDF5', text: '#047857' },
 }
 
 function Badge({ action, className }: { action: AuditAction; className?: string }) {
@@ -109,6 +110,7 @@ export default function AuditLogPage() {
                 <option value="LOGOUT">Logout</option>
                 <option value="DELETE">Delete</option>
                 <option value="FILE_DELETE">File Delete</option>
+                <option value="PERMISSION_UPDATE">Permission Update</option>
               </select>
             </div>
             <div>

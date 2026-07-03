@@ -256,6 +256,37 @@ export interface AuthResponse {
   access_token?: string
   refresh_token: string
   user: User
+  permissions?: string[]
+}
+
+export type PermissionEffect = 'ALLOW' | 'DENY'
+
+export interface Permission {
+  id: string
+  code: string
+  feature: string
+  action: string
+  scope: string
+  label: string
+  description?: string
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface UserPermissionOverride {
+  code: string
+  effect: PermissionEffect
+  updated_at: string
+}
+
+export interface UserPermissionAccess {
+  user_id: string
+  role: UserRole
+  permissions: Permission[]
+  role_permissions: string[]
+  overrides: UserPermissionOverride[]
+  effective_permissions: string[]
 }
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
@@ -285,6 +316,7 @@ export type AuditAction =
   | 'LOGOUT'
   | 'DELETE'
   | 'FILE_DELETE'
+  | 'PERMISSION_UPDATE'
 
 export interface AuditLog {
   id: string

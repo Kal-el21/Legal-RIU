@@ -12,6 +12,7 @@ type LoginResponse struct {
 	AccessToken  string       `json:"access_token"`
 	RefreshToken string       `json:"refresh_token"`
 	User         UserResponse `json:"user"`
+	Permissions  []string     `json:"permissions"`
 }
 
 type RefreshTokenRequest struct {
@@ -30,40 +31,40 @@ type ChangePasswordRequest struct {
 // ─── User ─────────────────────────────────────────────────────────────────────
 
 type UserResponse struct {
-	ID                 string            `json:"id"`
-	FullName           string            `json:"full_name"`
-	Email              string            `json:"email"`
-	Position           string            `json:"position"`
-	Division           string            `json:"division"`
-	DivisionID         string            `json:"division_id,omitempty"`
-	DivisionDetail     *DivisionResponse `json:"division_detail,omitempty"`
-	Role               string            `json:"role"`
-	Status             string            `json:"status"`
-	EmailNotifications bool              `json:"email_notifications"`
-	TwoFAEnabled       bool              `json:"two_fa_enabled"`
-	CompanyID          string            `json:"company_id"`
-	Company            *CompanyResponse  `json:"company,omitempty"`
-	PurposeTypeID      string            `json:"purpose_type_id,omitempty"`
+	ID                 string               `json:"id"`
+	FullName           string               `json:"full_name"`
+	Email              string               `json:"email"`
+	Position           string               `json:"position"`
+	Division           string               `json:"division"`
+	DivisionID         string               `json:"division_id,omitempty"`
+	DivisionDetail     *DivisionResponse    `json:"division_detail,omitempty"`
+	Role               string               `json:"role"`
+	Status             string               `json:"status"`
+	EmailNotifications bool                 `json:"email_notifications"`
+	TwoFAEnabled       bool                 `json:"two_fa_enabled"`
+	CompanyID          string               `json:"company_id"`
+	Company            *CompanyResponse     `json:"company,omitempty"`
+	PurposeTypeID      string               `json:"purpose_type_id,omitempty"`
 	PurposeType        *PurposeTypeResponse `json:"purpose_type,omitempty"`
 }
 
 type CreateUserRequest struct {
-	FullName     string `json:"full_name" binding:"required"`
-	Email        string `json:"email" binding:"required,email"`
-	Password     string `json:"password" binding:"required,min=8"`
-	Position     string `json:"position" binding:"required"`
-	Division     string `json:"division" binding:"required"`
-	Role         string `json:"role" binding:"required,oneof=USER ADMIN LEGAL EXTERNAL LEGAL_AU"`
-	CompanyID    string `json:"company_id"`
+	FullName      string `json:"full_name" binding:"required"`
+	Email         string `json:"email" binding:"required,email"`
+	Password      string `json:"password" binding:"required,min=8"`
+	Position      string `json:"position" binding:"required"`
+	Division      string `json:"division" binding:"required"`
+	Role          string `json:"role" binding:"required,oneof=USER ADMIN LEGAL EXTERNAL LEGAL_AU"`
+	CompanyID     string `json:"company_id"`
 	PurposeTypeID string `json:"purpose_type_id"`
 }
 
 type UpdateUserRequest struct {
-	FullName     string `json:"full_name" binding:"required"`
-	Position     string `json:"position" binding:"required"`
-	Division     string `json:"division" binding:"required"`
-	Role         string `json:"role" binding:"omitempty,oneof=USER ADMIN LEGAL EXTERNAL LEGAL_AU"`
-	CompanyID    string `json:"company_id"`
+	FullName      string `json:"full_name" binding:"required"`
+	Position      string `json:"position" binding:"required"`
+	Division      string `json:"division" binding:"required"`
+	Role          string `json:"role" binding:"omitempty,oneof=USER ADMIN LEGAL EXTERNAL LEGAL_AU"`
+	CompanyID     string `json:"company_id"`
 	PurposeTypeID string `json:"purpose_type_id"`
 }
 

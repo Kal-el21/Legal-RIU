@@ -28,6 +28,7 @@ func (b *Base) BeforeCreate(tx *gorm.DB) error {
 type UserRole string
 type UserStatus string
 type SubmissionStatus string
+type PermissionEffect string
 
 const (
 	RoleUser     UserRole = "USER"
@@ -45,26 +46,29 @@ const (
 	StatusRejected     SubmissionStatus = "REJECTED"
 	StatusResubmitted  SubmissionStatus = "RESUBMITTED"
 	StatusCompleted    SubmissionStatus = "COMPLETED"
+
+	PermissionAllow PermissionEffect = "ALLOW"
+	PermissionDeny  PermissionEffect = "DENY"
 )
 
 // ─── User ─────────────────────────────────────────────────────────────────────
 
 type User struct {
 	Base
-	FullName           string     `gorm:"not null" json:"full_name"`
-	Email              string     `gorm:"uniqueIndex;not null" json:"email"`
-	PasswordHash       string     `gorm:"not null" json:"-"`
-	Position           string     `gorm:"not null" json:"position"`
-	Division           string     `gorm:"not null" json:"division"`
-	DivisionID         *uuid.UUID `gorm:"type:uuid;index" json:"division_id,omitempty"`
-	DivisionRef        Division   `gorm:"foreignKey:DivisionID;constraint:OnUpdate:CASCADE,OnDelete:SET NULL;" json:"division_ref,omitempty"`
-	Role               UserRole   `gorm:"not null;default:'USER'" json:"role"`
-	Status             UserStatus `gorm:"not null;default:'ACTIVE'" json:"status"`
-	EmailNotifications bool       `gorm:"not null;default:true" json:"email_notifications"`
-	TwoFAEnabled       bool       `gorm:"not null;default:false" json:"two_fa_enabled"`
-	CompanyID          *uuid.UUID `gorm:"type:uuid;index" json:"company_id,omitempty"`
-	Company            Company    `gorm:"foreignKey:CompanyID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT;" json:"company,omitempty"`
-	PurposeTypeID      *uuid.UUID `gorm:"type:uuid;index" json:"purpose_type_id,omitempty"`
+	FullName           string      `gorm:"not null" json:"full_name"`
+	Email              string      `gorm:"uniqueIndex;not null" json:"email"`
+	PasswordHash       string      `gorm:"not null" json:"-"`
+	Position           string      `gorm:"not null" json:"position"`
+	Division           string      `gorm:"not null" json:"division"`
+	DivisionID         *uuid.UUID  `gorm:"type:uuid;index" json:"division_id,omitempty"`
+	DivisionRef        Division    `gorm:"foreignKey:DivisionID;constraint:OnUpdate:CASCADE,OnDelete:SET NULL;" json:"division_ref,omitempty"`
+	Role               UserRole    `gorm:"not null;default:'USER'" json:"role"`
+	Status             UserStatus  `gorm:"not null;default:'ACTIVE'" json:"status"`
+	EmailNotifications bool        `gorm:"not null;default:true" json:"email_notifications"`
+	TwoFAEnabled       bool        `gorm:"not null;default:false" json:"two_fa_enabled"`
+	CompanyID          *uuid.UUID  `gorm:"type:uuid;index" json:"company_id,omitempty"`
+	Company            Company     `gorm:"foreignKey:CompanyID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT;" json:"company,omitempty"`
+	PurposeTypeID      *uuid.UUID  `gorm:"type:uuid;index" json:"purpose_type_id,omitempty"`
 	PurposeType        PurposeType `gorm:"foreignKey:PurposeTypeID;constraint:OnUpdate:CASCADE,OnDelete:SET NULL;" json:"purpose_type,omitempty"`
 }
 
@@ -85,6 +89,35 @@ func (r *RefreshToken) IsValid() bool {
 }
 
 // ─── Legal Opinion ────────────────────────────────────────────────────────────
+
+type Permission struct {
+	Base
+	Code        string `gorm:"size:120;uniqueIndex;not null" json:"code"`
+	Feature     string `gorm:"size:80;not null;index" json:"feature"`
+	Action      string `gorm:"size:60;not null;index" json:"action"`
+	Scope       string `gorm:"size:60;not null;index" json:"scope"`
+	Label       string `gorm:"size:180;not null" json:"label"`
+	Description string `gorm:"type:text" json:"description"`
+	IsActive    bool   `gorm:"not null;default:true" json:"is_active"`
+}
+
+type RolePermission struct {
+	Base
+	Role         UserRole   `gorm:"size:30;not null;uniqueIndex:idx_role_permission" json:"role"`
+	PermissionID uuid.UUID  `gorm:"type:uuid;not null;uniqueIndex:idx_role_permission" json:"permission_id"`
+	Permission   Permission `gorm:"foreignKey:PermissionID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"permission,omitempty"`
+}
+
+type UserPermissionOverride struct {
+	Base
+	UserID       uuid.UUID        `gorm:"type:uuid;not null;uniqueIndex:idx_user_permission_override" json:"user_id"`
+	User         User             `gorm:"foreignKey:UserID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"user,omitempty"`
+	PermissionID uuid.UUID        `gorm:"type:uuid;not null;uniqueIndex:idx_user_permission_override" json:"permission_id"`
+	Permission   Permission       `gorm:"foreignKey:PermissionID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"permission,omitempty"`
+	Effect       PermissionEffect `gorm:"size:10;not null" json:"effect"`
+	CreatedBy    *uuid.UUID       `gorm:"type:uuid" json:"created_by,omitempty"`
+	UpdatedBy    *uuid.UUID       `gorm:"type:uuid" json:"updated_by,omitempty"`
+}
 
 type LegalOpinion struct {
 	Base
@@ -235,11 +268,11 @@ type CaseCategory struct {
 
 type LegalMaterial struct {
 	Base
-	Title       string `gorm:"size:255;not null;index" json:"title"`
-	Excerpt     string `gorm:"size:500" json:"excerpt"`
-	Content     string `gorm:"type:text;not null" json:"content"`
-	CreatedBy   uuid.UUID `gorm:"type:uuid;not null;index" json:"created_by"`
-	UpdatedBy   uuid.UUID `gorm:"type:uuid;not null;index" json:"updated_by"`
+	Title     string    `gorm:"size:255;not null;index" json:"title"`
+	Excerpt   string    `gorm:"size:500" json:"excerpt"`
+	Content   string    `gorm:"type:text;not null" json:"content"`
+	CreatedBy uuid.UUID `gorm:"type:uuid;not null;index" json:"created_by"`
+	UpdatedBy uuid.UUID `gorm:"type:uuid;not null;index" json:"updated_by"`
 }
 
 type Regency struct {
@@ -267,10 +300,10 @@ type LegalCase struct {
 	CaseSummary       string           `gorm:"type:text" json:"case_summary"`
 	RelatedPartyID    uuid.UUID        `gorm:"type:uuid;not null;index" json:"related_party_id"`
 	RelatedParty      Cedant           `gorm:"foreignKey:RelatedPartyID" json:"related_party,omitempty"`
-	CategoryID        *uuid.UUID      `gorm:"type:uuid;index" json:"category_id,omitempty"`
+	CategoryID        *uuid.UUID       `gorm:"type:uuid;index" json:"category_id,omitempty"`
 	CategoryRef       CaseCategory     `gorm:"foreignKey:CategoryID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT;" json:"category_ref,omitempty"`
 	Specification     string           `gorm:"type:text" json:"specification"`
-	CaseTypeID        *uuid.UUID      `gorm:"type:uuid;index" json:"case_type_id,omitempty"`
+	CaseTypeID        *uuid.UUID       `gorm:"type:uuid;index" json:"case_type_id,omitempty"`
 	CaseTypeRef       CaseType         `gorm:"foreignKey:CaseTypeID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT;" json:"case_type_ref,omitempty"`
 	TechnicalReserve  string           `gorm:"size:255" json:"technical_reserve"`
 	CaseValue         float64          `gorm:"type:decimal(18,2)" json:"case_value"`
@@ -283,7 +316,7 @@ type LegalCase struct {
 	AdditionalNotes   string           `gorm:"type:text" json:"additional_notes"`
 	LocationRegencyID uuid.UUID        `gorm:"type:uuid;not null;index" json:"location_regency_id"`
 	LocationRegency   Regency          `gorm:"foreignKey:LocationRegencyID" json:"location_regency,omitempty"`
-	CompanyID         *uuid.UUID      `gorm:"type:uuid;index" json:"company_id,omitempty"`
+	CompanyID         *uuid.UUID       `gorm:"type:uuid;index" json:"company_id,omitempty"`
 	Company           Company          `gorm:"foreignKey:CompanyID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT;" json:"company,omitempty"`
 	Chronologies      []CaseChronology `gorm:"foreignKey:CaseID" json:"chronologies,omitempty"`
 }
@@ -303,13 +336,14 @@ type CaseChronology struct {
 type AuditAction string
 
 const (
-	ActionStatusChange AuditAction = "STATUS_CHANGE"
-	ActionFileUpload   AuditAction = "FILE_UPLOAD"
-	ActionUserUpdate   AuditAction = "USER_UPDATE"
-	ActionLogin        AuditAction = "LOGIN"
-	ActionLogout       AuditAction = "LOGOUT"
-	ActionDelete       AuditAction = "DELETE"
-	ActionFileDelete   AuditAction = "FILE_DELETE"
+	ActionStatusChange     AuditAction = "STATUS_CHANGE"
+	ActionFileUpload       AuditAction = "FILE_UPLOAD"
+	ActionUserUpdate       AuditAction = "USER_UPDATE"
+	ActionLogin            AuditAction = "LOGIN"
+	ActionLogout           AuditAction = "LOGOUT"
+	ActionDelete           AuditAction = "DELETE"
+	ActionFileDelete       AuditAction = "FILE_DELETE"
+	ActionPermissionUpdate AuditAction = "PERMISSION_UPDATE"
 )
 
 type AuditLog struct {
