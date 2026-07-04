@@ -10,6 +10,7 @@ import { useDocumentReview, useAdminUpdateDocumentReviewStatus } from '@/hooks/u
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { documentReviewService } from '@/services/document-review.service'
 import { formatDateTime, formatFileSize, validateFile } from '@/lib/utils'
+import { useAuthStore } from '@/store/auth.store'
 import type { SubmissionStatus } from '@/types'
 
 const NEXT_STATUSES: Record<string, string[]> = {
@@ -35,6 +36,9 @@ export default function AdminReviewDocumentDetailPage() {
 
   const { data: dr, isLoading } = useDocumentReview(id!)
   const updateStatus = useAdminUpdateDocumentReviewStatus()
+  const hasPermission = useAuthStore((state) => state.hasPermission)
+  const canUpdateStatus = hasPermission('document_review.update_status.all')
+  const canUploadResult = hasPermission('document_review.upload_result.all')
 
   const [newStatus, setNewStatus] = useState('')
   const [adminNote, setAdminNote] = useState('')
@@ -189,7 +193,7 @@ export default function AdminReviewDocumentDetailPage() {
             </Card>
           )}
 
-          {nextOptions.length > 0 && (
+          {canUpdateStatus && nextOptions.length > 0 && (
             <Card title="Ubah Status">
               <div className="space-y-4">
                 <div className="space-y-1.5">
@@ -218,29 +222,31 @@ export default function AdminReviewDocumentDetailPage() {
             </Card>
           )}
 
-          <Card title="Upload Hasil Review">
-            <div className="space-y-3">
-              <label className="flex flex-col items-center gap-2 p-5 border-2 border-dashed border-gray-200 rounded-xl cursor-pointer hover:bg-gray-50 transition-colors">
-                <Upload className="w-5 h-5 text-gray-400" />
-                <p className="text-xs text-gray-500 text-center">
-                  {resultFile ? resultFile.name : 'Klik untuk pilih file hasil review'}
-                </p>
-                <input type="file" accept=".pdf,.doc,.docx" className="hidden" onChange={handleFileChange} />
-              </label>
-              {fileError && <p className="text-xs text-red-500">{fileError}</p>}
-              <div className="space-y-1.5">
-                <Label className="text-xs text-gray-500">Catatan Hasil (opsional)</Label>
-                <Textarea value={resultNotes} onChange={(e) => setResultNotes(e.target.value)}
-                  placeholder="Catatan hasil review..." rows={2} />
+          {canUploadResult && (
+            <Card title="Upload Hasil Review">
+              <div className="space-y-3">
+                <label className="flex flex-col items-center gap-2 p-5 border-2 border-dashed border-gray-200 rounded-xl cursor-pointer hover:bg-gray-50 transition-colors">
+                  <Upload className="w-5 h-5 text-gray-400" />
+                  <p className="text-xs text-gray-500 text-center">
+                    {resultFile ? resultFile.name : 'Klik untuk pilih file hasil review'}
+                  </p>
+                  <input type="file" accept=".pdf,.doc,.docx" className="hidden" onChange={handleFileChange} />
+                </label>
+                {fileError && <p className="text-xs text-red-500">{fileError}</p>}
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-gray-500">Catatan Hasil (opsional)</Label>
+                  <Textarea value={resultNotes} onChange={(e) => setResultNotes(e.target.value)}
+                    placeholder="Catatan hasil review..." rows={2} />
+                </div>
+                {uploadResultMutation.isSuccess && <p className="text-xs text-green-600">File berhasil diupload!</p>}
+                <Button onClick={() => uploadResultMutation.mutateAsync({ file: resultFile!, notes: resultNotes })}
+                  disabled={!resultFile || uploadResultMutation.isPending}
+                  className="w-full text-white" style={{ background: '#C8102E' }}>
+                  {uploadResultMutation.isPending ? 'Mengupload...' : 'Upload Hasil'}
+                </Button>
               </div>
-              {uploadResultMutation.isSuccess && <p className="text-xs text-green-600">File berhasil diupload!</p>}
-              <Button onClick={() => uploadResultMutation.mutateAsync({ file: resultFile!, notes: resultNotes })}
-                disabled={!resultFile || uploadResultMutation.isPending}
-                className="w-full text-white" style={{ background: '#C8102E' }}>
-                {uploadResultMutation.isPending ? 'Mengupload...' : 'Upload Hasil'}
-              </Button>
-            </div>
-          </Card>
+            </Card>
+          )}
         </div>
       </div>
     </div>

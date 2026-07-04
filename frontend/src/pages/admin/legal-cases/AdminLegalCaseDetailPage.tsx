@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { useCreateCaseChronology, useDeleteCaseChronology, useDeleteLegalCase, useLegalCase } from '@/hooks/useLegalCase'
 import { getLegalCaseRouteBase, legalCaseService } from '@/services/legal-case.service'
 import { formatCurrency, formatDate, formatDateTime, formatFileSize, validateFile } from '@/lib/utils'
+import { useAuthStore } from '@/store/auth.store'
 import type { CaseChronology } from '@/types'
 import LegalCaseFormDialog from './components/LegalCaseFormDialog'
 
@@ -21,6 +22,11 @@ export default function AdminLegalCaseDetailPage() {
   const createChronology = useCreateCaseChronology(id!)
   const deleteChronology = useDeleteCaseChronology(id!)
   const caseRouteBase = getLegalCaseRouteBase()
+  const hasPermission = useAuthStore((state) => state.hasPermission)
+  const canEdit = hasPermission('case_management.update')
+  const canDelete = hasPermission('case_management.delete')
+  const canManageDocument = hasPermission('case_management.manage_document')
+  const canManageChronology = hasPermission('case_management.manage_chronology')
 
   const [editOpen, setEditOpen] = useState(false)
   const [agendaDate, setAgendaDate] = useState('')
@@ -108,14 +114,18 @@ export default function AdminLegalCaseDetailPage() {
           </div>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setEditOpen(true)}>
-            <Edit className="h-4 w-4" />
-            Edit Kasus
-          </Button>
-          <Button variant="destructive" onClick={handleDeleteCase} disabled={deleteCase.isPending}>
-            <Trash2 className="h-4 w-4" />
-            Hapus
-          </Button>
+          {canEdit && (
+            <Button variant="outline" onClick={() => setEditOpen(true)}>
+              <Edit className="h-4 w-4" />
+              Edit Kasus
+            </Button>
+          )}
+          {canDelete && (
+            <Button variant="destructive" onClick={handleDeleteCase} disabled={deleteCase.isPending}>
+              <Trash2 className="h-4 w-4" />
+              Hapus
+            </Button>
+          )}
         </div>
       </div>
 
@@ -137,6 +147,7 @@ export default function AdminLegalCaseDetailPage() {
               <DocumentUpload
                 label="Dokumen Pendukung"
                 documentLink={legalCase.document_link}
+                canManage={canManageDocument}
                 onUpload={async (file) => {
                   await legalCaseService.uploadDocument(legalCase.id, file)
                   await queryClient.invalidateQueries({ queryKey: ['legal-cases'] })
@@ -246,6 +257,7 @@ export default function AdminLegalCaseDetailPage() {
                     <ChronologyRow
                       key={chronology.id}
                       chronology={chronology}
+                      canDelete={canManageChronology}
                       onDownload={handleDownload}
                       onDelete={handleDeleteChronology}
                     />
@@ -262,8 +274,9 @@ export default function AdminLegalCaseDetailPage() {
   )
 }
 
-function ChronologyRow({ chronology, onDownload, onDelete }: {
+function ChronologyRow({ chronology, canDelete, onDownload, onDelete }: {
   chronology: CaseChronology
+  canDelete?: boolean
   onDownload: (path: string) => void
   onDelete: (id: string) => void
 }) {
@@ -287,9 +300,11 @@ function ChronologyRow({ chronology, onDownload, onDelete }: {
         )}
       </td>
       <td className="px-4 py-3 text-right">
-        <button onClick={() => onDelete(chronology.id)} className="rounded-lg p-2 text-gray-400 hover:bg-red-50 hover:text-red-600" title="Hapus kronologi">
-          <Trash2 className="h-4 w-4" />
-        </button>
+        {canDelete && (
+          <button onClick={() => onDelete(chronology.id)} className="rounded-lg p-2 text-gray-400 hover:bg-red-50 hover:text-red-600" title="Hapus kronologi">
+            <Trash2 className="h-4 w-4" />
+          </button>
+        )}
       </td>
     </tr>
   )
@@ -335,9 +350,10 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   )
 }
 
-function DocumentUpload({ label, documentLink, onUpload, onDelete }: {
+function DocumentUpload({ label, documentLink, canManage, onUpload, onDelete }: {
   label: string
   documentLink?: string
+  canManage?: boolean
   onUpload: (file: File) => void
   onDelete: () => void
 }) {
@@ -404,30 +420,34 @@ function DocumentUpload({ label, documentLink, onUpload, onDelete }: {
           >
             <Download className="h-3 w-3" />
           </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={onDelete}
-            className="h-7 px-2 text-xs text-red-600 hover:text-red-700"
-          >
-            <Trash2 className="h-3 w-3" />
-          </Button>
+          {canManage && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={onDelete}
+              className="h-7 px-2 text-xs text-red-600 hover:text-red-700"
+            >
+              <Trash2 className="h-3 w-3" />
+            </Button>
+          )}
         </div>
       ) : (
-        <label className="flex cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed border-gray-200 p-4 hover:bg-gray-50">
-          <Upload className="h-5 w-5 text-gray-400" />
-          <span className="text-center text-xs text-gray-500">
-            {uploading ? 'Mengupload...' : 'Pilih dokumen untuk diupload'}
-          </span>
-          <input
-            type="file"
-            accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png"
-            className="hidden"
-            onChange={handleFileChange}
-            disabled={uploading}
-          />
-        </label>
+        canManage && (
+          <label className="flex cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed border-gray-200 p-4 hover:bg-gray-50">
+            <Upload className="h-5 w-5 text-gray-400" />
+            <span className="text-center text-xs text-gray-500">
+              {uploading ? 'Mengupload...' : 'Pilih dokumen untuk diupload'}
+            </span>
+            <input
+              type="file"
+              accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png"
+              className="hidden"
+              onChange={handleFileChange}
+              disabled={uploading}
+            />
+          </label>
+        )
       )}
       {error && <p className="text-xs text-red-500">{error}</p>}
     </div>

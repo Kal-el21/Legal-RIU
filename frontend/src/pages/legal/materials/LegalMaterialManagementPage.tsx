@@ -7,8 +7,8 @@ import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import { useMaterials, useCreateMaterial, useUpdateMaterial, useDeleteMaterial } from '@/hooks/useMaterial'
+import RichTextEditor from '@/components/common/RichTextEditor'
+import { useMaterials, useCreateMaterial, useDeleteMaterial } from '@/hooks/useMaterial'
 import type { LegalMaterial } from '@/types'
 
 const schema = z.object({
@@ -48,39 +48,24 @@ function Field({ label, error, children }: { label: string; error?: string; chil
 export default function LegalMaterialManagementPage() {
   const navigate = useNavigate()
   const [search, setSearch] = useState('')
-  const [modal, setModal] = useState<'create' | 'edit' | null>(null)
-  const [selected, setSelected] = useState<LegalMaterial | null>(null)
+  const [modal, setModal] = useState<'create' | null>(null)
 
   const { data, isLoading } = useMaterials()
   const createMutation = useCreateMaterial()
-  const updateMutation = useUpdateMaterial()
   const deleteMutation = useDeleteMaterial()
 
   const form = useForm<FormData>({ resolver: zodResolver(schema), defaultValues: { title: '', excerpt: '', content: '' } })
 
   const openCreate = () => {
-    setSelected(null)
     form.reset({ title: '', excerpt: '', content: '' })
     setModal('create')
   }
 
-  const openEdit = (item: LegalMaterial) => {
-    setSelected(item)
-    form.reset({ title: item.title, excerpt: item.excerpt || '', content: item.content })
-    setModal('edit')
-  }
-
-  const closeModal = () => { setModal(null); setSelected(null); form.reset({ title: '', excerpt: '', content: '' }) }
+  const closeModal = () => { setModal(null); form.reset({ title: '', excerpt: '', content: '' }) }
 
   const onCreateSubmit = async (data: FormData) => {
     await createMutation.mutateAsync(data)
     form.reset()
-    closeModal()
-  }
-
-  const onEditSubmit = async (data: FormData) => {
-    if (!selected) return
-    await updateMutation.mutateAsync({ id: selected.id, data })
     closeModal()
   }
 
@@ -131,7 +116,7 @@ export default function LegalMaterialManagementPage() {
                   <td className="px-6 py-4 text-sm text-gray-500">{new Date(item.created_at).toLocaleDateString('id-ID')}</td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-1 justify-end">
-                      <button onClick={() => { openEdit(item); navigate(`/legal/materials/${item.id}`) }} title="Edit" className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-700">
+                      <button onClick={() => navigate(`/legal/materials/${item.id}`)} title="Lihat Detail" className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-700">
                         <Edit className="w-4 h-4" />
                       </button>
                       <button onClick={() => handleDelete(item)} title="Hapus" className="p-1.5 rounded-lg hover:bg-red-50 transition-colors text-gray-400 hover:text-red-600">
@@ -156,36 +141,14 @@ export default function LegalMaterialManagementPage() {
               <Input {...form.register('excerpt')} placeholder="Ringkasan singkat" />
             </Field>
             <Field label="Konten" error={form.formState.errors.content?.message}>
-              <Textarea {...form.register('content')} rows={6} placeholder="Konten materi..." />
+              <RichTextEditor value={form.watch('content') || ''} onChange={(v) => form.setValue('content', v)} />
+              <input type="hidden" {...form.register('content')} />
             </Field>
             {createMutation.isError && <p className="text-xs text-red-500">{(createMutation.error as Error)?.message}</p>}
             <div className="flex gap-2 pt-2">
               <Button type="button" variant="outline" className="flex-1" onClick={closeModal}>Batal</Button>
               <Button type="submit" disabled={createMutation.isPending} className="flex-1 text-white" style={{ background: '#C8102E' }}>
                 {createMutation.isPending ? 'Menyimpan...' : 'Buat'}
-              </Button>
-            </div>
-          </form>
-        </Modal>
-      )}
-
-      {modal === 'edit' && selected && (
-        <Modal title={`Edit — ${selected.title}`} onClose={closeModal}>
-          <form onSubmit={form.handleSubmit(onEditSubmit)} className="space-y-4">
-            <Field label="Judul" error={form.formState.errors.title?.message}>
-              <Input {...form.register('title')} />
-            </Field>
-            <Field label="Excerpt" error={form.formState.errors.excerpt?.message}>
-              <Input {...form.register('excerpt')} />
-            </Field>
-            <Field label="Konten" error={form.formState.errors.content?.message}>
-              <Textarea {...form.register('content')} rows={6} />
-            </Field>
-            {updateMutation.isError && <p className="text-xs text-red-500">{(updateMutation.error as Error)?.message}</p>}
-            <div className="flex gap-2 pt-2">
-              <Button type="button" variant="outline" className="flex-1" onClick={closeModal}>Batal</Button>
-              <Button type="submit" disabled={updateMutation.isPending} className="flex-1 text-white" style={{ background: '#0B2545' }}>
-                {updateMutation.isPending ? 'Menyimpan...' : 'Simpan'}
               </Button>
             </div>
           </form>

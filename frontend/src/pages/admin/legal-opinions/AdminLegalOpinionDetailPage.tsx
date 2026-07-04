@@ -10,6 +10,7 @@ import { useLegalOpinion, useAdminUpdateStatus, useAdminDownloadPDF } from '@/ho
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { legalOpinionService } from '@/services/legal-opinion.service'
 import { formatDateTime, formatFileSize, validateFile } from '@/lib/utils'
+import { useAuthStore } from '@/store/auth.store'
 import type { SubmissionStatus } from '@/types'
 
 // Valid next status options per current status
@@ -37,6 +38,10 @@ export default function AdminLegalOpinionDetailPage() {
   const { data: lo, isLoading } = useLegalOpinion(id!)
   const updateStatus = useAdminUpdateStatus()
   const downloadPDF = useAdminDownloadPDF()
+  const hasPermission = useAuthStore((state) => state.hasPermission)
+  const canDownloadPDF = hasPermission('legal_opinion.download.all')
+  const canUpdateStatus = hasPermission('legal_opinion.update_status.all')
+  const canUploadResult = hasPermission('legal_opinion.upload_result.all')
 
   const [newStatus, setNewStatus] = useState('')
   const [adminNote, setAdminNote] = useState('')
@@ -115,16 +120,18 @@ export default function AdminLegalOpinionDetailPage() {
               {lo.ticket_number}
             </span>
             <StatusBadge status={status} />
-            <Button
-              onClick={handleDownloadPDF}
-              disabled={downloadPDF.isPending}
-              variant="outline"
-              size="sm"
-              className="ml-auto"
-            >
-              <FileDown className="w-4 h-4 mr-1" />
-              {downloadPDF.isPending ? 'Generating...' : 'Download PDF'}
-            </Button>
+            {canDownloadPDF && (
+              <Button
+                onClick={handleDownloadPDF}
+                disabled={downloadPDF.isPending}
+                variant="outline"
+                size="sm"
+                className="ml-auto"
+              >
+                <FileDown className="w-4 h-4 mr-1" />
+                {downloadPDF.isPending ? 'Generating...' : 'Download PDF'}
+              </Button>
+            )}
           </div>
           <h1 className="text-xl font-bold mt-2" style={{ color: '#0B2545' }}>{lo.title}</h1>
           <p className="text-sm text-gray-500 mt-0.5">
@@ -222,7 +229,7 @@ export default function AdminLegalOpinionDetailPage() {
           )}
 
           {/* Update status */}
-          {nextOptions.length > 0 && (
+          {canUpdateStatus && nextOptions.length > 0 && (
             <Card title="Ubah Status">
               <div className="space-y-4">
                 <div className="space-y-1.5">
@@ -269,7 +276,8 @@ export default function AdminLegalOpinionDetailPage() {
           )}
 
           {/* Upload hasil kajian */}
-          <Card title="Upload Hasil Kajian">
+          {canUploadResult && (
+            <Card title="Upload Hasil Kajian">
             <div className="space-y-3">
               <label className="flex flex-col items-center gap-2 p-5 border-2 border-dashed border-gray-200 rounded-xl cursor-pointer hover:bg-gray-50 transition-colors">
                 <Upload className="w-5 h-5 text-gray-400" />
@@ -304,6 +312,7 @@ export default function AdminLegalOpinionDetailPage() {
               </Button>
             </div>
           </Card>
+          )}
         </div>
       </div>
     </div>

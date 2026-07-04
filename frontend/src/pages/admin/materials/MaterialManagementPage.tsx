@@ -7,7 +7,7 @@ import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
+import RichTextEditor from '@/components/common/RichTextEditor'
 import { useMaterials, useCreateMaterial, useUpdateMaterial, useDeleteMaterial } from '@/hooks/useMaterial'
 import type { LegalMaterial } from '@/types'
 
@@ -158,7 +158,8 @@ export default function MaterialManagementPage() {
               <Input {...form.register('excerpt')} placeholder="Ringkasan singkat" />
             </Field>
             <Field label="Konten" error={form.formState.errors.content?.message}>
-              <Textarea {...form.register('content')} rows={6} placeholder="Konten materi..." />
+              <RichTextEditor value={form.watch('content') || ''} onChange={(v) => form.setValue('content', v)} />
+              <input type="hidden" {...form.register('content')} />
             </Field>
             {createMutation.isError && <p className="text-xs text-red-500">{(createMutation.error as Error)?.message}</p>}
             <div className="flex gap-2 pt-2">
@@ -181,7 +182,8 @@ export default function MaterialManagementPage() {
               <Input {...form.register('excerpt')} />
             </Field>
             <Field label="Konten" error={form.formState.errors.content?.message}>
-              <Textarea {...form.register('content')} rows={6} />
+              <RichTextEditor value={form.watch('content') || ''} onChange={(v) => form.setValue('content', v)} />
+              <input type="hidden" {...form.register('content')} />
             </Field>
             {updateMutation.isError && <p className="text-xs text-red-500">{(updateMutation.error as Error)?.message}</p>}
             <div className="flex gap-2 pt-2">

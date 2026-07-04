@@ -15,6 +15,7 @@ export interface MarkReminderReadPayload {
 function getReminderEndpoint() {
   const role = useAuthStore.getState().user?.role
   const pathname = typeof window === 'undefined' ? '' : window.location.pathname
+  if (role === 'EXTERNAL' || pathname.startsWith('/external')) return '/external/dashboard/reminders'
   if (role === 'ADMIN' || pathname.startsWith('/admin')) return '/admin/dashboard/reminders'
   if (role === 'LEGAL' || pathname.startsWith('/legal')) return '/legal/dashboard/reminders'
   return '/dashboard/reminders'

@@ -170,13 +170,8 @@ func rolePermissionSeedData(permissionByCode map[string]entity.Permission) map[e
 
 	external := []string{
 		"case_management.view",
-		"case_management.create",
-		"case_management.update",
-		"case_management.delete",
-		"case_management.update_status",
 		"case_management.manage_document",
 		"case_management.manage_chronology",
-		"case_management.manage_reference",
 	}
 
 	legalAU := []string{

@@ -52,6 +52,7 @@ import LegalLegalOpinionDetailPage from '@/pages/legal/legal-opinions/LegalOpini
 import LegalReviewDocumentListPage from '@/pages/legal/review-documents/ReviewDocumentListPage'
 import LegalReviewDocumentDetailPage from '@/pages/legal/review-documents/ReviewDocumentDetailPage'
 import LegalMaterialManagementPage from '@/pages/legal/materials/LegalMaterialManagementPage'
+import LegalMaterialDetailPage from '@/pages/legal/materials/LegalMaterialDetailPage'
 
 import LegalAUCaseListPage from '@/pages/legal-au/legal-cases/LegalAUCaseListPage'
 import LegalAUCaseDetailPage from '@/pages/legal-au/legal-cases/LegalAUCaseDetailPage'
@@ -171,9 +172,9 @@ export const router = createBrowserRouter([
           { path: '/legal/legal-cases', element: <AdminLegalCaseListPage /> },
           { path: '/legal/legal-cases/:id', element: <AdminLegalCaseDetailPage /> },
           { path: '/legal/audit-logs', element: <AuditLogPage /> },
-          { path: '/legal/materials', element: <LegalMaterialManagementPage /> },
+{ path: '/legal/materials', element: <LegalMaterialManagementPage /> },
           { path: '/legal/materials/new', element: <MaterialFormPage /> },
-          { path: '/legal/materials/:id', element: <MaterialFormPage /> },
+          { path: '/legal/materials/:id', element: <LegalMaterialDetailPage /> },
         ],
       },
     ],
@@ -204,7 +205,6 @@ export const router = createBrowserRouter([
       {
         element: <ExternalLayout />,
         children: [
-          { path: '/external', element: <AdminLegalCaseListPage /> },
           { path: '/external/settings', element: <SettingsPage /> },
           { path: '/external/legal-cases', element: <AdminLegalCaseListPage /> },
           { path: '/external/legal-cases/:id', element: <AdminLegalCaseDetailPage /> },
