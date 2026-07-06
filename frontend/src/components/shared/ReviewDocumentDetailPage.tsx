@@ -1,5 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, FileText, MessageSquare, Download, CheckCircle } from 'lucide-react'
+import { ArrowLeft, FileText, MessageSquare, Download, CheckCircle, FileDown } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import StatusBadge from '@/components/common/StatusBadge'
 import { useDocumentReview } from '@/hooks/useDocumentReview'
 import { documentReviewService } from '@/services/document-review.service'
@@ -7,11 +8,15 @@ import { formatDateTime, formatFileSize } from '@/lib/utils'
 import type { SubmissionStatus } from '@/types'
 
 interface SharedReviewDocumentDetailPageProps {
+  showDownloadPDF?: boolean
+  downloadPDFMutation?: any
   onBack?: () => void
   children?: React.ReactNode
 }
 
 export default function SharedReviewDocumentDetailPage({
+  showDownloadPDF = false,
+  downloadPDFMutation,
   onBack,
   children,
 }: SharedReviewDocumentDetailPageProps) {
@@ -22,6 +27,17 @@ export default function SharedReviewDocumentDetailPage({
 
   const handleDownload = async (filePath: string) => {
     const { blob, filename } = await documentReviewService.downloadFile(filePath)
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const handleDownloadPDF = async () => {
+    if (!dr || !id || !downloadPDFMutation) return
+    const { blob, filename } = await downloadPDFMutation.mutateAsync(id)
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
@@ -47,6 +63,18 @@ export default function SharedReviewDocumentDetailPage({
               {dr.ticket_number}
             </span>
             <StatusBadge status={status} />
+            {showDownloadPDF && (
+              <Button
+                onClick={handleDownloadPDF}
+                disabled={downloadPDFMutation?.isPending}
+                variant="outline"
+                size="sm"
+                className="ml-auto"
+              >
+                <FileDown className="w-4 h-4 mr-1" />
+                {downloadPDFMutation?.isPending ? 'Generating...' : 'Download PDF'}
+              </Button>
+            )}
           </div>
           <h1 className="text-xl font-bold mt-2" style={{ color: '#0B2545' }}>{dr.document_name}</h1>
           <p className="text-sm text-gray-500 mt-0.5">

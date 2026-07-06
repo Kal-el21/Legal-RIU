@@ -1,12 +1,12 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Download, Edit, FileText, Plus, Trash2, Upload } from 'lucide-react'
+import { ArrowLeft, Download, Edit, FileText, FileDown, Plus, Trash2, Upload } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { useCreateCaseChronology, useDeleteCaseChronology, useDeleteLegalCase, useLegalCase } from '@/hooks/useLegalCase'
+import { useCreateCaseChronology, useDeleteCaseChronology, useDeleteLegalCase, useLegalCase, useAdminDownloadPDF } from '@/hooks/useLegalCase'
 import { getLegalCaseRouteBase, legalCaseService } from '@/services/legal-case.service'
 import { formatCurrency, formatDate, formatDateTime, formatFileSize, validateFile } from '@/lib/utils'
 import { useAuthStore } from '@/store/auth.store'
@@ -21,9 +21,9 @@ export default function AdminLegalCaseDetailPage() {
   const deleteCase = useDeleteLegalCase()
   const createChronology = useCreateCaseChronology(id!)
   const deleteChronology = useDeleteCaseChronology(id!)
+  const downloadPDF = useAdminDownloadPDF()
   const caseRouteBase = getLegalCaseRouteBase()
   const hasPermission = useAuthStore((state) => state.hasPermission)
-  const canEdit = hasPermission('case_management.update')
   const canDelete = hasPermission('case_management.delete')
   const canManageDocument = hasPermission('case_management.manage_document')
   const canManageChronology = hasPermission('case_management.manage_chronology')
@@ -92,6 +92,17 @@ export default function AdminLegalCaseDetailPage() {
     URL.revokeObjectURL(url)
   }
 
+  const handleDownloadPDF = async () => {
+    if (!id) return
+    const { blob, filename } = await downloadPDF.mutateAsync(id)
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = filename
+    anchor.click()
+    URL.revokeObjectURL(url)
+  }
+
   const handleDeleteChronology = async (chronologyID: string) => {
     if (!window.confirm('Hapus kronologi ini?')) return
     await deleteChronology.mutateAsync(chronologyID)
@@ -114,12 +125,14 @@ export default function AdminLegalCaseDetailPage() {
           </div>
         </div>
         <div className="flex gap-2">
-          {canEdit && (
-            <Button variant="outline" onClick={() => setEditOpen(true)}>
-              <Edit className="h-4 w-4" />
-              Edit Kasus
-            </Button>
-          )}
+          <Button variant="outline" onClick={() => setEditOpen(true)}>
+            <Edit className="h-4 w-4" />
+            Edit Kasus
+          </Button>
+          <Button variant="outline" onClick={handleDownloadPDF} disabled={downloadPDF.isPending}>
+            <FileDown className="h-4 w-4" />
+            Download PDF
+          </Button>
           {canDelete && (
             <Button variant="destructive" onClick={handleDeleteCase} disabled={deleteCase.isPending}>
               <Trash2 className="h-4 w-4" />

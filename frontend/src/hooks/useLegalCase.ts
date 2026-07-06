@@ -267,3 +267,9 @@ export function useDeleteCaseCategory() {
     },
   })
 }
+
+export function useAdminDownloadPDF() {
+  return useMutation({
+    mutationFn: (id: string) => legalCaseService.adminDownloadPDF(id),
+  })
+}

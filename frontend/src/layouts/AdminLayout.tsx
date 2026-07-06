@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation } from 'react-router-dom'
-import { Scale, LayoutDashboard, FileText, FileSearch, Users, Menu, ChevronRight, ChevronLeft, ScrollText, Building2, Target, Briefcase, MapPin, UserCog, FolderOpen } from 'lucide-react'
+import { Scale, LayoutDashboard, FileText, FileSearch, Users, Menu, ChevronRight, ChevronLeft, ScrollText, Building2, Target, Briefcase, MapPin, UserCog, FolderOpen, BarChart3 } from 'lucide-react'
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
 import SidebarUserButton from '@/components/common/SidebarUserButton'
@@ -18,6 +18,7 @@ const DATA_MASTER_ITEMS = [
 
 const NAV = [
   { label: 'Dashboard', href: '/admin', icon: LayoutDashboard, exact: true },
+  { label: 'Laporan', href: '/admin/reports', icon: BarChart3 },
   { label: 'Legal Opinion', href: '/admin/legal-opinions', icon: FileText },
   { label: 'Review Dokumen', href: '/admin/review-documents', icon: FileSearch },
   { label: 'Manajemen Kasus', href: '/admin/legal-cases', icon: Scale },
