@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useCreateCaseChronology, useDeleteCaseChronology, useLegalCase } from '@/hooks/useLegalCase'
+import { useAuthStore } from '@/store/auth.store'
 import { formatDate } from '@/lib/utils'
 
 interface CaseChronologySectionProps {
@@ -12,6 +13,8 @@ interface CaseChronologySectionProps {
 
 export default function CaseChronologySection({ caseId }: CaseChronologySectionProps) {
   const { data: legalCase } = useLegalCase(caseId)
+  const hasPermission = useAuthStore((state) => state.hasPermission)
+  const canManageChronology = hasPermission('case_management.manage_chronology')
   const createChronology = useCreateCaseChronology(caseId)
   const deleteChronology = useDeleteCaseChronology(caseId)
   const [agendaDate, setAgendaDate] = useState('')
@@ -48,36 +51,38 @@ export default function CaseChronologySection({ caseId }: CaseChronologySectionP
     <div className="bg-white rounded-2xl border border-gray-100 p-6">
       <h2 className="text-lg font-semibold text-gray-900 mb-4">Kronologi Kasus</h2>
 
-      <form onSubmit={handleSubmit} className="space-y-4 mb-6">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <Label className="text-sm font-medium text-gray-700">Tanggal Agenda</Label>
-            <Input
-              type="date"
-              value={agendaDate}
-              onChange={(e) => setAgendaDate(e.target.value)}
-              className="mt-1.5"
-            />
+      {canManageChronology && (
+        <form onSubmit={handleSubmit} className="space-y-4 mb-6">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <Label className="text-sm font-medium text-gray-700">Tanggal Agenda</Label>
+              <Input
+                type="date"
+                value={agendaDate}
+                onChange={(e) => setAgendaDate(e.target.value)}
+                className="mt-1.5"
+              />
+            </div>
+            <div>
+              <Label className="text-sm font-medium text-gray-700">Agenda</Label>
+              <Input
+                value={agenda}
+                onChange={(e) => setAgenda(e.target.value)}
+                placeholder="Judul agenda"
+                className="mt-1.5"
+              />
+            </div>
           </div>
-          <div>
-            <Label className="text-sm font-medium text-gray-700">Agenda</Label>
-            <Input
-              value={agenda}
-              onChange={(e) => setAgenda(e.target.value)}
-              placeholder="Judul agenda"
-              className="mt-1.5"
-            />
-          </div>
-        </div>
-        <Button
-          type="submit"
-          disabled={!agendaDate || !agenda.trim() || createChronology.isPending}
-          className="w-full text-white"
-          style={{ background: '#C8102E' }}
-        >
-          {createChronology.isPending ? 'Menyimpan...' : 'Tambah Kronologi'}
-        </Button>
-      </form>
+          <Button
+            type="submit"
+            disabled={!agendaDate || !agenda.trim() || createChronology.isPending}
+            className="w-full text-white"
+            style={{ background: '#C8102E' }}
+          >
+            {createChronology.isPending ? 'Menyimpan...' : 'Tambah Kronologi'}
+          </Button>
+        </form>
+      )}
 
       <div className="space-y-3">
         {chronologies.length === 0 && (
@@ -92,15 +97,17 @@ export default function CaseChronologySection({ caseId }: CaseChronologySectionP
                 <p className="text-sm text-gray-500 mt-1">{chronology.description}</p>
               )}
             </div>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => handleDelete(chronology.id)}
-              className="text-red-600 hover:text-red-700"
-            >
-              <Trash2 className="w-4 h-4" />
-            </Button>
+            {canManageChronology && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => handleDelete(chronology.id)}
+                className="text-red-600 hover:text-red-700"
+              >
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            )}
           </div>
         ))}
       </div>

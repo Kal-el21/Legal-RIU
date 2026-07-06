@@ -12,8 +12,7 @@ import type { SubmissionStatus } from '@/types'
 export default function ReviewDocumentDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const user = useAuthStore((s) => s.user)
-  const isAdmin = user?.role === 'ADMIN'
+  const hasPermission = useAuthStore((s) => s.hasPermission)
 
   const { data: dr, isLoading } = useDocumentReview(id!)
   const deleteMutation = useDeleteDocumentReview()
@@ -48,9 +47,9 @@ export default function ReviewDocumentDetailPage() {
   if (!dr) return <div className="p-12 text-center text-gray-500">Pengajuan tidak ditemukan</div>
 
   const status = dr.status as SubmissionStatus
-  const canEdit = !isAdmin && (status === 'SUBMITTED' || status === 'NEED_REVISION' || status === 'REJECTED')
-  const canDelete = !isAdmin && status === 'SUBMITTED'
-  const canResubmit = !isAdmin && (status === 'NEED_REVISION' || status === 'REJECTED')
+  const canEdit = hasPermission('document_review.update.own') && (status === 'SUBMITTED' || status === 'NEED_REVISION' || status === 'REJECTED')
+  const canDelete = hasPermission('document_review.delete.own') && status === 'SUBMITTED'
+  const canResubmit = hasPermission('document_review.resubmit.own') && (status === 'NEED_REVISION' || status === 'REJECTED')
   const canDownload = status === 'COMPLETED' && (dr.results?.length ?? 0) > 0
 
   return (

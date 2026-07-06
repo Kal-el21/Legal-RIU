@@ -46,6 +46,15 @@ export default function LegalOpinionFormPage() {
   const [files, setFiles] = useState<File[]>([])
   const [fileErrors, setFileErrors] = useState<string[]>([])
 
+  const hasPermission = useAuthStore((state) => state.hasPermission)
+  const canCreate = hasPermission('legal_opinion.create.own')
+  const canEdit = hasPermission('legal_opinion.update.own')
+
+  useEffect(() => {
+    if (!isEdit && !canCreate) navigate('/dashboard/legal-opinions')
+    if (isEdit && !canEdit) navigate('/dashboard/legal-opinions')
+  }, [canCreate, canEdit, isEdit, navigate])
+
   const { data: existing } = useLegalOpinion(id ?? '')
   const { data: divisions = [] } = useDivisions()
   const createMutation = useCreateLegalOpinion()

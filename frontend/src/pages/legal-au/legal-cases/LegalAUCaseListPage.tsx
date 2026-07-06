@@ -4,6 +4,7 @@ import { Search, Plus, Eye } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useLegalCases } from '@/hooks/useLegalCase'
+import { useAuthStore } from '@/store/auth.store'
 import { formatDate } from '@/lib/utils'
 import type { LegalCase } from '@/types'
 
@@ -11,6 +12,8 @@ export default function LegalAUCaseListPage() {
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
   const { data, isLoading } = useLegalCases({ page, limit: 10, search })
+  const hasPermission = useAuthStore((state) => state.hasPermission)
+  const canCreateCase = hasPermission('case_management.create')
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -19,11 +22,13 @@ export default function LegalAUCaseListPage() {
           <h1 className="text-2xl font-bold" style={{ color: '#0B2545' }}>Manajemen Kasus</h1>
           <p className="text-sm text-gray-500 mt-0.5">Daftar kasus hukum perusahaan Anda</p>
         </div>
-        <Link to="/legal-au/cases/new">
-          <Button className="flex items-center gap-2 text-white" style={{ background: '#C8102E' }}>
-            <Plus className="w-4 h-4" /> Tambah Kasus
-          </Button>
-        </Link>
+        {canCreateCase && (
+          <Link to="/legal-au/cases/new">
+            <Button className="flex items-center gap-2 text-white" style={{ background: '#C8102E' }}>
+              <Plus className="w-4 h-4" /> Tambah Kasus
+            </Button>
+          </Link>
+        )}
       </div>
 
       <div className="relative mb-6 max-w-xs">

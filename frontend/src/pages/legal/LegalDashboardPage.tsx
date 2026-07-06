@@ -1,11 +1,14 @@
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
+import { useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { FileText, FileSearch, Clock, AlertCircle, RefreshCw, ArrowRight, AlertTriangle } from 'lucide-react'
 import { dashboardService } from '@/services/dashboard.service'
 import StatusBadge from '@/components/common/StatusBadge'
 import WarningBadge from '@/components/common/WarningBadge'
 import { formatDate } from '@/lib/utils'
 import type { SubmissionStatus } from '@/types'
+import { useAuthStore } from '@/store/auth.store'
 
 function StatCard({ icon: Icon, label, value, color, bg }: {
   icon: React.ElementType; label: string; value: number | undefined; color: string; bg: string
@@ -24,6 +27,15 @@ function StatCard({ icon: Icon, label, value, color, bg }: {
 }
 
 export default function LegalDashboardPage() {
+  const navigate = useNavigate()
+  const hasPermission = useAuthStore((state) => state.hasPermission)
+
+  useEffect(() => {
+    if (!hasPermission('dashboard.legal.view')) {
+      navigate('/legal', { replace: true })
+    }
+  }, [hasPermission, navigate])
+
   const { data: stats } = useQuery({
     queryKey: ['dashboard', 'legal', 'stats'],
     queryFn: dashboardService.getLegalStats,

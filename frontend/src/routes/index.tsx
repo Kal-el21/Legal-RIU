@@ -52,9 +52,11 @@ import LegalLegalOpinionDetailPage from '@/pages/legal/legal-opinions/LegalOpini
 import LegalReviewDocumentListPage from '@/pages/legal/review-documents/ReviewDocumentListPage'
 import LegalReviewDocumentDetailPage from '@/pages/legal/review-documents/ReviewDocumentDetailPage'
 import LegalMaterialManagementPage from '@/pages/legal/materials/LegalMaterialManagementPage'
+import LegalMaterialDetailPage from '@/pages/legal/materials/LegalMaterialDetailPage'
 
 import LegalAUCaseListPage from '@/pages/legal-au/legal-cases/LegalAUCaseListPage'
 import LegalAUCaseDetailPage from '@/pages/legal-au/legal-cases/LegalAUCaseDetailPage'
+import LegalAUCaseFormPage from '@/pages/legal-au/legal-cases/LegalAUCaseFormPage'
 import LegalAUMaterialManagementPage from '@/pages/legal-au/materials/LegalAUMaterialManagementPage'
 
 const notFoundElement = (
@@ -113,8 +115,6 @@ export const router = createBrowserRouter([
           { path: '/dashboard/review-documents/new', element: <ReviewDocumentFormPage /> },
           { path: '/dashboard/review-documents/:id', element: <ReviewDocumentDetailPage /> },
           { path: '/dashboard/review-documents/:id/edit', element: <ReviewDocumentFormPage /> },
-          { path: '/dashboard/legal-cases', element: <AdminLegalCaseListPage /> },
-          { path: '/dashboard/legal-cases/:id', element: <AdminLegalCaseDetailPage /> },
         ],
       },
     ],
@@ -139,9 +139,9 @@ export const router = createBrowserRouter([
           { path: '/admin/users', element: <UserManagementPage /> },
           { path: '/admin/audit-logs', element: <AuditLogPage /> },
           { path: '/admin/companies', element: <CompanyManagementPage /> },
-{ path: '/admin/purpose-types', element: <PurposeTypeManagementPage /> },
-           { path: '/admin/document-types', element: <DocumentTypeManagementPage /> },
-           { path: '/admin/case-types', element: <CaseTypeManagementPage /> },
+          { path: '/admin/purpose-types', element: <PurposeTypeManagementPage /> },
+          { path: '/admin/document-types', element: <DocumentTypeManagementPage /> },
+          { path: '/admin/case-types', element: <CaseTypeManagementPage /> },
           { path: '/admin/case-categories', element: <CaseCategoryManagementPage /> },
           { path: '/admin/regencies', element: <RegencyManagementPage /> },
           { path: '/admin/cedants', element: <CedantManagementPage /> },
@@ -171,9 +171,9 @@ export const router = createBrowserRouter([
           { path: '/legal/legal-cases', element: <AdminLegalCaseListPage /> },
           { path: '/legal/legal-cases/:id', element: <AdminLegalCaseDetailPage /> },
           { path: '/legal/audit-logs', element: <AuditLogPage /> },
-          { path: '/legal/materials', element: <LegalMaterialManagementPage /> },
+{ path: '/legal/materials', element: <LegalMaterialManagementPage /> },
           { path: '/legal/materials/new', element: <MaterialFormPage /> },
-          { path: '/legal/materials/:id', element: <MaterialFormPage /> },
+          { path: '/legal/materials/:id', element: <LegalMaterialDetailPage /> },
         ],
       },
     ],
@@ -188,6 +188,7 @@ export const router = createBrowserRouter([
         children: [
           { path: '/legal-au', element: <LegalAUCaseListPage /> },
           { path: '/legal-au/cases', element: <LegalAUCaseListPage /> },
+          { path: '/legal-au/cases/new', element: <LegalAUCaseFormPage /> },
           { path: '/legal-au/cases/:id', element: <LegalAUCaseDetailPage /> },
           { path: '/legal-au/materials', element: <LegalAUMaterialManagementPage /> },
           { path: '/legal-au/materials/new', element: <MaterialFormPage /> },
@@ -204,7 +205,6 @@ export const router = createBrowserRouter([
       {
         element: <ExternalLayout />,
         children: [
-          { path: '/external', element: <AdminLegalCaseListPage /> },
           { path: '/external/settings', element: <SettingsPage /> },
           { path: '/external/legal-cases', element: <AdminLegalCaseListPage /> },
           { path: '/external/legal-cases/:id', element: <AdminLegalCaseDetailPage /> },

@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useUsers, useCreateUser, useUpdateUser, useUpdateUserStatus, useResetPassword, useDeleteUser } from '@/hooks/useUser'
 import { useCompanies, useDivisions, usePurposeTypes } from '@/hooks/useLegalCase'
 import { formatDate } from '@/lib/utils'
+import { useAuthStore } from '@/store/auth.store'
 import type { User } from '@/types'
 import UserPermissionModal from './UserPermissionModal'
 
@@ -108,6 +109,13 @@ export default function UserManagementPage() {
   const statusMutation = useUpdateUserStatus()
   const resetMutation = useResetPassword()
   const deleteMutation = useDeleteUser()
+  const hasPermission = useAuthStore((state) => state.hasPermission)
+  const canManagePermissions = hasPermission('user_management.manage_permissions')
+  const canUpdateUser = hasPermission('user_management.update')
+  const canResetPassword = hasPermission('user_management.reset_password')
+  const canUpdateStatus = hasPermission('user_management.update_status')
+  const canCreate = hasPermission('user_management.create')
+  const canDelete = hasPermission('user_management.delete')
 
   const createForm = useForm<CreateForm>({ resolver: zodResolver(createSchema), defaultValues: { role: 'USER', company_id: '' } })
   const editForm = useForm<EditForm>({ resolver: zodResolver(editSchema) })
@@ -208,9 +216,11 @@ export default function UserManagementPage() {
           <h1 className="text-2xl font-bold" style={{ color: '#0B2545' }}>User Management</h1>
           <p className="text-sm text-gray-500 mt-0.5">Kelola akun pengguna Legal RIU Portal</p>
         </div>
-        <Button onClick={() => setModal('create')} className="flex items-center gap-2 text-white" style={{ background: '#C8102E' }}>
-          <Plus className="w-4 h-4" /> Tambah User
-        </Button>
+        {canCreate && (
+          <Button onClick={() => setModal('create')} className="flex items-center gap-2 text-white" style={{ background: '#C8102E' }}>
+            <Plus className="w-4 h-4" /> Tambah User
+          </Button>
+        )}
       </div>
 
       {/* Search */}
@@ -294,28 +304,38 @@ export default function UserManagementPage() {
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-1 justify-end">
-                      <button onClick={() => openPermissions(user)} title="Permission"
-                        className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-700">
-                        <Shield className="w-4 h-4" />
-                      </button>
-                      <button onClick={() => openEdit(user)} title="Edit"
-                        className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-700">
-                        <Edit className="w-4 h-4" />
-                      </button>
-                      <button onClick={() => openReset(user)} title="Reset Password"
-                        className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-700">
-                        <KeyRound className="w-4 h-4" />
-                      </button>
-                      <button onClick={() => toggleStatus(user)} title={user.status === 'ACTIVE' ? 'Nonaktifkan' : 'Aktifkan'}
-                        className={`p-1.5 rounded-lg hover:bg-gray-100 transition-colors ${
-                          user.status === 'ACTIVE' ? 'text-green-500 hover:text-green-700' : 'text-gray-400 hover:text-gray-600'
-                        }`}>
-                        {user.status === 'ACTIVE' ? <ToggleRight className="w-4 h-4" /> : <ToggleLeft className="w-4 h-4" />}
-                      </button>
-                      <button onClick={() => handleDelete(user)} title="Hapus"
-                        className="p-1.5 rounded-lg hover:bg-red-50 transition-colors text-gray-400 hover:text-red-600">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      {canManagePermissions && (
+                        <button onClick={() => openPermissions(user)} title="Permission"
+                          className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-700">
+                          <Shield className="w-4 h-4" />
+                        </button>
+                      )}
+                      {canUpdateUser && (
+                        <button onClick={() => openEdit(user)} title="Edit"
+                          className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-700">
+                          <Edit className="w-4 h-4" />
+                        </button>
+                      )}
+                      {canResetPassword && (
+                        <button onClick={() => openReset(user)} title="Reset Password"
+                          className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-700">
+                          <KeyRound className="w-4 h-4" />
+                        </button>
+                      )}
+                      {canUpdateStatus && (
+                        <button onClick={() => toggleStatus(user)} title={user.status === 'ACTIVE' ? 'Nonaktifkan' : 'Aktifkan'}
+                          className={`p-1.5 rounded-lg hover:bg-gray-100 transition-colors ${
+                            user.status === 'ACTIVE' ? 'text-green-500 hover:text-green-700' : 'text-gray-400 hover:text-gray-600'
+                          }`}>
+                          {user.status === 'ACTIVE' ? <ToggleRight className="w-4 h-4" /> : <ToggleLeft className="w-4 h-4" />}
+                        </button>
+                      )}
+                      {canDelete && (
+                        <button onClick={() => handleDelete(user)} title="Hapus"
+                          className="p-1.5 rounded-lg hover:bg-red-50 transition-colors text-gray-400 hover:text-red-600">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>

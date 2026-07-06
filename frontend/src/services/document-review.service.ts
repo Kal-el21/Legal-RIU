@@ -20,6 +20,7 @@ export interface CreateDocumentReviewData {
 function getDocumentReviewEndpoint() {
   const role = useAuthStore.getState().user?.role
   const pathname = typeof window === 'undefined' ? '' : window.location.pathname
+  if (role === 'EXTERNAL' || pathname.startsWith('/external')) return '/external/review-documents'
   if (role === 'ADMIN' || pathname.startsWith('/admin')) return '/admin/review-documents'
   if (role === 'LEGAL' || pathname.startsWith('/legal')) return '/legal/review-documents'
   return '/review-documents'

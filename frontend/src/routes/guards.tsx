@@ -10,6 +10,8 @@ function getRoleHome(role?: UserRole) {
   return '/dashboard'
 }
 
+export { getRoleHome }
+
 // Redirect to login if not authenticated
 export function PrivateRoute() {
   const { isAuthenticated } = useAuthStore()
