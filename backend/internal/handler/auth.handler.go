@@ -12,6 +12,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+
+	"net/http"
 )
 
 type AuthHandler struct {
@@ -238,4 +240,76 @@ func (h *AuthHandler) Toggle2FA(c *gin.Context) {
 	}
 	c.Set("audit_description", "Two-factor authentication "+status)
 	utils.OK(c, "Two-step login berhasil "+status, nil)
+}
+
+// POST /api/v1/auth/ldap-login
+func (h *AuthHandler) LDAPLogin(c *gin.Context) {
+	var req dto.LDAPLoginRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "Validasi gagal", err.Error())
+		return
+	}
+
+	ip := getClientIP(c)
+	ua := getUserAgent(c)
+
+	res, err := h.authService.LDAPLogin(req, &ip, &ua)
+	if err != nil {
+		utils.BadRequest(c, err.Error(), nil)
+		return
+	}
+
+	h.setAuthCookies(c, res.AccessToken, res.RefreshToken)
+	utils.OK(c, "Login LDAP berhasil", res)
+}
+
+// GET /api/v1/auth/microsoft-login
+func (h *AuthHandler) MicrosoftLogin(c *gin.Context) {
+	state, err := utils.GenerateSecureToken(16)
+	if err != nil {
+		utils.InternalError(c, "Gagal membuat state login")
+		return
+	}
+
+	isProduction := h.cfg.App.Env == "production"
+	c.SetCookie("ms_oauth_state", state, 300, "/", "", isProduction, true)
+
+	authURL, err := h.authService.MicrosoftAuthURL(state)
+	if err != nil {
+		utils.BadRequest(c, err.Error(), nil)
+		return
+	}
+
+	c.Redirect(http.StatusFound, authURL)
+}
+
+// GET /api/v1/auth/microsoft-callback
+func (h *AuthHandler) MicrosoftCallback(c *gin.Context) {
+	stateCookie, _ := c.Cookie("ms_oauth_state")
+	stateQuery := c.Query("state")
+
+	if stateCookie == "" || stateQuery == "" || stateCookie != stateQuery {
+		utils.Unauthorized(c, "State Microsoft SSO tidak valid")
+		return
+	}
+
+	code := c.Query("code")
+	if code == "" {
+		utils.BadRequest(c, "Authorization code tidak ditemukan", nil)
+		return
+	}
+
+	ip := getClientIP(c)
+	ua := getUserAgent(c)
+
+	res, err := h.authService.MicrosoftCallback(code, &ip, &ua)
+	if err != nil {
+		utils.BadRequest(c, err.Error(), nil)
+		return
+	}
+
+	h.setAuthCookies(c, res.AccessToken, res.RefreshToken)
+	c.SetCookie("ms_oauth_state", "", -1, "/", "", false, true)
+
+	c.Redirect(http.StatusFound, h.cfg.Microsoft.FrontendURL)
 }

@@ -94,3 +94,8 @@ type Toggle2FARequest struct {
 	Enabled  bool   `json:"enabled"`
 	Password string `json:"password" binding:"required"`
 }
+
+type LDAPLoginRequest struct {
+	Username string `json:"username" binding:"required"`
+	Password string `json:"password" binding:"required"`
+}

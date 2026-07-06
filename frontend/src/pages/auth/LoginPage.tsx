@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useLogin } from '@/hooks/useAuth'
+import { authService } from '@/services/auth.service'
 
 const loginSchema = z.object({
   email: z.string().email('Email tidak valid'),
@@ -18,6 +19,10 @@ type LoginForm = z.infer<typeof loginSchema>
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const login = useLogin()
+
+  const handleMicrosoftLogin = () => {
+    window.location.href = authService.microsoftLoginUrl()
+  }
 
   const {
     register,
@@ -61,7 +66,7 @@ export default function LoginPage() {
             Hukum Digital
           </h1>
           <p className="text-white/70 text-base leading-relaxed max-w-sm">
-            Kelola pengajuan Legal Opinion dan Review Dokumen dengan mudah dan efisien.
+            Permudah proses pengajuan Legal Opinion dan Review Dokumen dengan alur yang cepat, terintegrasi, dan efisien.
           </p>
 
           <div className="mt-10 grid grid-cols-3 gap-4">
@@ -79,7 +84,7 @@ export default function LoginPage() {
         </div>
 
         <p className="relative text-white/40 text-xs">
-          © 2025 Legal RIU — Indonesia Re. All rights reserved.
+          © PT Reasuransi Indonesia Utama (Persero). All rights reserved.
         </p>
       </div>
 
@@ -159,6 +164,14 @@ export default function LoginPage() {
               style={{ background: login.isPending ? '#999' : '#C8102E' }}
             >
               {login.isPending ? 'Memproses...' : 'Masuk'}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={handleMicrosoftLogin}
+            >
+              Sign in with Microsoft
             </Button>
           </form>
 
