@@ -85,3 +85,9 @@ export function useLegalUpdateDocumentReviewStatus() {
     },
   })
 }
+
+export function useAdminDownloadPDF() {
+  return useMutation({
+    mutationFn: (id: string) => documentReviewService.adminDownloadPDF(id),
+  })
+}

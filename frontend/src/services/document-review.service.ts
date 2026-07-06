@@ -127,4 +127,19 @@ export const documentReviewService = {
     if (notes) form.append('notes', notes)
     await api.post(`/legal/review-documents/${id}/result`, form)
   },
+
+  adminDownloadPDF: async (id: string): Promise<{ blob: Blob; filename: string }> => {
+    const res = await api.get(`${getDocumentReviewEndpoint()}/${id}/pdf`, {
+      responseType: 'blob',
+    })
+
+    const contentDisposition = res.headers['content-disposition']
+    let filename = `document-review-${id}.pdf`
+    if (contentDisposition) {
+      const match = contentDisposition.match(/filename="?([^"]+)"?/i)
+      if (match) filename = match[1]
+    }
+
+    return { blob: res.data, filename }
+  },
 }

@@ -45,6 +45,7 @@ import DivisionManagementPage from '@/pages/admin/divisions/DivisionManagementPa
 import MaterialManagementPage from '@/pages/admin/materials/MaterialManagementPage'
 import MaterialListingPage from '@/pages/public/MaterialListingPage'
 import MaterialFormPage from '@/pages/materials/MaterialFormPage'
+import ReportPage from '@/pages/reports/ReportPage'
 
 import LegalDashboardPage from '@/pages/legal/LegalDashboardPage'
 import LegalLegalOpinionListPage from '@/pages/legal/legal-opinions/LegalOpinionListPage'
@@ -149,6 +150,7 @@ export const router = createBrowserRouter([
           { path: '/admin/materials', element: <MaterialManagementPage /> },
           { path: '/admin/materials/new', element: <MaterialFormPage /> },
           { path: '/admin/materials/:id', element: <MaterialFormPage /> },
+          { path: '/admin/reports', element: <ReportPage /> },
         ],
       },
     ],
@@ -171,9 +173,10 @@ export const router = createBrowserRouter([
           { path: '/legal/legal-cases', element: <AdminLegalCaseListPage /> },
           { path: '/legal/legal-cases/:id', element: <AdminLegalCaseDetailPage /> },
           { path: '/legal/audit-logs', element: <AuditLogPage /> },
-{ path: '/legal/materials', element: <LegalMaterialManagementPage /> },
+          { path: '/legal/materials', element: <LegalMaterialManagementPage /> },
           { path: '/legal/materials/new', element: <MaterialFormPage /> },
           { path: '/legal/materials/:id', element: <LegalMaterialDetailPage /> },
+          { path: '/legal/reports', element: <ReportPage /> },
         ],
       },
     ],

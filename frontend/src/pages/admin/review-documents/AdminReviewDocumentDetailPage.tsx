@@ -1,7 +1,7 @@
 import { useParams } from 'react-router-dom'
 import { useState, useMemo } from 'react'
 import { Upload } from 'lucide-react'
-import { useDocumentReview, useAdminUpdateDocumentReviewStatus } from '@/hooks/useDocumentReview'
+import { useDocumentReview, useAdminUpdateDocumentReviewStatus, useAdminDownloadPDF } from '@/hooks/useDocumentReview'
 import { useAuthStore } from '@/store/auth.store'
 import { useQueryClient, useMutation } from '@tanstack/react-query'
 import SharedReviewDocumentDetailPage from '@/components/shared/ReviewDocumentDetailPage'
@@ -31,6 +31,7 @@ export default function AdminReviewDocumentDetailPage() {
 
   const { data: dr } = useDocumentReview(id!)
   const updateStatus = useAdminUpdateDocumentReviewStatus()
+  const downloadPDF = useAdminDownloadPDF()
   const canUpdateStatus = hasPermission('document_review.update_status.all')
   const canUploadResult = hasPermission('document_review.upload_result.all')
 
@@ -153,7 +154,10 @@ export default function AdminReviewDocumentDetailPage() {
   )
 
   return (
-    <SharedReviewDocumentDetailPage>
+    <SharedReviewDocumentDetailPage
+      showDownloadPDF
+      downloadPDFMutation={downloadPDF}
+    >
       {actionCards}
     </SharedReviewDocumentDetailPage>
   )

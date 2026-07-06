@@ -395,3 +395,51 @@ export interface RemindersResponse {
   limit: number
   total_pages: number
 }
+
+export interface ReportChartSeries {
+  name: string
+  data: number[]
+}
+
+export interface ReportChartResponse {
+  labels: string[]
+  series: ReportChartSeries[]
+}
+
+export type ReportFeature = 'legal-cases' | 'legal-opinions' | 'document-reviews'
+
+export type ReportGroupBy =
+  | 'company'
+  | 'case_type'
+  | 'category'
+  | 'status'
+  | 'level'
+  | 'location'
+  | 'pic'
+  | 'legal_type'
+  | 'division'
+  | 'document_type'
+
+export const REPORT_GROUP_BY_OPTIONS: Record<ReportFeature, { value: ReportGroupBy; label: string }[]> = {
+  'legal-cases': [
+    { value: 'company', label: 'Perusahaan' },
+    { value: 'case_type', label: 'Jenis Kasus' },
+    { value: 'category', label: 'Kategori' },
+    { value: 'status', label: 'Status' },
+    { value: 'level', label: 'Level' },
+    { value: 'location', label: 'Lokasi' },
+    { value: 'pic', label: 'PIC (Divisi)' },
+  ],
+  'legal-opinions': [
+    { value: 'company', label: 'Perusahaan' },
+    { value: 'legal_type', label: 'Jenis Hukum' },
+    { value: 'status', label: 'Status' },
+    { value: 'division', label: 'Divisi' },
+  ],
+  'document-reviews': [
+    { value: 'company', label: 'Perusahaan' },
+    { value: 'document_type', label: 'Jenis Dokumen' },
+    { value: 'status', label: 'Status' },
+    { value: 'division', label: 'Divisi' },
+  ],
+}

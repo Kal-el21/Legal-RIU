@@ -237,4 +237,19 @@ export const legalCaseService = {
   deleteCaseCategory: async (id: string) => {
     await api.delete(`/admin/case-categories/${id}`)
   },
+
+  adminDownloadPDF: async (id: string): Promise<{ blob: Blob; filename: string }> => {
+    const res = await api.get(`${getLegalCaseRouteBase()}/${id}/pdf`, {
+      responseType: 'blob',
+    })
+
+    const contentDisposition = res.headers['content-disposition']
+    let filename = `legal-case-${id}.pdf`
+    if (contentDisposition) {
+      const match = contentDisposition.match(/filename="?([^"]+)"?/i)
+      if (match) filename = match[1]
+    }
+
+    return { blob: res.data, filename }
+  },
 }
