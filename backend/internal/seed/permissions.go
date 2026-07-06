@@ -120,6 +120,10 @@ func permissionSeedData() []entity.Permission {
 		perm("notification_setting.manage", "notification_setting", "manage", "all", "Notifikasi - Kelola", "Mengelola pengaturan notifikasi"),
 		perm("legal_material.view", "legal_material", "view", "all", "Materi Legal - Lihat", "Melihat materi legal"),
 		perm("legal_material.manage", "legal_material", "manage", "all", "Materi Legal - Kelola", "Mengelola materi legal"),
+
+		perm("report.legal_case.view", "report", "legal_case", "all", "Report - Legal Case", "Melihat laporan legal case"),
+		perm("report.legal_opinion.view", "report", "legal_opinion", "all", "Report - Legal Opinion", "Melihat laporan legal opinion"),
+		perm("report.document_review.view", "report", "document_review", "all", "Report - Review Dokumen", "Melihat laporan review dokumen"),
 	}
 }
 
@@ -167,6 +171,9 @@ func rolePermissionSeedData(permissionByCode map[string]entity.Permission) map[e
 		"audit_log.view",
 		"legal_material.view",
 		"legal_material.manage",
+		"report.legal_case.view",
+		"report.legal_opinion.view",
+		"report.document_review.view",
 	}
 
 	external := []string{

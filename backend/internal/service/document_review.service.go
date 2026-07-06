@@ -27,15 +27,18 @@ type DocumentReviewService interface {
 	UploadResult(id string, adminID string, req dto.UploadResultRequest, file *multipart.FileHeader) error
 	GetPresignedURL(filePath string) (string, error)
 	DownloadFile(filePath string) (*minio.Object, error)
+
+	GeneratePDF(id string) ([]byte, error)
 }
 
 type documentReviewService struct {
 	repo    repository.DocumentReviewRepository
 	storage *storage.MinIOClient
+	pdfSvc  PDFService
 }
 
 func NewDocumentReviewService(repo repository.DocumentReviewRepository, s *storage.MinIOClient) DocumentReviewService {
-	return &documentReviewService{repo: repo, storage: s}
+	return &documentReviewService{repo: repo, storage: s, pdfSvc: NewPDFService()}
 }
 
 func (s *documentReviewService) Create(userID string, req dto.CreateDocumentReviewRequest, files []*multipart.FileHeader) (*entity.DocumentReview, error) {
@@ -247,4 +250,18 @@ func (s *documentReviewService) uploadAttachments(drID uuid.UUID, files []*multi
 		}
 	}
 	return nil
+}
+
+func (s *documentReviewService) GeneratePDF(id string) ([]byte, error) {
+	uid, err := parseUUID(id)
+	if err != nil {
+		return nil, errors.New("ID tidak valid")
+	}
+
+	dr, err := s.repo.FindByID(uid)
+	if err != nil {
+		return nil, errors.New("pengajuan tidak ditemukan")
+	}
+
+	return s.pdfSvc.GenerateDocumentReviewPDF(dr)
 }

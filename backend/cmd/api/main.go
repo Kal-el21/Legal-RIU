@@ -59,6 +59,7 @@ func main() {
 	caseCategorySvc := service.NewCaseCategoryService(caseCategoryRepo)
 	documentTypeSvc := service.NewDocumentTypeService(documentTypeRepo)
 	materialSvc := service.NewLegalMaterialService(materialRepo)
+	reportSvc := service.NewReportService(db)
 
 	// ── Handlers ─────────────────────────────────────────────────────────────
 	authHandler := handler.NewAuthHandler(authSvc, cfg, auditLogSvc)
@@ -77,6 +78,7 @@ func main() {
 	documentTypeHandler := handler.NewDocumentTypeHandler(documentTypeSvc)
 	materialHandler := handler.NewLegalMaterialHandler(materialSvc)
 	permissionHandler := handler.NewPermissionHandler(permissionSvc)
+	reportHandler := handler.NewReportHandler(reportSvc)
 
 	// ── Gin ──────────────────────────────────────────────────────────────────
 	if cfg.App.Env == "production" {
@@ -240,12 +242,14 @@ func main() {
 	admin.POST("/legal-cases/:id/chronology", legalCaseHandler.CreateChronology)
 	admin.PUT("/legal-cases/:id/chronology/:chronId", legalCaseHandler.UpdateChronology)
 	admin.DELETE("/legal-cases/:id/chronology/:chronId", legalCaseHandler.DeleteChronology)
+	admin.GET("/legal-cases/:id/pdf", requirePermission("case_management.view"), legalCaseHandler.GeneratePDF)
 
 	admin.PATCH("/legal-opinions/:id/status", loHandler.AdminUpdateStatus)
 	admin.POST("/legal-opinions/:id/result", loHandler.AdminUploadResult)
 	admin.GET("/legal-opinions/:id/pdf", loHandler.GeneratePDF)
 	admin.PATCH("/review-documents/:id/status", drHandler.AdminUpdateStatus)
 	admin.POST("/review-documents/:id/result", drHandler.AdminUploadResult)
+	admin.GET("/review-documents/:id/pdf", requirePermission("document_review.view.all"), drHandler.GeneratePDF)
 
 	admin.GET("/users", userHandler.GetAll)
 	admin.POST("/users", userHandler.Create)
@@ -265,6 +269,10 @@ func main() {
 	admin.POST("/materials", materialHandler.Create)
 	admin.PUT("/materials/:id", materialHandler.Update)
 	admin.DELETE("/materials/:id", materialHandler.Delete)
+
+	admin.GET("/reports/legal-cases", requirePermission("report.legal_case.view"), reportHandler.GetLegalCaseReport)
+	admin.GET("/reports/legal-opinions", requirePermission("report.legal_opinion.view"), reportHandler.GetLegalOpinionReport)
+	admin.GET("/reports/document-reviews", requirePermission("report.document_review.view"), reportHandler.GetDocumentReviewReport)
 
 	// ── Legal ─────────────────────────────────────────────────────────────────
 	legal := api.Group("/legal")
@@ -289,6 +297,7 @@ func main() {
 	legal.GET("/review-documents/:id", requirePermission("document_review.view.all"), drHandler.GetByID)
 	legal.PATCH("/review-documents/:id/status", requirePermission("document_review.update_status.all"), drHandler.AdminUpdateStatus)
 	legal.POST("/review-documents/:id/result", requirePermission("document_review.upload_result.all"), drHandler.AdminUploadResult)
+	legal.GET("/review-documents/:id/pdf", requirePermission("document_review.view.all"), drHandler.GeneratePDF)
 
 	registerLegalCaseRoutes(legal, legalCaseHandler, requirePermission)
 
@@ -299,6 +308,10 @@ func main() {
 	legal.POST("/materials", requirePermission("legal_material.manage"), materialHandler.Create)
 	legal.PUT("/materials/:id", requirePermission("legal_material.manage"), materialHandler.Update)
 	legal.DELETE("/materials/:id", requirePermission("legal_material.manage"), materialHandler.Delete)
+
+	legal.GET("/reports/legal-cases", requirePermission("report.legal_case.view"), reportHandler.GetLegalCaseReport)
+	legal.GET("/reports/legal-opinions", requirePermission("report.legal_opinion.view"), reportHandler.GetLegalOpinionReport)
+	legal.GET("/reports/document-reviews", requirePermission("report.document_review.view"), reportHandler.GetDocumentReviewReport)
 
 	// ─── Legal AU ─────────────────────────────────────────────────────────────
 	legalAU := api.Group("/legal-au")

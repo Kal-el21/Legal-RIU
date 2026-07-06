@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"bytes"
 	"fmt"
 	"mime/multipart"
 	"path/filepath"
@@ -391,4 +392,19 @@ func mustParseUUID(value string) uuid.UUID {
 		return uuid.Nil
 	}
 	return parsed
+}
+
+func (h *LegalCaseHandler) GeneratePDF(c *gin.Context) {
+	id := c.Param("id")
+	pdfData, err := h.svc.GeneratePDF(id)
+	if err != nil {
+		utils.InternalError(c, err.Error())
+		return
+	}
+
+	lc, _ := h.svc.GetByID(h.getCompanyID(c), id)
+
+	c.DataFromReader(-1, -1, "application/pdf", bytes.NewReader(pdfData), map[string]string{
+		"Content-Disposition": fmt.Sprintf(`attachment; filename="legal-case-%s.pdf"`, lc.ID),
+	})
 }
