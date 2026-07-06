@@ -41,15 +41,18 @@ type LegalCaseService interface {
 	CreateCedant(req dto.CreateCedantRequest) (*dto.CedantResponse, error)
 	UpdateCedant(id string, req dto.UpdateCedantRequest) (*dto.CedantResponse, error)
 	DeleteCedant(id string) error
+
+	GeneratePDF(id string) ([]byte, error)
 }
 
 type legalCaseService struct {
 	repo    repository.LegalCaseRepository
 	storage *storage.MinIOClient
+	pdfSvc  PDFService
 }
 
 func NewLegalCaseService(repo repository.LegalCaseRepository, s *storage.MinIOClient) LegalCaseService {
-	return &legalCaseService{repo: repo, storage: s}
+	return &legalCaseService{repo: repo, storage: s, pdfSvc: NewPDFService()}
 }
 
 func (s *legalCaseService) Create(companyID *uuid.UUID, req dto.CreateLegalCaseRequest) (*dto.LegalCaseResponse, error) {
@@ -708,4 +711,18 @@ func toCedantResponse(cedant *entity.Cedant) dto.CedantResponse {
 
 func FileNameFromPath(filePath string) string {
 	return filepath.Base(filePath)
+}
+
+func (s *legalCaseService) GeneratePDF(id string) ([]byte, error) {
+	uid, err := parseUUID(id)
+	if err != nil {
+		return nil, errors.New("ID tidak valid")
+	}
+
+	lc, err := s.repo.FindByID(uid)
+	if err != nil {
+		return nil, errors.New("kasus hukum tidak ditemukan")
+	}
+
+	return s.pdfSvc.GenerateLegalCasePDF(lc)
 }

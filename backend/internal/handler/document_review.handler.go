@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"bytes"
 	"fmt"
 	"mime/multipart"
 	"strconv"
@@ -245,4 +246,20 @@ func (h *DocumentReviewHandler) AdminUploadResult(c *gin.Context) {
 	}
 	middleware.SetAuditContext(c, entity.ActionFileUpload, "document_review", id)
 	utils.OK(c, "Hasil review berhasil diupload", nil)
+}
+
+// GET /api/v1/review-documents/:id/pdf
+func (h *DocumentReviewHandler) GeneratePDF(c *gin.Context) {
+	id := c.Param("id")
+	pdfData, err := h.svc.GeneratePDF(id)
+	if err != nil {
+		utils.InternalError(c, err.Error())
+		return
+	}
+
+	dr, _ := h.svc.GetByID(id, middleware.GetUserID(c), middleware.RoleWithAllAccess(c, "document_review.view.all"))
+
+	c.DataFromReader(-1, -1, "application/pdf", bytes.NewReader(pdfData), map[string]string{
+		"Content-Disposition": fmt.Sprintf(`attachment; filename="document-review-%s.pdf"`, dr.TicketNumber),
+	})
 }
