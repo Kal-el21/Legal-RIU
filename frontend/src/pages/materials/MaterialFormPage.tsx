@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useMaterial, useCreateMaterial, useUpdateMaterial } from '@/hooks/useMaterial'
+import { useAuthStore } from '@/store/auth.store'
 
 const schema = z.object({
   title: z.string().min(1, 'Judul wajib diisi'),
@@ -21,10 +22,30 @@ export default function MaterialFormPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const isEdit = !!id
+  const role = useAuthStore((state) => state.user?.role)
 
   const { data: material, isLoading } = useMaterial(id || '')
   const createMutation = useCreateMaterial()
   const updateMutation = useUpdateMaterial()
+
+  const hasPermission = useAuthStore((state) => state.hasPermission)
+  const canManage = hasPermission('legal_material.manage')
+
+  const getRedirectPath = () => {
+    if (role === 'ADMIN') return '/admin/materials'
+    if (role === 'LEGAL') return '/legal/materials'
+    if (role === 'LEGAL_AU') return '/legal-au/materials'
+    return '/dashboard'
+  }
+
+  useEffect(() => {
+    if (!canManage) navigate(getRedirectPath())
+  }, [canManage, navigate, role])
+
+  useEffect(() => {
+    if (!isEdit && !canManage) navigate(getRedirectPath())
+    if (isEdit && !canManage) navigate(getRedirectPath())
+  }, [canManage, isEdit, navigate, role])
 
   const form = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -43,7 +64,7 @@ export default function MaterialFormPage() {
     } else {
       await createMutation.mutateAsync(data)
     }
-    navigate('/admin/materials')
+    navigate(getRedirectPath())
   }
 
   if (isEdit && isLoading) {
@@ -74,7 +95,7 @@ export default function MaterialFormPage() {
         </div>
 
         <div className="flex gap-2 pt-2">
-          <Button type="button" variant="outline" onClick={() => navigate('/admin/materials')}>Batal</Button>
+          <Button type="button" variant="outline" onClick={() => navigate(getRedirectPath())}>Batal</Button>
           <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending} className="text-white" style={{ background: '#C8102E' }}>
             {(createMutation.isPending || updateMutation.isPending) ? 'Menyimpan...' : 'Simpan'}
           </Button>

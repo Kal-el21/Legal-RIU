@@ -12,8 +12,7 @@ import type { SubmissionStatus } from '@/types'
 export default function LegalOpinionDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const user = useAuthStore((s) => s.user)
-  const isAdmin = user?.role === 'ADMIN'
+  const hasPermission = useAuthStore((s) => s.hasPermission)
 
   const { data: lo, isLoading } = useLegalOpinion(id!)
   const deleteMutation = useDeleteLegalOpinion()
@@ -66,9 +65,9 @@ export default function LegalOpinionDetailPage() {
   if (!lo) return <div className="p-12 text-center text-gray-500">Pengajuan tidak ditemukan</div>
 
   const status = lo.status as SubmissionStatus
-  const canEdit = !isAdmin && (status === 'SUBMITTED' || status === 'NEED_REVISION' || status === 'REJECTED')
-  const canDelete = !isAdmin && status === 'SUBMITTED'
-  const canResubmit = !isAdmin && (status === 'NEED_REVISION' || status === 'REJECTED')
+  const canEdit = hasPermission('legal_opinion.update.own') && (status === 'SUBMITTED' || status === 'NEED_REVISION' || status === 'REJECTED')
+  const canDelete = hasPermission('legal_opinion.delete.own') && status === 'SUBMITTED'
+  const canResubmit = hasPermission('legal_opinion.resubmit.own') && (status === 'NEED_REVISION' || status === 'REJECTED')
   const canDownload = status === 'COMPLETED' && (lo.results?.length ?? 0) > 0
 
   return (

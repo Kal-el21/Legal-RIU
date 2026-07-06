@@ -1,9 +1,12 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
 import { Search, Filter, X, History } from 'lucide-react'
 import { auditLogService } from '@/services/audit-log.service'
 import { cn } from '@/lib/utils'
 import type { AuditLog, AuditAction } from '@/types'
+import { useAuthStore } from '@/store/auth.store'
+import { getRoleHome } from '@/routes/guards'
 
 const ACTION_COLORS: Record<AuditAction, { bg: string; text: string }> = {
   STATUS_CHANGE: { bg: '#FEF3C7', text: '#92400E' },
@@ -27,6 +30,10 @@ function Badge({ action, className }: { action: AuditAction; className?: string 
 }
 
 export default function AuditLogPage() {
+  const navigate = useNavigate()
+  const hasPermission = useAuthStore((state) => state.hasPermission)
+  const role = useAuthStore((state) => state.user?.role)
+
   const [page, setPage] = useState(1)
   const [filters, setFilters] = useState({
     action: '',
@@ -36,6 +43,12 @@ export default function AuditLogPage() {
     date_to: '',
   })
   const [showFilters, setShowFilters] = useState(false)
+
+  useEffect(() => {
+    if (!hasPermission('audit_log.view')) {
+      navigate(getRoleHome(role), { replace: true })
+    }
+  }, [hasPermission, navigate, role])
 
   const { data, isLoading } = useQuery({
     queryKey: ['audit-logs', page, filters],

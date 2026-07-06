@@ -46,6 +46,15 @@ export default function ReviewDocumentFormPage() {
   const [files, setFiles] = useState<File[]>([]);
   const [fileErrors, setFileErrors] = useState<string[]>([]);
 
+  const hasPermission = useAuthStore((s) => s.hasPermission);
+  const canCreate = hasPermission('document_review.create.own');
+  const canEdit = hasPermission('document_review.update.own');
+
+  useEffect(() => {
+    if (!isEdit && !canCreate) navigate('/dashboard/review-documents');
+    if (isEdit && !canEdit) navigate('/dashboard/review-documents');
+  }, [canCreate, canEdit, isEdit, navigate]);
+
   const { data: existing } = useDocumentReview(id ?? "");
   const { data: divisions = [] } = useDivisions();
   const { data: documentTypes = [] } = useDocumentTypes();

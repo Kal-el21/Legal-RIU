@@ -112,6 +112,7 @@ func permissionSeedData() []entity.Permission {
 		perm("user_management.update_status", "user_management", "update_status", "all", "User Management - Status", "Mengubah status user"),
 		perm("user_management.reset_password", "user_management", "reset_password", "all", "User Management - Reset Password", "Mereset password user"),
 		perm("user_management.manage_permissions", "user_management", "manage_permissions", "all", "User Management - Permission", "Mengelola permission user"),
+		perm("user_management.delete", "user_management", "delete", "all", "User Management - Hapus", "Menghapus user"),
 
 		perm("audit_log.view", "audit_log", "view", "all", "Audit Log - Lihat", "Melihat audit log"),
 		perm("master_data.view", "master_data", "view", "all", "Master Data - Lihat", "Melihat master data"),
@@ -176,6 +177,7 @@ func rolePermissionSeedData(permissionByCode map[string]entity.Permission) map[e
 
 	legalAU := []string{
 		"case_management.view",
+		"case_management.create",
 		"case_management.update_status",
 		"case_management.manage_chronology",
 		"legal_material.view",
