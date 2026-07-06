@@ -2,6 +2,7 @@ import { useParams, Link } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useLegalCase } from '@/hooks/useLegalCase'
+import { formatDateTime } from '@/lib/utils'
 import CaseChronologySection from '@/pages/admin/legal-cases/components/CaseChronologySection'
 
 export default function LegalAUCaseDetailPage() {
@@ -71,6 +72,21 @@ export default function LegalAUCaseDetailPage() {
           </div>
         )}
       </div>
+
+      {legalCase.current_status && (
+        <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">Posisi Kasus</h2>
+          <div className="flex items-start gap-3">
+            <div className="mt-1 h-3 w-3 rounded-full bg-[#C8102E]" />
+            <div>
+              <p className="text-sm font-semibold text-gray-900">{legalCase.current_status || 'Belum ada status'}</p>
+              {legalCase.status_updated_at && (
+                <p className="mt-1 text-xs text-gray-400">Status terakhir diubah: {formatDateTime(legalCase.status_updated_at)}</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       <CaseChronologySection caseId={id!} />
     </div>

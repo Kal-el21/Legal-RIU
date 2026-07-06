@@ -160,7 +160,7 @@ export default function AdminLegalCaseDetailPage() {
               <div className="mt-1 h-3 w-3 rounded-full bg-[#C8102E]" />
               <div>
                 <p className="text-sm font-semibold text-gray-900">{legalCase.current_status || 'Belum ada status'}</p>
-                <p className="mt-1 text-xs text-gray-400">Update terakhir {formatDateTime(legalCase.updated_at)}</p>
+                <p className="mt-1 text-xs text-gray-400">Update terakhir {formatDateTime(legalCase.status_updated_at || legalCase.updated_at)}</p>
               </div>
             </div>
             {(legalCase.chronologies?.length ?? 0) > 0 && (

@@ -3,8 +3,9 @@ package seed
 import (
 	"errors"
 
-	"gorm.io/gorm"
 	"legal-riu-portal/internal/entity"
+
+	"gorm.io/gorm"
 )
 
 func PrepareLegalCasePICMigration(db *gorm.DB) error {
@@ -168,38 +169,68 @@ func EnforceLegalCaseNotNull(db *gorm.DB) error {
 	return nil
 }
 
+func AddStatusUpdatedAtColumns(db *gorm.DB) error {
+	// Add status_updated_at to legal_opinions if not exists
+	if !db.Migrator().HasColumn(&entity.LegalOpinion{}, "status_updated_at") {
+		if err := db.Migrator().AddColumn(&entity.LegalOpinion{}, "status_updated_at"); err != nil {
+			return err
+		}
+	}
+
+	// Add status_updated_at to document_reviews if not exists
+	if !db.Migrator().HasColumn(&entity.DocumentReview{}, "status_updated_at") {
+		if err := db.Migrator().AddColumn(&entity.DocumentReview{}, "status_updated_at"); err != nil {
+			return err
+		}
+	}
+
+	// Add status_updated_at to legal_cases if not exists
+	if !db.Migrator().HasColumn(&entity.LegalCase{}, "status_updated_at") {
+		if err := db.Migrator().AddColumn(&entity.LegalCase{}, "status_updated_at"); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func RunAllMigrationsAndSeeds(db *gorm.DB) error {
 	if err := PrepareLegalCasePICMigration(db); err != nil {
 		return err
 	}
-	if err := db.AutoMigrate(
-		&entity.Division{},
-		&entity.User{},
-		&entity.RefreshToken{},
-		&entity.Permission{},
-		&entity.RolePermission{},
-		&entity.UserPermissionOverride{},
-		&entity.LegalOpinion{},
-		&entity.LegalOpinionAttachment{},
-		&entity.LegalOpinionResult{},
-		&entity.DocumentReview{},
-		&entity.DocumentReviewAttachment{},
-		&entity.DocumentReviewResult{},
-		&entity.Regency{},
-		&entity.Cedant{},
-		&entity.LegalCase{},
-		&entity.CaseChronology{},
-		&entity.AuditLog{},
-		&entity.NotificationSetting{},
-		&entity.UserSettings{},
-		&entity.Company{},
-		&entity.PurposeType{},
-		&entity.CaseType{},
-		&entity.CaseCategory{},
-		&entity.LegalMaterial{},
-	); err != nil {
-		return err
-	}
+if err := db.AutoMigrate(
+ 		&entity.Division{},
+ 		&entity.User{},
+ 		&entity.RefreshToken{},
+ 		&entity.Permission{},
+ 		&entity.RolePermission{},
+ 		&entity.UserPermissionOverride{},
+ 		&entity.LegalOpinion{},
+ 		&entity.LegalOpinionAttachment{},
+ 		&entity.LegalOpinionResult{},
+ 		&entity.DocumentReview{},
+ 		&entity.DocumentReviewAttachment{},
+ 		&entity.DocumentReviewResult{},
+ 		&entity.Regency{},
+ 		&entity.Cedant{},
+ 		&entity.LegalCase{},
+ 		&entity.CaseChronology{},
+ 		&entity.AuditLog{},
+ 		&entity.NotificationSetting{},
+ 		&entity.UserSettings{},
+ 		&entity.Company{},
+ 		&entity.PurposeType{},
+ 		&entity.CaseType{},
+ 		&entity.CaseCategory{},
+ 		&entity.DocumentType{},
+ 		&entity.LegalMaterial{},
+ 	); err != nil {
+ 		return err
+ 	}
+
+ 	if err := AddStatusUpdatedAtColumns(db); err != nil {
+ 		return err
+ 	}
 
 	if err := BackfillLegalCaseTypeCategory(db); err != nil {
 		return err
@@ -221,6 +252,9 @@ func RunAllMigrationsAndSeeds(db *gorm.DB) error {
 		return err
 	}
 	if err := SeedPurposeTypes(db); err != nil {
+		return err
+	}
+	if err := SeedDocumentTypes(db); err != nil {
 		return err
 	}
 	if err := SeedCaseTypes(db); err != nil {

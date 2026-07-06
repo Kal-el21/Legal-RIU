@@ -127,8 +127,13 @@ export default function LegalLegalOpinionDetailPage() {
           </div>
           <h1 className="text-xl font-bold mt-2" style={{ color: '#0B2545' }}>{lo.title}</h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            Oleh: {lo.requestor_name} · {lo.requestor_division} · {formatDateTime(lo.created_at)}
+            Oleh: {lo.requestor_name} · {lo.requestor_division} · Dibuat {formatDateTime(lo.created_at)}
           </p>
+          {lo.status_updated_at && (
+            <p className="text-xs text-gray-400 mt-1">
+              Status terakhir diubah: {formatDateTime(lo.status_updated_at)}
+            </p>
+          )}
         </div>
       </div>
 
@@ -168,7 +173,7 @@ export default function LegalLegalOpinionDetailPage() {
                     <FileText className="w-4 h-4 text-gray-400 flex-shrink-0" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-gray-700 truncate">{att.file_name}</p>
-                      <p className="text-xs text-gray-400">{formatFileSize(att.file_size)} · Round {att.upload_round}</p>
+                      <p className="text-xs text-gray-400">{formatFileSize(att.file_size)} · Round {att.upload_round} · Diupload {formatDateTime(att.created_at)}</p>
                     </div>
                     <button onClick={() => handleDownload(att.file_path)}
                       className="p-1.5 rounded-lg hover:bg-gray-200 text-gray-400 hover:text-gray-600">
@@ -189,7 +194,8 @@ export default function LegalLegalOpinionDetailPage() {
                     <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-gray-700 truncate">{res.file_name}</p>
-                      {res.notes && <p className="text-xs text-gray-500 mt-0.5">{res.notes}</p>}
+                      <p className="text-xs text-gray-500 mt-0.5">Diupload oleh {res.uploader?.full_name} · {formatDateTime(res.created_at)}</p>
+                      {res.notes && <p className="text-xs text-gray-500 mt-0.5 italic">{res.notes}</p>}
                     </div>
                     <button onClick={() => handleDownload(res.file_path)}
                       className="p-1.5 rounded-lg hover:bg-green-200 text-green-500">

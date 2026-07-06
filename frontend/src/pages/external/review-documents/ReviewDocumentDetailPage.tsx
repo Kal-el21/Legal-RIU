@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import StatusBadge from '@/components/common/StatusBadge'
 import { useDocumentReview } from '@/hooks/useDocumentReview'
 import { useAuthStore } from '@/store/auth.store'
-import { formatFileSize } from '@/lib/utils'
+import { formatFileSize, formatDateTime } from '@/lib/utils'
 import { documentReviewService } from '@/services/document-review.service'
 import type { SubmissionStatus } from '@/types'
 
@@ -46,6 +46,11 @@ export default function ExternalReviewDocumentDetailPage() {
             <StatusBadge status={status} />
           </div>
           <h1 className="text-xl font-bold mt-2" style={{ color: '#0B2545' }}>{dr.document_name}</h1>
+          {dr.status_updated_at && (
+            <p className="text-xs text-gray-400 mt-1">
+              Status terakhir diubah: {formatDateTime(dr.status_updated_at)}
+            </p>
+          )}
         </div>
       </div>
 
@@ -93,7 +98,7 @@ export default function ExternalReviewDocumentDetailPage() {
                   <FileText className="w-4 h-4 text-gray-400 flex-shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-gray-700 truncate">{att.file_name}</p>
-                    <p className="text-xs text-gray-400">{formatFileSize(att.file_size)} · Round {att.upload_round}</p>
+                    <p className="text-xs text-gray-400">{formatFileSize(att.file_size)} · Round {att.upload_round} · Diupload {formatDateTime(att.created_at)}</p>
                   </div>
                   <button onClick={() => handleDownload(att.file_path)}
                     className="p-1.5 rounded-lg hover:bg-gray-200 text-gray-400 hover:text-gray-600">
@@ -113,7 +118,8 @@ export default function ExternalReviewDocumentDetailPage() {
                   <FileText className="w-4 h-4 text-green-500 flex-shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-gray-700 truncate">{res.file_name}</p>
-                    {res.notes && <p className="text-xs text-gray-500 mt-0.5">{res.notes}</p>}
+                    <p className="text-xs text-gray-500 mt-0.5">Diupload oleh {res.uploader?.full_name} · {formatDateTime(res.created_at)}</p>
+                    {res.notes && <p className="text-xs text-gray-500 mt-0.5 italic">{res.notes}</p>}
                   </div>
                   <Button size="sm" onClick={() => handleDownload(res.file_path)}
                     className="flex items-center gap-1.5 text-white text-xs" style={{ background: '#0B2545' }}>

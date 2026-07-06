@@ -38,6 +38,7 @@ func main() {
 	purposeTypeRepo := repository.NewPurposeTypeRepository(db)
 	caseTypeRepo := repository.NewCaseTypeRepository(db)
 	caseCategoryRepo := repository.NewCaseCategoryRepository(db)
+	documentTypeRepo := repository.NewDocumentTypeRepository(db)
 	materialRepo := repository.NewLegalMaterialRepository(db)
 	permissionRepo := repository.NewPermissionRepository(db)
 
@@ -56,6 +57,7 @@ func main() {
 	purposeTypeSvc := service.NewPurposeTypeService(purposeTypeRepo)
 	caseTypeSvc := service.NewCaseTypeService(caseTypeRepo)
 	caseCategorySvc := service.NewCaseCategoryService(caseCategoryRepo)
+	documentTypeSvc := service.NewDocumentTypeService(documentTypeRepo)
 	materialSvc := service.NewLegalMaterialService(materialRepo)
 
 	// ── Handlers ─────────────────────────────────────────────────────────────
@@ -72,6 +74,7 @@ func main() {
 	purposeTypeHandler := handler.NewPurposeTypeHandler(purposeTypeSvc)
 	caseTypeHandler := handler.NewCaseTypeHandler(caseTypeSvc)
 	caseCategoryHandler := handler.NewCaseCategoryHandler(caseCategorySvc)
+	documentTypeHandler := handler.NewDocumentTypeHandler(documentTypeSvc)
 	materialHandler := handler.NewLegalMaterialHandler(materialSvc)
 	permissionHandler := handler.NewPermissionHandler(permissionSvc)
 
@@ -124,6 +127,7 @@ func main() {
 	protected.GET("/companies", requirePermission("case_management.view", "case_management.create", "master_data.view"), companyHandler.GetAll)
 	protected.GET("/case-types", requirePermission("case_management.view", "case_management.create", "master_data.view"), caseTypeHandler.GetAll)
 	protected.GET("/case-categories", requirePermission("case_management.view", "case_management.create", "master_data.view"), caseCategoryHandler.GetAll)
+	protected.GET("/document-types", requirePermission("case_management.view", "case_management.create", "master_data.view"), documentTypeHandler.GetAll)
 
 	userOnly := protected.Group("")
 	userOnly.Use(middleware.RoleMiddleware("USER"))
@@ -210,6 +214,12 @@ func main() {
 	admin.POST("/case-categories", caseCategoryHandler.Create)
 	admin.PUT("/case-categories/:id", caseCategoryHandler.Update)
 	admin.DELETE("/case-categories/:id", caseCategoryHandler.Delete)
+
+	admin.GET("/document-types", documentTypeHandler.GetAll)
+	admin.GET("/document-types/:id", documentTypeHandler.GetByID)
+	admin.POST("/document-types", documentTypeHandler.Create)
+	admin.PUT("/document-types/:id", documentTypeHandler.Update)
+	admin.DELETE("/document-types/:id", documentTypeHandler.Delete)
 
 	admin.GET("/regencies", legalCaseHandler.ListRegencies)
 	admin.GET("/cedants", legalCaseHandler.ListCedants)
