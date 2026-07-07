@@ -8,6 +8,7 @@ export default function AdminLegalOpinionListPage() {
       description="Kelola seluruh pengajuan Legal Opinion"
       showColumnRequester={true}
       linkLabel="Kelola →"
+      viewPermission="legal_opinion.view.all"
     />
   )
 }

@@ -7,6 +7,7 @@ export default function AdminReviewDocumentListPage() {
       title="Manage Review Dokumen"
       description="Kelola seluruh pengajuan Review Dokumen"
       linkLabel="Kelola →"
+      viewPermission="document_review.view.all"
     />
   )
 }

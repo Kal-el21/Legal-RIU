@@ -1,10 +1,13 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { Plus, FileText } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import StatusBadge from '@/components/common/StatusBadge'
 import { useLegalOpinions } from '@/hooks/useLegalOpinion'
 import { formatDate } from '@/lib/utils'
+import { useNavigate } from 'react-router-dom'
+import { useAuthStore } from '@/store/auth.store'
+import { getRoleHome } from '@/routes/guards'
 import type { SubmissionStatus } from '@/types'
 
 const STATUS_FILTERS = [
@@ -25,6 +28,8 @@ interface SharedLegalOpinionListPageProps {
   createPath?: string
   showColumnRequester?: boolean
   linkLabel?: string
+  viewPermission?: string
+  createPermission?: string
 }
 
 export default function SharedLegalOpinionListPage({
@@ -35,10 +40,23 @@ export default function SharedLegalOpinionListPage({
   createPath,
   showColumnRequester = true,
   linkLabel = 'Kelola →',
+  viewPermission,
+  createPermission,
 }: SharedLegalOpinionListPageProps) {
   const [status, setStatus] = useState('')
   const [page, setPage] = useState(1)
+  const navigate = useNavigate()
+  const hasPermission = useAuthStore((state) => state.hasPermission)
+  const role = useAuthStore((state) => state.user?.role)
+  const canView = viewPermission ? hasPermission(viewPermission) : true
+  const canCreate = createPermission ? hasPermission(createPermission) : false
   const { data, isLoading } = useLegalOpinions({ page, limit: 10, status })
+
+  useEffect(() => {
+    if (!canView) {
+      navigate(getRoleHome(role), { replace: true })
+    }
+  }, [canView, navigate, role])
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -48,7 +66,7 @@ export default function SharedLegalOpinionListPage({
             <h1 className="text-2xl font-bold" style={{ color: '#0B2545' }}>{title}</h1>
             <p className="text-sm text-gray-500 mt-0.5">{description}</p>
           </div>
-          {showCreateButton && createPath && (
+          {showCreateButton && canCreate && createPath && (
             <Link to={createPath}>
               <Button className="flex items-center gap-2 text-white" style={{ background: '#C8102E' }}>
                 <Plus className="w-4 h-4" /> Buat Pengajuan

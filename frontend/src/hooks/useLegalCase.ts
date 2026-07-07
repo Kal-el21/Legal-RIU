@@ -89,6 +89,17 @@ export function useDeleteCaseChronology(caseID: string) {
   })
 }
 
+export function useImportCaseChronology(caseID: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (file: File) => legalCaseService.importChronologyExcel(caseID, file),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEYS.detail(caseID) })
+      qc.invalidateQueries({ queryKey: KEYS.all })
+    },
+  })
+}
+
 export function useRegencies(params?: { search?: string; limit?: number }) {
   return useQuery({
     queryKey: KEYS.regencies(params),

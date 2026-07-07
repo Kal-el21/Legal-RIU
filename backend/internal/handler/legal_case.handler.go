@@ -169,6 +169,91 @@ func (h *LegalCaseHandler) UploadDocument(c *gin.Context) {
 	utils.OK(c, "Dokumen berhasil diupload", legalCase)
 }
 
+func (h *LegalCaseHandler) UploadPhoto(c *gin.Context) {
+	id := c.Param("id")
+
+	file, err := c.FormFile("photo")
+	if err != nil {
+		utils.BadRequest(c, "Foto wajib diupload", err.Error())
+		return
+	}
+
+	legalCase, err := h.svc.UploadPhoto(id, file)
+	if err != nil {
+		utils.BadRequest(c, err.Error(), nil)
+		return
+	}
+
+	middleware.SetAuditContext(c, entity.ActionFileUpload, "legal_case", id)
+	c.Set("audit_description", "Legal case photo uploaded")
+	utils.OK(c, "Foto berhasil diupload", legalCase)
+}
+
+func (h *LegalCaseHandler) DeletePhoto(c *gin.Context) {
+	id := c.Param("id")
+
+	legalCase, err := h.svc.DeletePhoto(id)
+	if err != nil {
+		utils.BadRequest(c, err.Error(), nil)
+		return
+	}
+
+	middleware.SetAuditContext(c, entity.ActionFileDelete, "legal_case", id)
+	c.Set("audit_description", "Legal case photo deleted")
+	utils.OK(c, "Foto berhasil dihapus", legalCase)
+}
+
+func (h *LegalCaseHandler) ImportChronologies(c *gin.Context) {
+	id := c.Param("id")
+
+	file, err := c.FormFile("file")
+	if err != nil {
+		utils.BadRequest(c, "File Excel wajib diupload", err.Error())
+		return
+	}
+
+	result, err := h.svc.ImportChronologies(id, file)
+	if err != nil {
+		utils.BadRequest(c, err.Error(), nil)
+		return
+	}
+
+	middleware.SetAuditContext(c, entity.ActionFileUpload, "legal_case", id)
+	c.Set("audit_description", "Legal case chronologies imported")
+	utils.OK(c, "Impor kronologi selesai", result)
+}
+
+func (h *LegalCaseHandler) DownloadChronologyTemplate(c *gin.Context) {
+	buf, err := h.svc.GenerateChronologyTemplate()
+	if err != nil {
+		utils.InternalError(c, err.Error())
+		return
+	}
+
+	c.DataFromReader(-1, -1, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", buf, map[string]string{
+		"Content-Disposition": `attachment; filename="chronology-template.xlsx"`,
+	})
+}
+
+func (h *LegalCaseHandler) ViewFile(c *gin.Context) {
+	filePath := c.Query("path")
+	if filePath == "" {
+		utils.BadRequest(c, "Path file diperlukan", nil)
+		return
+	}
+
+	obj, contentType, err := h.svc.ViewFile(filePath)
+	if err != nil {
+		utils.BadRequest(c, err.Error(), nil)
+		return
+	}
+	defer obj.Close()
+
+	c.DataFromReader(-1, -1, contentType, obj, map[string]string{
+		"Content-Disposition": fmt.Sprintf(`inline; filename="%s"`, filepath.Base(filePath)),
+	})
+}
+
 func (h *LegalCaseHandler) DeleteDocument(c *gin.Context) {
 	id := c.Param("id")
 

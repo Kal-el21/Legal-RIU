@@ -1,12 +1,14 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"mime/multipart"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -17,6 +19,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/minio/minio-go/v7"
+	"github.com/xuri/excelize/v2"
 )
 
 type LegalCaseService interface {
@@ -35,6 +38,11 @@ type LegalCaseService interface {
 	DownloadFile(filePath string) (*minio.Object, error)
 	UploadDocument(caseID string, file *multipart.FileHeader) (*dto.LegalCaseResponse, error)
 	DeleteDocument(caseID string) (*dto.LegalCaseResponse, error)
+	UploadPhoto(caseID string, file *multipart.FileHeader) (*dto.LegalCaseResponse, error)
+	DeletePhoto(caseID string) (*dto.LegalCaseResponse, error)
+	ImportChronologies(caseID string, file *multipart.FileHeader) (*dto.ImportChronologyResult, error)
+	GenerateChronologyTemplate() (*bytes.Buffer, error)
+	ViewFile(filePath string) (*minio.Object, string, error)
 
 	ListRegencies(search string, limit int) ([]dto.RegencyResponse, error)
 	ListCedants(search string, limit int) ([]dto.CedantResponse, error)
@@ -159,6 +167,7 @@ func (s *legalCaseService) Update(id string, req dto.UpdateLegalCaseRequest) (*d
 	existing.CaseValue = updated.CaseValue
 	existing.PIC = updated.PIC
 	existing.DocumentLink = updated.DocumentLink
+	existing.Photo = updated.Photo
 	existing.CurrentStatus = updated.CurrentStatus
 	existing.CaseDate = updated.CaseDate
 	existing.Level = updated.Level
@@ -473,6 +482,66 @@ func (s *legalCaseService) DeleteDocument(caseID string) (*dto.LegalCaseResponse
 	return &response, nil
 }
 
+func (s *legalCaseService) UploadPhoto(caseID string, file *multipart.FileHeader) (*dto.LegalCaseResponse, error) {
+	uid, err := parseUUID(caseID)
+	if err != nil {
+		return nil, errors.New("ID kasus tidak valid")
+	}
+
+	legalCase, err := s.repo.FindByID(uid)
+	if err != nil {
+		return nil, errors.New("kasus tidak ditemukan")
+	}
+
+	oldPhoto := legalCase.Photo
+
+	objectName, _, err := s.storage.UploadFile(context.Background(), "legal-cases/photos", file, fmt.Sprintf("case-%s", uid.String()))
+	if err != nil {
+		return nil, errors.New("gagal upload foto: " + err.Error())
+	}
+
+	legalCase.Photo = objectName
+	if err := s.repo.Update(legalCase); err != nil {
+		_ = s.storage.DeleteFile(context.Background(), objectName)
+		return nil, errors.New("gagal menyimpan foto")
+	}
+
+	if oldPhoto != "" {
+		_ = s.storage.DeleteFile(context.Background(), oldPhoto)
+	}
+
+	response := toLegalCaseResponse(legalCase, true)
+	return &response, nil
+}
+
+func (s *legalCaseService) DeletePhoto(caseID string) (*dto.LegalCaseResponse, error) {
+	uid, err := parseUUID(caseID)
+	if err != nil {
+		return nil, errors.New("ID kasus tidak valid")
+	}
+
+	legalCase, err := s.repo.FindByID(uid)
+	if err != nil {
+		return nil, errors.New("kasus tidak ditemukan")
+	}
+
+	if legalCase.Photo == "" {
+		response := toLegalCaseResponse(legalCase, true)
+		return &response, nil
+	}
+
+	oldPhoto := legalCase.Photo
+	legalCase.Photo = ""
+	if err := s.repo.Update(legalCase); err != nil {
+		return nil, errors.New("gagal memperbarui kasus")
+	}
+
+	_ = s.storage.DeleteFile(context.Background(), oldPhoto)
+
+	response := toLegalCaseResponse(legalCase, true)
+	return &response, nil
+}
+
 func (s *legalCaseService) buildLegalCase(companyID *uuid.UUID, req dto.CreateLegalCaseRequest) (*entity.LegalCase, error) {
 	caseDate, err := parseRequiredDate(req.CaseDate)
 	if err != nil {
@@ -530,6 +599,7 @@ func (s *legalCaseService) buildLegalCase(companyID *uuid.UUID, req dto.CreateLe
 		CaseValue:         req.CaseValue,
 		PIC:               picID,
 		DocumentLink:      req.DocumentLink,
+		Photo:             req.Photo,
 		CurrentStatus:     strings.TrimSpace(req.CurrentStatus),
 		CaseDate:          caseDate,
 		Level:             strings.TrimSpace(req.Level),
@@ -572,7 +642,84 @@ func parseRequiredDate(value string) (time.Time, error) {
 	if parsed, err := time.Parse("2006-01-02", value); err == nil {
 		return parsed, nil
 	}
-	return time.Parse(time.RFC3339, value)
+	if parsed, err := time.Parse(time.RFC3339, value); err == nil {
+		return parsed, nil
+	}
+	if parsed, err := time.Parse("02/01/2006", value); err == nil {
+		return parsed, nil
+	}
+	if serial, err := strconv.Atoi(strings.TrimSpace(value)); err == nil && serial > 0 {
+		return time.Date(1899, 12, 30, 0, 0, 0, 0, time.UTC).AddDate(0, 0, serial), nil
+	}
+	return time.Time{}, errors.New("format tanggal tidak valid")
+}
+
+func parseFlexibleDate(value string) (time.Time, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return time.Time{}, errors.New("tanggal wajib diisi")
+	}
+
+	// Layouts tried in order. Day-month-year (Indonesian) is preferred and
+	// tried before month-day-year. Any common separator is covered.
+	layouts := []string{
+		"2006-01-02",
+		"2006/01/02",
+		"2006.01.02",
+		time.RFC3339,
+		"02/01/2006", // DD/MM/YYYY
+		"02-01-2006",
+		"02.01.2006",
+		"02 01 2006",
+		"02-Jan-2006",
+		"02 Jan 2006",
+		"2 January 2006",
+		"01/02/2006", // MM/DD/YYYY fallback
+		"01-02-2006",
+		"02/01/2006 15:04",
+		"2006-01-02 15:04",
+	}
+	for _, layout := range layouts {
+		if parsed, err := time.Parse(layout, value); err == nil {
+			return parsed, nil
+		}
+	}
+
+	// Excel serial date (numeric, e.g. 45123). Floor at 36526 (~ year 2000)
+	// so a bare 4-digit year like "2024" is not mistaken for a serial.
+	if serial, err := strconv.ParseFloat(strings.ReplaceAll(value, ",", "."), 64); err == nil && serial >= 36526 {
+		base := time.Date(1899, 12, 30, 0, 0, 0, 0, time.UTC)
+		days := int(serial)
+		frac := serial - float64(days)
+		return base.AddDate(0, 0, days).Add(time.Duration(frac * 24 * float64(time.Hour))), nil
+	}
+
+	// Fallback: split by any non-digit separator, expect day-month-year.
+	// Also supports 2-digit years (e.g. 15/02/24 -> 2024) and 8 digits (DDMMYYYY).
+	parts := strings.FieldsFunc(value, func(r rune) bool { return r < '0' || r > '9' })
+	if len(parts) == 3 {
+		d, de := strconv.Atoi(parts[0])
+		m, me := strconv.Atoi(parts[1])
+		y, ye := strconv.Atoi(parts[2])
+		if de == nil && me == nil && ye == nil {
+			if y < 100 {
+				y += 2000
+			}
+			if d >= 1 && d <= 31 && m >= 1 && m <= 12 && y > 1900 {
+				return time.Date(y, time.Month(m), d, 0, 0, 0, 0, time.UTC), nil
+			}
+		}
+	} else if len(parts) == 1 && len(parts[0]) == 8 {
+		s := parts[0]
+		d, _ := strconv.Atoi(s[0:2])
+		m, _ := strconv.Atoi(s[2:4])
+		y, _ := strconv.Atoi(s[4:8])
+		if d >= 1 && d <= 31 && m >= 1 && m <= 12 {
+			return time.Date(y, time.Month(m), d, 0, 0, 0, 0, time.UTC), nil
+		}
+	}
+
+	return time.Time{}, errors.New("format tanggal tidak didukung")
 }
 
 func parseOptionalDate(value string) (*time.Time, error) {
@@ -609,6 +756,211 @@ func decodeDocuments(value string) []string {
 	return documents
 }
 
+func (s *legalCaseService) ImportChronologies(caseID string, file *multipart.FileHeader) (*dto.ImportChronologyResult, error) {
+	uid, err := parseUUID(caseID)
+	if err != nil {
+		return nil, errors.New("ID kasus tidak valid")
+	}
+	if _, err := s.repo.FindByID(uid); err != nil {
+		return nil, errors.New("kasus hukum tidak ditemukan")
+	}
+
+	src, err := file.Open()
+	if err != nil {
+		return nil, errors.New("gagal membaca file: " + err.Error())
+	}
+	defer src.Close()
+
+	wb, err := excelize.OpenReader(src)
+	if err != nil {
+		return nil, errors.New("gagal membaca file Excel: " + err.Error())
+	}
+	defer wb.Close()
+
+	sheetName := wb.GetSheetName(0)
+	rows, err := wb.GetRows(sheetName)
+	if err != nil {
+		return nil, errors.New("gagal membaca sheet Excel: " + err.Error())
+	}
+
+	result := &dto.ImportChronologyResult{Errors: []dto.ImportChronologyRowError{}}
+	if len(rows) < 2 {
+		return result, nil
+	}
+
+	header := normalizeHeaders(rows[0])
+	colAgendaDate := indexOfHeader(header, "agenda_date")
+	colAgenda := indexOfHeader(header, "agenda")
+	colDescription := indexOfHeader(header, "description")
+
+	for i, row := range rows[1:] {
+		rowNumber := i + 2
+		if isEmptyRow(row) {
+			continue
+		}
+
+		get := func(idx int) string {
+			if idx < 0 || idx >= len(row) {
+				return ""
+			}
+			return strings.TrimSpace(row[idx])
+		}
+
+		agendaDateRaw := get(colAgendaDate)
+		agenda := get(colAgenda)
+		description := get(colDescription)
+
+		if agenda == "" {
+			result.Skipped++
+			result.Errors = append(result.Errors, dto.ImportChronologyRowError{
+				Row:    rowNumber,
+				Agenda: agenda,
+				Reason: "agenda wajib diisi",
+			})
+			continue
+		}
+
+		agendaDate, err := parseFlexibleDate(agendaDateRaw)
+		if err != nil {
+			result.Skipped++
+			result.Errors = append(result.Errors, dto.ImportChronologyRowError{
+				Row:    rowNumber,
+				Agenda: agenda,
+				Reason: "tanggal agenda tidak valid",
+			})
+			continue
+		}
+
+		chronology := &entity.CaseChronology{
+			CaseID:      uid,
+			AgendaDate:  agendaDate,
+			Agenda:      agenda,
+			Description: description,
+			Documents:   encodeDocuments(nil),
+		}
+		chronology.ID = uuid.New()
+
+		if err := s.repo.CreateChronology(chronology); err != nil {
+			result.Skipped++
+			result.Errors = append(result.Errors, dto.ImportChronologyRowError{
+				Row:    rowNumber,
+				Agenda: agenda,
+				Reason: "gagal menyimpan kronologi",
+			})
+			continue
+		}
+
+		result.Imported++
+	}
+
+	return result, nil
+}
+
+func (s *legalCaseService) GenerateChronologyTemplate() (*bytes.Buffer, error) {
+	wb := excelize.NewFile()
+	defer wb.Close()
+
+	sheet := "Template"
+	wb.SetSheetName("Sheet1", sheet)
+
+	headers := []string{"agenda_date", "agenda", "description"}
+	for col, h := range headers {
+		cell, _ := excelize.CoordinatesToCellName(col+1, 1)
+		wb.SetCellValue(sheet, cell, h)
+	}
+
+	// Examples use MM/DD/YYYY (month/day/year) to match the expected format.
+	examples := [][]string{
+		{"01/31/2024", "Sidang Pertama", "Menghadirkan saksi dan bukti dokumen"},
+		{"02/15/2024", "Mediasi", "Mencoba penyelesaian damai antar pihak"},
+		{"03/20/2024", "Putusan", "Menunggu salinan putusan dari kepaniteraan"},
+	}
+	for rowIdx, example := range examples {
+		for colIdx, value := range example {
+			cell, _ := excelize.CoordinatesToCellName(colIdx+1, rowIdx+2)
+			wb.SetCellValue(sheet, cell, value)
+		}
+	}
+
+	// Separate instructions sheet (not read by the importer, which only
+	// processes the first "Template" sheet).
+	guide := "Petunjuk"
+	wb.NewSheet(guide)
+	guideLines := []string{
+		"FORMAT TANGGAL: MM/DD/YYYY (bulan/hari/tahun)",
+		"Contoh: 01/31/2024 berarti 31 Januari 2024.",
+		"Juga mendukung: YYYY-MM-DD (mis. 2024-01-31) dan nomor serial Excel.",
+		"Kolom agenda wajib diisi, kolom description opsional.",
+		"Baris dengan agenda atau tanggal kosong/format salah akan dilewati.",
+	}
+	for i, line := range guideLines {
+		cell, _ := excelize.CoordinatesToCellName(1, i+1)
+		wb.SetCellValue(guide, cell, line)
+	}
+
+	var buf bytes.Buffer
+	if err := wb.Write(&buf); err != nil {
+		return nil, errors.New("gagal membuat template: " + err.Error())
+	}
+	return &buf, nil
+}
+
+func normalizeHeaders(header []string) []string {
+	out := make([]string, len(header))
+	for i, h := range header {
+		out[i] = strings.ToLower(strings.TrimSpace(h))
+	}
+	return out
+}
+
+func indexOfHeader(header []string, name string) int {
+	for i, h := range header {
+		if h == name {
+			return i
+		}
+	}
+	return -1
+}
+
+func isEmptyRow(row []string) bool {
+	for _, cell := range row {
+		if strings.TrimSpace(cell) != "" {
+			return false
+		}
+	}
+	return true
+}
+
+func (s *legalCaseService) ViewFile(filePath string) (*minio.Object, string, error) {
+	if !strings.HasPrefix(filePath, "legal-cases/documents/") &&
+		!strings.HasPrefix(filePath, "legal-cases/chronologies/") &&
+		!strings.HasPrefix(filePath, "legal-cases/photos/") {
+		return nil, "", errors.New("path file tidak valid")
+	}
+
+	obj, err := s.storage.GetFileObject(context.Background(), filePath)
+	if err != nil {
+		return nil, "", err
+	}
+
+	contentType := "application/octet-stream"
+	ext := strings.ToLower(filepath.Ext(filePath))
+	switch ext {
+	case ".jpg", ".jpeg":
+		contentType = "image/jpeg"
+	case ".png":
+		contentType = "image/png"
+	case ".gif":
+		contentType = "image/gif"
+	case ".webp":
+		contentType = "image/webp"
+	case ".pdf":
+		contentType = "application/pdf"
+	}
+
+	return obj, contentType, nil
+}
+
 func toLegalCaseResponse(legalCase *entity.LegalCase, includeChronologies bool) dto.LegalCaseResponse {
 	categoryID := ""
 	if legalCase.CategoryID != nil {
@@ -635,6 +987,7 @@ func toLegalCaseResponse(legalCase *entity.LegalCase, includeChronologies bool) 
 		CaseValue:         legalCase.CaseValue,
 		PIC:               legalCase.PIC.String(),
 		DocumentLink:      legalCase.DocumentLink,
+		Photo:             legalCase.Photo,
 		CurrentStatus:     legalCase.CurrentStatus,
 		CaseDate:          legalCase.CaseDate,
 		Level:             legalCase.Level,

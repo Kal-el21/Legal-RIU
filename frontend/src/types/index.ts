@@ -209,6 +209,18 @@ export interface CaseChronology {
   updated_at: string
 }
 
+export interface ImportChronologyRowError {
+  row: number
+  agenda: string
+  reason: string
+}
+
+export interface ImportChronologyResult {
+  imported: number
+  skipped: number
+  errors: ImportChronologyRowError[]
+}
+
 export interface LegalCase {
   id: string
   case_name: string
@@ -225,6 +237,7 @@ export interface LegalCase {
   pic: string
   pic_division?: Division
   document_link?: string
+  photo?: string
   current_status?: string
   case_date: string
   level: string

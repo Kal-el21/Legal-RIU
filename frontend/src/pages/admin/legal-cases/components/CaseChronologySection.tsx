@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label'
 import { useCreateCaseChronology, useDeleteCaseChronology, useLegalCase } from '@/hooks/useLegalCase'
 import { useAuthStore } from '@/store/auth.store'
 import { formatDate } from '@/lib/utils'
+import ChronologyImportCard from './ChronologyImportCard'
 
 interface CaseChronologySectionProps {
   caseId: string
@@ -82,6 +83,12 @@ export default function CaseChronologySection({ caseId }: CaseChronologySectionP
             {createChronology.isPending ? 'Menyimpan...' : 'Tambah Kronologi'}
           </Button>
         </form>
+      )}
+
+      {canManageChronology && (
+        <div className="mb-6">
+          <ChronologyImportCard caseId={caseId} />
+        </div>
       )}
 
       <div className="space-y-3">

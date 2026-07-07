@@ -12,6 +12,8 @@ import { formatCurrency, formatDate, formatDateTime, formatFileSize, validateFil
 import { useAuthStore } from '@/store/auth.store'
 import type { CaseChronology } from '@/types'
 import LegalCaseFormDialog from './components/LegalCaseFormDialog'
+import ChronologyImportCard from './components/ChronologyImportCard'
+import PermissionGate from '@/components/common/PermissionGate'
 
 export default function AdminLegalCaseDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -112,7 +114,8 @@ export default function AdminLegalCaseDetailPage() {
   if (!legalCase) return <div className="p-12 text-center text-gray-500">Kasus hukum tidak ditemukan</div>
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <PermissionGate permission="case_management.view">
+      <div className="p-6 max-w-6xl mx-auto">
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-start gap-3">
           <button onClick={() => navigate(caseRouteBase)} className="mt-0.5 rounded-lg p-2 hover:bg-gray-100" title="Kembali">
@@ -146,6 +149,11 @@ export default function AdminLegalCaseDetailPage() {
         <div className="space-y-6 lg:col-span-2">
           <Section title="Informasi Umum">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <PhotoDisplay photo={legalCase.photo} canManage={canManageDocument} onDelete={async () => {
+                if (!window.confirm('Hapus foto kasus?')) return
+                await legalCaseService.deletePhoto(legalCase.id)
+                await queryClient.invalidateQueries({ queryKey: ['legal-cases'] })
+              }} />
               <Info label="Nama Kasus" value={legalCase.case_name} />
               <Info label="Jenis Kasus" value={legalCase.case_type?.label ?? legalCase.case_type_id} />
               <Info label="Pihak Terkait" value={legalCase.related_party?.name ?? '-'} />
@@ -251,6 +259,11 @@ export default function AdminLegalCaseDetailPage() {
 
       <div className="mt-6">
         <Section title="Kronologi Sidang">
+          {canManageChronology && (
+            <div className="mb-4">
+              <ChronologyImportCard caseId={id!} />
+            </div>
+          )}
           {(legalCase.chronologies?.length ?? 0) === 0 ? (
             <div className="rounded-lg bg-gray-50 p-8 text-center text-sm text-gray-400">Belum ada kronologi sidang</div>
           ) : (
@@ -284,6 +297,7 @@ export default function AdminLegalCaseDetailPage() {
 
       <LegalCaseFormDialog open={editOpen} onOpenChange={setEditOpen} legalCase={legalCase} />
     </div>
+    </PermissionGate>
   )
 }
 
@@ -359,6 +373,39 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     <div className="space-y-1.5">
       <Label className="text-sm font-medium text-gray-700">{label}</Label>
       {children}
+    </div>
+  )
+}
+
+function PhotoDisplay({ photo, canManage, onDelete }: {
+  photo?: string
+  canManage?: boolean
+  onDelete: () => void
+}) {
+  if (!photo) {
+    return (
+      <div className="space-y-1.5">
+        <Label className="text-sm font-medium text-gray-700">Foto Kasus</Label>
+        <p className="text-xs text-gray-400">Belum ada foto</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-sm font-medium text-gray-700">Foto Kasus</Label>
+      <div className="flex items-center gap-3">
+        <img
+          src={legalCaseService.getFileViewUrl(photo)}
+          alt="Foto kasus"
+          className="h-24 w-24 rounded-lg border border-gray-200 object-cover"
+        />
+        {canManage && (
+          <Button type="button" variant="ghost" size="sm" onClick={onDelete} className="h-7 px-2 text-xs text-red-600 hover:text-red-700">
+            <Trash2 className="h-3 w-3" />
+          </Button>
+        )}
+      </div>
     </div>
   )
 }

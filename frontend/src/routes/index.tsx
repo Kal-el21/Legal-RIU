@@ -43,10 +43,14 @@ import CedantManagementPage from '@/pages/admin/cedants/CedantManagementPage'
 import DivisionManagementPage from '@/pages/admin/divisions/DivisionManagementPage'
 
 import MaterialManagementPage from '@/pages/admin/materials/MaterialManagementPage'
+import DashboardMaterialManagementPage from '@/pages/dashboard/materials/LegalMaterialManagementPage'
+import ExternalMaterialManagementPage from '@/pages/external/materials/LegalMaterialManagementPage'
 import MaterialListingPage from '@/pages/public/MaterialListingPage'
 import MaterialFormPage from '@/pages/materials/MaterialFormPage'
 import ReportPage from '@/pages/reports/ReportPage'
 
+import External_OpinionListPage from '@/pages/external/legal-opinions/External_OpinionListPage'
+import External_ReviewDocumentListPage from '@/pages/external/review-documents/External_ReviewDocumentListPage'
 import LegalDashboardPage from '@/pages/legal/LegalDashboardPage'
 import LegalLegalOpinionListPage from '@/pages/legal/legal-opinions/LegalOpinionListPage'
 import LegalLegalOpinionDetailPage from '@/pages/legal/legal-opinions/LegalOpinionDetailPage'
@@ -58,6 +62,8 @@ import LegalMaterialDetailPage from '@/pages/legal/materials/LegalMaterialDetail
 import LegalAUCaseListPage from '@/pages/legal-au/legal-cases/LegalAUCaseListPage'
 import LegalAUCaseDetailPage from '@/pages/legal-au/legal-cases/LegalAUCaseDetailPage'
 import LegalAUCaseFormPage from '@/pages/legal-au/legal-cases/LegalAUCaseFormPage'
+import LegalAU_OpinionListPage from '@/pages/legal-au/legal-opinions/LegalAU_OpinionListPage'
+import LegalAU_ReviewDocumentListPage from '@/pages/legal-au/review-documents/LegalAU_ReviewDocumentListPage'
 import LegalAUMaterialManagementPage from '@/pages/legal-au/materials/LegalAUMaterialManagementPage'
 
 const notFoundElement = (
@@ -116,6 +122,14 @@ export const router = createBrowserRouter([
           { path: '/dashboard/review-documents/new', element: <ReviewDocumentFormPage /> },
           { path: '/dashboard/review-documents/:id', element: <ReviewDocumentDetailPage /> },
           { path: '/dashboard/review-documents/:id/edit', element: <ReviewDocumentFormPage /> },
+          { path: '/dashboard/legal-cases', element: <AdminLegalCaseListPage /> },
+          { path: '/dashboard/legal-cases/:id', element: <AdminLegalCaseDetailPage /> },
+          { path: '/dashboard/audit-logs', element: <AuditLogPage /> },
+          { path: '/dashboard/reports', element: <ReportPage /> },
+          { path: '/dashboard/materials', element: <DashboardMaterialManagementPage /> },
+          { path: '/dashboard/materials/new', element: <MaterialFormPage /> },
+          { path: '/dashboard/materials/:id', element: <MaterialFormPage /> },
+          { path: '/dashboard/users', element: <UserManagementPage /> },
         ],
       },
     ],
@@ -196,6 +210,19 @@ export const router = createBrowserRouter([
           { path: '/legal-au/materials', element: <LegalAUMaterialManagementPage /> },
           { path: '/legal-au/materials/new', element: <MaterialFormPage /> },
           { path: '/legal-au/materials/:id', element: <MaterialFormPage /> },
+          { path: '/legal-au/settings', element: <SettingsPage /> },
+          { path: '/legal-au/notifications', element: <NotificationListPage /> },
+          { path: '/legal-au/reports', element: <ReportPage /> },
+          { path: '/legal-au/audit-logs', element: <AuditLogPage /> },
+          { path: '/legal-au/legal-opinions', element: <LegalAU_OpinionListPage /> },
+          { path: '/legal-au/legal-opinions/:id', element: <LegalLegalOpinionDetailPage /> },
+          { path: '/legal-au/legal-opinions/new', element: <LegalOpinionFormPage /> },
+          { path: '/legal-au/legal-opinions/:id/edit', element: <LegalOpinionFormPage /> },
+          { path: '/legal-au/review-documents', element: <LegalAU_ReviewDocumentListPage /> },
+          { path: '/legal-au/review-documents/:id', element: <LegalReviewDocumentDetailPage /> },
+          { path: '/legal-au/review-documents/new', element: <ReviewDocumentFormPage /> },
+          { path: '/legal-au/review-documents/:id/edit', element: <ReviewDocumentFormPage /> },
+          { path: '/legal-au/users', element: <UserManagementPage /> },
         ],
       },
     ],
@@ -209,8 +236,23 @@ export const router = createBrowserRouter([
         element: <ExternalLayout />,
         children: [
           { path: '/external/settings', element: <SettingsPage /> },
+          { path: '/external/notifications', element: <NotificationListPage /> },
           { path: '/external/legal-cases', element: <AdminLegalCaseListPage /> },
           { path: '/external/legal-cases/:id', element: <AdminLegalCaseDetailPage /> },
+          { path: '/external/reports', element: <ReportPage /> },
+          { path: '/external/audit-logs', element: <AuditLogPage /> },
+          { path: '/external/legal-opinions', element: <External_OpinionListPage /> },
+          { path: '/external/legal-opinions/:id', element: <LegalLegalOpinionDetailPage /> },
+          { path: '/external/legal-opinions/new', element: <LegalOpinionFormPage /> },
+          { path: '/external/legal-opinions/:id/edit', element: <LegalOpinionFormPage /> },
+          { path: '/external/review-documents', element: <External_ReviewDocumentListPage /> },
+          { path: '/external/review-documents/:id', element: <LegalReviewDocumentDetailPage /> },
+          { path: '/external/review-documents/new', element: <ReviewDocumentFormPage /> },
+          { path: '/external/review-documents/:id/edit', element: <ReviewDocumentFormPage /> },
+          { path: '/external/materials', element: <ExternalMaterialManagementPage /> },
+          { path: '/external/materials/new', element: <MaterialFormPage /> },
+          { path: '/external/materials/:id', element: <MaterialFormPage /> },
+          { path: '/external/users', element: <UserManagementPage /> },
         ],
       },
     ],

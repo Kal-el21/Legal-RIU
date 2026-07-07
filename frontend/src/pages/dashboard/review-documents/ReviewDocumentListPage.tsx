@@ -9,6 +9,8 @@ export default function ReviewDocumentListPage() {
       showCreateButton={true}
       createPath="/dashboard/review-documents/new"
       linkLabel="Detail →"
+      viewPermission="document_review.view.own"
+      createPermission="document_review.create.own"
     />
   )
 }

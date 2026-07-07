@@ -10,6 +10,7 @@ import { getLegalCaseRouteBase } from '@/services/legal-case.service'
 import { useAuthStore } from '@/store/auth.store'
 import type { CaseChronology, LegalCase } from '@/types'
 import LegalCaseFormDialog from './components/LegalCaseFormDialog'
+import PermissionGate from '@/components/common/PermissionGate'
 
 const CASE_TYPES = [
   { label: 'Semua Jenis', value: 'ALL' },
@@ -95,7 +96,8 @@ export default function AdminLegalCaseListPage() {
   const latestChronology = hoveredCase?.chronologies?.[0]
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <PermissionGate permission="case_management.view">
+      <div className="p-6 max-w-7xl mx-auto">
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="flex items-center gap-2">
@@ -246,6 +248,7 @@ export default function AdminLegalCaseListPage() {
 
       <LegalCaseFormDialog open={dialogOpen} onOpenChange={setDialogOpen} legalCase={editingCase} />
     </div>
+    </PermissionGate>
   )
 }
 

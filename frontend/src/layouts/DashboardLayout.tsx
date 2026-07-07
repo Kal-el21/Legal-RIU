@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation } from 'react-router-dom'
-import { Scale, LayoutDashboard, FileText, FileSearch, Menu, ChevronRight, ChevronLeft, BriefcaseBusiness } from 'lucide-react'
+import { Scale, LayoutDashboard, FileText, FileSearch, Menu, ChevronRight, ChevronLeft, BriefcaseBusiness, ScrollText } from 'lucide-react'
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
 import SidebarUserButton from '@/components/common/SidebarUserButton'
@@ -11,6 +11,7 @@ const NAV = [
   { label: 'Legal Opinion', href: '/dashboard/legal-opinions', icon: FileText, permissions: ['legal_opinion.view.own', 'legal_opinion.view.all'] },
   { label: 'Review Dokumen', href: '/dashboard/review-documents', icon: FileSearch, permissions: ['document_review.view.own', 'document_review.view.all'] },
   { label: 'Case Management', href: '/dashboard/legal-cases', icon: BriefcaseBusiness, permissions: ['case_management.view'] },
+  { label: 'Audit Log', href: '/dashboard/audit-logs', icon: ScrollText, permissions: ['audit_log.view'] },
 ]
 
 export default function DashboardLayout() {

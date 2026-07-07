@@ -1,6 +1,6 @@
 import api from './api'
 import { useAuthStore } from '@/store/auth.store'
-import type { ApiResponse, CaseChronology, Cedant, Company, Division, LegalCase, PaginatedData, Regency, CaseType, CaseCategory, PurposeType } from '@/types'
+import type { ApiResponse, CaseChronology, Cedant, Company, Division, LegalCase, PaginatedData, Regency, CaseType, CaseCategory, PurposeType, ImportChronologyResult } from '@/types'
 
 export interface LegalCaseFilters {
   page?: number
@@ -124,6 +124,36 @@ export const legalCaseService = {
   deleteDocument: async (caseID: string) => {
     const res = await api.delete(`${getLegalCaseRouteBase()}/${caseID}/document`)
     return res.data.data!
+  },
+
+  uploadPhoto: async (caseID: string, file: File) => {
+    const form = new FormData()
+    form.append('photo', file)
+    const res = await api.post<ApiResponse<LegalCase>>(`${getLegalCaseRouteBase()}/${caseID}/photo`, form)
+    return res.data.data!
+  },
+
+  deletePhoto: async (caseID: string) => {
+    const res = await api.delete<ApiResponse<LegalCase>>(`${getLegalCaseRouteBase()}/${caseID}/photo`)
+    return res.data.data!
+  },
+
+  getFileViewUrl: (path: string) => {
+    return `${getLegalCaseRouteBase()}/file?path=${encodeURIComponent(path)}`
+  },
+
+  importChronologyExcel: async (caseID: string, file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    const res = await api.post<ApiResponse<ImportChronologyResult>>(`${getLegalCaseRouteBase()}/${caseID}/chronology/import`, form)
+    return res.data.data!
+  },
+
+  downloadChronologyTemplate: async () => {
+    const res = await api.get(`${getLegalCaseRouteBase()}/chronology/template`, {
+      responseType: 'blob',
+    })
+    return { blob: res.data, filename: 'chronology-template.xlsx' }
   },
 
   downloadFile: async (path: string): Promise<{ blob: Blob; filename: string }> => {
