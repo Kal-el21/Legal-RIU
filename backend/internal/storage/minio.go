@@ -191,3 +191,12 @@ func (m *MinIOClient) DeleteFile(ctx context.Context, objectPath string) error {
 func (m *MinIOClient) GetFileObject(ctx context.Context, objectPath string) (*minio.Object, error) {
 	return m.client.GetObject(ctx, m.bucket, objectPath, minio.GetObjectOptions{})
 }
+
+// GetFileContentType returns the stored content type of an object (from MinIO metadata).
+func (m *MinIOClient) GetFileContentType(ctx context.Context, objectPath string) string {
+	info, err := m.client.StatObject(ctx, m.bucket, objectPath, minio.StatObjectOptions{})
+	if err != nil {
+		return ""
+	}
+	return info.ContentType
+}

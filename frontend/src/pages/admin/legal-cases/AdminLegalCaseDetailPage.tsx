@@ -149,11 +149,6 @@ export default function AdminLegalCaseDetailPage() {
         <div className="space-y-6 lg:col-span-2">
           <Section title="Informasi Umum">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <PhotoDisplay photo={legalCase.photo} canManage={canManageDocument} onDelete={async () => {
-                if (!window.confirm('Hapus foto kasus?')) return
-                await legalCaseService.deletePhoto(legalCase.id)
-                await queryClient.invalidateQueries({ queryKey: ['legal-cases'] })
-              }} />
               <Info label="Nama Kasus" value={legalCase.case_name} />
               <Info label="Jenis Kasus" value={legalCase.case_type?.label ?? legalCase.case_type_id} />
               <Info label="Pihak Terkait" value={legalCase.related_party?.name ?? '-'} />
@@ -256,6 +251,18 @@ export default function AdminLegalCaseDetailPage() {
           </Section>
         </div>
       </div>
+
+      <Section title="Foto Kasus">
+        <PhotoDisplay
+          photo={legalCase.photo}
+          canManage={canManageDocument}
+          onDelete={async () => {
+            if (!window.confirm('Hapus foto kasus?')) return
+            await legalCaseService.deletePhoto(legalCase.id)
+            await queryClient.invalidateQueries({ queryKey: ['legal-cases'] })
+          }}
+        />
+      </Section>
 
       <div className="mt-6">
         <Section title="Kronologi Sidang">
@@ -391,21 +398,33 @@ function PhotoDisplay({ photo, canManage, onDelete }: {
     )
   }
 
+  const src = legalCaseService.getFileViewUrl(photo)
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-2">
       <Label className="text-sm font-medium text-gray-700">Foto Kasus</Label>
-      <div className="flex items-center gap-3">
-        <img
-          src={legalCaseService.getFileViewUrl(photo)}
-          alt="Foto kasus"
-          className="h-24 w-24 rounded-lg border border-gray-200 object-cover"
-        />
-        {canManage && (
-          <Button type="button" variant="ghost" size="sm" onClick={onDelete} className="h-7 px-2 text-xs text-red-600 hover:text-red-700">
-            <Trash2 className="h-3 w-3" />
-          </Button>
-        )}
-      </div>
+      <img
+        src={src}
+        alt="Foto kasus"
+        className="w-full max-h-96 rounded-lg border border-gray-200 object-contain"
+        onError={(event) => {
+          console.error('[PhotoDisplay] Gagal memuat foto:', { src, photo, event })
+        }}
+        onLoad={() => {
+          console.log('[PhotoDisplay] Foto berhasil dimuat:', src)
+        }}
+      />
+      {canManage && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={onDelete}
+          className="text-xs text-red-600 hover:text-red-700"
+        >
+          <Trash2 className="h-3 w-3" />
+          Hapus Foto
+        </Button>
+      )}
     </div>
   )
 }

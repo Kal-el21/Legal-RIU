@@ -139,7 +139,7 @@ export const legalCaseService = {
   },
 
   getFileViewUrl: (path: string) => {
-    return `${getLegalCaseRouteBase()}/file?path=${encodeURIComponent(path)}`
+    return `/api/v1${getLegalCaseRouteBase()}/file?path=${encodeURIComponent(path)}`
   },
 
   importChronologyExcel: async (caseID: string, file: File) => {

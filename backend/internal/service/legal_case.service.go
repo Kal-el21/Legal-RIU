@@ -943,19 +943,24 @@ func (s *legalCaseService) ViewFile(filePath string) (*minio.Object, string, err
 		return nil, "", err
 	}
 
-	contentType := "application/octet-stream"
-	ext := strings.ToLower(filepath.Ext(filePath))
-	switch ext {
-	case ".jpg", ".jpeg":
-		contentType = "image/jpeg"
-	case ".png":
-		contentType = "image/png"
-	case ".gif":
-		contentType = "image/gif"
-	case ".webp":
-		contentType = "image/webp"
-	case ".pdf":
-		contentType = "application/pdf"
+	// Prefer MinIO's stored content type, fall back to extension detection.
+	contentType := s.storage.GetFileContentType(context.Background(), filePath)
+	if contentType == "" || contentType == "application/octet-stream" {
+		ext := strings.ToLower(filepath.Ext(filePath))
+		switch ext {
+		case ".jpg", ".jpeg":
+			contentType = "image/jpeg"
+		case ".png":
+			contentType = "image/png"
+		case ".gif":
+			contentType = "image/gif"
+		case ".webp":
+			contentType = "image/webp"
+		case ".pdf":
+			contentType = "application/pdf"
+		default:
+			contentType = "application/octet-stream"
+		}
 	}
 
 	return obj, contentType, nil
