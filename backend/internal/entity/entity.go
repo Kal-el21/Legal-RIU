@@ -312,6 +312,7 @@ type LegalCase struct {
 	PIC               uuid.UUID        `gorm:"type:uuid;index" json:"pic"`
 	PICDivision       Division         `gorm:"foreignKey:PIC" json:"pic_division,omitempty"`
 	DocumentLink      string           `gorm:"size:500" json:"document_link"`
+	Photo             string           `gorm:"size:500" json:"photo"`
 	CurrentStatus     string           `gorm:"size:100;index" json:"current_status"`
 	StatusUpdatedAt   *time.Time       `json:"status_updated_at,omitempty"`
 	CaseDate          time.Time        `gorm:"not null;index" json:"case_date"`

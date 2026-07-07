@@ -1,11 +1,20 @@
 import { Outlet, Link, useLocation } from 'react-router-dom'
-import { Scale, Menu, ChevronRight, ChevronLeft } from 'lucide-react'
+import { Scale, LayoutDashboard, FileText, FileSearch, Menu, ChevronRight, ChevronLeft, ScrollText, BarChart3, Users } from 'lucide-react'
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
 import SidebarUserButton from '@/components/common/SidebarUserButton'
+import NotificationDropdown from '@/components/common/NotificationDropdown'
+import { useAuthStore } from '@/store/auth.store'
 
 const NAV = [
-  { label: 'Manajemen Kasus', href: '/external/legal-cases', icon: Scale, exact: false },
+  { label: 'Dashboard', href: '/external', icon: LayoutDashboard, exact: true, permissions: ['dashboard.user.view'] },
+  { label: 'Laporan', href: '/external/reports', icon: BarChart3, permissions: ['report.legal_case.view', 'report.legal_opinion.view', 'report.document_review.view'] },
+  { label: 'Legal Opinion', href: '/external/legal-opinions', icon: FileText, permissions: ['legal_opinion.view.own'] },
+  { label: 'Review Dokumen', href: '/external/review-documents', icon: FileSearch, permissions: ['document_review.view.own'] },
+  { label: 'Manajemen Kasus', href: '/external/legal-cases', icon: Scale, permissions: ['case_management.view'] },
+  { label: 'Materi Legal', href: '/external/materials', icon: FileText, permissions: ['legal_material.view'] },
+  { label: 'Audit Log', href: '/external/audit-logs', icon: ScrollText, permissions: ['audit_log.view'] },
+  { label: 'User Management', href: '/external/users', icon: Users, permissions: ['user_management.view'] },
 ]
 
 export default function ExternalLayout() {
@@ -15,6 +24,13 @@ export default function ExternalLayout() {
 
   const isActive = (href: string, exact?: boolean) =>
     exact ? location.pathname === href : location.pathname.startsWith(href)
+
+  const permissions = useAuthStore((state) => state.permissions)
+  const user = useAuthStore((state) => state.user)
+
+  const navItems = NAV.filter((item) =>
+    user?.role === 'ADMIN' || item.permissions.some((permission) => permissions.includes(permission))
+  )
 
   return (
     <div className="min-h-screen flex" style={{ background: '#f8fafc' }}>
@@ -40,7 +56,7 @@ export default function ExternalLayout() {
         </div>
 
         <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-          {NAV.map((item) => (
+          {navItems.map((item) => (
             <Link key={item.href} to={item.href} onClick={() => setSidebarOpen(false)}
               className={cn(
                 'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all',
@@ -81,6 +97,7 @@ export default function ExternalLayout() {
             {sidebarCollapsed ? <ChevronRight className="w-5 h-5 text-gray-600" /> : <ChevronLeft className="w-5 h-5 text-gray-600" />}
           </button>
           <div className="flex-1" />
+          <NotificationDropdown />
           <Link to="/" className="text-sm text-gray-500 hover:text-gray-700 transition-colors">
             ← Kembali ke Beranda
           </Link>

@@ -24,6 +24,7 @@ type CreateLegalCaseRequest struct {
 	CaseValue         float64 `json:"case_value"`
 	PIC               string  `json:"pic" binding:"required"`
 	DocumentLink      string  `json:"document_link"`
+	Photo             string  `json:"photo"`
 	CurrentStatus     string  `json:"current_status"`
 	CaseDate          string  `json:"case_date" binding:"required"`
 	Level             string  `json:"level" binding:"required"`
@@ -33,6 +34,18 @@ type CreateLegalCaseRequest struct {
 }
 
 type UpdateLegalCaseRequest = CreateLegalCaseRequest
+
+type ImportChronologyRowError struct {
+	Row    int    `json:"row"`
+	Agenda string `json:"agenda"`
+	Reason string `json:"reason"`
+}
+
+type ImportChronologyResult struct {
+	Imported int                      `json:"imported"`
+	Skipped  int                      `json:"skipped"`
+	Errors   []ImportChronologyRowError `json:"errors"`
+}
 
 type CreateCaseChronologyRequest struct {
 	AgendaDate  string   `json:"agenda_date" binding:"required"`
@@ -160,6 +173,7 @@ type LegalCaseResponse struct {
 	PIC               string                   `json:"pic"`
 	PICDivision       *DivisionResponse        `json:"pic_division,omitempty"`
 	DocumentLink      string                   `json:"document_link"`
+	Photo             string                   `json:"photo"`
 	CurrentStatus     string                   `json:"current_status"`
 	CaseDate          time.Time                `json:"case_date"`
 	Level             string                   `json:"level"`

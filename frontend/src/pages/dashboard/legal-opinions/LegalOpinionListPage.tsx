@@ -10,6 +10,8 @@ export default function LegalOpinionListPage() {
       createPath="/dashboard/legal-opinions/new"
       showColumnRequester={false}
       linkLabel="Detail →"
+      viewPermission="legal_opinion.view.own"
+      createPermission="legal_opinion.create.own"
     />
   )
 }

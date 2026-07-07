@@ -4,26 +4,27 @@ import { useState } from 'react'
 import { cn } from '@/lib/utils'
 import SidebarUserButton from '@/components/common/SidebarUserButton'
 import NotificationDropdown from '@/components/common/NotificationDropdown'
+import { useAuthStore } from '@/store/auth.store'
 
 const DATA_MASTER_ITEMS = [
-  { label: 'Perusahaan', href: '/admin/companies', icon: Building2 },
-  { label: 'Tujuan Pembuatan', href: '/admin/purpose-types', icon: Target },
-  { label: 'Jenis Dokumen', href: '/admin/document-types', icon: FileText },
-  { label: 'Jenis Kasus', href: '/admin/case-types', icon: Briefcase },
-  { label: 'Kategori', href: '/admin/case-categories', icon: FolderOpen },
-  { label: 'Kabupaten/Kota', href: '/admin/regencies', icon: MapPin },
-  { label: 'Cedant', href: '/admin/cedants', icon: UserCog },
-  { label: 'Divisi', href: '/admin/divisions', icon: Users },
+  { label: 'Perusahaan', href: '/admin/companies', icon: Building2, permissions: ['master_data.manage'] },
+  { label: 'Tujuan Pembuatan', href: '/admin/purpose-types', icon: Target, permissions: ['master_data.manage'] },
+  { label: 'Jenis Dokumen', href: '/admin/document-types', icon: FileText, permissions: ['master_data.manage'] },
+  { label: 'Jenis Kasus', href: '/admin/case-types', icon: Briefcase, permissions: ['master_data.manage'] },
+  { label: 'Kategori', href: '/admin/case-categories', icon: FolderOpen, permissions: ['master_data.manage'] },
+  { label: 'Kabupaten/Kota', href: '/admin/regencies', icon: MapPin, permissions: ['master_data.manage'] },
+  { label: 'Cedant', href: '/admin/cedants', icon: UserCog, permissions: ['master_data.manage'] },
+  { label: 'Divisi', href: '/admin/divisions', icon: Users, permissions: ['master_data.manage'] },
 ]
 
 const NAV = [
-  { label: 'Dashboard', href: '/admin', icon: LayoutDashboard, exact: true },
-  { label: 'Laporan', href: '/admin/reports', icon: BarChart3 },
-  { label: 'Legal Opinion', href: '/admin/legal-opinions', icon: FileText },
-  { label: 'Review Dokumen', href: '/admin/review-documents', icon: FileSearch },
-  { label: 'Manajemen Kasus', href: '/admin/legal-cases', icon: Scale },
-  { label: 'User Management', href: '/admin/users', icon: Users },
-  { label: 'Audit Log', href: '/admin/audit-logs', icon: ScrollText },
+  { label: 'Dashboard', href: '/admin', icon: LayoutDashboard, exact: true, permissions: ['dashboard.admin.view'] },
+  { label: 'Laporan', href: '/admin/reports', icon: BarChart3, permissions: ['report.legal_case.view', 'report.legal_opinion.view', 'report.document_review.view'] },
+  { label: 'Legal Opinion', href: '/admin/legal-opinions', icon: FileText, permissions: ['legal_opinion.view.all'] },
+  { label: 'Review Dokumen', href: '/admin/review-documents', icon: FileSearch, permissions: ['document_review.view.all'] },
+  { label: 'Manajemen Kasus', href: '/admin/legal-cases', icon: Scale, permissions: ['case_management.view'] },
+  { label: 'User Management', href: '/admin/users', icon: Users, permissions: ['user_management.view'] },
+  { label: 'Audit Log', href: '/admin/audit-logs', icon: ScrollText, permissions: ['audit_log.view'] },
 ]
 
 export default function AdminLayout() {
@@ -34,6 +35,17 @@ export default function AdminLayout() {
 
   const isActive = (href: string, exact?: boolean) =>
     exact ? location.pathname === href : location.pathname.startsWith(href)
+
+  const permissions = useAuthStore((state) => state.permissions)
+  const user = useAuthStore((state) => state.user)
+
+  const navItems = NAV.filter((item) =>
+    user?.role === 'ADMIN' || item.permissions.some((permission) => permissions.includes(permission))
+  )
+
+  const dataMasterItems = DATA_MASTER_ITEMS.filter((item) =>
+    user?.role === 'ADMIN' || item.permissions.some((permission) => permissions.includes(permission))
+  )
 
   return (
     <div className="min-h-screen flex" style={{ background: '#f8fafc' }}>
@@ -59,7 +71,7 @@ export default function AdminLayout() {
         </div>
 
         <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-          {NAV.map((item) => (
+          {navItems.map((item) => (
             <Link key={item.href} to={item.href} onClick={() => setSidebarOpen(false)}
               className={cn(
                 'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all',
@@ -76,36 +88,38 @@ export default function AdminLayout() {
             </Link>
           ))}
 
-          <div className="pt-2">
-            <button
-              onClick={() => setDataMasterOpen(!dataMasterOpen)}
-              className={cn(
-                'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all w-full',
-                'text-white/50 hover:bg-white/5 hover:text-white'
+          {dataMasterItems.length > 0 && (
+            <div className="pt-2">
+              <button
+                onClick={() => setDataMasterOpen(!dataMasterOpen)}
+                className={cn(
+                  'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all w-full',
+                  'text-white/50 hover:bg-white/5 hover:text-white'
+                )}
+              >
+                <FolderOpen className="w-4 h-4 flex-shrink-0" />
+                {!sidebarCollapsed && <span>Data Master</span>}
+                {!sidebarCollapsed && <ChevronRight className={cn('w-3.5 h-3.5 ml-auto opacity-60 transition-transform', dataMasterOpen && 'rotate-90')} />}
+              </button>
+              {dataMasterOpen && !sidebarCollapsed && (
+                <div className="ml-4 mt-1 space-y-0.5">
+                  {dataMasterItems.map((item) => (
+                    <Link key={item.href} to={item.href} onClick={() => setSidebarOpen(false)}
+                      className={cn(
+                        'flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all',
+                        isActive(item.href)
+                          ? 'bg-white/10 text-white'
+                          : 'text-white/50 hover:bg-white/5 hover:text-white'
+                      )}
+                    >
+                      <item.icon className="w-3.5 h-3.5 flex-shrink-0" />
+                      {item.label}
+                    </Link>
+                  ))}
+                </div>
               )}
-            >
-              <FolderOpen className="w-4 h-4 flex-shrink-0" />
-              {!sidebarCollapsed && <span>Data Master</span>}
-              {!sidebarCollapsed && <ChevronRight className={cn('w-3.5 h-3.5 ml-auto opacity-60 transition-transform', dataMasterOpen && 'rotate-90')} />}
-            </button>
-            {dataMasterOpen && !sidebarCollapsed && (
-              <div className="ml-4 mt-1 space-y-0.5">
-                {DATA_MASTER_ITEMS.map((item) => (
-                  <Link key={item.href} to={item.href} onClick={() => setSidebarOpen(false)}
-                    className={cn(
-                      'flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all',
-                      isActive(item.href)
-                        ? 'bg-white/10 text-white'
-                        : 'text-white/50 hover:bg-white/5 hover:text-white'
-                    )}
-                  >
-                    <item.icon className="w-3.5 h-3.5 flex-shrink-0" />
-                    {item.label}
-                  </Link>
-                ))}
-              </div>
-            )}
-          </div>
+            </div>
+          )}
 
           <Link to="/admin/materials" onClick={() => setSidebarOpen(false)}
             className={cn(

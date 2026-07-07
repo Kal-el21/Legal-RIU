@@ -11,6 +11,7 @@ import { useUsers, useCreateUser, useUpdateUser, useUpdateUserStatus, useResetPa
 import { useCompanies, useDivisions, usePurposeTypes } from '@/hooks/useLegalCase'
 import { formatDate } from '@/lib/utils'
 import { useAuthStore } from '@/store/auth.store'
+import PermissionGate from '@/components/common/PermissionGate'
 import type { User } from '@/types'
 import UserPermissionModal from './UserPermissionModal'
 
@@ -209,7 +210,8 @@ export default function UserManagementPage() {
   )
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <PermissionGate permission="user_management.view">
+      <div className="p-6 max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -572,5 +574,6 @@ export default function UserManagementPage() {
         </Modal>
       )}
     </div>
+      </PermissionGate>
   )
 }

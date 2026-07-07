@@ -6,14 +6,15 @@ import { dashboardService } from '@/services/dashboard.service'
 import { cn } from '@/lib/utils'
 import SidebarUserButton from '@/components/common/SidebarUserButton'
 import NotificationDropdown from '@/components/common/NotificationDropdown'
+import { useAuthStore } from '@/store/auth.store'
 
 const NAV = [
-  { label: 'Dashboard', href: '/legal', icon: LayoutDashboard, exact: true },
-  { label: 'Laporan', href: '/legal/reports', icon: BarChart3 },
-  { label: 'Legal Opinion', href: '/legal/legal-opinions', icon: FileText },
-  { label: 'Review Dokumen', href: '/legal/review-documents', icon: FileSearch },
-  { label: 'Manajemen Kasus', href: '/legal/legal-cases', icon: Scale },
-  { label: 'Audit Log', href: '/legal/audit-logs', icon: ScrollText },
+  { label: 'Dashboard', href: '/legal', icon: LayoutDashboard, exact: true, permissions: ['dashboard.legal.view'] },
+  { label: 'Laporan', href: '/legal/reports', icon: BarChart3, permissions: ['report.legal_case.view', 'report.legal_opinion.view', 'report.document_review.view'] },
+  { label: 'Legal Opinion', href: '/legal/legal-opinions', icon: FileText, permissions: ['legal_opinion.view.all'] },
+  { label: 'Review Dokumen', href: '/legal/review-documents', icon: FileSearch, permissions: ['document_review.view.all'] },
+  { label: 'Manajemen Kasus', href: '/legal/legal-cases', icon: Scale, permissions: ['case_management.view'] },
+  { label: 'Audit Log', href: '/legal/audit-logs', icon: ScrollText, permissions: ['audit_log.view'] },
 ]
 
 export default function LegalLayout() {
@@ -30,6 +31,13 @@ export default function LegalLayout() {
   })
 
   const reminderCount = (reminders?.yellow?.length ?? 0) + (reminders?.red?.length ?? 0)
+
+  const permissions = useAuthStore((state) => state.permissions)
+  const user = useAuthStore((state) => state.user)
+
+  const navItems = NAV.filter((item) =>
+    user?.role === 'ADMIN' || item.permissions.some((permission) => permissions.includes(permission))
+  )
 
   return (
     <div className="min-h-screen flex" style={{ background: '#f8fafc' }}>
@@ -55,7 +63,7 @@ export default function LegalLayout() {
         </div>
 
         <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-          {NAV.map((item) => (
+          {navItems.map((item) => (
             <Link key={item.href} to={item.href} onClick={() => setSidebarOpen(false)}
               className={cn(
                 'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all',
