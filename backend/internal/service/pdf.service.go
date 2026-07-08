@@ -326,6 +326,13 @@ func (s *pdfService) GenerateLegalCasePDF(lc *entity.LegalCase) ([]byte, error) 
 	pdf.Cell(0, 12, "Legal Case Report")
 	pdf.Ln(10)
 
+	// Ticket Number
+	pdf.SetFont("Arial", "", 11)
+	pdf.SetTextColor(0, 0, 0)
+	pdf.CellFormat(50, 8, "Ticket Number:", "0", 0, "", false, 0, "")
+	pdf.Cell(0, 8, lc.TicketNumber)
+	pdf.Ln(8)
+
 	// Status
 	pdf.SetFont("Arial", "", 11)
 	pdf.SetTextColor(0, 0, 0)

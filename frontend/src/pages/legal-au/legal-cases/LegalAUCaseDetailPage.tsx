@@ -33,6 +33,10 @@ export default function LegalAUCaseDetailPage() {
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Detail Kasus</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
+            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Ticket Number</p>
+            <p className="text-sm text-gray-900 mt-1">{legalCase.ticket_number || '-'}</p>
+          </div>
+          <div>
             <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Jenis Kasus</p>
             <p className="text-sm text-gray-900 mt-1">{legalCase.case_type?.label || '-'}</p>
           </div>

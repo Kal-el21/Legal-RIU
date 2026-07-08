@@ -227,6 +227,7 @@ export interface LegalCase {
   id: string
   case_name: string
   case_summary?: string
+  ticket_number?: string
   related_party_id: string
   related_party?: Cedant
   category_id: string

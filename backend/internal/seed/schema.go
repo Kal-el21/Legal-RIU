@@ -2,6 +2,8 @@ package seed
 
 import (
 	"errors"
+	"fmt"
+	"time"
 
 	"legal-riu-portal/internal/entity"
 
@@ -169,6 +171,54 @@ func EnforceLegalCaseNotNull(db *gorm.DB) error {
 	return nil
 }
 
+func BackfillLegalCaseTicketNumbers(db *gorm.DB) error {
+	var count int64
+	if err := db.Raw(`
+		SELECT COUNT(*)
+		FROM information_schema.columns
+		WHERE table_schema = current_schema()
+			AND table_name = 'legal_cases'
+			AND column_name = 'ticket_number'
+	`).Scan(&count).Error; err != nil {
+		return err
+	}
+	if count == 0 {
+		return nil
+	}
+
+	if err := db.Exec(`UPDATE legal_cases SET ticket_number = '' WHERE ticket_number IS NULL`).Error; err != nil {
+		return err
+	}
+
+	var existingCount int64
+	if err := db.Model(&entity.LegalCase{}).Where("ticket_number <> ''").Count(&existingCount).Error; err != nil {
+		return err
+	}
+
+	now := time.Now()
+	prefix := "LC"
+	month := now.Format("200601")
+
+	var cases []entity.LegalCase
+	if err := db.Where("ticket_number = ''").Order("created_at ASC, id ASC").Find(&cases).Error; err != nil {
+		return err
+	}
+	if len(cases) == 0 {
+		return nil
+	}
+
+	return db.Transaction(func(tx *gorm.DB) error {
+		for i, lc := range cases {
+			sequence := int(existingCount) + i + 1
+			ticket := fmt.Sprintf("%s-%s-%04d", prefix, month, sequence)
+			if err := tx.Model(&lc).Update("ticket_number", ticket).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
 func AddStatusUpdatedAtColumns(db *gorm.DB) error {
 	// Add status_updated_at to legal_opinions if not exists
 	if !db.Migrator().HasColumn(&entity.LegalOpinion{}, "status_updated_at") {
@@ -191,7 +241,24 @@ func AddStatusUpdatedAtColumns(db *gorm.DB) error {
 		}
 	}
 
+	// Add ticket_number to legal_cases if not exists
+	if err := db.Exec(`
+		ALTER TABLE legal_cases ADD COLUMN IF NOT EXISTS ticket_number text DEFAULT ''
+	`).Error; err != nil {
+		return err
+	}
+
 	return nil
+}
+
+func EnforceLegalCaseTicketNumberNotNull(db *gorm.DB) error {
+	if !db.Migrator().HasColumn(&entity.LegalCase{}, "ticket_number") {
+		return nil
+	}
+	if err := db.Exec(`UPDATE legal_cases SET ticket_number = '' WHERE ticket_number IS NULL`).Error; err != nil {
+		return err
+	}
+	return db.Exec(`ALTER TABLE legal_cases ALTER COLUMN ticket_number SET NOT NULL`).Error
 }
 
 func MigrateTechnicalReserveToDecimal(db *gorm.DB) error {
@@ -227,39 +294,43 @@ func RunAllMigrationsAndSeeds(db *gorm.DB) error {
 	if err := MigrateTechnicalReserveToDecimal(db); err != nil {
 		return err
 	}
-	if err := db.AutoMigrate(
- 		&entity.Division{},
- 		&entity.User{},
- 		&entity.RefreshToken{},
- 		&entity.Permission{},
- 		&entity.RolePermission{},
- 		&entity.UserPermissionOverride{},
- 		&entity.LegalOpinion{},
- 		&entity.LegalOpinionAttachment{},
- 		&entity.LegalOpinionResult{},
- 		&entity.DocumentReview{},
- 		&entity.DocumentReviewAttachment{},
- 		&entity.DocumentReviewResult{},
- 		&entity.Regency{},
- 		&entity.Cedant{},
- 		&entity.LegalCase{},
- 		&entity.CaseChronology{},
- 		&entity.AuditLog{},
- 		&entity.NotificationSetting{},
- 		&entity.UserSettings{},
- 		&entity.Company{},
- 		&entity.PurposeType{},
- 		&entity.CaseType{},
- 		&entity.CaseCategory{},
- 		&entity.DocumentType{},
- 		&entity.LegalMaterial{},
- 	); err != nil {
- 		return err
- 	}
 
- 	if err := AddStatusUpdatedAtColumns(db); err != nil {
- 		return err
- 	}
+	if err := AddStatusUpdatedAtColumns(db); err != nil {
+		return err
+	}
+	if err := BackfillLegalCaseTicketNumbers(db); err != nil {
+		return err
+	}
+
+	if err := db.AutoMigrate(
+		&entity.Division{},
+		&entity.User{},
+		&entity.RefreshToken{},
+		&entity.Permission{},
+		&entity.RolePermission{},
+		&entity.UserPermissionOverride{},
+		&entity.LegalOpinion{},
+		&entity.LegalOpinionAttachment{},
+		&entity.LegalOpinionResult{},
+		&entity.DocumentReview{},
+		&entity.DocumentReviewAttachment{},
+		&entity.DocumentReviewResult{},
+		&entity.Regency{},
+		&entity.Cedant{},
+		&entity.LegalCase{},
+		&entity.CaseChronology{},
+		&entity.AuditLog{},
+		&entity.NotificationSetting{},
+		&entity.UserSettings{},
+		&entity.Company{},
+		&entity.PurposeType{},
+		&entity.CaseType{},
+		&entity.CaseCategory{},
+		&entity.DocumentType{},
+		&entity.LegalMaterial{},
+	); err != nil {
+		return err
+	}
 
 	if err := BackfillLegalCaseTypeCategory(db); err != nil {
 		return err
@@ -299,6 +370,9 @@ func RunAllMigrationsAndSeeds(db *gorm.DB) error {
 		return err
 	}
 	if err := EnforceLegalCaseNotNull(db); err != nil {
+		return err
+	}
+	if err := EnforceLegalCaseTicketNumberNotNull(db); err != nil {
 		return err
 	}
 	if err := SeedNotificationSettings(db); err != nil {

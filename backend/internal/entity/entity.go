@@ -300,6 +300,7 @@ type LegalCase struct {
 	Base
 	CaseName          string           `gorm:"size:255;not null;index" json:"case_name"`
 	CaseSummary       string           `gorm:"type:text" json:"case_summary"`
+	TicketNumber      string           `gorm:"uniqueIndex" json:"ticket_number"`
 	RelatedPartyID    uuid.UUID        `gorm:"type:uuid;not null;index" json:"related_party_id"`
 	RelatedParty      Cedant           `gorm:"foreignKey:RelatedPartyID" json:"related_party,omitempty"`
 	CategoryID        *uuid.UUID       `gorm:"type:uuid;index" json:"category_id,omitempty"`

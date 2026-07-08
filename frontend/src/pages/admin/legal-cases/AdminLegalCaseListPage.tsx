@@ -166,7 +166,7 @@ export default function AdminLegalCaseListPage() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-gray-100" style={{ background: '#f8fafc' }}>
-                <th className="w-16 px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">No</th>
+                <th className="w-32 px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Ticket Number</th>
                 <th className="px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Nama Kasus</th>
                 <th className="px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Kategori</th>
                 <th className="px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Jenis Kasus</th>
@@ -176,14 +176,14 @@ export default function AdminLegalCaseListPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {data.items.map((item, index) => (
+              {data.items.map((item) => (
                 <tr
                   key={item.id}
                   className="hover:bg-gray-50/50 relative"
                   onMouseEnter={() => setHoveredCaseId(item.id)}
                   onMouseLeave={() => setHoveredCaseId(null)}
                 >
-                  <td className="px-6 py-4 text-sm text-gray-500">{((page - 1) * 10) + index + 1}</td>
+                  <td className="px-6 py-4 text-sm text-gray-500">{item.ticket_number || '-'}</td>
                   <td className="px-6 py-4">
                     <p className="max-w-[260px] truncate text-sm font-medium text-gray-900">{item.case_name}</p>
                     <p className="text-xs text-gray-400">{formatDate(item.case_date)} - {item.level}</p>

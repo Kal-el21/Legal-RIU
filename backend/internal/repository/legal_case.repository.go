@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"fmt"
 	"time"
 
 	"legal-riu-portal/internal/entity"
@@ -29,6 +30,7 @@ type LegalCaseRepository interface {
 	Update(legalCase *entity.LegalCase) error
 	UpdateStatus(id uuid.UUID, status string, statusUpdatedAt *time.Time) error
 	Delete(id uuid.UUID) error
+	CountByMonthAndPrefix(prefix string) (int64, error)
 
 	ListChronologies(caseID uuid.UUID) ([]entity.CaseChronology, error)
 	FindChronology(caseID uuid.UUID, chronologyID uuid.UUID) (*entity.CaseChronology, error)
@@ -143,6 +145,17 @@ func (r *legalCaseRepository) UpdateStatus(id uuid.UUID, status string, statusUp
 
 func (r *legalCaseRepository) Delete(id uuid.UUID) error {
 	return r.db.Delete(&entity.LegalCase{}, "id = ?", id).Error
+}
+
+func (r *legalCaseRepository) CountByMonthAndPrefix(prefix string) (int64, error) {
+	var count int64
+	now := time.Now()
+	start := fmt.Sprintf("%s-%s-", prefix, now.Format("200601"))
+	err := r.db.Model(&entity.LegalCase{}).
+		Where("ticket_number LIKE ? AND created_at >= ?", start+"%",
+			time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())).
+		Count(&count).Error
+	return count, err
 }
 
 func (r *legalCaseRepository) ListChronologies(caseID uuid.UUID) ([]entity.CaseChronology, error) {

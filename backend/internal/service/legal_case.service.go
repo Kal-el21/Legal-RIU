@@ -69,10 +69,17 @@ func NewLegalCaseService(repo repository.LegalCaseRepository, s *storage.MinIOCl
 }
 
 func (s *legalCaseService) Create(companyID *uuid.UUID, req dto.CreateLegalCaseRequest) (*dto.LegalCaseResponse, error) {
+	count, err := s.repo.CountByMonthAndPrefix("LC")
+	if err != nil {
+		return nil, errors.New("gagal generate ticket number")
+	}
+	ticket := utils.GenerateTicketNumber(utils.PrefixLegalCase, int(count)+1)
+
 	legalCase, err := s.buildLegalCase(companyID, req)
 	if err != nil {
 		return nil, err
 	}
+	legalCase.TicketNumber = ticket
 
 	if err := s.repo.Create(legalCase); err != nil {
 		return nil, errors.New("gagal membuat kasus hukum")
@@ -1060,6 +1067,7 @@ func toLegalCaseResponse(legalCase *entity.LegalCase, includeChronologies bool) 
 		ID:                legalCase.ID.String(),
 		CaseName:          legalCase.CaseName,
 		CaseSummary:       legalCase.CaseSummary,
+		TicketNumber:      legalCase.TicketNumber,
 		RelatedPartyID:    legalCase.RelatedPartyID.String(),
 		CategoryID:        categoryID,
 		Specification:     legalCase.Specification,

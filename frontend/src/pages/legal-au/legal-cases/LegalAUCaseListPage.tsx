@@ -47,16 +47,18 @@ export default function LegalAUCaseListPage() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-gray-100" style={{ background: '#f8fafc' }}>
-                <th className="text-left px-6 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">Nama Kasus</th>
-                <th className="text-left px-6 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">Jenis</th>
-                <th className="text-left px-6 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</th>
-                <th className="text-left px-6 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">Tanggal</th>
-                <th className="px-6 py-3.5 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide">Aksi</th>
+                <th className="w-32 px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Ticket Number</th>
+                <th className="text-left px-6 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500">Nama Kasus</th>
+                <th className="text-left px-6 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500">Jenis</th>
+                <th className="text-left px-6 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500">Status</th>
+                <th className="text-left px-6 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500">Tanggal</th>
+                <th className="px-6 py-3.5 text-right text-xs font-semibold uppercase tracking-wide text-gray-500">Aksi</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
               {data.items.map((item: LegalCase) => (
                 <tr key={item.id} className="hover:bg-gray-50/50 transition-colors">
+                  <td className="px-6 py-4 text-sm text-gray-500">{item.ticket_number || '-'}</td>
                   <td className="px-6 py-4">
                     <p className="text-sm font-medium text-gray-900">{item.case_name}</p>
                     <p className="text-xs text-gray-400">{item.company?.name}</p>

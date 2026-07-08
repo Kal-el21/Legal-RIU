@@ -151,6 +151,7 @@ type LegalCaseResponse struct {
 	ID                string                   `json:"id"`
 	CaseName          string                   `json:"case_name"`
 	CaseSummary       string                   `json:"case_summary"`
+	TicketNumber      string                   `json:"ticket_number"`
 	RelatedPartyID    string                   `json:"related_party_id"`
 	RelatedParty      *CedantResponse          `json:"related_party,omitempty"`
 	CategoryID        string                   `json:"category_id"`
