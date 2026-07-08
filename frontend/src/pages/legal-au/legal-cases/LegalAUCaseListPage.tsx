@@ -58,7 +58,11 @@ export default function LegalAUCaseListPage() {
             <tbody className="divide-y divide-gray-50">
               {data.items.map((item: LegalCase) => (
                 <tr key={item.id} className="hover:bg-gray-50/50 transition-colors">
-                  <td className="px-6 py-4 text-sm text-gray-500">{item.ticket_number || '-'}</td>
+                  <td className="px-6 py-4">
+                    <span className="text-xs font-mono font-medium text-gray-600 bg-gray-100 px-2 py-1 rounded">
+                      {item.ticket_number || '-'}
+                    </span>
+                  </td>
                   <td className="px-6 py-4">
                     <p className="text-sm font-medium text-gray-900">{item.case_name}</p>
                     <p className="text-xs text-gray-400">{item.company?.name}</p>

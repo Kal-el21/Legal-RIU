@@ -183,7 +183,11 @@ export default function AdminLegalCaseListPage() {
                   onMouseEnter={() => setHoveredCaseId(item.id)}
                   onMouseLeave={() => setHoveredCaseId(null)}
                 >
-                  <td className="px-6 py-4 text-sm text-gray-500">{item.ticket_number || '-'}</td>
+                  <td className="px-6 py-4">
+                    <span className="text-xs font-mono font-medium text-gray-600 bg-gray-100 px-2 py-1 rounded">
+                      {item.ticket_number || '-'}
+                    </span>
+                  </td>
                   <td className="px-6 py-4">
                     <p className="max-w-[260px] truncate text-sm font-medium text-gray-900">{item.case_name}</p>
                     <p className="text-xs text-gray-400">{formatDate(item.case_date)} - {item.level}</p>
