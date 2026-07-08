@@ -6,7 +6,9 @@ import { Plus, Search, Edit, Trash2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { useCompanies, useCreateCompany, useUpdateCompany, useDeleteCompany } from '@/hooks/useLegalCase'
+import { useCompanies, useCreateCompany, useUpdateCompany, useDeleteCompany, useImportCompanies } from '@/hooks/useLegalCase'
+import { legalCaseService } from '@/services/legal-case.service'
+import ImportCard from '@/components/common/ImportCard'
 import type { Company } from '@/types'
 
 const schema = z.object({
@@ -52,6 +54,7 @@ export default function CompanyManagementPage() {
   const createMutation = useCreateCompany()
   const updateMutation = useUpdateCompany()
   const deleteMutation = useDeleteCompany()
+  const importMutation = useImportCompanies()
 
   const form = useForm<FormData>({ resolver: zodResolver(schema), defaultValues: { name: '', email_domain: '', is_internal: true } })
 
@@ -99,7 +102,13 @@ export default function CompanyManagementPage() {
         <Input placeholder="Cari perusahaan..." className="pl-9" value={search} onChange={(e) => { setSearch(e.target.value) }} />
       </div>
 
-      <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+      <ImportCard
+        title="Impor dari Excel"
+        onImport={(file) => importMutation.mutateAsync(file)}
+        onDownloadTemplate={() => legalCaseService.downloadCompanyTemplate()}
+      />
+
+      <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden mt-4">
         {isLoading ? (
           <div className="p-12 text-center text-gray-400">Memuat data...</div>
         ) : !filtered.length ? (

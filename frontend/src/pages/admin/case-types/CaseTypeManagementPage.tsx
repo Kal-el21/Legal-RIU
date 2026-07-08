@@ -6,7 +6,8 @@ import { Plus, Search, Edit, Trash2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { useCaseTypes, useCreateCaseType, useUpdateCaseType, useDeleteCaseType } from '@/hooks/useLegalCase'
+import { useCaseTypes, useCreateCaseType, useUpdateCaseType, useDeleteCaseType, useImportCaseTypes } from '@/hooks/useLegalCase'
+import { legalCaseService } from '@/services/legal-case.service'
 import type { CaseType } from '@/types'
 
 const schema = z.object({
@@ -43,6 +44,8 @@ function Field({ label, error, children }: { label: string; error?: string; chil
   )
 }
 
+import ImportCard from '@/components/common/ImportCard'
+
 export default function CaseTypeManagementPage() {
   const [search, setSearch] = useState('')
   const [modal, setModal] = useState<'create' | 'edit' | null>(null)
@@ -52,6 +55,7 @@ export default function CaseTypeManagementPage() {
   const createMutation = useCreateCaseType()
   const updateMutation = useUpdateCaseType()
   const deleteMutation = useDeleteCaseType()
+  const importMutation = useImportCaseTypes()
 
   const form = useForm<FormData>({ resolver: zodResolver(schema), defaultValues: { code: '', label: '', is_active: true } })
 
@@ -99,7 +103,13 @@ export default function CaseTypeManagementPage() {
         <Input placeholder="Cari..." className="pl-9" value={search} onChange={(e) => { setSearch(e.target.value) }} />
       </div>
 
-      <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+      <ImportCard
+        title="Impor dari Excel"
+        onImport={(file) => importMutation.mutateAsync(file)}
+        onDownloadTemplate={() => legalCaseService.downloadCaseTypeTemplate()}
+      />
+
+      <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden mt-4">
         {isLoading ? (
           <div className="p-12 text-center text-gray-400">Memuat data...</div>
         ) : !filtered.length ? (

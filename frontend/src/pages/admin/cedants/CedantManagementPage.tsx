@@ -6,7 +6,9 @@ import { Plus, Search, Edit, Trash2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { useCedants, useCreateCedant } from '@/hooks/useLegalCase'
+import { useCedants, useCreateCedant, useImportCedants } from '@/hooks/useLegalCase'
+import { legalCaseService } from '@/services/legal-case.service'
+import ImportCard from '@/components/common/ImportCard'
 import api from '@/services/api'
 import type { Cedant } from '@/types'
 
@@ -50,6 +52,7 @@ export default function CedantManagementPage() {
 
   const { data, isLoading } = useCedants({ limit: 200 })
   const createMutation = useCreateCedant()
+  const importMutation = useImportCedants()
 
   const form = useForm<FormData>({ resolver: zodResolver(schema), defaultValues: { name: '', description: '' } })
 
@@ -99,7 +102,13 @@ export default function CedantManagementPage() {
         <Input placeholder="Cari..." className="pl-9" value={search} onChange={(e) => { setSearch(e.target.value) }} />
       </div>
 
-      <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+      <ImportCard
+        title="Impor dari Excel"
+        onImport={(file) => importMutation.mutateAsync(file)}
+        onDownloadTemplate={() => legalCaseService.downloadCedantTemplate()}
+      />
+
+      <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden mt-4">
         {isLoading ? (
           <div className="p-12 text-center text-gray-400">Memuat data...</div>
         ) : !filtered.length ? (

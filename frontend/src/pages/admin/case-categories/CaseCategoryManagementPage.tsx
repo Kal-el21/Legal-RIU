@@ -6,7 +6,9 @@ import { Plus, Search, Edit, Trash2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { useCaseCategories, useCreateCaseCategory, useUpdateCaseCategory, useDeleteCaseCategory } from '@/hooks/useLegalCase'
+import { useCaseCategories, useCreateCaseCategory, useUpdateCaseCategory, useDeleteCaseCategory, useImportCaseCategories } from '@/hooks/useLegalCase'
+import { legalCaseService } from '@/services/legal-case.service'
+import ImportCard from '@/components/common/ImportCard'
 import type { CaseCategory } from '@/types'
 
 const schema = z.object({
@@ -52,6 +54,7 @@ export default function CaseCategoryManagementPage() {
   const createMutation = useCreateCaseCategory()
   const updateMutation = useUpdateCaseCategory()
   const deleteMutation = useDeleteCaseCategory()
+  const importMutation = useImportCaseCategories()
 
   const form = useForm<FormData>({ resolver: zodResolver(schema), defaultValues: { code: '', label: '', is_active: true } })
 
@@ -99,7 +102,13 @@ export default function CaseCategoryManagementPage() {
         <Input placeholder="Cari..." className="pl-9" value={search} onChange={(e) => { setSearch(e.target.value) }} />
       </div>
 
-      <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+      <ImportCard
+        title="Impor dari Excel"
+        onImport={(file) => importMutation.mutateAsync(file)}
+        onDownloadTemplate={() => legalCaseService.downloadCaseCategoryTemplate()}
+      />
+
+      <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden mt-4">
         {isLoading ? (
           <div className="p-12 text-center text-gray-400">Memuat data...</div>
         ) : !filtered.length ? (

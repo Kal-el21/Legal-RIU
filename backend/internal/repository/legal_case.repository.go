@@ -38,9 +38,12 @@ type LegalCaseRepository interface {
 
 	ListRegencies(search string, limit int) ([]entity.Regency, error)
 	FindRegencyByID(id uuid.UUID) (*entity.Regency, error)
+	FindRegencyByNameAndProvince(name string, province string) (*entity.Regency, error)
+	CreateRegency(regency *entity.Regency) error
 
 	ListCedants(search string, limit int) ([]entity.Cedant, error)
 	FindCedantByID(id uuid.UUID) (*entity.Cedant, error)
+	FindCedantByName(name string) (*entity.Cedant, error)
 	CreateCedant(cedant *entity.Cedant) error
 	UpdateCedant(cedant *entity.Cedant) error
 	DeleteCedant(id uuid.UUID) error
@@ -197,6 +200,19 @@ func (r *legalCaseRepository) FindRegencyByID(id uuid.UUID) (*entity.Regency, er
 	return &regency, nil
 }
 
+func (r *legalCaseRepository) FindRegencyByNameAndProvince(name string, province string) (*entity.Regency, error) {
+	var regency entity.Regency
+	err := r.db.Where("name = ? AND province = ?", name, province).First(&regency).Error
+	if err != nil {
+		return nil, err
+	}
+	return &regency, nil
+}
+
+func (r *legalCaseRepository) CreateRegency(regency *entity.Regency) error {
+	return r.db.Create(regency).Error
+}
+
 func (r *legalCaseRepository) ListCedants(search string, limit int) ([]entity.Cedant, error) {
 	var items []entity.Cedant
 	query := r.db.Model(&entity.Cedant{})
@@ -213,6 +229,15 @@ func (r *legalCaseRepository) ListCedants(search string, limit int) ([]entity.Ce
 func (r *legalCaseRepository) FindCedantByID(id uuid.UUID) (*entity.Cedant, error) {
 	var cedant entity.Cedant
 	err := r.db.Where("id = ?", id).First(&cedant).Error
+	if err != nil {
+		return nil, err
+	}
+	return &cedant, nil
+}
+
+func (r *legalCaseRepository) FindCedantByName(name string) (*entity.Cedant, error) {
+	var cedant entity.Cedant
+	err := r.db.Where("name = ?", name).First(&cedant).Error
 	if err != nil {
 		return nil, err
 	}

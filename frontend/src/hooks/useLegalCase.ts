@@ -100,6 +100,96 @@ export function useImportCaseChronology(caseID: string) {
   })
 }
 
+export function useImportCedants() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (file: File) => legalCaseService.importCedants(file),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEYS.cedants() })
+    },
+  })
+}
+
+export function useImportRegencies() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (file: File) => legalCaseService.importRegencies(file),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEYS.regencies() })
+    },
+  })
+}
+
+export function useImportDivisions() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (file: File) => legalCaseService.importDivisions(file),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEYS.divisions() })
+    },
+  })
+}
+
+export function useImportCaseTypes() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (file: File) => legalCaseService.importCaseTypes(file),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEYS.caseTypes() })
+    },
+  })
+}
+
+export function useImportCaseCategories() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (file: File) => legalCaseService.importCaseCategories(file),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEYS.caseCategories() })
+    },
+  })
+}
+
+export function useImportCompanies() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (file: File) => legalCaseService.importCompanies(file),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEYS.companies() })
+    },
+  })
+}
+
+export function useImportPurposeTypes() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (file: File) => legalCaseService.importPurposeTypes(file),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEYS.purposeTypes() })
+    },
+  })
+}
+
+export function useImportDocumentTypes() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (file: File) => legalCaseService.importDocumentTypes(file),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEYS.all })
+    },
+  })
+}
+
+export function useImportLegalMaterials() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (file: File) => legalCaseService.importLegalMaterials(file),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEYS.all })
+    },
+  })
+}
+
 export function useRegencies(params?: { search?: string; limit?: number }) {
   return useQuery({
     queryKey: KEYS.regencies(params),

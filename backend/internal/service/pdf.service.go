@@ -367,7 +367,7 @@ func (s *pdfService) GenerateLegalCasePDF(lc *entity.LegalCase) ([]byte, error) 
 	pdf.Ln(4)
 
 	pdf.CellFormat(50, 7, "Cadangan Teknis:", "0", 0, "", false, 0, "")
-	pdf.Cell(0, 7, lc.TechnicalReserve)
+	pdf.Cell(0, 7, fmt.Sprintf("%.2f", lc.TechnicalReserve))
 	pdf.Ln(7)
 
 	pdf.CellFormat(50, 7, "Nilai Kasus:", "0", 0, "", false, 0, "")

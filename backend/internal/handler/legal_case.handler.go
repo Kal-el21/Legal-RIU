@@ -409,6 +409,60 @@ func (h *LegalCaseHandler) DeleteCedant(c *gin.Context) {
 	utils.OK(c, "Cedant berhasil dihapus", nil)
 }
 
+func (h *LegalCaseHandler) ImportCedants(c *gin.Context) {
+	file, err := c.FormFile("file")
+	if err != nil {
+		utils.BadRequest(c, "File Excel wajib diupload", err.Error())
+		return
+	}
+	result, err := h.svc.ImportCedants(file)
+	if err != nil {
+		utils.BadRequest(c, err.Error(), nil)
+		return
+	}
+	middleware.SetAuditContext(c, entity.ActionFileUpload, "cedant", "import")
+	c.Set("audit_description", "Cedants imported")
+	utils.OK(c, "Impor cedant selesai", result)
+}
+
+func (h *LegalCaseHandler) DownloadCedantTemplate(c *gin.Context) {
+	buf, err := h.svc.GenerateCedantTemplate()
+	if err != nil {
+		utils.InternalError(c, err.Error())
+		return
+	}
+	c.DataFromReader(-1, -1, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", buf, map[string]string{
+		"Content-Disposition": `attachment; filename="cedant-template.xlsx"`,
+	})
+}
+
+func (h *LegalCaseHandler) ImportRegencies(c *gin.Context) {
+	file, err := c.FormFile("file")
+	if err != nil {
+		utils.BadRequest(c, "File Excel wajib diupload", err.Error())
+		return
+	}
+	result, err := h.svc.ImportRegencies(file)
+	if err != nil {
+		utils.BadRequest(c, err.Error(), nil)
+		return
+	}
+	middleware.SetAuditContext(c, entity.ActionFileUpload, "regency", "import")
+	c.Set("audit_description", "Regencies imported")
+	utils.OK(c, "Impor regensi selesai", result)
+}
+
+func (h *LegalCaseHandler) DownloadRegencyTemplate(c *gin.Context) {
+	buf, err := h.svc.GenerateRegencyTemplate()
+	if err != nil {
+		utils.InternalError(c, err.Error())
+		return
+	}
+	c.DataFromReader(-1, -1, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", buf, map[string]string{
+		"Content-Disposition": `attachment; filename="regency-template.xlsx"`,
+	})
+}
+
 func (h *LegalCaseHandler) UpdateStatus(c *gin.Context) {
 	id := c.Param("id")
 	var body struct {

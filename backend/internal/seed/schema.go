@@ -194,11 +194,40 @@ func AddStatusUpdatedAtColumns(db *gorm.DB) error {
 	return nil
 }
 
+func MigrateTechnicalReserveToDecimal(db *gorm.DB) error {
+	var colCount int64
+	if err := db.Raw(`
+		SELECT COUNT(*)
+		FROM information_schema.columns
+		WHERE table_schema = current_schema()
+			AND table_name = 'legal_cases'
+			AND column_name = 'technical_reserve'
+			AND data_type = 'character varying'
+	`).Scan(&colCount).Error; err != nil {
+		return err
+	}
+	if colCount == 0 {
+		return nil
+	}
+
+	return db.Exec(`
+		ALTER TABLE legal_cases
+		ALTER COLUMN technical_reserve TYPE decimal(18,2)
+		USING CASE
+			WHEN technical_reserve ~ '^[0-9]+(\.[0-9]+)?$' THEN technical_reserve::decimal(18,2)
+			ELSE NULL
+		END
+	`).Error
+}
+
 func RunAllMigrationsAndSeeds(db *gorm.DB) error {
 	if err := PrepareLegalCasePICMigration(db); err != nil {
 		return err
 	}
-if err := db.AutoMigrate(
+	if err := MigrateTechnicalReserveToDecimal(db); err != nil {
+		return err
+	}
+	if err := db.AutoMigrate(
  		&entity.Division{},
  		&entity.User{},
  		&entity.RefreshToken{},

@@ -307,7 +307,7 @@ type LegalCase struct {
 	Specification     string           `gorm:"type:text" json:"specification"`
 	CaseTypeID        *uuid.UUID       `gorm:"type:uuid;index" json:"case_type_id,omitempty"`
 	CaseTypeRef       CaseType         `gorm:"foreignKey:CaseTypeID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT;" json:"case_type_ref,omitempty"`
-	TechnicalReserve  string           `gorm:"size:255" json:"technical_reserve"`
+	TechnicalReserve  float64         `gorm:"type:decimal(18,2)" json:"technical_reserve"`
 	CaseValue         float64          `gorm:"type:decimal(18,2)" json:"case_value"`
 	PIC               uuid.UUID        `gorm:"type:uuid;index" json:"pic"`
 	PICDivision       Division         `gorm:"foreignKey:PIC" json:"pic_division,omitempty"`

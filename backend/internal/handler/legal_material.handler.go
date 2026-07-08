@@ -116,3 +116,30 @@ func (h *LegalMaterialHandler) Delete(c *gin.Context) {
 	c.Set("audit_description", "Legal material deleted")
 	utils.OK(c, "Materi berhasil dihapus", nil)
 }
+
+func (h *LegalMaterialHandler) ImportLegalMaterials(c *gin.Context) {
+	file, err := c.FormFile("file")
+	if err != nil {
+		utils.BadRequest(c, "File Excel wajib diupload", err.Error())
+		return
+	}
+	result, err := h.svc.ImportFromExcel(file)
+	if err != nil {
+		utils.BadRequest(c, err.Error(), nil)
+		return
+	}
+	middleware.SetAuditContext(c, entity.ActionFileUpload, "legal_material", "import")
+	c.Set("audit_description", "Legal materials imported")
+	utils.OK(c, "Impor materi selesai", result)
+}
+
+func (h *LegalMaterialHandler) DownloadLegalMaterialTemplate(c *gin.Context) {
+	buf, err := h.svc.GenerateImportTemplate()
+	if err != nil {
+		utils.InternalError(c, err.Error())
+		return
+	}
+	c.DataFromReader(-1, -1, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", buf, map[string]string{
+		"Content-Disposition": `attachment; filename="legal-material-template.xlsx"`,
+	})
+}

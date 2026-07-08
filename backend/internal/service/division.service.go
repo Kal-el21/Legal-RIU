@@ -1,11 +1,17 @@
 package service
 
 import (
+	"bytes"
 	"errors"
+	"mime/multipart"
+
+	"legal-riu-portal/internal/dto"
 	"legal-riu-portal/internal/entity"
 	"legal-riu-portal/internal/repository"
+	"legal-riu-portal/internal/utils"
 
 	"github.com/google/uuid"
+	"github.com/xuri/excelize/v2"
 )
 
 type DivisionService interface {
@@ -15,6 +21,8 @@ type DivisionService interface {
 	Update(id, name, description string) (*entity.Division, error)
 	Delete(id string) error
 	SyncFromList(divisions []entity.Division) error
+	ImportFromExcel(file *multipart.FileHeader) (*dto.ImportResult, error)
+	GenerateImportTemplate() (*bytes.Buffer, error)
 }
 
 type divisionService struct {
@@ -92,4 +100,68 @@ func (s *divisionService) SyncFromList(divisions []entity.Division) error {
 		}
 	}
 	return nil
+}
+
+func (s *divisionService) ImportFromExcel(file *multipart.FileHeader) (*dto.ImportResult, error) {
+	rows, err := utils.ReadSheet(file, 0)
+	if err != nil {
+		return nil, errors.New("gagal membaca file Excel: " + err.Error())
+	}
+
+	result := &dto.ImportResult{Errors: []dto.ImportRowError{}}
+	if len(rows) < 2 {
+		return result, nil
+	}
+
+	header := utils.NormalizeHeaders(rows[0])
+	colName := utils.IndexOfHeader(header, "name")
+	colDescription := utils.IndexOfHeader(header, "description")
+
+	for i, row := range rows[1:] {
+		rowNumber := i + 2
+		if utils.IsEmptyRow(row) {
+			continue
+		}
+
+		name := utils.CellValue(row, colName)
+		description := utils.CellValue(row, colDescription)
+
+		if name == "" {
+			utils.AppendRowError(result, rowNumber, "name", "nama wajib diisi")
+			continue
+		}
+
+		_, err := s.repo.FindByName(name)
+		if err == nil {
+			utils.AppendRowError(result, rowNumber, "name", "nama sudah ada")
+			continue
+		}
+
+		division := &entity.Division{Name: name, Description: description}
+		if err := s.repo.Create(division); err != nil {
+			utils.AppendRowError(result, rowNumber, "name", "gagal menyimpan")
+			continue
+		}
+		result.Imported++
+	}
+
+	return result, nil
+}
+
+func (s *divisionService) GenerateImportTemplate() (*bytes.Buffer, error) {
+	wb := excelize.NewFile()
+	defer wb.Close()
+
+	headers := []string{"name", "description"}
+	examples := [][]string{
+		{"Divisi Hukum", "Divisi yang menangani hukum"},
+		{"Divisi Teknik", "Divisi yang menangani teknik"},
+	}
+	utils.GenerateTemplate(wb, "Template", headers, examples)
+
+	var buf bytes.Buffer
+	if err := wb.Write(&buf); err != nil {
+		return nil, errors.New("gagal membuat template: " + err.Error())
+	}
+	return &buf, nil
 }

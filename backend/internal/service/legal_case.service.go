@@ -16,6 +16,7 @@ import (
 	"legal-riu-portal/internal/entity"
 	"legal-riu-portal/internal/repository"
 	"legal-riu-portal/internal/storage"
+	"legal-riu-portal/internal/utils"
 
 	"github.com/google/uuid"
 	"github.com/minio/minio-go/v7"
@@ -40,7 +41,7 @@ type LegalCaseService interface {
 	DeleteDocument(caseID string) (*dto.LegalCaseResponse, error)
 	UploadPhoto(caseID string, file *multipart.FileHeader) (*dto.LegalCaseResponse, error)
 	DeletePhoto(caseID string) (*dto.LegalCaseResponse, error)
-	ImportChronologies(caseID string, file *multipart.FileHeader) (*dto.ImportChronologyResult, error)
+	ImportChronologies(caseID string, file *multipart.FileHeader) (*dto.ImportResult, error)
 	GenerateChronologyTemplate() (*bytes.Buffer, error)
 	ViewFile(filePath string) (*minio.Object, string, error)
 
@@ -49,6 +50,10 @@ type LegalCaseService interface {
 	CreateCedant(req dto.CreateCedantRequest) (*dto.CedantResponse, error)
 	UpdateCedant(id string, req dto.UpdateCedantRequest) (*dto.CedantResponse, error)
 	DeleteCedant(id string) error
+	ImportCedants(file *multipart.FileHeader) (*dto.ImportResult, error)
+	GenerateCedantTemplate() (*bytes.Buffer, error)
+	ImportRegencies(file *multipart.FileHeader) (*dto.ImportResult, error)
+	GenerateRegencyTemplate() (*bytes.Buffer, error)
 
 	GeneratePDF(id string) ([]byte, error)
 }
@@ -422,6 +427,140 @@ func (s *legalCaseService) DeleteCedant(id string) error {
 	return nil
 }
 
+func (s *legalCaseService) ImportCedants(file *multipart.FileHeader) (*dto.ImportResult, error) {
+	rows, err := utils.ReadSheet(file, 0)
+	if err != nil {
+		return nil, errors.New("gagal membaca file Excel: " + err.Error())
+	}
+
+	result := &dto.ImportResult{Errors: []dto.ImportRowError{}}
+	if len(rows) < 2 {
+		return result, nil
+	}
+
+	header := utils.NormalizeHeaders(rows[0])
+	colName := utils.IndexOfHeader(header, "name")
+	colDescription := utils.IndexOfHeader(header, "description")
+
+	for i, row := range rows[1:] {
+		rowNumber := i + 2
+		if utils.IsEmptyRow(row) {
+			continue
+		}
+
+		name := utils.CellValue(row, colName)
+		description := utils.CellValue(row, colDescription)
+
+		if name == "" {
+			utils.AppendRowError(result, rowNumber, "name", "nama wajib diisi")
+			continue
+		}
+
+		_, err := s.repo.FindCedantByName(name)
+		if err == nil {
+			utils.AppendRowError(result, rowNumber, "name", "nama sudah ada")
+			continue
+		}
+
+		cedant := &entity.Cedant{Name: name, Description: description}
+		if err := s.repo.CreateCedant(cedant); err != nil {
+			utils.AppendRowError(result, rowNumber, "name", "gagal menyimpan")
+			continue
+		}
+		result.Imported++
+	}
+
+	return result, nil
+}
+
+func (s *legalCaseService) GenerateCedantTemplate() (*bytes.Buffer, error) {
+	wb := excelize.NewFile()
+	defer wb.Close()
+
+	headers := []string{"name", "description"}
+	examples := [][]string{
+		{"Cedant A", "Deskripsi cedant A"},
+		{"Cedant B", "Deskripsi cedant B"},
+	}
+	utils.GenerateTemplate(wb, "Template", headers, examples)
+
+	var buf bytes.Buffer
+	if err := wb.Write(&buf); err != nil {
+		return nil, errors.New("gagal membuat template: " + err.Error())
+	}
+	return &buf, nil
+}
+
+func (s *legalCaseService) ImportRegencies(file *multipart.FileHeader) (*dto.ImportResult, error) {
+	rows, err := utils.ReadSheet(file, 0)
+	if err != nil {
+		return nil, errors.New("gagal membaca file Excel: " + err.Error())
+	}
+
+	result := &dto.ImportResult{Errors: []dto.ImportRowError{}}
+	if len(rows) < 2 {
+		return result, nil
+	}
+
+	header := utils.NormalizeHeaders(rows[0])
+	colName := utils.IndexOfHeader(header, "name")
+	colProvince := utils.IndexOfHeader(header, "province")
+	colType := utils.IndexOfHeader(header, "type")
+
+	for i, row := range rows[1:] {
+		rowNumber := i + 2
+		if utils.IsEmptyRow(row) {
+			continue
+		}
+
+		name := utils.CellValue(row, colName)
+		province := utils.CellValue(row, colProvince)
+		regencyType := utils.CellValue(row, colType)
+
+		if name == "" {
+			utils.AppendRowError(result, rowNumber, "name", "nama wajib diisi")
+			continue
+		}
+		if province == "" {
+			utils.AppendRowError(result, rowNumber, "province", "provinsi wajib diisi")
+			continue
+		}
+
+		_, err := s.repo.FindRegencyByNameAndProvince(name, province)
+		if err == nil {
+			utils.AppendRowError(result, rowNumber, "name", "kabupaten/kota sudah ada di provinsi tersebut")
+			continue
+		}
+
+		regency := &entity.Regency{Name: name, Province: province, Type: regencyType}
+		if err := s.repo.CreateRegency(regency); err != nil {
+			utils.AppendRowError(result, rowNumber, "name", "gagal menyimpan")
+			continue
+		}
+		result.Imported++
+	}
+
+	return result, nil
+}
+
+func (s *legalCaseService) GenerateRegencyTemplate() (*bytes.Buffer, error) {
+	wb := excelize.NewFile()
+	defer wb.Close()
+
+	headers := []string{"name", "province", "type"}
+	examples := [][]string{
+		{"Jakarta Selatan", "DKI Jakarta", "Kota"},
+		{"Bandung", "Jawa Barat", "Kabupaten"},
+	}
+	utils.GenerateTemplate(wb, "Template", headers, examples)
+
+	var buf bytes.Buffer
+	if err := wb.Write(&buf); err != nil {
+		return nil, errors.New("gagal membuat template: " + err.Error())
+	}
+	return &buf, nil
+}
+
 func (s *legalCaseService) UploadDocument(caseID string, file *multipart.FileHeader) (*dto.LegalCaseResponse, error) {
 	uid, err := parseUUID(caseID)
 	if err != nil {
@@ -756,7 +895,7 @@ func decodeDocuments(value string) []string {
 	return documents
 }
 
-func (s *legalCaseService) ImportChronologies(caseID string, file *multipart.FileHeader) (*dto.ImportChronologyResult, error) {
+func (s *legalCaseService) ImportChronologies(caseID string, file *multipart.FileHeader) (*dto.ImportResult, error) {
 	uid, err := parseUUID(caseID)
 	if err != nil {
 		return nil, errors.New("ID kasus tidak valid")
@@ -783,51 +922,34 @@ func (s *legalCaseService) ImportChronologies(caseID string, file *multipart.Fil
 		return nil, errors.New("gagal membaca sheet Excel: " + err.Error())
 	}
 
-	result := &dto.ImportChronologyResult{Errors: []dto.ImportChronologyRowError{}}
+	result := &dto.ImportResult{Errors: []dto.ImportRowError{}}
 	if len(rows) < 2 {
 		return result, nil
 	}
 
-	header := normalizeHeaders(rows[0])
-	colAgendaDate := indexOfHeader(header, "agenda_date")
-	colAgenda := indexOfHeader(header, "agenda")
-	colDescription := indexOfHeader(header, "description")
+	header := utils.NormalizeHeaders(rows[0])
+	colAgendaDate := utils.IndexOfHeader(header, "agenda_date")
+	colAgenda := utils.IndexOfHeader(header, "agenda")
+	colDescription := utils.IndexOfHeader(header, "description")
 
 	for i, row := range rows[1:] {
 		rowNumber := i + 2
-		if isEmptyRow(row) {
+		if utils.IsEmptyRow(row) {
 			continue
 		}
 
-		get := func(idx int) string {
-			if idx < 0 || idx >= len(row) {
-				return ""
-			}
-			return strings.TrimSpace(row[idx])
-		}
-
-		agendaDateRaw := get(colAgendaDate)
-		agenda := get(colAgenda)
-		description := get(colDescription)
+		agendaDateRaw := utils.CellValue(row, colAgendaDate)
+		agenda := utils.CellValue(row, colAgenda)
+		description := utils.CellValue(row, colDescription)
 
 		if agenda == "" {
-			result.Skipped++
-			result.Errors = append(result.Errors, dto.ImportChronologyRowError{
-				Row:    rowNumber,
-				Agenda: agenda,
-				Reason: "agenda wajib diisi",
-			})
+			utils.AppendRowError(result, rowNumber, "agenda", "agenda wajib diisi")
 			continue
 		}
 
 		agendaDate, err := parseFlexibleDate(agendaDateRaw)
 		if err != nil {
-			result.Skipped++
-			result.Errors = append(result.Errors, dto.ImportChronologyRowError{
-				Row:    rowNumber,
-				Agenda: agenda,
-				Reason: "tanggal agenda tidak valid",
-			})
+			utils.AppendRowError(result, rowNumber, "agenda_date", "tanggal agenda tidak valid")
 			continue
 		}
 
@@ -841,12 +963,7 @@ func (s *legalCaseService) ImportChronologies(caseID string, file *multipart.Fil
 		chronology.ID = uuid.New()
 
 		if err := s.repo.CreateChronology(chronology); err != nil {
-			result.Skipped++
-			result.Errors = append(result.Errors, dto.ImportChronologyRowError{
-				Row:    rowNumber,
-				Agenda: agenda,
-				Reason: "gagal menyimpan kronologi",
-			})
+			utils.AppendRowError(result, rowNumber, "agenda", "gagal menyimpan kronologi")
 			continue
 		}
 
@@ -861,29 +978,14 @@ func (s *legalCaseService) GenerateChronologyTemplate() (*bytes.Buffer, error) {
 	defer wb.Close()
 
 	sheet := "Template"
-	wb.SetSheetName("Sheet1", sheet)
-
 	headers := []string{"agenda_date", "agenda", "description"}
-	for col, h := range headers {
-		cell, _ := excelize.CoordinatesToCellName(col+1, 1)
-		wb.SetCellValue(sheet, cell, h)
-	}
-
-	// Examples use MM/DD/YYYY (month/day/year) to match the expected format.
 	examples := [][]string{
 		{"01/31/2024", "Sidang Pertama", "Menghadirkan saksi dan bukti dokumen"},
 		{"02/15/2024", "Mediasi", "Mencoba penyelesaian damai antar pihak"},
 		{"03/20/2024", "Putusan", "Menunggu salinan putusan dari kepaniteraan"},
 	}
-	for rowIdx, example := range examples {
-		for colIdx, value := range example {
-			cell, _ := excelize.CoordinatesToCellName(colIdx+1, rowIdx+2)
-			wb.SetCellValue(sheet, cell, value)
-		}
-	}
+	utils.GenerateTemplate(wb, sheet, headers, examples)
 
-	// Separate instructions sheet (not read by the importer, which only
-	// processes the first "Template" sheet).
 	guide := "Petunjuk"
 	wb.NewSheet(guide)
 	guideLines := []string{
@@ -903,32 +1005,6 @@ func (s *legalCaseService) GenerateChronologyTemplate() (*bytes.Buffer, error) {
 		return nil, errors.New("gagal membuat template: " + err.Error())
 	}
 	return &buf, nil
-}
-
-func normalizeHeaders(header []string) []string {
-	out := make([]string, len(header))
-	for i, h := range header {
-		out[i] = strings.ToLower(strings.TrimSpace(h))
-	}
-	return out
-}
-
-func indexOfHeader(header []string, name string) int {
-	for i, h := range header {
-		if h == name {
-			return i
-		}
-	}
-	return -1
-}
-
-func isEmptyRow(row []string) bool {
-	for _, cell := range row {
-		if strings.TrimSpace(cell) != "" {
-			return false
-		}
-	}
-	return true
 }
 
 func (s *legalCaseService) ViewFile(filePath string) (*minio.Object, string, error) {

@@ -63,42 +63,7 @@ func main() {
 	var existing entity.User
 	err = db.Where("email = ?", email).First(&existing).Error
 	if err == nil {
-		updates := map[string]interface{}{}
-		if existing.Role != entity.RoleAdmin {
-			updates["role"] = entity.RoleAdmin
-		}
-		if existing.Status != entity.UserActive {
-			updates["status"] = entity.UserActive
-		}
-		if existing.EmailNotifications != true {
-			updates["email_notifications"] = true
-		}
-		if existing.TwoFAEnabled != false {
-			updates["two_fa_enabled"] = false
-		}
-		if companyID != uuid.Nil {
-			if existing.CompanyID == nil || *existing.CompanyID != companyID {
-				updates["company_id"] = companyID
-			}
-		} else {
-			if existing.CompanyID != nil {
-				updates["company_id"] = nil
-			}
-		}
-		if admin.DivisionID != nil && (existing.DivisionID == nil || *existing.DivisionID != *admin.DivisionID) {
-			updates["division"] = admin.Division
-			updates["division_id"] = admin.DivisionID
-		}
-
-		if len(updates) > 0 {
-			if err := db.Model(&existing).Updates(updates).Error; err != nil {
-				log.Fatalf("Failed to update existing admin user: %v", err)
-			}
-			log.Printf("Admin user %s already exists and was updated", email)
-			return
-		}
-
-		log.Printf("Admin user %s already exists", email)
+		log.Printf("Admin user %s already exists, skipping seed", email)
 		return
 	}
 	if !errors.Is(err, gorm.ErrRecordNotFound) {

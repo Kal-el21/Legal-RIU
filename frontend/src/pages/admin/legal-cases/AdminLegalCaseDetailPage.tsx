@@ -155,7 +155,7 @@ export default function AdminLegalCaseDetailPage() {
               <Info label="Kategori Kasus" value={legalCase.category?.label ?? legalCase.category_id} />
               <Info label="Lokasi" value={legalCase.location_regency?.label ?? '-'} />
               <Info label="Penanggung Jawab" value={legalCase.pic_division?.name ?? legalCase.pic ?? '-'} />
-              <Info label="Cadangan Teknis" value={legalCase.technical_reserve || '-'} />
+              <Info label="Cadangan Teknis" value={formatCurrency(legalCase.technical_reserve ?? 0)} />
               <Info label="Nilai Kasus" value={formatCurrency(legalCase.case_value)} />
               <Info label="Status Terkini" value={legalCase.current_status || '-'} />
               <Info label="Tanggal" value={formatDate(legalCase.case_date)} />

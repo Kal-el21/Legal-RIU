@@ -102,3 +102,30 @@ func (h *PurposeTypeHandler) Delete(c *gin.Context) {
 	c.Set("audit_description", "Purpose type deleted")
 	utils.OK(c, "Tujuan pembuatan berhasil dihapus", nil)
 }
+
+func (h *PurposeTypeHandler) ImportPurposeTypes(c *gin.Context) {
+	file, err := c.FormFile("file")
+	if err != nil {
+		utils.BadRequest(c, "File Excel wajib diupload", err.Error())
+		return
+	}
+	result, err := h.svc.ImportFromExcel(file)
+	if err != nil {
+		utils.BadRequest(c, err.Error(), nil)
+		return
+	}
+	middleware.SetAuditContext(c, entity.ActionFileUpload, "purpose_type", "import")
+	c.Set("audit_description", "Purpose types imported")
+	utils.OK(c, "Impor tujuan pembuatan selesai", result)
+}
+
+func (h *PurposeTypeHandler) DownloadPurposeTypeTemplate(c *gin.Context) {
+	buf, err := h.svc.GenerateImportTemplate()
+	if err != nil {
+		utils.InternalError(c, err.Error())
+		return
+	}
+	c.DataFromReader(-1, -1, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", buf, map[string]string{
+		"Content-Disposition": `attachment; filename="purpose-type-template.xlsx"`,
+	})
+}
