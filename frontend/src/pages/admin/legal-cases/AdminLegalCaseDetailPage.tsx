@@ -149,13 +149,14 @@ export default function AdminLegalCaseDetailPage() {
         <div className="space-y-6 lg:col-span-2">
           <Section title="Informasi Umum">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Info label="Ticket Number" value={legalCase.ticket_number || '-'} />
               <Info label="Nama Kasus" value={legalCase.case_name} />
               <Info label="Jenis Kasus" value={legalCase.case_type?.label ?? legalCase.case_type_id} />
               <Info label="Pihak Terkait" value={legalCase.related_party?.name ?? '-'} />
               <Info label="Kategori Kasus" value={legalCase.category?.label ?? legalCase.category_id} />
               <Info label="Lokasi" value={legalCase.location_regency?.label ?? '-'} />
               <Info label="Penanggung Jawab" value={legalCase.pic_division?.name ?? legalCase.pic ?? '-'} />
-              <Info label="Cadangan Teknis" value={legalCase.technical_reserve || '-'} />
+              <Info label="Cadangan Teknis" value={formatCurrency(legalCase.technical_reserve ?? 0)} />
               <Info label="Nilai Kasus" value={formatCurrency(legalCase.case_value)} />
               <Info label="Status Terkini" value={legalCase.current_status || '-'} />
               <Info label="Tanggal" value={formatDate(legalCase.case_date)} />

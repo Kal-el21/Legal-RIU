@@ -22,36 +22,25 @@ func SeedDocumentTypes(db *gorm.DB) error {
 	for _, dt := range DEFAULT_DOCUMENT_TYPES {
 		expectedID := uuid.NewSHA1(uuid.NameSpaceOID, []byte("document_type:"+dt.Name))
 
-		var existing entity.DocumentType
-		if err := db.Where("id = ?", expectedID).First(&existing).Error; err != nil {
-			if err == gorm.ErrRecordNotFound {
-				if err := db.Where("name = ?", dt.Name).First(&existing).Error; err != nil {
-					if err == gorm.ErrRecordNotFound {
-						if err := db.Create(&entity.DocumentType{
-							Base: entity.Base{
-								ID: expectedID,
-							},
-							Name:     dt.Name,
-							Label:    dt.Label,
-							IsActive: dt.IsActive,
-						}).Error; err != nil {
-							return err
-						}
-					} else {
-						return err
-					}
-				} else {
-					if err := db.Model(&existing).Updates(entity.DocumentType{
-						Label:    dt.Label,
-						IsActive: dt.IsActive,
-					}).Error; err != nil {
-						return err
-					}
-				}
-			} else {
-				return err
-			}
+	var existing entity.DocumentType
+	if err := db.Where("id = ?", expectedID).First(&existing).Error; err != nil {
+		if err != gorm.ErrRecordNotFound {
+			return err
 		}
+		if err := db.Where("name = ?", dt.Name).First(&existing).Error; err == nil {
+			continue
+		}
+		if err := db.Create(&entity.DocumentType{
+			Base: entity.Base{
+				ID: expectedID,
+			},
+			Name:     dt.Name,
+			Label:    dt.Label,
+			IsActive: dt.IsActive,
+		}).Error; err != nil {
+			return err
+		}
+	}
 	}
 	return nil
 }

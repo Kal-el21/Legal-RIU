@@ -1,13 +1,17 @@
 package service
 
 import (
+	"bytes"
 	"errors"
+	"mime/multipart"
 
 	"legal-riu-portal/internal/dto"
 	"legal-riu-portal/internal/entity"
 	"legal-riu-portal/internal/repository"
+	"legal-riu-portal/internal/utils"
 
 	"github.com/google/uuid"
+	"github.com/xuri/excelize/v2"
 )
 
 type LegalMaterialService interface {
@@ -16,6 +20,8 @@ type LegalMaterialService interface {
 	Create(title, excerpt, content string, createdBy uuid.UUID) (*entity.LegalMaterial, error)
 	Update(id, title, excerpt, content string, updatedBy uuid.UUID) (*entity.LegalMaterial, error)
 	Delete(id string) error
+	ImportFromExcel(file *multipart.FileHeader) (*dto.ImportResult, error)
+	GenerateImportTemplate() (*bytes.Buffer, error)
 }
 
 type legalMaterialService struct {
@@ -86,6 +92,77 @@ func (s *legalMaterialService) Delete(id string) error {
 		return errors.New("gagal menghapus materi")
 	}
 	return nil
+}
+
+func (s *legalMaterialService) ImportFromExcel(file *multipart.FileHeader) (*dto.ImportResult, error) {
+	rows, err := utils.ReadSheet(file, 0)
+	if err != nil {
+		return nil, errors.New("gagal membaca file Excel: " + err.Error())
+	}
+
+	result := &dto.ImportResult{Errors: []dto.ImportRowError{}}
+	if len(rows) < 2 {
+		return result, nil
+	}
+
+	header := utils.NormalizeHeaders(rows[0])
+	colTitle := utils.IndexOfHeader(header, "title")
+	colExcerpt := utils.IndexOfHeader(header, "excerpt")
+	colContent := utils.IndexOfHeader(header, "content")
+
+	createdBy, _ := uuid.Parse("00000000-0000-0000-0000-000000000000")
+
+	for i, row := range rows[1:] {
+		rowNumber := i + 2
+		if utils.IsEmptyRow(row) {
+			continue
+		}
+
+		title := utils.CellValue(row, colTitle)
+		excerpt := utils.CellValue(row, colExcerpt)
+		content := utils.CellValue(row, colContent)
+
+		if title == "" {
+			utils.AppendRowError(result, rowNumber, "title", "judul wajib diisi")
+			continue
+		}
+		if content == "" {
+			utils.AppendRowError(result, rowNumber, "content", "konten wajib diisi")
+			continue
+		}
+
+		material := &entity.LegalMaterial{
+			Title:     title,
+			Excerpt:   excerpt,
+			Content:   content,
+			CreatedBy: createdBy,
+			UpdatedBy: createdBy,
+		}
+		if err := s.repo.Create(material); err != nil {
+			utils.AppendRowError(result, rowNumber, "title", "gagal menyimpan")
+			continue
+		}
+		result.Imported++
+	}
+
+	return result, nil
+}
+
+func (s *legalMaterialService) GenerateImportTemplate() (*bytes.Buffer, error) {
+	wb := excelize.NewFile()
+	defer wb.Close()
+
+	headers := []string{"title", "excerpt", "content"}
+	examples := [][]string{
+		{"Contoh Materi", "Ringkasan materi", "Isi lengkap materi..."},
+	}
+	utils.GenerateTemplate(wb, "Template", headers, examples)
+
+	var buf bytes.Buffer
+	if err := wb.Write(&buf); err != nil {
+		return nil, errors.New("gagal membuat template: " + err.Error())
+	}
+	return &buf, nil
 }
 
 func toLegalMaterialResponse(material *entity.LegalMaterial) dto.LegalMaterialResponse {

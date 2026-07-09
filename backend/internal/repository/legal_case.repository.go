@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"fmt"
 	"time"
 
 	"legal-riu-portal/internal/entity"
@@ -29,6 +30,7 @@ type LegalCaseRepository interface {
 	Update(legalCase *entity.LegalCase) error
 	UpdateStatus(id uuid.UUID, status string, statusUpdatedAt *time.Time) error
 	Delete(id uuid.UUID) error
+	CountByMonthAndPrefix(prefix string) (int64, error)
 
 	ListChronologies(caseID uuid.UUID) ([]entity.CaseChronology, error)
 	FindChronology(caseID uuid.UUID, chronologyID uuid.UUID) (*entity.CaseChronology, error)
@@ -38,9 +40,12 @@ type LegalCaseRepository interface {
 
 	ListRegencies(search string, limit int) ([]entity.Regency, error)
 	FindRegencyByID(id uuid.UUID) (*entity.Regency, error)
+	FindRegencyByNameAndProvince(name string, province string) (*entity.Regency, error)
+	CreateRegency(regency *entity.Regency) error
 
 	ListCedants(search string, limit int) ([]entity.Cedant, error)
 	FindCedantByID(id uuid.UUID) (*entity.Cedant, error)
+	FindCedantByName(name string) (*entity.Cedant, error)
 	CreateCedant(cedant *entity.Cedant) error
 	UpdateCedant(cedant *entity.Cedant) error
 	DeleteCedant(id uuid.UUID) error
@@ -142,6 +147,17 @@ func (r *legalCaseRepository) Delete(id uuid.UUID) error {
 	return r.db.Delete(&entity.LegalCase{}, "id = ?", id).Error
 }
 
+func (r *legalCaseRepository) CountByMonthAndPrefix(prefix string) (int64, error) {
+	var count int64
+	now := time.Now()
+	start := fmt.Sprintf("%s-%s-", prefix, now.Format("200601"))
+	err := r.db.Model(&entity.LegalCase{}).
+		Where("ticket_number LIKE ? AND created_at >= ?", start+"%",
+			time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())).
+		Count(&count).Error
+	return count, err
+}
+
 func (r *legalCaseRepository) ListChronologies(caseID uuid.UUID) ([]entity.CaseChronology, error) {
 	var items []entity.CaseChronology
 	err := r.db.
@@ -197,6 +213,19 @@ func (r *legalCaseRepository) FindRegencyByID(id uuid.UUID) (*entity.Regency, er
 	return &regency, nil
 }
 
+func (r *legalCaseRepository) FindRegencyByNameAndProvince(name string, province string) (*entity.Regency, error) {
+	var regency entity.Regency
+	err := r.db.Where("name = ? AND province = ?", name, province).First(&regency).Error
+	if err != nil {
+		return nil, err
+	}
+	return &regency, nil
+}
+
+func (r *legalCaseRepository) CreateRegency(regency *entity.Regency) error {
+	return r.db.Create(regency).Error
+}
+
 func (r *legalCaseRepository) ListCedants(search string, limit int) ([]entity.Cedant, error) {
 	var items []entity.Cedant
 	query := r.db.Model(&entity.Cedant{})
@@ -213,6 +242,15 @@ func (r *legalCaseRepository) ListCedants(search string, limit int) ([]entity.Ce
 func (r *legalCaseRepository) FindCedantByID(id uuid.UUID) (*entity.Cedant, error) {
 	var cedant entity.Cedant
 	err := r.db.Where("id = ?", id).First(&cedant).Error
+	if err != nil {
+		return nil, err
+	}
+	return &cedant, nil
+}
+
+func (r *legalCaseRepository) FindCedantByName(name string) (*entity.Cedant, error) {
+	var cedant entity.Cedant
+	err := r.db.Where("name = ?", name).First(&cedant).Error
 	if err != nil {
 		return nil, err
 	}

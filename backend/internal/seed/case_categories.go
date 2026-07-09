@@ -18,36 +18,25 @@ func SeedCaseCategories(db *gorm.DB) error {
 	for _, cc := range DEFAULT_CASE_CATEGORIES {
 		expectedID := uuid.NewSHA1(uuid.NameSpaceOID, []byte("case_category:"+cc.Code))
 
-		var existing entity.CaseCategory
-		if err := db.Where("id = ?", expectedID).First(&existing).Error; err != nil {
-			if err == gorm.ErrRecordNotFound {
-				if err := db.Where("code = ?", cc.Code).First(&existing).Error; err != nil {
-					if err == gorm.ErrRecordNotFound {
-						if err := db.Create(&entity.CaseCategory{
-							Base: entity.Base{
-								ID: expectedID,
-							},
-							Code:     cc.Code,
-							Label:    cc.Label,
-							IsActive: cc.IsActive,
-						}).Error; err != nil {
-							return err
-						}
-					} else {
-						return err
-					}
-				} else {
-					if err := db.Model(&existing).Updates(entity.CaseCategory{
-						Label:    cc.Label,
-						IsActive: cc.IsActive,
-					}).Error; err != nil {
-						return err
-					}
-				}
-			} else {
-				return err
-			}
+	var existing entity.CaseCategory
+	if err := db.Where("id = ?", expectedID).First(&existing).Error; err != nil {
+		if err != gorm.ErrRecordNotFound {
+			return err
 		}
+		if err := db.Where("code = ?", cc.Code).First(&existing).Error; err == nil {
+			continue
+		}
+		if err := db.Create(&entity.CaseCategory{
+			Base: entity.Base{
+				ID: expectedID,
+			},
+			Code:     cc.Code,
+			Label:    cc.Label,
+			IsActive: cc.IsActive,
+		}).Error; err != nil {
+			return err
+		}
+	}
 	}
 	return nil
 }

@@ -6,7 +6,9 @@ import { Plus, Search, Edit, Trash2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { useRegencies } from '@/hooks/useLegalCase'
+import { useRegencies, useImportRegencies } from '@/hooks/useLegalCase'
+import { legalCaseService } from '@/services/legal-case.service'
+import ImportCard from '@/components/common/ImportCard'
 import api from '@/services/api'
 import type { Regency } from '@/types'
 
@@ -52,6 +54,7 @@ export default function RegencyManagementPage() {
   const [loading, setLoading] = useState(true)
 
   const { data: regenciesData } = useRegencies({ limit: 500 })
+  const importMutation = useImportRegencies()
 
   useEffect(() => {
     if (regenciesData) {
@@ -109,7 +112,13 @@ export default function RegencyManagementPage() {
         <Input placeholder="Cari..." className="pl-9" value={search} onChange={(e) => { setSearch(e.target.value) }} />
       </div>
 
-      <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+      <ImportCard
+        title="Impor dari Excel"
+        onImport={(file) => importMutation.mutateAsync(file)}
+        onDownloadTemplate={() => legalCaseService.downloadRegencyTemplate()}
+      />
+
+      <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden mt-4">
         {loading ? (
           <div className="p-12 text-center text-gray-400">Memuat data...</div>
         ) : !filtered.length ? (

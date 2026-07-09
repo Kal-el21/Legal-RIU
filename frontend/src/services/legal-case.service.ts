@@ -1,6 +1,6 @@
 import api from './api'
 import { useAuthStore } from '@/store/auth.store'
-import type { ApiResponse, CaseChronology, Cedant, Company, Division, LegalCase, PaginatedData, Regency, CaseType, CaseCategory, PurposeType, ImportChronologyResult } from '@/types'
+import type { ApiResponse, CaseChronology, Cedant, Company, Division, LegalCase, PaginatedData, Regency, CaseType, CaseCategory, PurposeType, ImportResult } from '@/types'
 
 export interface LegalCaseFilters {
   page?: number
@@ -20,7 +20,7 @@ export interface LegalCaseFormData {
   category_id: string
   specification?: string
   case_type_id: string
-  technical_reserve?: string
+  technical_reserve?: number
   case_value: number
   pic: string
   document_link?: string
@@ -145,7 +145,7 @@ export const legalCaseService = {
   importChronologyExcel: async (caseID: string, file: File) => {
     const form = new FormData()
     form.append('file', file)
-    const res = await api.post<ApiResponse<ImportChronologyResult>>(`${getLegalCaseRouteBase()}/${caseID}/chronology/import`, form)
+    const res = await api.post<ApiResponse<ImportResult>>(`${getLegalCaseRouteBase()}/${caseID}/chronology/import`, form)
     return res.data.data!
   },
 
@@ -154,6 +154,132 @@ export const legalCaseService = {
       responseType: 'blob',
     })
     return { blob: res.data, filename: 'chronology-template.xlsx' }
+  },
+
+  importCedants: async (file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    const res = await api.post<ApiResponse<ImportResult>>('/admin/legal-cases/cedants/import', form)
+    return res.data.data!
+  },
+
+  downloadCedantTemplate: async () => {
+    const res = await api.get('/admin/legal-cases/cedants/import/template', {
+      responseType: 'blob',
+    })
+    return { blob: res.data, filename: 'cedant-template.xlsx' }
+  },
+
+  importRegencies: async (file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    const res = await api.post<ApiResponse<ImportResult>>('/admin/legal-cases/regencies/import', form)
+    return res.data.data!
+  },
+
+  downloadRegencyTemplate: async () => {
+    const res = await api.get('/admin/legal-cases/regencies/import/template', {
+      responseType: 'blob',
+    })
+    return { blob: res.data, filename: 'regency-template.xlsx' }
+  },
+
+  importDivisions: async (file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    const res = await api.post<ApiResponse<ImportResult>>('/admin/divisions/import', form)
+    return res.data.data!
+  },
+
+  downloadDivisionTemplate: async () => {
+    const res = await api.get('/admin/divisions/import/template', {
+      responseType: 'blob',
+    })
+    return { blob: res.data, filename: 'division-template.xlsx' }
+  },
+
+  importCompanies: async (file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    const res = await api.post<ApiResponse<ImportResult>>('/admin/companies/import', form)
+    return res.data.data!
+  },
+
+  downloadCompanyTemplate: async () => {
+    const res = await api.get('/admin/companies/import/template', {
+      responseType: 'blob',
+    })
+    return { blob: res.data, filename: 'company-template.xlsx' }
+  },
+
+  importPurposeTypes: async (file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    const res = await api.post<ApiResponse<ImportResult>>('/admin/purpose-types/import', form)
+    return res.data.data!
+  },
+
+  downloadPurposeTypeTemplate: async () => {
+    const res = await api.get('/admin/purpose-types/import/template', {
+      responseType: 'blob',
+    })
+    return { blob: res.data, filename: 'purpose-type-template.xlsx' }
+  },
+
+  importCaseTypes: async (file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    const res = await api.post<ApiResponse<ImportResult>>('/admin/case-types/import', form)
+    return res.data.data!
+  },
+
+  downloadCaseTypeTemplate: async () => {
+    const res = await api.get('/admin/case-types/import/template', {
+      responseType: 'blob',
+    })
+    return { blob: res.data, filename: 'case-type-template.xlsx' }
+  },
+
+  importCaseCategories: async (file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    const res = await api.post<ApiResponse<ImportResult>>('/admin/case-categories/import', form)
+    return res.data.data!
+  },
+
+  downloadCaseCategoryTemplate: async () => {
+    const res = await api.get('/admin/case-categories/import/template', {
+      responseType: 'blob',
+    })
+    return { blob: res.data, filename: 'case-category-template.xlsx' }
+  },
+
+  importDocumentTypes: async (file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    const res = await api.post<ApiResponse<ImportResult>>('/admin/document-types/import', form)
+    return res.data.data!
+  },
+
+  downloadDocumentTypeTemplate: async () => {
+    const res = await api.get('/admin/document-types/import/template', {
+      responseType: 'blob',
+    })
+    return { blob: res.data, filename: 'document-type-template.xlsx' }
+  },
+
+  importLegalMaterials: async (file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    const res = await api.post<ApiResponse<ImportResult>>('/admin/materials/import', form)
+    return res.data.data!
+  },
+
+  downloadLegalMaterialTemplate: async () => {
+    const res = await api.get('/admin/materials/import/template', {
+      responseType: 'blob',
+    })
+    return { blob: res.data, filename: 'legal-material-template.xlsx' }
   },
 
   downloadFile: async (path: string): Promise<{ blob: Blob; filename: string }> => {

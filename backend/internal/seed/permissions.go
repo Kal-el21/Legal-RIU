@@ -61,14 +61,7 @@ func upsertSeedPermission(tx *gorm.DB, permission entity.Permission) error {
 		return err
 	}
 
-	return tx.Model(&existing).Updates(map[string]interface{}{
-		"feature":     permission.Feature,
-		"action":      permission.Action,
-		"scope":       permission.Scope,
-		"label":       permission.Label,
-		"description": permission.Description,
-		"is_active":   permission.IsActive,
-	}).Error
+	return nil
 }
 
 func permissionSeedData() []entity.Permission {

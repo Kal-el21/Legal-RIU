@@ -1,5 +1,5 @@
 import api from './api'
-import type { ApiResponse, LegalMaterial, PaginatedData } from '@/types'
+import type { ApiResponse, LegalMaterial, PaginatedData, ImportResult } from '@/types'
 
 export interface MaterialFormData {
   title: string
@@ -30,5 +30,19 @@ export const materialService = {
 
   delete: async (id: string) => {
     await api.delete(`/materials/${id}`)
+  },
+
+  importExcel: async (file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    const res = await api.post<ApiResponse<ImportResult>>('/admin/materials/import', form)
+    return res.data.data!
+  },
+
+  downloadTemplate: async () => {
+    const res = await api.get('/admin/materials/import/template', {
+      responseType: 'blob',
+    })
+    return { blob: res.data, filename: 'legal-material-template.xlsx' }
   },
 }

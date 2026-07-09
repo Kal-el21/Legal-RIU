@@ -6,7 +6,9 @@ import { Plus, Search, Edit, Trash2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { usePurposeTypes, useCreatePurposeType, useUpdatePurposeType, useDeletePurposeType } from '@/hooks/useLegalCase'
+import { usePurposeTypes, useCreatePurposeType, useUpdatePurposeType, useDeletePurposeType, useImportPurposeTypes } from '@/hooks/useLegalCase'
+import { legalCaseService } from '@/services/legal-case.service'
+import ImportCard from '@/components/common/ImportCard'
 import type { PurposeType } from '@/types'
 
 const schema = z.object({
@@ -52,6 +54,7 @@ export default function PurposeTypeManagementPage() {
   const createMutation = useCreatePurposeType()
   const updateMutation = useUpdatePurposeType()
   const deleteMutation = useDeletePurposeType()
+  const importMutation = useImportPurposeTypes()
 
   const form = useForm<FormData>({ resolver: zodResolver(schema), defaultValues: { name: '', description: '', is_active: true } })
 
@@ -99,7 +102,13 @@ export default function PurposeTypeManagementPage() {
         <Input placeholder="Cari..." className="pl-9" value={search} onChange={(e) => { setSearch(e.target.value) }} />
       </div>
 
-      <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+      <ImportCard
+        title="Impor dari Excel"
+        onImport={(file) => importMutation.mutateAsync(file)}
+        onDownloadTemplate={() => legalCaseService.downloadPurposeTypeTemplate()}
+      />
+
+      <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden mt-4">
         {isLoading ? (
           <div className="p-12 text-center text-gray-400">Memuat data...</div>
         ) : !filtered.length ? (

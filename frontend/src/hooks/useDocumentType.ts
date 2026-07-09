@@ -42,3 +42,13 @@ export function useDeleteDocumentType() {
     },
   })
 }
+
+export function useImportDocumentTypes() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (file: File) => documentTypeService.importExcel(file),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEYS.all })
+    },
+  })
+}

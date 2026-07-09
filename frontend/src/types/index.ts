@@ -209,22 +209,25 @@ export interface CaseChronology {
   updated_at: string
 }
 
-export interface ImportChronologyRowError {
+export interface ImportRowError {
   row: number
-  agenda: string
+  field: string
   reason: string
 }
 
-export interface ImportChronologyResult {
+export interface ImportResult {
   imported: number
   skipped: number
-  errors: ImportChronologyRowError[]
+  errors: ImportRowError[]
 }
+
+
 
 export interface LegalCase {
   id: string
   case_name: string
   case_summary?: string
+  ticket_number?: string
   related_party_id: string
   related_party?: Cedant
   category_id: string
@@ -232,7 +235,7 @@ export interface LegalCase {
   specification?: string
   case_type_id: string
   case_type?: CaseType
-  technical_reserve?: string
+  technical_reserve?: number
   case_value: number
   pic: string
   pic_division?: Division

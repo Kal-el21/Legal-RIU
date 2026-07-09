@@ -101,3 +101,28 @@ func (h *DivisionHandler) Delete(c *gin.Context) {
 	}
 	utils.OK(c, "Divisi berhasil dihapus", nil)
 }
+
+func (h *DivisionHandler) ImportDivisions(c *gin.Context) {
+	file, err := c.FormFile("file")
+	if err != nil {
+		utils.BadRequest(c, "File Excel wajib diupload", err.Error())
+		return
+	}
+	result, err := h.divisionService.ImportFromExcel(file)
+	if err != nil {
+		utils.BadRequest(c, err.Error(), nil)
+		return
+	}
+	utils.OK(c, "Impor divisi selesai", result)
+}
+
+func (h *DivisionHandler) DownloadDivisionTemplate(c *gin.Context) {
+	buf, err := h.divisionService.GenerateImportTemplate()
+	if err != nil {
+		utils.InternalError(c, err.Error())
+		return
+	}
+	c.DataFromReader(-1, -1, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", buf, map[string]string{
+		"Content-Disposition": `attachment; filename="division-template.xlsx"`,
+	})
+}

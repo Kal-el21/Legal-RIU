@@ -34,7 +34,7 @@ const schema = z.object({
   category_id: z.string().min(1, 'Wajib diisi'),
   specification: z.string().optional(),
   case_type_id: z.string().min(1, 'Pilih jenis kasus'),
-  technical_reserve: z.string().optional(),
+  technical_reserve: z.number().optional(),
   case_value: z.number().min(0, 'Nilai tidak valid'),
   pic: z.string().min(1, 'Pilih PIC'),
   document_link: z.string().optional(),
@@ -283,7 +283,7 @@ export default function LegalCaseFormDialog({ open, onOpenChange, legalCase }: L
               <Input type="number" min={0} step={1000} {...register('case_value', { valueAsNumber: true })} placeholder="0" />
             </Field>
             <Field label="Cadangan Teknis" error={errors.technical_reserve?.message}>
-              <Input {...register('technical_reserve')} placeholder="Cadangan teknis" />
+              <Input type="number" min={0} step={1000} {...register('technical_reserve', { valueAsNumber: true })} placeholder="0" />
             </Field>
 
             <div className="sm:col-span-2">
@@ -543,7 +543,7 @@ function emptyDefaults(): FormData {
     category_id: '',
     specification: '',
     case_type_id: '',
-    technical_reserve: '',
+    technical_reserve: 0,
     case_value: 0,
     pic: '',
     document_link: '',
@@ -565,7 +565,7 @@ function valuesFromLegalCase(legalCase: LegalCase): FormData {
     category_id: legalCase.category_id,
     specification: legalCase.specification ?? '',
     case_type_id: legalCase.case_type_id,
-    technical_reserve: legalCase.technical_reserve ?? '',
+    technical_reserve: legalCase.technical_reserve ?? 0,
     case_value: legalCase.case_value ?? 0,
     pic: legalCase.pic,
     document_link: legalCase.document_link ?? '',

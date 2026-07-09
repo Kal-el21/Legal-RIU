@@ -51,3 +51,13 @@ export function useDeleteMaterial() {
     },
   })
 }
+
+export function useImportLegalMaterials() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (file: File) => materialService.importExcel(file),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEYS.all })
+    },
+  })
+}

@@ -23,35 +23,25 @@ func SeedRegencies(db *gorm.DB) error {
 	for _, r := range regencies {
 		expectedID := uuid.NewSHA1(uuid.NameSpaceOID, []byte("regency:"+r.Province+":"+r.Name))
 
-		var existing entity.Regency
-		if err := db.Where("id = ?", expectedID).First(&existing).Error; err != nil {
-			if err == gorm.ErrRecordNotFound {
-				if err := db.Where("name = ? AND province = ?", r.Name, r.Province).First(&existing).Error; err != nil {
-					if err == gorm.ErrRecordNotFound {
-						if err := db.Create(&entity.Regency{
-							Base: entity.Base{
-								ID: expectedID,
-							},
-							Name:     r.Name,
-							Province: r.Province,
-							Type:     r.Type,
-						}).Error; err != nil {
-							return err
-						}
-					} else {
-						return err
-					}
-				} else {
-					if err := db.Model(&existing).Updates(entity.Regency{
-						Type: r.Type,
-					}).Error; err != nil {
-						return err
-					}
-				}
-			} else {
-				return err
-			}
+	var existing entity.Regency
+	if err := db.Where("id = ?", expectedID).First(&existing).Error; err != nil {
+		if err != gorm.ErrRecordNotFound {
+			return err
 		}
+		if err := db.Where("name = ? AND province = ?", r.Name, r.Province).First(&existing).Error; err == nil {
+			continue
+		}
+		if err := db.Create(&entity.Regency{
+			Base: entity.Base{
+				ID: expectedID,
+			},
+			Name:     r.Name,
+			Province: r.Province,
+			Type:     r.Type,
+		}).Error; err != nil {
+			return err
+		}
+	}
 	}
 
 	return nil

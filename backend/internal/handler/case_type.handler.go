@@ -103,3 +103,30 @@ func (h *CaseTypeHandler) Delete(c *gin.Context) {
 	c.Set("audit_description", "Case type deleted")
 	utils.OK(c, "Jenis kasus berhasil dihapus", nil)
 }
+
+func (h *CaseTypeHandler) ImportCaseTypes(c *gin.Context) {
+	file, err := c.FormFile("file")
+	if err != nil {
+		utils.BadRequest(c, "File Excel wajib diupload", err.Error())
+		return
+	}
+	result, err := h.svc.ImportFromExcel(file)
+	if err != nil {
+		utils.BadRequest(c, err.Error(), nil)
+		return
+	}
+	middleware.SetAuditContext(c, entity.ActionFileUpload, "case_type", "import")
+	c.Set("audit_description", "Case types imported")
+	utils.OK(c, "Impor jenis kasus selesai", result)
+}
+
+func (h *CaseTypeHandler) DownloadCaseTypeTemplate(c *gin.Context) {
+	buf, err := h.svc.GenerateImportTemplate()
+	if err != nil {
+		utils.InternalError(c, err.Error())
+		return
+	}
+	c.DataFromReader(-1, -1, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", buf, map[string]string{
+		"Content-Disposition": `attachment; filename="case-type-template.xlsx"`,
+	})
+}

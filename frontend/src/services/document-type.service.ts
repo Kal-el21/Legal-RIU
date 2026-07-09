@@ -1,5 +1,5 @@
 import api from './api'
-import type { ApiResponse, DocumentType } from '@/types'
+import type { ApiResponse, DocumentType, ImportResult } from '@/types'
 
 export const documentTypeService = {
   getAll: async () => {
@@ -19,5 +19,19 @@ export const documentTypeService = {
 
   delete: async (id: string) => {
     await api.delete(`/admin/document-types/${id}`)
+  },
+
+  importExcel: async (file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    const res = await api.post<ApiResponse<ImportResult>>('/admin/document-types/import', form)
+    return res.data.data!
+  },
+
+  downloadTemplate: async () => {
+    const res = await api.get('/admin/document-types/import/template', {
+      responseType: 'blob',
+    })
+    return { blob: res.data, filename: 'document-type-template.xlsx' }
   },
 }
