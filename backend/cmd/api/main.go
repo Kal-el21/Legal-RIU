@@ -271,6 +271,7 @@ func main() {
 	admin.POST("/legal-cases/:id/chronology/import", requirePermission("case_management.manage_chronology"), legalCaseHandler.ImportChronologies)
 	admin.GET("/legal-cases/chronology/template", requirePermission("case_management.view"), legalCaseHandler.DownloadChronologyTemplate)
 	admin.GET("/legal-cases/file", requirePermission("case_management.view"), legalCaseHandler.ViewFile)
+	admin.GET("/legal-cases/download", requirePermission("case_management.view", "case_management.manage_document"), legalCaseHandler.Download)
 	admin.GET("/legal-cases/:id/pdf", requirePermission("case_management.view"), legalCaseHandler.GeneratePDF)
 
 	admin.PATCH("/legal-opinions/:id/status", loHandler.AdminUpdateStatus)

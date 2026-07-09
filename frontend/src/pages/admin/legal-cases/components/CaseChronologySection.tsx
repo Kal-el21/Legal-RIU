@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react'
-import { Trash2 } from 'lucide-react'
+import { Download, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useCreateCaseChronology, useDeleteCaseChronology, useLegalCase } from '@/hooks/useLegalCase'
 import { useAuthStore } from '@/store/auth.store'
 import { formatDate } from '@/lib/utils'
+import { legalCaseService } from '@/services/legal-case.service'
 import ChronologyImportCard from './ChronologyImportCard'
 
 interface CaseChronologySectionProps {
@@ -46,6 +47,16 @@ export default function CaseChronologySection({ caseId }: CaseChronologySectionP
   const handleDelete = async (chronologyID: string) => {
     if (!window.confirm('Hapus kronologi ini?')) return
     await deleteChronology.mutateAsync(chronologyID)
+  }
+
+  const handleDownload = async (path: string) => {
+    const { blob, filename } = await legalCaseService.downloadFile(path)
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = filename
+    anchor.click()
+    URL.revokeObjectURL(url)
   }
 
   return (
@@ -97,11 +108,25 @@ export default function CaseChronologySection({ caseId }: CaseChronologySectionP
         )}
         {chronologies.map((chronology) => (
           <div key={chronology.id} className="flex items-start justify-between rounded-lg border border-gray-100 p-4">
-            <div>
+            <div className="flex-1 min-w-0">
               <p className="text-xs text-gray-400">{formatDate(chronology.agenda_date)}</p>
               <p className="text-sm font-medium text-gray-800 mt-0.5">{chronology.agenda}</p>
               {chronology.description && (
                 <p className="text-sm text-gray-500 mt-1">{chronology.description}</p>
+              )}
+              {chronology.documents?.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-2">
+                  {chronology.documents.map((path) => (
+                    <button
+                      key={path}
+                      onClick={() => handleDownload(path)}
+                      className="inline-flex items-center gap-1 rounded-lg bg-gray-100 px-2 py-1 text-xs text-gray-600 hover:bg-gray-200"
+                    >
+                      <Download className="h-3 w-3" />
+                      {path.split('/').pop()}
+                    </button>
+                  ))}
+                </div>
               )}
             </div>
             {canManageChronology && (
