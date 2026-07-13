@@ -11,6 +11,8 @@ import (
 	"legal-riu-portal/internal/service"
 	"legal-riu-portal/internal/storage"
 
+	"legal-riu-portal/internal/assets"
+
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
@@ -19,6 +21,10 @@ func main() {
 	cfg := config.Load()
 	db := config.InitDatabase(cfg)
 	store := storage.InitMinIO(cfg)
+
+	if err := assets.EnsureDefaultTemplate(store); err != nil {
+		log.Printf("Warning: failed to ensure default template: %v", err)
+	}
 
 	if err := seed.RunAllMigrationsAndSeeds(db); err != nil {
 		log.Fatalf("Migration and seed failed: %v", err)
@@ -29,6 +35,7 @@ func main() {
 	refreshTokenRepo := repository.NewRefreshTokenRepository(db)
 	loRepo := repository.NewLegalOpinionRepository(db)
 	drRepo := repository.NewDocumentReviewRepository(db)
+	agreementRepo := repository.NewAgreementDocumentRepository(db)
 	dashRepo := repository.NewDashboardRepository(db)
 	auditLogRepo := repository.NewAuditLogRepository(db)
 	legalCaseRepo := repository.NewLegalCaseRepository(db)
@@ -41,6 +48,9 @@ func main() {
 	documentTypeRepo := repository.NewDocumentTypeRepository(db)
 	materialRepo := repository.NewLegalMaterialRepository(db)
 	permissionRepo := repository.NewPermissionRepository(db)
+	companyMasterRepo := repository.NewCompanyMasterRepository(db)
+
+	fieldPositionRepo := repository.NewTemplateFieldPositionRepository(db)
 
 	// ── Services ─────────────────────────────────────────────────────────────
 	permissionSvc := service.NewPermissionService(permissionRepo, userRepo)
@@ -48,6 +58,7 @@ func main() {
 	userSvc := service.NewUserService(userRepo)
 	loSvc := service.NewLegalOpinionService(loRepo, store)
 	drSvc := service.NewDocumentReviewService(drRepo, store)
+	agreementSvc := service.NewAgreementDocumentService(agreementRepo, store, fieldPositionRepo)
 	notificationSettingSvc := service.NewNotificationSettingService(notificationSettingRepo, dashRepo)
 	dashSvc := service.NewDashboardService(dashRepo, notificationSettingSvc)
 	auditLogSvc := service.NewAuditLogService(auditLogRepo)
@@ -60,12 +71,15 @@ func main() {
 	documentTypeSvc := service.NewDocumentTypeService(documentTypeRepo)
 	materialSvc := service.NewLegalMaterialService(materialRepo)
 	reportSvc := service.NewReportService(db)
+	templateConversionSvc := service.NewTemplateConversionService(store)
+	companyMasterSvc := service.NewCompanyMasterService(companyMasterRepo, store, templateConversionSvc, fieldPositionRepo)
 
 	// ── Handlers ─────────────────────────────────────────────────────────────
 	authHandler := handler.NewAuthHandler(authSvc, cfg, auditLogSvc)
 	userHandler := handler.NewUserHandler(userSvc, auditLogSvc)
 	loHandler := handler.NewLegalOpinionHandler(loSvc, auditLogSvc)
 	drHandler := handler.NewDocumentReviewHandler(drSvc, auditLogSvc)
+	agreementHandler := handler.NewAgreementDocumentHandler(agreementSvc, auditLogSvc)
 	dashHandler := handler.NewDashboardHandler(dashSvc)
 	auditLogHandler := handler.NewAuditLogHandler(auditLogSvc, auditLogRepo)
 	legalCaseHandler := handler.NewLegalCaseHandler(legalCaseSvc, auditLogSvc, userRepo)
@@ -79,6 +93,7 @@ func main() {
 	materialHandler := handler.NewLegalMaterialHandler(materialSvc)
 	permissionHandler := handler.NewPermissionHandler(permissionSvc)
 	reportHandler := handler.NewReportHandler(reportSvc)
+	companyMasterHandler := handler.NewCompanyMasterHandler(companyMasterSvc, auditLogSvc)
 
 	// ── Gin ──────────────────────────────────────────────────────────────────
 	if cfg.App.Env == "production" {
@@ -162,6 +177,16 @@ func main() {
 	userOnly.POST("/review-documents/:id/resubmit", requirePermission("document_review.resubmit.own"), drHandler.Resubmit)
 
 	registerLegalCaseRoutes(userOnly, legalCaseHandler, requirePermission)
+
+	// Agreement Documents (Perjanjian)
+	userOnly.GET("/agreement-documents", requirePermission("agreement_document.view.own", "agreement_document.view.all"), agreementHandler.GetAll)
+	userOnly.POST("/agreement-documents", requirePermission("agreement_document.create.own"), agreementHandler.Create)
+	userOnly.GET("/agreement-documents/:id", requirePermission("agreement_document.view.own", "agreement_document.view.all"), agreementHandler.GetByID)
+	userOnly.PUT("/agreement-documents/:id", requirePermission("agreement_document.update.own"), agreementHandler.Update)
+	userOnly.DELETE("/agreement-documents/:id", requirePermission("agreement_document.delete.own"), agreementHandler.Delete)
+	userOnly.POST("/agreement-documents/:id/resubmit", requirePermission("agreement_document.resubmit.own"), agreementHandler.Resubmit)
+	userOnly.GET("/agreement-documents/:id/preview", requirePermission("agreement_document.view.own", "agreement_document.view.all"), agreementHandler.PreviewDocument)
+	userOnly.GET("/agreement-documents/:id/pdf", requirePermission("agreement_document.download.all"), agreementHandler.DownloadFinal)
 
 	// ── Admin only ─────────────────────────────────────────────────────────────
 	admin := api.Group("/admin")
@@ -281,6 +306,29 @@ func main() {
 	admin.POST("/review-documents/:id/result", drHandler.AdminUploadResult)
 	admin.GET("/review-documents/:id/pdf", requirePermission("document_review.view.all"), drHandler.GeneratePDF)
 
+	admin.GET("/agreement-documents", agreementHandler.GetAll)
+	admin.GET("/agreement-documents/:id", agreementHandler.GetByID)
+	admin.GET("/agreement-documents/:id/preview", requirePermission("agreement_document.preview.all"), agreementHandler.PreviewDocument)
+	admin.PUT("/agreement-documents/:id/pihak-pertama", requirePermission("agreement_document.update_pihak_pertama.all"), agreementHandler.UpdatePihakPertama)
+	admin.PUT("/agreement-documents/:id/meta", requirePermission("agreement_document.update_pihak_pertama.all"), agreementHandler.UpdateMeta)
+	admin.POST("/agreement-documents/:id/approve", requirePermission("agreement_document.approve.all"), agreementHandler.Approve)
+	admin.POST("/agreement-documents/:id/return", requirePermission("agreement_document.return.all"), agreementHandler.ReturnForRevision)
+	admin.POST("/agreement-documents/:id/reject", requirePermission("agreement_document.reject.all"), agreementHandler.Reject)
+	admin.GET("/agreement-documents/:id/pdf", requirePermission("agreement_document.download.all"), agreementHandler.DownloadFinal)
+
+	admin.GET("/company-masters", companyMasterHandler.GetAll)
+	admin.GET("/company-masters/:id", companyMasterHandler.GetByID)
+	admin.POST("/company-masters", companyMasterHandler.Create)
+	admin.PUT("/company-masters/:id", companyMasterHandler.Update)
+	admin.DELETE("/company-masters/:id", companyMasterHandler.Delete)
+	admin.POST("/company-masters/template/upload", companyMasterHandler.UploadTemplate)
+	admin.GET("/company-masters/template/active", companyMasterHandler.GetActiveTemplate)
+	admin.GET("/company-masters/template/:version", companyMasterHandler.GetTemplateByVersion)
+	admin.DELETE("/company-masters/template/:version", companyMasterHandler.DeleteTemplate)
+	admin.GET("/templates/:version/preview", companyMasterHandler.GetTemplatePreview)
+	admin.GET("/templates/:version/field-positions", companyMasterHandler.GetFieldPositions)
+	admin.PUT("/templates/:version/field-positions", companyMasterHandler.SaveFieldPositions)
+
 	admin.GET("/users", userHandler.GetAll)
 	admin.POST("/users", userHandler.Create)
 	admin.GET("/permissions", requirePermission("user_management.manage_permissions"), permissionHandler.GetCatalog)
@@ -322,6 +370,16 @@ func main() {
 	legal.PATCH("/review-documents/:id/status", requirePermission("document_review.update_status.all"), drHandler.AdminUpdateStatus)
 	legal.POST("/review-documents/:id/result", requirePermission("document_review.upload_result.all"), drHandler.AdminUploadResult)
 	legal.GET("/review-documents/:id/pdf", requirePermission("document_review.view.all"), drHandler.GeneratePDF)
+
+	legal.GET("/agreement-documents", requirePermission("agreement_document.view.all"), agreementHandler.GetAll)
+	legal.GET("/agreement-documents/:id", requirePermission("agreement_document.view.all"), agreementHandler.GetByID)
+	legal.GET("/agreement-documents/:id/preview", requirePermission("agreement_document.preview.all"), agreementHandler.PreviewDocument)
+	legal.PUT("/agreement-documents/:id/pihak-pertama", requirePermission("agreement_document.update_pihak_pertama.all"), agreementHandler.UpdatePihakPertama)
+	legal.PUT("/agreement-documents/:id/meta", requirePermission("agreement_document.update_pihak_pertama.all"), agreementHandler.UpdateMeta)
+	legal.POST("/agreement-documents/:id/approve", requirePermission("agreement_document.approve.all"), agreementHandler.Approve)
+	legal.POST("/agreement-documents/:id/return", requirePermission("agreement_document.return.all"), agreementHandler.ReturnForRevision)
+	legal.POST("/agreement-documents/:id/reject", requirePermission("agreement_document.reject.all"), agreementHandler.Reject)
+	legal.GET("/agreement-documents/:id/pdf", requirePermission("agreement_document.download.all"), agreementHandler.DownloadFinal)
 
 	registerLegalCaseRoutes(legal, legalCaseHandler, requirePermission)
 

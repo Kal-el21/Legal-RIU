@@ -174,6 +174,69 @@ export interface DocumentReview {
   status_updated_at?: string
 }
 
+export interface CompanyMaster {
+  id: string
+  name: string
+  address?: string
+  npwp?: string
+  phone?: string
+  email?: string
+  default_pejabat?: string
+  default_jabatan?: string
+  default_tempat_ttd?: string
+  is_active: boolean
+}
+
+export interface CompanyMasterTemplate {
+  version: string
+  template_path: string
+  base_pdf_path: string
+  uploaded_at: string
+}
+
+export interface TemplateFieldPosition {
+  id?: string
+  template_version: string
+  field_name: string
+  x: number
+  y: number
+  font?: string
+  style?: string
+  size?: number
+  align?: string
+  page_number?: number
+}
+
+export interface AgreementAttachment {
+  id: string
+  agreement_id: string
+  file_name: string
+  file_path: string
+  file_size: number
+  upload_round: number
+  created_at: string
+}
+
+export interface AgreementDocument {
+  id: string
+  ticket_number: string
+  user_id: string
+  user?: Pick<User, 'id' | 'full_name' | 'email'>
+  pihak_pertama_id: string
+  pihak_pertama?: CompanyMaster
+  pihak_pertama_pejabat?: string
+  pihak_pertama_jabatan?: string
+  form_data: Record<string, string | number>
+  generated_pdf_path?: string
+  generated_file_name?: string
+  status: SubmissionStatus
+  admin_note?: string
+  attachments?: AgreementAttachment[]
+  created_at: string
+  updated_at: string
+  status_updated_at?: string
+}
+
 export interface Regency {
   id: string
   name: string

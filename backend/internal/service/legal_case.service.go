@@ -65,7 +65,7 @@ type legalCaseService struct {
 }
 
 func NewLegalCaseService(repo repository.LegalCaseRepository, s *storage.MinIOClient) LegalCaseService {
-	return &legalCaseService{repo: repo, storage: s, pdfSvc: NewPDFService()}
+	return &legalCaseService{repo: repo, storage: s, pdfSvc: NewPDFService(NewNoOpTemplateConversionService(), nil)}
 }
 
 func (s *legalCaseService) Create(companyID *uuid.UUID, req dto.CreateLegalCaseRequest) (*dto.LegalCaseResponse, error) {

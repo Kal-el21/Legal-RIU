@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation } from 'react-router-dom'
-import { Scale, LayoutDashboard, FileText, FileSearch, Menu, ChevronRight, ChevronLeft, ScrollText, BarChart3, Users } from 'lucide-react'
+import { Scale, LayoutDashboard, FileText, FileSearch, FileStack, Menu, ChevronRight, ChevronLeft, ScrollText, BarChart3, Users } from 'lucide-react'
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
 import SidebarUserButton from '@/components/common/SidebarUserButton'
@@ -11,6 +11,7 @@ const NAV = [
   { label: 'Laporan', href: '/external/reports', icon: BarChart3, permissions: ['report.legal_case.view', 'report.legal_opinion.view', 'report.document_review.view'] },
   { label: 'Legal Opinion', href: '/external/legal-opinions', icon: FileText, permissions: ['legal_opinion.view.own'] },
   { label: 'Review Dokumen', href: '/external/review-documents', icon: FileSearch, permissions: ['document_review.view.own'] },
+  { label: 'Dokumen Perjanjian', href: '/external/agreement-documents', icon: FileStack, permissions: ['agreement_document.view.own'] },
   { label: 'Manajemen Kasus', href: '/external/legal-cases', icon: Scale, permissions: ['case_management.view'] },
   { label: 'Materi Legal', href: '/external/materials', icon: FileText, permissions: ['legal_material.view'] },
   { label: 'Audit Log', href: '/external/audit-logs', icon: ScrollText, permissions: ['audit_log.view'] },

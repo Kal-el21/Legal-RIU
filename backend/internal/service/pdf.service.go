@@ -2,10 +2,12 @@ package service
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 
 	"legal-riu-portal/internal/entity"
+	"legal-riu-portal/internal/repository"
 
 	"github.com/jung-kurt/gofpdf/v2"
 )
@@ -14,12 +16,17 @@ type PDFService interface {
 	GenerateLegalOpinionPDF(lo *entity.LegalOpinion) ([]byte, error)
 	GenerateDocumentReviewPDF(dr *entity.DocumentReview) ([]byte, error)
 	GenerateLegalCasePDF(lc *entity.LegalCase) ([]byte, error)
+	GenerateAgreementPreview(ctx context.Context, doc *entity.AgreementDocument) ([]byte, error)
+	GenerateFinalAgreementPDF(ctx context.Context, doc *entity.AgreementDocument) ([]byte, error)
 }
 
-type pdfService struct{}
+type pdfService struct {
+	templateSvc       TemplateConversionService
+	fieldPositionRepo repository.TemplateFieldPositionRepository
+}
 
-func NewPDFService() PDFService {
-	return &pdfService{}
+func NewPDFService(templateSvc TemplateConversionService, fieldPositionRepo repository.TemplateFieldPositionRepository) PDFService {
+	return &pdfService{templateSvc: templateSvc, fieldPositionRepo: fieldPositionRepo}
 }
 
 func (s *pdfService) GenerateLegalOpinionPDF(lo *entity.LegalOpinion) ([]byte, error) {

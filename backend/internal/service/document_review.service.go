@@ -38,7 +38,7 @@ type documentReviewService struct {
 }
 
 func NewDocumentReviewService(repo repository.DocumentReviewRepository, s *storage.MinIOClient) DocumentReviewService {
-	return &documentReviewService{repo: repo, storage: s, pdfSvc: NewPDFService()}
+	return &documentReviewService{repo: repo, storage: s, pdfSvc: NewPDFService(NewNoOpTemplateConversionService(), nil)}
 }
 
 func (s *documentReviewService) Create(userID string, req dto.CreateDocumentReviewRequest, files []*multipart.FileHeader) (*entity.DocumentReview, error) {

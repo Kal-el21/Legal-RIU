@@ -1,6 +1,7 @@
 package entity
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
@@ -343,6 +344,7 @@ type AuditAction string
 const (
 	ActionStatusChange     AuditAction = "STATUS_CHANGE"
 	ActionFileUpload       AuditAction = "FILE_UPLOAD"
+	ActionUserCreate       AuditAction = "USER_CREATE"
 	ActionUserUpdate       AuditAction = "USER_UPDATE"
 	ActionLogin            AuditAction = "LOGIN"
 	ActionLogout           AuditAction = "LOGOUT"
@@ -408,4 +410,57 @@ type NotificationRead struct {
 	SubmissionID   uuid.UUID  `gorm:"type:uuid;not null;uniqueIndex:idx_notification_reads_user_submission" json:"submission_id"`
 	IsRead         bool       `gorm:"not null;default:true" json:"is_read"`
 	ReadAt         *time.Time `json:"read_at"`
+}
+
+// ─── Agreement Document (Perjanjian Generation) ─────────────────────────────
+
+// CompanyMaster holds the fixed "Pihak Pertama" master data (the company's
+// own legal entity information) used when generating agreement documents.
+type CompanyMaster struct {
+	Base
+	Name              string `gorm:"size:255;not null" json:"name"`
+	Address           string `gorm:"type:text" json:"address"`
+	NPWP              string `gorm:"size:50" json:"npwp"`
+	Phone             string `gorm:"size:50" json:"phone"`
+	Email             string `gorm:"size:100" json:"email"`
+	DefaultPejabat    string `gorm:"size:255" json:"default_pejabat"`
+	DefaultJabatan    string `gorm:"size:255" json:"default_jabatan"`
+	DefaultTempatTtd  string `gorm:"size:255" json:"default_tempat_ttd"`
+	IsActive          bool   `gorm:"not null;default:true" json:"is_active"`
+}
+
+type AgreementDocument struct {
+	Base
+	TicketNumber        string                     `gorm:"uniqueIndex;not null" json:"ticket_number"`
+	UserID              uuid.UUID                  `gorm:"type:uuid;not null" json:"user_id"`
+	User                User                       `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	PihakPertamaID      uuid.UUID                  `gorm:"type:uuid;not null" json:"pihak_pertama_id"`
+	PihakPertama        CompanyMaster              `gorm:"foreignKey:PihakPertamaID" json:"pihak_pertama,omitempty"`
+	PihakPertamaPejabat string                     `gorm:"size:255" json:"pihak_pertama_pejabat"`
+	PihakPertamaJabatan string                     `gorm:"size:255" json:"pihak_pertama_jabatan"`
+	FormData            json.RawMessage             `gorm:"type:jsonb;not null" json:"form_data"`
+	GeneratedPDFPath    string                     `gorm:"size:500" json:"generated_pdf_path"`
+	GeneratedFileName   string                     `gorm:"size:255" json:"generated_file_name"`
+	TemplateVersion     string                     `gorm:"size:50" json:"template_version"`
+	Status              SubmissionStatus           `gorm:"not null;default:'SUBMITTED'" json:"status"`
+	StatusUpdatedAt     *time.Time                 `json:"status_updated_at,omitempty"`
+	AdminNote           string                     `gorm:"type:text" json:"admin_note"`
+	Attachments         []AgreementAttachment      `gorm:"foreignKey:AgreementID" json:"attachments,omitempty"`
+}
+
+type AgreementAttachment struct {
+	ID          uuid.UUID `gorm:"type:uuid;primaryKey" json:"id"`
+	AgreementID uuid.UUID `gorm:"type:uuid;not null" json:"agreement_id"`
+	FileName    string    `gorm:"not null" json:"file_name"`
+	FilePath    string    `gorm:"not null" json:"file_path"`
+	FileSize    int64     `json:"file_size"`
+	UploadRound int       `gorm:"not null;default:1" json:"upload_round"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+func (a *AgreementAttachment) BeforeCreate(tx *gorm.DB) error {
+	if a.ID == uuid.Nil {
+		a.ID = uuid.New()
+	}
+	return nil
 }

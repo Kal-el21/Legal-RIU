@@ -117,6 +117,19 @@ func permissionSeedData() []entity.Permission {
 		perm("report.legal_case.view", "report", "legal_case", "all", "Report - Legal Case", "Melihat laporan legal case"),
 		perm("report.legal_opinion.view", "report", "legal_opinion", "all", "Report - Legal Opinion", "Melihat laporan legal opinion"),
 		perm("report.document_review.view", "report", "document_review", "all", "Report - Review Dokumen", "Melihat laporan review dokumen"),
+
+		perm("agreement_document.view.own", "agreement_document", "view", "own", "Dokumen Perjanjian - Lihat Milik Sendiri", "Melihat dokumen perjanjian milik sendiri"),
+		perm("agreement_document.view.all", "agreement_document", "view", "all", "Dokumen Perjanjian - Lihat Semua", "Melihat semua dokumen perjanjian"),
+		perm("agreement_document.create.own", "agreement_document", "create", "own", "Dokumen Perjanjian - Buat", "Membuat pengajuan dokumen perjanjian"),
+		perm("agreement_document.update.own", "agreement_document", "update", "own", "Dokumen Perjanjian - Edit", "Mengedit dokumen perjanjian milik sendiri"),
+		perm("agreement_document.delete.own", "agreement_document", "delete", "own", "Dokumen Perjanjian - Hapus", "Menghapus dokumen perjanjian milik sendiri"),
+		perm("agreement_document.resubmit.own", "agreement_document", "resubmit", "own", "Dokumen Perjanjian - Ajukan Ulang", "Mengajukan ulang dokumen perjanjian milik sendiri"),
+		perm("agreement_document.preview.all", "agreement_document", "preview", "all", "Dokumen Perjanjian - Preview", "Melihat preview dokumen perjanjian (approver)"),
+		perm("agreement_document.update_pihak_pertama.all", "agreement_document", "update_pihak_pertama", "all", "Dokumen Perjanjian - Edit Pihak Pertama", "Mengedit data pihak pertama"),
+		perm("agreement_document.approve.all", "agreement_document", "approve", "all", "Dokumen Perjanjian - Approve", "Menyetujui dokumen perjanjian"),
+		perm("agreement_document.return.all", "agreement_document", "return", "all", "Dokumen Perjanjian - Return", "Mengembalikan dokumen perjanjian untuk revisi"),
+		perm("agreement_document.reject.all", "agreement_document", "reject", "all", "Dokumen Perjanjian - Reject", "Menolak dokumen perjanjian"),
+		perm("agreement_document.download.all", "agreement_document", "download", "all", "Dokumen Perjanjian - Download", "Mengunduh dokumen perjanjian final"),
 	}
 }
 
@@ -140,6 +153,12 @@ func rolePermissionSeedData(permissionByCode map[string]entity.Permission) map[e
 		"document_review.delete.own",
 		"document_review.resubmit.own",
 		"document_review.download.all",
+		"agreement_document.view.own",
+		"agreement_document.create.own",
+		"agreement_document.update.own",
+		"agreement_document.delete.own",
+		"agreement_document.resubmit.own",
+		"agreement_document.download.all",
 		"legal_material.view",
 	}
 
@@ -153,6 +172,13 @@ func rolePermissionSeedData(permissionByCode map[string]entity.Permission) map[e
 		"document_review.update_status.all",
 		"document_review.upload_result.all",
 		"document_review.download.all",
+		"agreement_document.view.all",
+		"agreement_document.preview.all",
+		"agreement_document.update_pihak_pertama.all",
+		"agreement_document.approve.all",
+		"agreement_document.return.all",
+		"agreement_document.reject.all",
+		"agreement_document.download.all",
 		"case_management.view",
 		"case_management.create",
 		"case_management.update",
@@ -173,6 +199,12 @@ func rolePermissionSeedData(permissionByCode map[string]entity.Permission) map[e
 		"case_management.view",
 		"case_management.manage_document",
 		"case_management.manage_chronology",
+		"agreement_document.view.own",
+		"agreement_document.create.own",
+		"agreement_document.update.own",
+		"agreement_document.delete.own",
+		"agreement_document.resubmit.own",
+		"agreement_document.download.all",
 	}
 
 	legalAU := []string{

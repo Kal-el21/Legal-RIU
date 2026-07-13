@@ -37,7 +37,7 @@ type legalOpinionService struct {
 }
 
 func NewLegalOpinionService(repo repository.LegalOpinionRepository, s *storage.MinIOClient) LegalOpinionService {
-	return &legalOpinionService{repo: repo, storage: s, pdfSvc: NewPDFService()}
+	return &legalOpinionService{repo: repo, storage: s, pdfSvc: NewPDFService(NewNoOpTemplateConversionService(), nil)}
 }
 
 func (s *legalOpinionService) Create(userID string, req dto.CreateLegalOpinionRequest, files []*multipart.FileHeader) (*entity.LegalOpinion, error) {

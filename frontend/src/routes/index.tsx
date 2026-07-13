@@ -22,6 +22,9 @@ import LegalOpinionDetailPage from '@/pages/dashboard/legal-opinions/LegalOpinio
 import ReviewDocumentListPage from '@/pages/dashboard/review-documents/ReviewDocumentListPage'
 import ReviewDocumentFormPage from '@/pages/dashboard/review-documents/ReviewDocumentFormPage'
 import ReviewDocumentDetailPage from '@/pages/dashboard/review-documents/ReviewDocumentDetailPage'
+import AgreementDocumentListPage from '@/pages/dashboard/agreement-documents/AgreementDocumentListPage'
+import AgreementDocumentFormPage from '@/pages/dashboard/agreement-documents/AgreementDocumentFormPage'
+import AgreementDocumentDetailPage from '@/pages/dashboard/agreement-documents/AgreementDocumentDetailPage'
 
 import AdminDashboardPage from '@/pages/admin/AdminDashboardPage'
 import UserManagementPage from '@/pages/admin/users/UserManagementPage'
@@ -29,6 +32,8 @@ import AdminLegalOpinionListPage from '@/pages/admin/legal-opinions/AdminLegalOp
 import AdminLegalOpinionDetailPage from '@/pages/admin/legal-opinions/AdminLegalOpinionDetailPage'
 import AdminReviewDocumentListPage from '@/pages/admin/review-documents/AdminReviewDocumentListPage'
 import AdminReviewDocumentDetailPage from '@/pages/admin/review-documents/AdminReviewDocumentDetailPage'
+import AdminAgreementDocumentListPage from '@/pages/admin/agreement-documents/AdminAgreementDocumentListPage'
+import AdminAgreementDocumentReviewPage from '@/pages/admin/agreement-documents/AdminAgreementDocumentReviewPage'
 import AdminLegalCaseListPage from '@/pages/admin/legal-cases/AdminLegalCaseListPage'
 import AdminLegalCaseDetailPage from '@/pages/admin/legal-cases/AdminLegalCaseDetailPage'
 import AuditLogPage from '@/pages/admin/AuditLogPage'
@@ -41,6 +46,8 @@ import CaseCategoryManagementPage from '@/pages/admin/case-categories/CaseCatego
 import RegencyManagementPage from '@/pages/admin/regencies/RegencyManagementPage'
 import CedantManagementPage from '@/pages/admin/cedants/CedantManagementPage'
 import DivisionManagementPage from '@/pages/admin/divisions/DivisionManagementPage'
+import CompanyMasterManagementPage from '@/pages/admin/company-masters/CompanyMasterManagementPage'
+import TemplateCalibrationPage from '@/pages/admin/company-masters/TemplateCalibrationPage'
 
 import MaterialManagementPage from '@/pages/admin/materials/MaterialManagementPage'
 import DashboardMaterialManagementPage from '@/pages/dashboard/materials/LegalMaterialManagementPage'
@@ -51,11 +58,16 @@ import ReportPage from '@/pages/reports/ReportPage'
 
 import External_OpinionListPage from '@/pages/external/legal-opinions/External_OpinionListPage'
 import External_ReviewDocumentListPage from '@/pages/external/review-documents/External_ReviewDocumentListPage'
+import External_AgreementDocumentListPage from '@/pages/external/agreement-documents/External_AgreementDocumentListPage'
+import External_AgreementDocumentFormPage from '@/pages/external/agreement-documents/External_AgreementDocumentFormPage'
+import External_AgreementDocumentDetailPage from '@/pages/external/agreement-documents/External_AgreementDocumentDetailPage'
 import LegalDashboardPage from '@/pages/legal/LegalDashboardPage'
 import LegalLegalOpinionListPage from '@/pages/legal/legal-opinions/LegalOpinionListPage'
 import LegalLegalOpinionDetailPage from '@/pages/legal/legal-opinions/LegalOpinionDetailPage'
 import LegalReviewDocumentListPage from '@/pages/legal/review-documents/ReviewDocumentListPage'
 import LegalReviewDocumentDetailPage from '@/pages/legal/review-documents/ReviewDocumentDetailPage'
+import LegalAgreementDocumentListPage from '@/pages/legal/agreement-documents/LegalAgreementDocumentListPage'
+import LegalAgreementDocumentReviewPage from '@/pages/legal/agreement-documents/LegalAgreementDocumentReviewPage'
 import LegalMaterialManagementPage from '@/pages/legal/materials/LegalMaterialManagementPage'
 import LegalMaterialDetailPage from '@/pages/legal/materials/LegalMaterialDetailPage'
 
@@ -122,6 +134,10 @@ export const router = createBrowserRouter([
           { path: '/dashboard/review-documents/new', element: <ReviewDocumentFormPage /> },
           { path: '/dashboard/review-documents/:id', element: <ReviewDocumentDetailPage /> },
           { path: '/dashboard/review-documents/:id/edit', element: <ReviewDocumentFormPage /> },
+          { path: '/dashboard/agreement-documents', element: <AgreementDocumentListPage /> },
+          { path: '/dashboard/agreement-documents/new', element: <AgreementDocumentFormPage /> },
+          { path: '/dashboard/agreement-documents/:id', element: <AgreementDocumentDetailPage /> },
+          { path: '/dashboard/agreement-documents/:id/edit', element: <AgreementDocumentFormPage /> },
           { path: '/dashboard/legal-cases', element: <AdminLegalCaseListPage /> },
           { path: '/dashboard/legal-cases/:id', element: <AdminLegalCaseDetailPage /> },
           { path: '/dashboard/audit-logs', element: <AuditLogPage /> },
@@ -149,6 +165,8 @@ export const router = createBrowserRouter([
           { path: '/admin/legal-opinions/:id', element: <AdminLegalOpinionDetailPage /> },
           { path: '/admin/review-documents', element: <AdminReviewDocumentListPage /> },
           { path: '/admin/review-documents/:id', element: <AdminReviewDocumentDetailPage /> },
+          { path: '/admin/agreement-documents', element: <AdminAgreementDocumentListPage /> },
+          { path: '/admin/agreement-documents/:id', element: <AdminAgreementDocumentReviewPage /> },
           { path: '/admin/legal-cases', element: <AdminLegalCaseListPage /> },
           { path: '/admin/legal-cases/:id', element: <AdminLegalCaseDetailPage /> },
           { path: '/admin/users', element: <UserManagementPage /> },
@@ -161,6 +179,8 @@ export const router = createBrowserRouter([
           { path: '/admin/regencies', element: <RegencyManagementPage /> },
           { path: '/admin/cedants', element: <CedantManagementPage /> },
           { path: '/admin/divisions', element: <DivisionManagementPage /> },
+          { path: '/admin/company-masters', element: <CompanyMasterManagementPage /> },
+          { path: '/admin/company-masters/template/:version/calibrate', element: <TemplateCalibrationPage /> },
           { path: '/admin/materials', element: <MaterialManagementPage /> },
           { path: '/admin/materials/new', element: <MaterialFormPage /> },
           { path: '/admin/materials/:id', element: <MaterialFormPage /> },
@@ -184,6 +204,8 @@ export const router = createBrowserRouter([
           { path: '/legal/legal-opinions/:id', element: <LegalLegalOpinionDetailPage /> },
           { path: '/legal/review-documents', element: <LegalReviewDocumentListPage /> },
           { path: '/legal/review-documents/:id', element: <LegalReviewDocumentDetailPage /> },
+          { path: '/legal/agreement-documents', element: <LegalAgreementDocumentListPage /> },
+          { path: '/legal/agreement-documents/:id', element: <LegalAgreementDocumentReviewPage /> },
           { path: '/legal/legal-cases', element: <AdminLegalCaseListPage /> },
           { path: '/legal/legal-cases/:id', element: <AdminLegalCaseDetailPage /> },
           { path: '/legal/audit-logs', element: <AuditLogPage /> },
@@ -249,6 +271,9 @@ export const router = createBrowserRouter([
           { path: '/external/review-documents/:id', element: <LegalReviewDocumentDetailPage /> },
           { path: '/external/review-documents/new', element: <ReviewDocumentFormPage /> },
           { path: '/external/review-documents/:id/edit', element: <ReviewDocumentFormPage /> },
+          { path: '/external/agreement-documents', element: <External_AgreementDocumentListPage /> },
+          { path: '/external/agreement-documents/new', element: <External_AgreementDocumentFormPage /> },
+          { path: '/external/agreement-documents/:id', element: <External_AgreementDocumentDetailPage /> },
           { path: '/external/materials', element: <ExternalMaterialManagementPage /> },
           { path: '/external/materials/new', element: <MaterialFormPage /> },
           { path: '/external/materials/:id', element: <MaterialFormPage /> },

@@ -1,6 +1,8 @@
 package storage
 
 import (
+	"bytes"
+	"io"
 	"context"
 	"errors"
 	"fmt"
@@ -163,6 +165,24 @@ func validateUpload(fileHeader *multipart.FileHeader) error {
 	return nil
 }
 
+// UploadBytes uploads raw bytes to MinIO and returns the stored path.
+func (m *MinIOClient) UploadBytes(ctx context.Context, folder string, data []byte, contentType string, baseName string) (string, string, error) {
+	ext := filepath.Ext(baseName)
+	name := strings.TrimSuffix(baseName, ext)
+	name = strings.ReplaceAll(name, " ", "_")
+	objectName := fmt.Sprintf("%s/%s-%s-%s%s", folder, name, time.Now().Format("20060102-150405"), uuid.New().String()[:8], ext)
+
+	reader := bytes.NewReader(data)
+	_, err := m.client.PutObject(ctx, m.bucket, objectName, reader, int64(len(data)), minio.PutObjectOptions{
+		ContentType: contentType,
+	})
+	if err != nil {
+		return "", "", fmt.Errorf("failed to upload file: %w", err)
+	}
+
+	return objectName, baseName, nil
+}
+
 // GetPresignedURL generates a temporary pre-signed URL for file access
 func (m *MinIOClient) GetPresignedURL(ctx context.Context, objectPath string) (string, error) {
 	reqParams := make(url.Values)
@@ -199,4 +219,75 @@ func (m *MinIOClient) GetFileContentType(ctx context.Context, objectPath string)
 		return ""
 	}
 	return info.ContentType
+}
+
+// Template management methods
+
+
+// UploadTemplate uploads a .docx template to MinIO
+func (m *MinIOClient) UploadTemplate(ctx context.Context, version string, docxData []byte) (string, error) {
+	objectName := fmt.Sprintf("templates/pks-template/v%s.docx", version)
+	reader := bytes.NewReader(docxData)
+	_, err := m.client.PutObject(ctx, m.bucket, objectName, reader, int64(len(docxData)), minio.PutObjectOptions{
+		ContentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to upload template: %w", err)
+	}
+	return objectName, nil
+}
+
+// GetTemplatePath returns the MinIO path for the active template
+func (m *MinIOClient) GetTemplatePath(version string) string {
+	return fmt.Sprintf("templates/pks-template/v%s.docx", version)
+}
+
+// UploadBasePDF uploads the converted base PDF to MinIO
+func (m *MinIOClient) UploadBasePDF(ctx context.Context, version string, pdfData []byte) (string, error) {
+	objectName := fmt.Sprintf("templates/pks-base/v%s.pdf", version)
+	reader := bytes.NewReader(pdfData)
+	_, err := m.client.PutObject(ctx, m.bucket, objectName, reader, int64(len(pdfData)), minio.PutObjectOptions{
+		ContentType: "application/pdf",
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to upload base PDF: %w", err)
+	}
+	return objectName, nil
+}
+
+// GetBasePDFPath returns the MinIO path for the base PDF template
+func (m *MinIOClient) GetBasePDFPath(version string) string {
+	return fmt.Sprintf("templates/pks-base/v%s.pdf", version)
+}
+
+// DownloadTemplate downloads the template .docx from MinIO
+func (m *MinIOClient) DownloadTemplate(ctx context.Context, version string) ([]byte, error) {
+	objectName := m.GetTemplatePath(version)
+	reader, err := m.client.GetObject(ctx, m.bucket, objectName, minio.GetObjectOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to download template: %w", err)
+	}
+	defer reader.Close()
+
+	data, err := io.ReadAll(reader)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read template: %w", err)
+	}
+	return data, nil
+}
+
+// DownloadBasePDF downloads the base PDF from MinIO
+func (m *MinIOClient) DownloadBasePDF(ctx context.Context, version string) ([]byte, error) {
+	objectName := m.GetBasePDFPath(version)
+	reader, err := m.client.GetObject(ctx, m.bucket, objectName, minio.GetObjectOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to download base PDF: %w", err)
+	}
+	defer reader.Close()
+
+	data, err := io.ReadAll(reader)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read base PDF: %w", err)
+	}
+	return data, nil
 }

@@ -14,7 +14,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o seed-admin ./cmd/seed-admin
 
 FROM alpine:latest
 
-RUN apk --no-cache add ca-certificates tzdata
+RUN apk --no-cache add ca-certificates tzdata libreoffice poppler-utils
 ENV TZ=Asia/Jakarta
 
 WORKDIR /root/

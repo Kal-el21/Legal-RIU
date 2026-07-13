@@ -328,6 +328,10 @@ func RunAllMigrationsAndSeeds(db *gorm.DB) error {
 		&entity.CaseCategory{},
 		&entity.DocumentType{},
 		&entity.LegalMaterial{},
+		&entity.CompanyMaster{},
+		&entity.AgreementDocument{},
+		&entity.AgreementAttachment{},
+		&entity.TemplateFieldPosition{},
 	); err != nil {
 		return err
 	}
@@ -357,10 +361,7 @@ func RunAllMigrationsAndSeeds(db *gorm.DB) error {
 	if err := SeedDocumentTypes(db); err != nil {
 		return err
 	}
-	if err := SeedCaseTypes(db); err != nil {
-		return err
-	}
-	if err := SeedCaseCategories(db); err != nil {
+	if err := SeedCompanyMasters(db); err != nil {
 		return err
 	}
 	if err := SeedPermissions(db); err != nil {

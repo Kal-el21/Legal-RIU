@@ -11,6 +11,7 @@ const (
 	PrefixLegalOpinion   TicketPrefix = "LO"
 	PrefixDocumentReview TicketPrefix = "RD"
 	PrefixLegalCase      TicketPrefix = "LC"
+	PrefixAgreement      TicketPrefix = "PK"
 )
 
 // GenerateTicketNumber creates a ticket number in format: LO-202506-0001
