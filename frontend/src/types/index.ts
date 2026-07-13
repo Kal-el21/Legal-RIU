@@ -198,6 +198,7 @@ export interface TemplateFieldPosition {
   id?: string
   template_version: string
   field_name: string
+  occurrence_index?: number
   x: number
   y: number
   font?: string

@@ -63,13 +63,16 @@ func (s *pdfService) renderAgreementPDF(doc *entity.AgreementDocument, watermark
 		defer os.Remove(imgPath)
 	}
 
-	positions := DefaultFieldPositions
+	// positionsByField groups every calibrated occurrence of a field. Each field
+	// can have multiple occurrences (e.g. a signature block repeated across
+	// pages); every occurrence renders with the same value at its own position.
+	positionsByField := make(map[string][]FieldPosition)
+
 	if s.fieldPositionRepo != nil {
 		dbVersion := version
 		if dbPositions, err := s.fieldPositionRepo.GetByVersion(dbVersion); err == nil && len(dbPositions) > 0 {
-			positions = make(map[string]FieldPosition)
 			for _, pos := range dbPositions {
-				positions[pos.FieldName] = FieldPosition{
+				positionsByField[pos.FieldName] = append(positionsByField[pos.FieldName], FieldPosition{
 					X:     pos.X,
 					Y:     pos.Y,
 					Font:  pos.Font,
@@ -77,52 +80,87 @@ func (s *pdfService) renderAgreementPDF(doc *entity.AgreementDocument, watermark
 					Size:  pos.Size,
 					Align: pos.Align,
 					Page:  pos.PageNumber,
-				}
+				})
 			}
-			log.Printf("Loaded %d field positions from DB for version %s", len(positions), dbVersion)
+			log.Printf("Loaded %d field positions from DB for version %s", len(dbPositions), dbVersion)
 		} else if err != nil {
 			log.Printf("Warning: failed to load field positions for version %s, using defaults: %v", dbVersion, err)
 		}
 	}
 
-	fields := map[string]string{
-		"pihak_kedua_nama":      fdString(doc, "pihak_kedua_nama"),
-		"pihak_kedua_bidang":    fdString(doc, "pihak_kedua_bidang"),
-		"jenis_pekerjaan":       fdString(doc, "jenis_pekerjaan"),
-		"nomor_pihak_pertama":   fdString(doc, "nomor_pihak_pertama"),
-		"nomor_pihak_kedua":     fdString(doc, "nomor_pihak_kedua"),
-		"tempat_ttd":            fdString(doc, "tempat_ttd"),
-		"tanggal_ttd":           formatTanggalID(fdString(doc, "tanggal_ttd")),
-		"pihak_pertama_pejabat": doc.PihakPertamaPejabat,
-		"pihak_pertama_jabatan": doc.PihakPertamaJabatan,
-		"pihak_kedua_pejabat":   fdString(doc, "pihak_kedua_pejabat"),
-		"pihak_kedua_jabatan":   fdString(doc, "pihak_kedua_jabatan"),
-		"ruang_lingkup":         fdString(doc, "ruang_lingkup"),
-		"nilai_kontrak":         formatRupiah(parseFloatField(fdString(doc, "nilai_kontrak"))),
+	// Fall back to hardcoded defaults for any field without a calibrated entry.
+	for name, pos := range DefaultFieldPositions {
+		if _, ok := positionsByField[name]; !ok {
+			positionsByField[name] = []FieldPosition{pos}
+		}
 	}
 
-	fieldsByPage := make(map[int]map[string]string)
-	for fieldName, value := range fields {
+	type fieldEntry struct {
+		Name  string
+		Value string
+		Pos   FieldPosition
+	}
+
+	var entries []fieldEntry
+	addField := func(name, value string) {
 		if value == "" || value == ".............................." {
-			continue
+			return
 		}
-		if pos, ok := positions[fieldName]; ok {
-			page := pos.Page
-			if page == 0 {
-				page = 1
-			}
-			if fieldsByPage[page] == nil {
-				fieldsByPage[page] = make(map[string]string)
-			}
-			fieldsByPage[page][fieldName] = value
+		occs, ok := positionsByField[name]
+		if !ok || len(occs) == 0 {
+			return
+		}
+		for _, pos := range occs {
+			entries = append(entries, fieldEntry{Name: name, Value: value, Pos: pos})
 		}
 	}
 
-	for _, pageFields := range fieldsByPage {
-		for fieldName, value := range pageFields {
-			if pos, ok := positions[fieldName]; ok {
-				s.overlayField(pdf, value, pos)
-			}
+	addField("pihak_kedua_nama", fdString(doc, "pihak_kedua_nama"))
+	addField("pihak_kedua_bidang", fdString(doc, "pihak_kedua_bidang"))
+	addField("pihak_kedua_alamat", fdString(doc, "pihak_kedua_alamat"))
+	addField("pihak_kedua_telepon", fdString(doc, "pihak_kedua_telepon"))
+	addField("pihak_kedua_email", fdString(doc, "pihak_kedua_email"))
+	addField("pihak_kedua_pic", fdString(doc, "pihak_kedua_pic"))
+	addField("jenis_pekerjaan", fdString(doc, "jenis_pekerjaan"))
+	addField("nomor_pihak_pertama", fdString(doc, "nomor_pihak_pertama"))
+	addField("nomor_pihak_kedua", fdString(doc, "nomor_pihak_kedua"))
+	addField("surat_penawaran_nomor", fdString(doc, "surat_penawaran_nomor"))
+	addField("surat_penawaran_perihal", fdString(doc, "surat_penawaran_perihal"))
+	addField("surat_penawaran_tanggal", fdString(doc, "surat_penawaran_tanggal"))
+	addField("surat_penunjukan_nomor", fdString(doc, "surat_penunjukan_nomor"))
+	addField("surat_penunjukan_perihal", fdString(doc, "surat_penunjukan_perihal"))
+	addField("surat_penunjukan_tanggal", fdString(doc, "surat_penunjukan_tanggal"))
+	addField("jangka_waktu_mulai", fdString(doc, "jangka_waktu_mulai"))
+	addField("jangka_waktu_selesai", fdString(doc, "jangka_waktu_selesai"))
+	addField("tempat_ttd", fdString(doc, "tempat_ttd"))
+	addField("tanggal_ttd", formatTanggalID(fdString(doc, "tanggal_ttd")))
+	addField("pihak_pertama_pejabat", doc.PihakPertamaPejabat)
+	addField("pihak_pertama_jabatan", doc.PihakPertamaJabatan)
+	addField("pihak_kedua_pejabat", fdString(doc, "pihak_kedua_pejabat"))
+	addField("pihak_kedua_jabatan", fdString(doc, "pihak_kedua_jabatan"))
+	addField("ruang_lingkup", fdString(doc, "ruang_lingkup"))
+	addField("nilai_kontrak", formatRupiah(parseFloatField(fdString(doc, "nilai_kontrak"))))
+	addField("termin1_persen", fdString(doc, "termin1_persen"))
+	addField("termin1_nilai", formatRupiah(parseFloatField(fdString(doc, "termin1_nilai"))))
+	addField("termin2_persen", fdString(doc, "termin2_persen"))
+	addField("termin2_nilai", formatRupiah(parseFloatField(fdString(doc, "termin2_nilai"))))
+	addField("bank", fdString(doc, "bank"))
+	addField("nomor_rekening", fdString(doc, "nomor_rekening"))
+	addField("atas_nama", fdString(doc, "atas_nama"))
+	addField("lampiran", fdString(doc, "lampiran"))
+
+	fieldsByPage := make(map[int][]fieldEntry)
+	for _, entry := range entries {
+		page := entry.Pos.Page
+		if page == 0 {
+			page = 1
+		}
+		fieldsByPage[page] = append(fieldsByPage[page], entry)
+	}
+
+	for _, pageEntries := range fieldsByPage {
+		for _, entry := range pageEntries {
+			s.overlayField(pdf, entry.Value, entry.Pos)
 		}
 	}
 

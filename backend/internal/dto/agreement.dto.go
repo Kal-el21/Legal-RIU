@@ -40,6 +40,9 @@ type CreateAgreementRequest struct {
 	Bank              string  `json:"bank"`
 	NomorRekening     string  `json:"nomor_rekening"`
 	AtasNama          string  `json:"atas_nama"`
+
+	// Lampiran (attachment list text)
+	Lampiran string `json:"lampiran"`
 }
 
 type UpdateAgreementRequest = CreateAgreementRequest

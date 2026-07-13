@@ -24,8 +24,8 @@ func NewTemplateFieldPositionRepository(db *gorm.DB) TemplateFieldPositionReposi
 func (r *templateFieldPositionRepository) GetByVersion(version string) ([]entity.TemplateFieldPosition, error) {
 	var fields []entity.TemplateFieldPosition
 	err := r.db.
-		Where("template_version = ?", version).
-		Order("page_number ASC, field_name ASC").
+		Where("template_version = ? AND deleted_at IS NULL", version).
+		Order("page_number ASC, field_name ASC, occurrence_index ASC").
 		Find(&fields).Error
 	return fields, err
 }
@@ -35,7 +35,7 @@ func (r *templateFieldPositionRepository) GetByVersion(version string) ([]entity
 // are not preserved.
 func (r *templateFieldPositionRepository) Upsert(version string, fields []entity.TemplateFieldPosition) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Unscoped().
+		if err := tx.
 			Where("template_version = ?", version).
 			Delete(&entity.TemplateFieldPosition{}).Error; err != nil {
 			return err

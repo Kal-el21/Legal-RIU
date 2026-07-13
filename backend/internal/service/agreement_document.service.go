@@ -76,6 +76,7 @@ func toFormData(req dto.CreateAgreementRequest) map[string]interface{} {
 		"bank":                     req.Bank,
 		"nomor_rekening":           req.NomorRekening,
 		"atas_nama":                req.AtasNama,
+		"lampiran":                 req.Lampiran,
 	}
 }
 
