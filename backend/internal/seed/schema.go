@@ -7,6 +7,7 @@ import (
 
 	"legal-riu-portal/internal/entity"
 
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -261,6 +262,201 @@ func EnforceLegalCaseTicketNumberNotNull(db *gorm.DB) error {
 	return db.Exec(`ALTER TABLE legal_cases ALTER COLUMN ticket_number SET NOT NULL`).Error
 }
 
+func PrepareAgreementDocumentRequesterID(db *gorm.DB) error {
+	if err := db.Exec(`
+		ALTER TABLE agreement_documents 
+		ADD COLUMN IF NOT EXISTS requester_id uuid
+	`).Error; err != nil {
+		return err
+	}
+
+	var adminIDStr string
+	if err := db.Raw(`
+		SELECT id FROM users WHERE role = 'ADMIN' LIMIT 1
+	`).Scan(&adminIDStr).Error; err != nil {
+		return err
+	}
+
+	var adminID uuid.UUID
+	if adminIDStr != "" {
+		var err error
+		adminID, err = uuid.Parse(adminIDStr)
+		if err != nil {
+			return err
+		}
+	}
+
+	if adminID != uuid.Nil {
+		return db.Exec(`
+			UPDATE agreement_documents 
+			SET requester_id = ?
+			WHERE requester_id IS NULL
+		`, adminID).Error
+	}
+
+	return nil
+}
+
+func EnforceAgreementDocumentRequesterIDNotNull(db *gorm.DB) error {
+	return db.Exec(`
+		ALTER TABLE agreement_documents 
+		ALTER COLUMN requester_id SET NOT NULL
+	`).Error
+}
+
+func EnforceAgreementDocumentTicketNumberNotNull(db *gorm.DB) error {
+	return db.Exec(`
+		ALTER TABLE agreement_documents 
+		ALTER COLUMN ticket_number SET NOT NULL
+	`).Error
+}
+
+func PrepareAgreementDocumentTicketNumber(db *gorm.DB) error {
+	if err := db.Exec(`
+		ALTER TABLE agreement_documents 
+		ADD COLUMN IF NOT EXISTS ticket_number varchar(80)
+	`).Error; err != nil {
+		return err
+	}
+
+	return db.Exec(`
+		UPDATE agreement_documents 
+		SET ticket_number = 'PK-LEGACY-' || SUBSTRING(CAST(id AS text), 1, 8)
+		WHERE ticket_number IS NULL
+	`).Error
+}
+
+func PrepareAgreementDocumentDocumentTypeCode(db *gorm.DB) error {
+	return db.Exec(`
+		ALTER TABLE agreement_documents 
+		ADD COLUMN IF NOT EXISTS document_type_code varchar(50)
+	`).Error
+}
+
+func PrepareAgreementDocumentFormData(db *gorm.DB) error {
+	return db.Exec(`
+		ALTER TABLE agreement_documents 
+		ADD COLUMN IF NOT EXISTS form_data jsonb DEFAULT '{}'::jsonb
+	`).Error
+}
+
+func BackfillAgreementDocumentDocumentTypeCode(db *gorm.DB) error {
+	return db.Exec(`
+		UPDATE agreement_documents 
+		SET document_type_code = 'PKS'
+		WHERE document_type_code IS NULL
+			OR BTRIM(document_type_code) = ''
+			OR UPPER(BTRIM(document_type_code)) IN (
+				'LAIN-LAIN',
+				'LAIN LAIN',
+				'OTHER',
+				'PERJANJIAN KERJA SAMA',
+				'PERJANJIAN_KERJA_SAMA'
+			)
+	`).Error
+}
+
+func EnforceAgreementDocumentDocumentTypeCodeNotNull(db *gorm.DB) error {
+	return db.Exec(`
+		ALTER TABLE agreement_documents 
+		ALTER COLUMN document_type_code SET NOT NULL
+	`).Error
+}
+
+func EnforceAgreementDocumentFormDataNotNull(db *gorm.DB) error {
+	return db.Exec(`
+		ALTER TABLE agreement_documents 
+		ALTER COLUMN form_data SET NOT NULL
+	`).Error
+}
+
+func PrepareAgreementAttachmentColumns(db *gorm.DB) error {
+	if err := db.Exec(`
+		ALTER TABLE agreement_attachments 
+		ADD COLUMN IF NOT EXISTS agreement_document_id uuid
+	`).Error; err != nil {
+		return err
+	}
+
+	if err := db.Exec(`
+		ALTER TABLE agreement_attachments 
+		ADD COLUMN IF NOT EXISTS file_name varchar(255)
+	`).Error; err != nil {
+		return err
+	}
+
+	if err := db.Exec(`
+		ALTER TABLE agreement_attachments 
+		ADD COLUMN IF NOT EXISTS file_path varchar(500)
+	`).Error; err != nil {
+		return err
+	}
+
+	if err := db.Exec(`
+		ALTER TABLE agreement_attachments 
+		ADD COLUMN IF NOT EXISTS uploaded_by uuid
+	`).Error; err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func BackfillAgreementAttachmentColumns(db *gorm.DB) error {
+	var adminID uuid.UUID
+	if err := db.Raw(`
+		SELECT id FROM users WHERE role = 'ADMIN' LIMIT 1
+	`).Scan(&adminID).Error; err != nil {
+		return err
+	}
+
+	if adminID != uuid.Nil {
+		if err := db.Exec(`
+			UPDATE agreement_attachments 
+			SET uploaded_by = ?
+			WHERE uploaded_by IS NULL
+		`, adminID).Error; err != nil {
+			return err
+		}
+	}
+
+	return db.Exec(`
+		UPDATE agreement_attachments SET file_name = '' WHERE file_name IS NULL
+	`).Error
+}
+
+func EnforceAgreementAttachmentColumnsNotNull(db *gorm.DB) error {
+	if err := db.Exec(`
+		ALTER TABLE agreement_attachments 
+		ALTER COLUMN agreement_document_id SET NOT NULL
+	`).Error; err != nil {
+		return err
+	}
+
+	if err := db.Exec(`
+		ALTER TABLE agreement_attachments 
+		ALTER COLUMN file_name SET NOT NULL
+	`).Error; err != nil {
+		return err
+	}
+
+	if err := db.Exec(`
+		ALTER TABLE agreement_attachments 
+		ALTER COLUMN file_path SET NOT NULL
+	`).Error; err != nil {
+		return err
+	}
+
+	if err := db.Exec(`
+		ALTER TABLE agreement_attachments 
+		ALTER COLUMN uploaded_by SET NOT NULL
+	`).Error; err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func MigrateTechnicalReserveToDecimal(db *gorm.DB) error {
 	var colCount int64
 	if err := db.Raw(`
@@ -302,6 +498,22 @@ func RunAllMigrationsAndSeeds(db *gorm.DB) error {
 		return err
 	}
 
+	if err := PrepareAgreementDocumentRequesterID(db); err != nil {
+		return err
+	}
+	if err := PrepareAgreementDocumentTicketNumber(db); err != nil {
+		return err
+	}
+	if err := PrepareAgreementDocumentDocumentTypeCode(db); err != nil {
+		return err
+	}
+	if err := PrepareAgreementDocumentFormData(db); err != nil {
+		return err
+	}
+	if err := PrepareAgreementAttachmentColumns(db); err != nil {
+		return err
+	}
+
 	if err := db.AutoMigrate(
 		&entity.Division{},
 		&entity.User{},
@@ -328,6 +540,9 @@ func RunAllMigrationsAndSeeds(db *gorm.DB) error {
 		&entity.CaseCategory{},
 		&entity.DocumentType{},
 		&entity.LegalMaterial{},
+		&entity.AgreementCompanyMaster{},
+		&entity.AgreementDocument{},
+		&entity.AgreementAttachment{},
 	); err != nil {
 		return err
 	}
@@ -357,6 +572,18 @@ func RunAllMigrationsAndSeeds(db *gorm.DB) error {
 	if err := SeedDocumentTypes(db); err != nil {
 		return err
 	}
+	if err := BackfillAgreementDocumentDocumentTypeCode(db); err != nil {
+		return err
+	}
+	if err := EnforceAgreementDocumentDocumentTypeCodeNotNull(db); err != nil {
+		return err
+	}
+	if err := EnforceAgreementDocumentFormDataNotNull(db); err != nil {
+		return err
+	}
+	if err := EnforceAgreementDocumentTicketNumberNotNull(db); err != nil {
+		return err
+	}
 	if err := SeedCaseTypes(db); err != nil {
 		return err
 	}
@@ -364,6 +591,9 @@ func RunAllMigrationsAndSeeds(db *gorm.DB) error {
 		return err
 	}
 	if err := SeedPermissions(db); err != nil {
+		return err
+	}
+	if err := SeedAgreementCompanyMaster(db); err != nil {
 		return err
 	}
 	if err := BackfillLegalCaseDefaults(db); err != nil {

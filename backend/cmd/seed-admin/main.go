@@ -80,6 +80,40 @@ func main() {
 		log.Fatalf("Failed to create admin user: %v", err)
 	}
 
+	if err := db.Exec(`
+		UPDATE agreement_documents 
+		SET requester_id = ?
+		WHERE requester_id IS NULL
+	`, admin.ID).Error; err != nil {
+		log.Fatalf("Failed to backfill agreement_documents.requester_id: %v", err)
+	}
+
+	if err := seed.EnforceAgreementDocumentRequesterIDNotNull(db); err != nil {
+		log.Fatalf("Failed to enforce agreement_documents.requester_id NOT NULL: %v", err)
+	}
+
+	if err := seed.EnforceAgreementDocumentTicketNumberNotNull(db); err != nil {
+		log.Fatalf("Failed to enforce agreement_documents.ticket_number NOT NULL: %v", err)
+	}
+
+	if err := seed.BackfillAgreementDocumentDocumentTypeCode(db); err != nil {
+		log.Fatalf("Failed to backfill agreement_documents.document_type_code: %v", err)
+	}
+	if err := seed.EnforceAgreementDocumentDocumentTypeCodeNotNull(db); err != nil {
+		log.Fatalf("Failed to enforce agreement_documents.document_type_code NOT NULL: %v", err)
+	}
+
+	if err := seed.EnforceAgreementDocumentFormDataNotNull(db); err != nil {
+		log.Fatalf("Failed to enforce agreement_documents.form_data NOT NULL: %v", err)
+	}
+
+	if err := seed.BackfillAgreementAttachmentColumns(db); err != nil {
+		log.Fatalf("Failed to backfill agreement_attachments: %v", err)
+	}
+	if err := seed.EnforceAgreementAttachmentColumnsNotNull(db); err != nil {
+		log.Fatalf("Failed to enforce agreement_attachments NOT NULL: %v", err)
+	}
+
 	log.Printf("Admin user %s created successfully", email)
 }
 

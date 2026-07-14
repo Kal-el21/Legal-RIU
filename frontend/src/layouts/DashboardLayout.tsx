@@ -10,6 +10,7 @@ const NAV = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, exact: true, permissions: ['dashboard.user.view'] },
   { label: 'Legal Opinion', href: '/dashboard/legal-opinions', icon: FileText, permissions: ['legal_opinion.view.own', 'legal_opinion.view.all'] },
   { label: 'Review Dokumen', href: '/dashboard/review-documents', icon: FileSearch, permissions: ['document_review.view.own', 'document_review.view.all'] },
+  { label: 'Dokumen Perjanjian', href: '/dashboard/agreement-documents', icon: FileText, permissions: ['agreement_document.view.own'] },
   { label: 'Case Management', href: '/dashboard/legal-cases', icon: BriefcaseBusiness, permissions: ['case_management.view'] },
   { label: 'Audit Log', href: '/dashboard/audit-logs', icon: ScrollText, permissions: ['audit_log.view'] },
 ]

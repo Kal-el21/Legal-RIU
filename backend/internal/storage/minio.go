@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -124,6 +125,17 @@ func (m *MinIOClient) UploadFile(ctx context.Context, folder string, fileHeader 
 	}
 
 	return objectName, fileHeader.Filename, nil
+}
+
+func (m *MinIOClient) UploadBytes(ctx context.Context, objectName string, data []byte, contentType string) error {
+	if len(data) == 0 {
+		return errors.New("file kosong tidak dapat diupload")
+	}
+	_, err := m.client.PutObject(ctx, m.bucket, objectName, bytes.NewReader(data), int64(len(data)), minio.PutObjectOptions{ContentType: contentType})
+	if err != nil {
+		return fmt.Errorf("failed to upload generated file: %w", err)
+	}
+	return nil
 }
 
 func sanitizeFilename(name string) string {
