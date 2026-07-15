@@ -116,7 +116,7 @@ func (s *agreementDocumentService) GetAll(userID string, all bool, q dto.Agreeme
 		}
 		owner = &id
 	}
-	return s.repo.FindAll(owner, q.Status, q.Page, q.Limit)
+	return s.repo.FindAll(owner, q.Status, q.DateFrom, q.Search, q.Page, q.Limit)
 }
 func (s *agreementDocumentService) GetByID(id, userID string, all bool) (*entity.AgreementDocument, error) {
 	uid, e := uuid.Parse(id)

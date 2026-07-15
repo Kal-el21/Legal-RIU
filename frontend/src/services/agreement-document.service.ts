@@ -2,7 +2,7 @@ import api from './api'
 import axios from 'axios'
 export interface AgreementField {name:string;label:string;type:string;required:boolean}
 export interface AgreementSchema {code:string;name:string;sections:{title:string;fields:AgreementField[]}[]}
-export interface AgreementDocument {id:string;ticket_number:string;document_type_code:string;form_data:Record<string,unknown>;agreement_number:string;status:string;approver_note?:string;attachments?:{id:string;file_name:string}[];generated_file_name?:string}
+export interface AgreementDocument {id:string;ticket_number:string;document_type_code:string;form_data:Record<string,unknown>;agreement_number:string;status:string;approver_note?:string;attachments?:{id:string;file_name:string}[];generated_file_name?:string;created_at?:string;requester?:{full_name?:string}}
 const data=<T>(r:{data:{data:T}})=>r.data.data
 
 async function fileError(reason: unknown, fallback: string): Promise<Error> {
@@ -24,7 +24,7 @@ async function fileError(reason: unknown, fallback: string): Promise<Error> {
 export const agreementService={
  types:()=>api.get('/agreement-document-types').then(r=>data<{code:string;name:string}[]>(r)),
  schema:(code='PKS')=>api.get(`/agreement-document-types/${code}/schema`).then(r=>data<{schema:AgreementSchema}>(r).schema),
- list:(base='')=>api.get(`${base}/agreement-documents`).then(r=>data<{items:AgreementDocument[]}>(r).items),
+  list:(base='',query?:Record<string,unknown>)=>api.get(`${base}/agreement-documents`, query ? {params:query} : undefined).then(r=>data<{items:AgreementDocument[]}>(r).items),
  get:(id:string,base='')=>api.get(`${base}/agreement-documents/${id}`).then(r=>data<AgreementDocument>(r)),
  create:(payload:unknown,files:File[])=>{const f=new FormData();f.append('data',JSON.stringify(payload));files.forEach(x=>f.append('attachments',x));return api.post('/agreement-documents',f).then(r=>data<AgreementDocument>(r))},
  update:(id:string,form_data:Record<string,unknown>)=>api.put(`/agreement-documents/${id}`,{form_data}),

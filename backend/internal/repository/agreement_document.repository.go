@@ -12,7 +12,7 @@ import (
 type AgreementDocumentRepository interface {
 	Create(*entity.AgreementDocument) error
 	FindByID(uuid.UUID) (*entity.AgreementDocument, error)
-	FindAll(*uuid.UUID, string, int, int) ([]entity.AgreementDocument, int64, error)
+	FindAll(*uuid.UUID, string, string, string, int, int) ([]entity.AgreementDocument, int64, error)
 	Save(*entity.AgreementDocument) error
 	Delete(uuid.UUID) error
 	AddAttachment(*entity.AgreementAttachment) error
@@ -37,7 +37,7 @@ func (r *agreementDocumentRepository) FindByID(id uuid.UUID) (*entity.AgreementD
 	err := r.db.Preload("Requester").Preload("Approver").Preload("Attachments", func(db *gorm.DB) *gorm.DB { return db.Order("upload_round, created_at") }).First(&v, "id = ?", id).Error
 	return &v, err
 }
-func (r *agreementDocumentRepository) FindAll(owner *uuid.UUID, status string, page, limit int) ([]entity.AgreementDocument, int64, error) {
+func (r *agreementDocumentRepository) FindAll(owner *uuid.UUID, status, dateFrom, search string, page, limit int) ([]entity.AgreementDocument, int64, error) {
 	if page < 1 {
 		page = 1
 	}
@@ -50,6 +50,12 @@ func (r *agreementDocumentRepository) FindAll(owner *uuid.UUID, status string, p
 	}
 	if status != "" {
 		q = q.Where("status = ?", status)
+	}
+	if dateFrom != "" {
+		q = q.Where("created_at >= ?", dateFrom)
+	}
+	if search != "" {
+		q = q.Joins("JOIN users u ON u.id = agreement_documents.requester_id").Where("u.full_name ILIKE ?", "%"+search+"%")
 	}
 	var total int64
 	if err := q.Count(&total).Error; err != nil {
