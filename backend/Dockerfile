@@ -12,9 +12,23 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -o main ./cmd/api
 RUN CGO_ENABLED=0 GOOS=linux go build -o seed-admin ./cmd/seed-admin
 
-FROM alpine:latest
+FROM alpine:3.22
 
-RUN apk --no-cache add ca-certificates tzdata libreoffice
+RUN apk --no-cache add \
+    ca-certificates \
+    tzdata \
+    libreoffice \
+    fontconfig \
+    font-carlito \
+    font-liberation \
+    font-dejavu
+
+COPY fonts.conf /etc/fonts/local.conf
+
+RUN fc-cache -f \
+    && fc-match Calibri | grep -qi Carlito \
+    && fc-match Arial | grep -qi "Liberation Sans" \
+    && fc-match "Times New Roman" | grep -qi "Liberation Serif"
 ENV TZ=Asia/Jakarta
 
 WORKDIR /root/

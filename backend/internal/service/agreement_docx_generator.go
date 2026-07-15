@@ -24,7 +24,9 @@ type AgreementGenerator struct{}
 func NewAgreementGenerator() *AgreementGenerator { return &AgreementGenerator{} }
 
 var wordTextRE = regexp.MustCompile(`(?s)(<w:t(?:\s[^>]*)?>)(.*?)(</w:t>)`)
+var wordParagraphRE = regexp.MustCompile(`(?s)<w:p(?:\s[^>]*)?>.*?</w:p>`)
 var placeholderRE = regexp.MustCompile(`\{\{[A-Z0-9_]+\}\}`)
+var scopePrefixRE = regexp.MustCompile(`^\s*(?:(?:[-*•])|(?:\d+|[A-Za-z])[.)])\s*`)
 
 func (g *AgreementGenerator) Generate(template []byte, values map[string]string, draft bool) ([]byte, string, error) {
 	if len(template) == 0 {
@@ -62,6 +64,9 @@ func (g *AgreementGenerator) Generate(template []byte, values map[string]string,
 			if f.Name == "word/document.xml" && !strings.Contains(text, "{{NOMOR_PIHAK_PERTAMA}}") {
 				text = prepareLegacyPKS(text)
 			}
+			if f.Name == "word/document.xml" {
+				text = expandScopeParagraphs(text, values["RUANG_LINGKUP"])
+			}
 			for key, val := range values {
 				for {
 					next := replaceAcrossWordRuns(text, "{{"+key+"}}", wordValue(val))
@@ -92,41 +97,152 @@ func (g *AgreementGenerator) Generate(template []byte, values map[string]string,
 }
 
 func prepareLegacyPKS(text string) string {
-	replacements := [][2]string{
-		{"____________", "{{PIHAK_KEDUA_NAMA}}"}, {"____________", "{{JENIS_PEKERJAAN}}"},
-		{"***/RM.01.01/**/IndonesiaRe/**/2026", "{{NOMOR_PIHAK_PERTAMA}}"},
-		{"NOMOR PIHAK KEDUA", "NOMOR PIHAK KEDUA{{NOMOR_PIHAK_KEDUA}}"},
-		{"Pada hari ini, [*], tanggal [*] bulan [*] tahun [*] (dd/mm/yyyy) bertempat di [*]", "Pada hari ini, {{HARI_TTD}}, tanggal {{TANGGAL_TTD}} bulan {{BULAN_TTD}} tahun {{TAHUN_TTD}} ({{TANGGAL_TTD_LENGKAP}}) bertempat di {{TEMPAT_TTD}}"},
-		{"diwakili oleh ____________, selaku ____________", "diwakili oleh {{PIHAK_PERTAMA_PEJABAT}}, selaku {{PIHAK_PERTAMA_JABATAN}}"},
-		{"____________, _________, selanjutnya disebut “PIHAK KEDUA”", "{{PIHAK_KEDUA_NAMA}}, beralamat di {{PIHAK_KEDUA_ALAMAT}}, dalam hal ini diwakili oleh {{PIHAK_KEDUA_PEJABAT}} selaku {{PIHAK_KEDUA_JABATAN}}, selanjutnya disebut “PIHAK KEDUA”"},
-		{"bergerak di bidang ____________", "bergerak di bidang {{PIHAK_KEDUA_BIDANG}}"},
-		{"pengadaan _____________", "pengadaan {{JENIS_PEKERJAAN}}"},
-		{"Surat Penawaran No. ____________ perihal ____________pada tanggal ____________", "Surat Penawaran No. {{SURAT_PENAWARAN_NOMOR}} perihal {{SURAT_PENAWARAN_PERIHAL}} pada tanggal {{SURAT_PENAWARAN_TANGGAL}}"},
-		{"Surat Penunjukan No. ____________ perihal ____________ pada tanggal ____________", "Surat Penunjukan No. {{SURAT_PENUNJUKAN_NOMOR}} perihal {{SURAT_PENUNJUKAN_PERIHAL}} pada tanggal {{SURAT_PENUNJUKAN_TANGGAL}}"},
-		{"dengan _____ tentang ____________", "dengan {{PIHAK_KEDUA_NAMA}} tentang {{JENIS_PEKERJAAN}}"},
-		{"Nama: ____________", "Nama: {{PIHAK_KEDUA_PEJABAT}}"}, {"Jabatan: ____________", "Jabatan: {{PIHAK_KEDUA_JABATAN}}"},
-		{"Nama: ____________", "Nama: {{PIHAK_PERTAMA_PEJABAT}}"}, {"Jabatan: ____________", "Jabatan: {{PIHAK_PERTAMA_JABATAN}}"},
-		{"____________", "{{PIHAK_KEDUA_NAMA}}"},
-		{"Pekerjaan yang akan diserahkan kepada PIHAK KEDUA, yaitu ______.", "Pekerjaan yang akan diserahkan kepada PIHAK KEDUA, yaitu {{JENIS_PEKERJAAN}}."},
-		{"RUANG LINGKUP PEKERJAAN", "RUANG LINGKUP PEKERJAAN{{RUANG_LINGKUP}}"},
-		{"berlaku sejak tanggal _____ sampai dengan tanggal _______", "berlaku sejak tanggal {{JANGKA_WAKTU_MULAI}} sampai dengan tanggal {{JANGKA_WAKTU_SELESAI}}"},
-		{"sebesar Rp. _____ (____________ rupiah)", "sebesar {{NILAI_KONTRAK}} ({{NILAI_KONTRAK_TERBILANG}} rupiah)"},
-		{"sebesar **% (*** persen) dari Nilai Kontrak atau sebesar  Rp _______ ( _______ rupiah)", "sebesar {{TERMIN_1_PERSEN}}% ({{TERMIN_1_PERSEN_TERBILANG}} persen) dari Nilai Kontrak atau sebesar {{TERMIN_1_NILAI}} ({{TERMIN_1_NILAI_TERBILANG}} rupiah)"},
-		{"sebesar **% (*** persen) dari Nilai Kontrak atau sebesar Rp. ______ (_______ rupiah)", "sebesar {{TERMIN_2_PERSEN}}% ({{TERMIN_2_PERSEN_TERBILANG}} persen) dari Nilai Kontrak atau sebesar {{TERMIN_2_NILAI}} ({{TERMIN_2_NILAI_TERBILANG}} rupiah)"},
-		{"Bank:", "Bank: {{BANK}}"}, {"Nomor Rekening:", "Nomor Rekening: {{NOMOR_REKENING}}"}, {"Atas Nama:", "Atas Nama: {{ATAS_NAMA}}"},
-		{"Alamat: Jl. Salemba Raya No. 30 Kenari Selatan, Jakarta Pusat", "Alamat: {{PIHAK_PERTAMA_ALAMAT}}"},
-		{"Telepon: 021 3920101", "Telepon: {{PIHAK_PERTAMA_TELEPON}}"},
-		{"________________________", "{{PIHAK_KEDUA_NAMA}}"},
-		{"Alamat: ", "Alamat: {{PIHAK_KEDUA_ALAMAT}}"}, {"Telepon: ", "Telepon: {{PIHAK_KEDUA_TELEPON}}"},
-		{"e-mail: ", "e-mail: {{PIHAK_PERTAMA_EMAIL}}"}, {"PIC:", "PIC: {{PIHAK_PERTAMA_PIC}}"},
-		{"e-mail: ", "e-mail: {{PIHAK_KEDUA_EMAIL}}"}, {"PIC:", "PIC: {{PIHAK_KEDUA_PIC}}"},
-		{"BAGIAN III", "BAGIAN III{{DAFTAR_LAMPIRAN}}"},
-	}
-	for _, r := range replacements {
-		text = replaceAcrossWordRuns(text, r[0], r[1])
-	}
+	// Marker garis bawah pada template lama identik. Pemetaan harus dibatasi
+	// per paragraf agar nilai dari field lain tidak tertukar.
+	text = replaceExactParagraph(text, "____________", "{{PIHAK_KEDUA_NAMA}}")
+	text = replaceExactParagraph(text, "____________", "{{JENIS_PEKERJAAN}}")
+	text = replaceInParagraph(text, "***/RM.01.01/", "***/RM.01.01/**/IndonesiaRe/**/2026", "{{NOMOR_PIHAK_PERTAMA}}")
+	text = insertIntoNextEmptyParagraph(text, "NOMOR PIHAK KEDUA", "{{NOMOR_PIHAK_KEDUA}}")
+
+	text = replaceInParagraph(text, "Pada hari ini,", "Pada hari ini, [*], tanggal [*] bulan [*] tahun [*] (dd/mm/yyyy) bertempat di [*]", "Pada hari ini, {{HARI_TTD}}, tanggal {{TANGGAL_TTD}} bulan {{BULAN_TTD}} tahun {{TAHUN_TTD}} ({{TANGGAL_TTD_LENGKAP}}) bertempat di {{TEMPAT_TTD}}")
+	text = replaceInParagraph(text, "PT REASURANSI INDONESIA UTAMA (PERSERO), suatu", "diwakili oleh ____________, selaku ____________", "diwakili oleh {{PIHAK_PERTAMA_PEJABAT}}, selaku {{PIHAK_PERTAMA_JABATAN}}")
+	text = replaceExactParagraph(text, "____________, _________, selanjutnya disebut “PIHAK KEDUA”.", "{{PIHAK_KEDUA_NAMA}}, beralamat di {{PIHAK_KEDUA_ALAMAT}}, dalam hal ini diwakili oleh {{PIHAK_KEDUA_PEJABAT}} selaku {{PIHAK_KEDUA_JABATAN}}, selanjutnya disebut “PIHAK KEDUA”.")
+	text = replaceInParagraph(text, "bergerak di bidang", "bergerak di bidang ____________", "bergerak di bidang {{PIHAK_KEDUA_BIDANG}}")
+	text = replaceInParagraph(text, "mengenai pengadaan", "pengadaan _____________", "pengadaan {{JENIS_PEKERJAAN}}")
+	text = replaceInParagraph(text, "Surat Penawaran No.", "Surat Penawaran No. ____________ perihal ____________ pada tanggal ____________", "Surat Penawaran No. {{SURAT_PENAWARAN_NOMOR}} perihal {{SURAT_PENAWARAN_PERIHAL}} pada tanggal {{SURAT_PENAWARAN_TANGGAL}}")
+	text = replaceInParagraph(text, "Surat Penunjukan No.", "Surat Penunjukan No. ____________ perihal ____________ pada tanggal ____________", "Surat Penunjukan No. {{SURAT_PENUNJUKAN_NOMOR}} perihal {{SURAT_PENUNJUKAN_PERIHAL}} pada tanggal {{SURAT_PENUNJUKAN_TANGGAL}}")
+	text = replaceInParagraph(text, "Perjanjian Kerja Sama antara", "dengan _____ tentang ____________", "dengan {{PIHAK_KEDUA_NAMA}} tentang {{JENIS_PEKERJAAN}}")
+
+	text = replaceExactParagraph(text, "____________", "{{PIHAK_KEDUA_NAMA}}")
+	text = replaceInParagraph(text, "Nama: ____________", "Nama: ____________", "Nama: {{PIHAK_KEDUA_PEJABAT}}")
+	text = replaceInParagraph(text, "Jabatan: ____________", "Jabatan: ____________", "Jabatan: {{PIHAK_KEDUA_JABATAN}}")
+	text = replaceInParagraph(text, "Nama: ____________", "Nama: ____________", "Nama: {{PIHAK_PERTAMA_PEJABAT}}")
+	text = replaceInParagraph(text, "Jabatan: ____________", "Jabatan: ____________", "Jabatan: {{PIHAK_PERTAMA_JABATAN}}")
+
+	text = replaceInParagraph(text, "Pekerjaan yang akan diserahkan", "Pekerjaan yang akan diserahkan kepada PIHAK KEDUA, yaitu ______.", "Pekerjaan yang akan diserahkan kepada PIHAK KEDUA, yaitu {{JENIS_PEKERJAAN}}.")
+	text = insertIntoNextEmptyParagraph(text, "Ruang lingkup Pekerjaan yang diserahkan kepada PIHAK KEDUA, yaitu:", "{{RUANG_LINGKUP_LIST}}")
+	text = replaceInParagraph(text, "Jangka waktu pelaksanaan", "berlaku sejak tanggal _____ sampai dengan tanggal _______", "berlaku sejak tanggal {{JANGKA_WAKTU_MULAI}} sampai dengan tanggal {{JANGKA_WAKTU_SELESAI}}")
+	text = replaceInParagraph(text, "biaya pelaksanaan Ruang Lingkup", "sebesar Rp. _____ (____________ rupiah)", "sebesar {{NILAI_KONTRAK}} ({{NILAI_KONTRAK_TERBILANG}} rupiah)")
+	text = replaceInParagraph(text, "Termin pertama:", "sebesar **% (*** persen) dari Nilai Kontrak atau sebesar  Rp _______ ( _______ rupiah)", "sebesar {{TERMIN_1_PERSEN}}% ({{TERMIN_1_PERSEN_TERBILANG}} persen) dari Nilai Kontrak atau sebesar {{TERMIN_1_NILAI}} ({{TERMIN_1_NILAI_TERBILANG}} rupiah)")
+	text = replaceInParagraph(text, "Termin kedua:", "sebesar **% (*** persen) dari Nilai Kontrak atau sebesar Rp. ______ (_______ rupiah)", "sebesar {{TERMIN_2_PERSEN}}% ({{TERMIN_2_PERSEN_TERBILANG}} persen) dari Nilai Kontrak atau sebesar {{TERMIN_2_NILAI}} ({{TERMIN_2_NILAI_TERBILANG}} rupiah)")
+
+	text = formatKeyValueParagraph(text, "Bank:", "Bank", "{{BANK}}", 2880, 3060)
+	text = formatKeyValueParagraph(text, "Nomor Rekening:", "Nomor Rekening", "{{NOMOR_REKENING}}", 2880, 3060)
+	text = formatKeyValueParagraph(text, "Atas Nama:", "Atas Nama", "{{ATAS_NAMA}}", 2880, 3060)
+	text = formatKeyValueParagraph(text, "Alamat: Jl. Salemba Raya No. 30 Kenari Selatan, Jakarta Pusat", "Alamat", "{{PIHAK_PERTAMA_ALAMAT}}", 1800, 1980)
+	text = formatKeyValueParagraph(text, "Telepon: 021 3920101", "Telepon", "{{PIHAK_PERTAMA_TELEPON}}", 1800, 1980)
+	text = formatKeyValueParagraph(text, "e-mail:", "E-mail", "{{PIHAK_PERTAMA_EMAIL}}", 1800, 1980)
+	text = formatKeyValueParagraph(text, "PIC:", "PIC", "{{PIHAK_PERTAMA_PIC}}", 1800, 1980)
+	text = replaceExactParagraph(text, "________________________", "{{PIHAK_KEDUA_NAMA}}")
+	text = formatKeyValueParagraph(text, "Alamat:", "Alamat", "{{PIHAK_KEDUA_ALAMAT}}", 1800, 1980)
+	text = formatKeyValueParagraph(text, "Telepon:", "Telepon", "{{PIHAK_KEDUA_TELEPON}}", 1800, 1980)
+	text = formatKeyValueParagraph(text, "e-mail:", "E-mail", "{{PIHAK_KEDUA_EMAIL}}", 1800, 1980)
+	text = formatKeyValueParagraph(text, "PIC:", "PIC", "{{PIHAK_KEDUA_PIC}}", 1800, 1980)
+	text = insertIntoNextEmptyParagraph(text, "LAMPIRAN-LAMPIRAN", "{{DAFTAR_LAMPIRAN}}")
 	return text
 }
+
+func paragraphText(paragraph string) string {
+	var b strings.Builder
+	for _, match := range wordTextRE.FindAllStringSubmatch(paragraph, -1) {
+		b.WriteString(html.UnescapeString(match[2]))
+	}
+	return b.String()
+}
+
+func transformParagraph(xmlText string, predicate func(string) bool, transform func(string) string) string {
+	for _, loc := range wordParagraphRE.FindAllStringIndex(xmlText, -1) {
+		paragraph := xmlText[loc[0]:loc[1]]
+		if !predicate(paragraphText(paragraph)) {
+			continue
+		}
+		updated := transform(paragraph)
+		if updated != paragraph {
+			return xmlText[:loc[0]] + updated + xmlText[loc[1]:]
+		}
+	}
+	return xmlText
+}
+
+func replaceInParagraph(xmlText, anchor, needle, replacement string) string {
+	return transformParagraph(xmlText, func(text string) bool {
+		return strings.Contains(text, anchor)
+	}, func(paragraph string) string {
+		return replaceAcrossWordRuns(paragraph, needle, replacement)
+	})
+}
+
+func replaceExactParagraph(xmlText, expected, replacement string) string {
+	return transformParagraph(xmlText, func(text string) bool {
+		return strings.TrimSpace(text) == expected
+	}, func(paragraph string) string {
+		return replaceAcrossWordRuns(paragraph, paragraphText(paragraph), replacement)
+	})
+}
+
+func formatKeyValueParagraph(xmlText, expected, label, placeholder string, colonPosition, valuePosition int) string {
+	return transformParagraph(xmlText, func(text string) bool {
+		return strings.TrimSpace(text) == expected
+	}, func(paragraph string) string {
+		pPrEnd := strings.Index(paragraph, "</w:pPr>")
+		if pPrEnd < 0 {
+			return paragraph
+		}
+		pPrEnd += len("</w:pPr>")
+		pPr := paragraph[:pPrEnd]
+		tabs := fmt.Sprintf(`<w:tabs><w:tab w:val="left" w:pos="%d"/><w:tab w:val="left" w:pos="%d"/></w:tabs>`, colonPosition, valuePosition)
+		pPr = strings.Replace(pPr, "</w:pPr>", tabs+"</w:pPr>", 1)
+		content := `<w:r><w:t>` + html.EscapeString(label) + `</w:t><w:tab/><w:t>:</w:t><w:tab/><w:t>` + placeholder + `</w:t></w:r>`
+		return pPr + content + "</w:p>"
+	})
+}
+
+func insertIntoNextEmptyParagraph(xmlText, anchor, placeholder string) string {
+	paragraphs := wordParagraphRE.FindAllStringIndex(xmlText, -1)
+	anchorIndex := -1
+	for i, loc := range paragraphs {
+		if strings.Contains(paragraphText(xmlText[loc[0]:loc[1]]), anchor) {
+			anchorIndex = i
+			break
+		}
+	}
+	if anchorIndex < 0 {
+		return xmlText
+	}
+	for _, loc := range paragraphs[anchorIndex+1:] {
+		paragraph := xmlText[loc[0]:loc[1]]
+		if strings.TrimSpace(paragraphText(paragraph)) != "" {
+			return xmlText
+		}
+		injected := strings.Replace(paragraph, "</w:p>", `<w:r><w:t>`+placeholder+`</w:t></w:r></w:p>`, 1)
+		return xmlText[:loc[0]] + injected + xmlText[loc[1]:]
+	}
+	return xmlText
+}
+
+func expandScopeParagraphs(xmlText, raw string) string {
+	items := make([]string, 0)
+	for _, line := range strings.Split(strings.ReplaceAll(raw, "\r\n", "\n"), "\n") {
+		line = strings.TrimSpace(scopePrefixRE.ReplaceAllString(line, ""))
+		if line != "" && line != "-" {
+			items = append(items, line)
+		}
+	}
+	if len(items) == 0 {
+		items = append(items, "-")
+	}
+	return transformParagraph(xmlText, func(text string) bool {
+		return strings.Contains(text, "{{RUANG_LINGKUP_LIST}}")
+	}, func(paragraph string) string {
+		paragraph = regexp.MustCompile(`\s+w14:(?:paraId|textId)="[^"]*"`).ReplaceAllString(paragraph, "")
+		var out strings.Builder
+		for _, item := range items {
+			out.WriteString(replaceAcrossWordRuns(paragraph, "{{RUANG_LINGKUP_LIST}}", wordValue(item)))
+		}
+		return out.String()
+	})
+}
+
 func replaceAcrossWordRuns(xmlText, needle, replacement string) string {
 	matches := wordTextRE.FindAllStringSubmatchIndex(xmlText, -1)
 	if len(matches) == 0 {

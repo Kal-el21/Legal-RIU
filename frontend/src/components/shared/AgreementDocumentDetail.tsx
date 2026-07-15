@@ -5,6 +5,14 @@ import { Button } from '@/components/ui/button'
 
 interface Props { apiBase?: string; approver?: boolean }
 
+const approverFieldLabels: Record<string, string> = {
+  agreement_number: 'Nomor Perjanjian',
+  signing_place: 'Tempat Penandatanganan',
+  signing_date: 'Tanggal Penandatanganan',
+  party_one_signatory_name: 'Nama Pejabat Pihak Pertama',
+  party_one_signatory_position: 'Jabatan Pejabat Pihak Pertama',
+}
+
 export default function AgreementDocumentDetail({ apiBase = '', approver = false }: Props) {
   const { id } = useParams()
   const [document, setDocument] = useState<AgreementDocument>()
@@ -83,15 +91,15 @@ export default function AgreementDocumentDetail({ apiBase = '', approver = false
       <div className="bg-white border rounded-xl p-5">
         <h2 className="font-semibold mb-3">Data Pengajuan</h2>
         {Object.entries(document.form_data).map(([key, value]) => <div key={key} className="grid grid-cols-2 text-sm py-1 border-b"><span className="text-gray-500">{key.split('_').join(' ')}</span><span>{String(value)}</span></div>)}
-        <h2 className="font-semibold mt-5">Attachment</h2>
+        <h2 className="font-semibold mt-5">Lampiran</h2>
         {document.attachments?.map((attachment) => <a key={attachment.id} className="block text-red-600" href={`${agreementService.fileUrl(apiBase, id!, 'preview').replace('/preview', `/attachments/${attachment.id}`)}`}>{attachment.file_name}</a>)}
       </div>
       <div>
         {approver && <div className="bg-white border rounded-xl p-5 mb-4">
-          <h2 className="font-semibold mb-3">Data Approver</h2>
-          {Object.entries(meta).map(([key, value]) => <label className="block mb-2" key={key}><span className="text-xs">{key.split('_').join(' ')}</span><input type={key === 'signing_date' ? 'date' : 'text'} className="w-full border rounded p-2" value={value} onChange={(event) => setMeta({ ...meta, [key]: event.target.value })} /></label>)}
+          <h2 className="font-semibold mb-3">Data Persetujuan</h2>
+          {Object.entries(meta).map(([key, value]) => <label className="block mb-2" key={key}><span className="text-xs">{approverFieldLabels[key] || key.split('_').join(' ')}</span><input type={key === 'signing_date' ? 'date' : 'text'} className="w-full border rounded p-2" value={value} onChange={(event) => setMeta({ ...meta, [key]: event.target.value })} /></label>)}
           <textarea className="w-full border rounded p-2" placeholder="Catatan revisi/penolakan" value={note} onChange={(event) => setNote(event.target.value)} />
-          <div className="flex gap-2 flex-wrap mt-3"><Button onClick={() => void changeStatus('UNDER_REVIEW')}>Mulai Review</Button><Button onClick={() => void changeStatus('NEED_REVISION')}>Kembalikan</Button><Button onClick={() => void changeStatus('REJECTED')}>Tolak</Button><Button onClick={() => void changeStatus('COMPLETED')}>Approve</Button></div>
+          <div className="flex gap-2 flex-wrap mt-3"><Button onClick={() => void changeStatus('UNDER_REVIEW')}>Mulai Pemeriksaan</Button><Button onClick={() => void changeStatus('NEED_REVISION')}>Kembalikan</Button><Button onClick={() => void changeStatus('REJECTED')}>Tolak</Button><Button onClick={() => void changeStatus('COMPLETED')}>Setujui</Button></div>
         </div>}
         {previewError && <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">Preview PDF gagal dimuat: {previewError}</div>}
         {!previewError && !previewUrl && <div className="h-[650px] rounded-xl border bg-gray-50 flex items-center justify-center text-sm text-gray-500">Menyiapkan preview PDF...</div>}

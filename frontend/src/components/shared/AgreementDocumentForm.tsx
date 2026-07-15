@@ -40,7 +40,7 @@ export default function AgreementDocumentForm() {
       <div className="grid md:grid-cols-2 gap-4">{section.fields.map((field) => <label key={field.name} className={field.type === 'textarea' ? 'md:col-span-2' : ''}>
         <span className="text-sm">{field.label}{field.required && ' *'}</span>
         {field.type === 'textarea'
-          ? <textarea required={field.required} className="mt-1 w-full border rounded-lg p-2" value={form[field.name] || ''} onChange={(e) => setForm({ ...form, [field.name]: e.target.value })} />
+          ? <textarea required={field.required} placeholder={field.name === 'ruang_lingkup' ? 'Tulis satu poin ruang lingkup per baris' : undefined} className="mt-1 w-full border rounded-lg p-2" value={form[field.name] || ''} onChange={(e) => setForm({ ...form, [field.name]: e.target.value })} />
           : <input required={field.required} type={field.type === 'money' || field.type === 'decimal' ? 'number' : field.type} className="mt-1 w-full border rounded-lg p-2" value={form[field.name] || ''} onChange={(e) => setForm({ ...form, [field.name]: e.target.value })} />}
       </label>)}</div>
     </section>)}

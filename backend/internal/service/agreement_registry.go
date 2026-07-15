@@ -118,5 +118,28 @@ func valueString(v interface{}) string {
 		return fmt.Sprint(x)
 	}
 }
-func valueFloat(v interface{}) float64 { n, _ := strconv.ParseFloat(valueString(v), 64); return n }
-func valueInt64(v interface{}) int64   { return int64(valueFloat(v)) }
+func valueFloat(v interface{}) float64 {
+	raw := strings.TrimSpace(valueString(v))
+	raw = strings.NewReplacer("Rp", "", "rp", "", "%", "", " ", "").Replace(raw)
+	if strings.Contains(raw, ",") {
+		raw = strings.ReplaceAll(raw, ".", "")
+		raw = strings.Replace(raw, ",", ".", 1)
+	} else if strings.Count(raw, ".") > 1 {
+		raw = strings.ReplaceAll(raw, ".", "")
+	}
+	n, _ := strconv.ParseFloat(raw, 64)
+	return n
+}
+
+func valueInt64(v interface{}) int64 {
+	raw := strings.TrimSpace(valueString(v))
+	raw = strings.NewReplacer("Rp", "", "rp", "", " ", "", ".", "").Replace(raw)
+	if comma := strings.Index(raw, ","); comma >= 0 {
+		raw = raw[:comma]
+	}
+	n, _ := strconv.ParseInt(raw, 10, 64)
+	if n != 0 || raw == "0" {
+		return n
+	}
+	return int64(valueFloat(v))
+}
