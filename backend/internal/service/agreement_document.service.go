@@ -98,7 +98,7 @@ func (s *agreementDocumentService) Create(userID string, req dto.CreateAgreement
 	if e != nil {
 		return nil, e
 	}
-	doc := &entity.AgreementDocument{TicketNumber: utils.GenerateTicketNumber("PK", int(seq)), RequesterID: uid, DocumentTypeCode: def.Code, FormData: raw, AgreementNumber: fmt.Sprintf("%03d/RM.01.01/HR/IndonesiaRe/%d", seq, time.Now().Year()), Status: entity.StatusSubmitted}
+	doc := &entity.AgreementDocument{TicketNumber: utils.GenerateTicketNumber("PK", int(seq)), UserID: uid, DocumentTypeCode: def.Code, FormData: raw, AgreementNumber: fmt.Sprintf("%03d/RM.01.01/HR/IndonesiaRe/%d", seq, time.Now().Year()), Status: entity.StatusSubmitted}
 	if e = s.repo.Create(doc); e != nil {
 		return nil, errors.New("gagal membuat pengajuan")
 	}
@@ -128,7 +128,7 @@ func (s *agreementDocumentService) GetByID(id, userID string, all bool) (*entity
 	if e != nil {
 		return nil, errors.New("pengajuan tidak ditemukan")
 	}
-	if !all && d.RequesterID.String() != userID {
+	if !all && d.UserID.String() != userID {
 		return nil, errors.New("pengajuan tidak ditemukan")
 	}
 	return d, nil
@@ -173,7 +173,7 @@ func (s *agreementDocumentService) Resubmit(id, userID string, files []*multipar
 		return nil, errors.New("pengajuan tidak dalam status NEED_REVISION")
 	}
 	round, _ := s.repo.LatestUploadRound(d.ID)
-	if e = s.uploadAttachments(d, d.RequesterID, files, round+1); e != nil {
+	if e = s.uploadAttachments(d, d.UserID, files, round+1); e != nil {
 		return nil, e
 	}
 	d.Status = entity.StatusResubmitted

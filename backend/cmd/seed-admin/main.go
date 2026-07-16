@@ -80,16 +80,8 @@ func main() {
 		log.Fatalf("Failed to create admin user: %v", err)
 	}
 
-	if err := db.Exec(`
-		UPDATE agreement_documents 
-		SET requester_id = ?
-		WHERE requester_id IS NULL
-	`, admin.ID).Error; err != nil {
-		log.Fatalf("Failed to backfill agreement_documents.requester_id: %v", err)
-	}
-
-	if err := seed.EnforceAgreementDocumentRequesterIDNotNull(db); err != nil {
-		log.Fatalf("Failed to enforce agreement_documents.requester_id NOT NULL: %v", err)
+	if err := seed.EnforceAgreementDocumentUserIDNotNull(db); err != nil {
+		log.Fatalf("Failed to enforce agreement_documents.user_id NOT NULL: %v", err)
 	}
 
 	if err := seed.EnforceAgreementDocumentTicketNumberNotNull(db); err != nil {

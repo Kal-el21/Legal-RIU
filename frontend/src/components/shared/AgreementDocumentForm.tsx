@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Send, ArrowLeft } from 'lucide-react'
 import { agreementService, type AgreementSchema } from '@/services/agreement-document.service'
@@ -63,19 +63,21 @@ export default function AgreementDocumentForm() {
     }
   }, [id])
 
-  const derivedForm: Record<string, string> = useMemo(() => {
+  const deriveForm = (source: Record<string, string>): Record<string, string> => {
     const toNum = (v: string) => { const n = Number(v); return Number.isFinite(n) ? n : 0 }
-    const persen1 = toNum(form.termin_1_persen ?? '')
-    const nilai1 = toNum(form.termin_1_nilai ?? '')
-    const kontrak = toNum(form.nilai_kontrak ?? '')
+    const persen1 = toNum(source.termin_1_persen ?? '')
+    const nilai1 = toNum(source.termin_1_nilai ?? '')
+    const kontrak = toNum(source.nilai_kontrak ?? '')
     const persen2 = Math.max(0, 100 - persen1)
     const nilai2 = Math.max(0, kontrak - nilai1)
     return {
-      ...form,
+      ...source,
       termin_2_persen: String(persen2),
       termin_2_nilai: String(nilai2),
     }
-  }, [form.termin_1_persen, form.termin_1_nilai, form.nilai_kontrak])
+  }
+
+  const derivedForm = deriveForm(form)
 
   const validate = (): string | undefined => {
     const persen1 = parseNum(derivedForm.termin_1_persen)
@@ -141,8 +143,8 @@ export default function AgreementDocumentForm() {
             <div key={field.name} className={field.type === 'textarea' ? 'md:col-span-2' : ''}>
               <Label className="mb-1.5 text-gray-700">{field.label}{field.required && ' *'}</Label>
               {field.type === 'textarea'
-                ? <Textarea required={field.required} placeholder={field.name === 'ruang_lingkup' ? 'Tulis satu poin ruang lingkup per baris' : undefined} value={derivedForm[field.name] || ''} onChange={(e) => setForm({ ...form, [field.name]: e.target.value })} />
-                : <Input readOnly={field.name === 'termin_2_persen' || field.name === 'termin_2_nilai'} required={field.required} type={field.type === 'money' || field.type === 'decimal' ? 'number' : field.type} value={derivedForm[field.name] || ''} onChange={(e) => setForm({ ...form, [field.name]: e.target.value })} />}
+                ? <Textarea required={field.required} placeholder={field.name === 'ruang_lingkup' ? 'Tulis satu poin ruang lingkup per baris' : undefined} value={form[field.name] || ''} onChange={(e) => setForm({ ...form, [field.name]: e.target.value })} />
+                : <Input readOnly={field.name === 'termin_2_persen' || field.name === 'termin_2_nilai'} required={field.required} type={field.type === 'money' || field.type === 'decimal' ? 'number' : field.type} value={form[field.name] || ''} onChange={(e) => setForm({ ...form, [field.name]: e.target.value })} />}
             </div>
           ))}
        </div>

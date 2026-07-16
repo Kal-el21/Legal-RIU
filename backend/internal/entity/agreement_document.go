@@ -25,8 +25,8 @@ type AgreementCompanyMaster struct {
 type AgreementDocument struct {
 	Base
 	TicketNumber      string                `gorm:"size:80;uniqueIndex;not null" json:"ticket_number"`
-	RequesterID       uuid.UUID             `gorm:"type:uuid;not null;index" json:"requester_id"`
-	Requester         User                  `gorm:"foreignKey:RequesterID" json:"requester,omitempty"`
+	UserID       uuid.UUID             `gorm:"type:uuid;not null;index" json:"user_id"`
+	User         User                  `gorm:"foreignKey:UserID" json:"user,omitempty"`
 	DocumentTypeCode  string                `gorm:"size:50;not null;index" json:"document_type_code"`
 	FormData          json.RawMessage       `gorm:"type:jsonb;not null" json:"form_data"`
 	PartyOneSnapshot  json.RawMessage       `gorm:"type:jsonb" json:"party_one_snapshot,omitempty"`

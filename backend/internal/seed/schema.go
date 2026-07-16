@@ -262,45 +262,31 @@ func EnforceLegalCaseTicketNumberNotNull(db *gorm.DB) error {
 	return db.Exec(`ALTER TABLE legal_cases ALTER COLUMN ticket_number SET NOT NULL`).Error
 }
 
-func PrepareAgreementDocumentRequesterID(db *gorm.DB) error {
+func PrepareAgreementDocumentUserID(db *gorm.DB) error {
 	if err := db.Exec(`
 		ALTER TABLE agreement_documents 
-		ADD COLUMN IF NOT EXISTS requester_id uuid
+		ADD COLUMN IF NOT EXISTS user_id uuid
 	`).Error; err != nil {
 		return err
 	}
 
-	var adminIDStr string
-	if err := db.Raw(`
-		SELECT id FROM users WHERE role = 'ADMIN' LIMIT 1
-	`).Scan(&adminIDStr).Error; err != nil {
+	// Kolom requester_id tidak ada di DB ini (seed lama belum pernah berjalan),
+	// sehingga tidak ada data untuk di-backfill. Cukup pastikan user_id ada dan
+	// bersihkan sisa kolom requester_id bila suatu saat ada.
+	if err := db.Exec(`
+		ALTER TABLE agreement_documents 
+		DROP COLUMN IF EXISTS requester_id
+	`).Error; err != nil {
 		return err
-	}
-
-	var adminID uuid.UUID
-	if adminIDStr != "" {
-		var err error
-		adminID, err = uuid.Parse(adminIDStr)
-		if err != nil {
-			return err
-		}
-	}
-
-	if adminID != uuid.Nil {
-		return db.Exec(`
-			UPDATE agreement_documents 
-			SET requester_id = ?
-			WHERE requester_id IS NULL
-		`, adminID).Error
 	}
 
 	return nil
 }
 
-func EnforceAgreementDocumentRequesterIDNotNull(db *gorm.DB) error {
+func EnforceAgreementDocumentUserIDNotNull(db *gorm.DB) error {
 	return db.Exec(`
 		ALTER TABLE agreement_documents 
-		ALTER COLUMN requester_id SET NOT NULL
+		ALTER COLUMN user_id SET NOT NULL
 	`).Error
 }
 
@@ -498,7 +484,7 @@ func RunAllMigrationsAndSeeds(db *gorm.DB) error {
 		return err
 	}
 
-	if err := PrepareAgreementDocumentRequesterID(db); err != nil {
+	if err := PrepareAgreementDocumentUserID(db); err != nil {
 		return err
 	}
 	if err := PrepareAgreementDocumentTicketNumber(db); err != nil {
