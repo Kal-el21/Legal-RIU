@@ -103,7 +103,8 @@ func (s *agreementDocumentService) Create(userID string, req dto.CreateAgreement
 		return nil, errors.New("gagal membuat pengajuan")
 	}
 	if e = s.uploadAttachments(doc, uid, files, 1); e != nil {
-		return nil, e
+		_ = s.repo.Delete(doc.ID)
+		return nil, errors.New("gagal mengunggah lampiran: " + e.Error())
 	}
 	return s.repo.FindByID(doc.ID)
 }

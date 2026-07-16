@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -10,6 +10,7 @@ import { useRegencies, useImportRegencies } from '@/hooks/useLegalCase'
 import { legalCaseService } from '@/services/legal-case.service'
 import ImportCard from '@/components/common/ImportCard'
 import api from '@/services/api'
+import { useQueryClient } from '@tanstack/react-query'
 import type { Regency } from '@/types'
 
 const schema = z.object({
@@ -50,18 +51,10 @@ export default function RegencyManagementPage() {
   const [search, setSearch] = useState('')
   const [modal, setModal] = useState<'create' | 'edit' | null>(null)
   const [selected, setSelected] = useState<Regency | null>(null)
-  const [items, setItems] = useState<Regency[]>([])
-  const [loading, setLoading] = useState(true)
 
-  const { data: regenciesData } = useRegencies({ limit: 500 })
+  const { data: regenciesData, isLoading } = useRegencies({ limit: 500 })
   const importMutation = useImportRegencies()
-
-  useEffect(() => {
-    if (regenciesData) {
-      setItems(regenciesData)
-      setLoading(false)
-    }
-  }, [regenciesData])
+  const queryClient = useQueryClient()
 
   const form = useForm<FormData>({ resolver: zodResolver(schema), defaultValues: { name: '', province: '', type: 'kabupaten' } })
 
@@ -90,10 +83,10 @@ export default function RegencyManagementPage() {
   const handleDelete = async (item: Regency) => {
     if (!confirm(`Hapus ${item.name}?`)) return
     await api.delete(`/admin/regencies/${item.id}`)
-    setItems(items.filter((i) => i.id !== item.id))
+    queryClient.invalidateQueries({ queryKey: ['legal-cases', 'regencies'] })
   }
 
-  const filtered = items.filter((r) => r.name.toLowerCase().includes(search.toLowerCase()) || r.province.toLowerCase().includes(search.toLowerCase()))
+  const filtered = (regenciesData ?? []).filter((r) => r.name.toLowerCase().includes(search.toLowerCase()) || r.province.toLowerCase().includes(search.toLowerCase()))
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -119,7 +112,7 @@ export default function RegencyManagementPage() {
       />
 
       <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden mt-4">
-        {loading ? (
+        {isLoading ? (
           <div className="p-12 text-center text-gray-400">Memuat data...</div>
         ) : !filtered.length ? (
           <div className="p-16 text-center"><p className="font-medium text-gray-500">Belum ada data</p></div>

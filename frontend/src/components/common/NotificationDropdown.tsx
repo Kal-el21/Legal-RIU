@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Bell, ChevronRight, Loader2 } from 'lucide-react'
 import WarningBadge from '@/components/common/WarningBadge'
@@ -17,7 +17,6 @@ function normalizeItems(dataItems?: ReminderItem[], red?: ReminderItem[], yellow
 export default function NotificationDropdown() {
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
-  const location = useLocation()
   const user = useAuthStore((state) => state.user)
   const queryClient = useQueryClient()
 
@@ -63,10 +62,6 @@ export default function NotificationDropdown() {
     return () => document.removeEventListener('mousedown', handlePointerDown)
   }, [open])
 
-  useEffect(() => {
-    setOpen(false)
-  }, [location.pathname])
-
   return (
     <div ref={rootRef} className="relative">
       <button
@@ -106,7 +101,7 @@ export default function NotificationDropdown() {
               <Link
                 key={`${item.submission_type}-${item.id}`}
                 to={getReminderDetailPath(item, user?.role)}
-                onClick={() => handleItemClick(item)}
+                onClick={() => { handleItemClick(item); setOpen(false) }}
                 className={cn(
                   'block border-b border-gray-50 px-3 py-2.5 transition-colors last:border-b-0 hover:bg-gray-50',
                   !item.is_read && 'bg-red-50/30',
@@ -140,6 +135,7 @@ export default function NotificationDropdown() {
 
           <Link
             to={`${basePath}/notifications`}
+            onClick={() => setOpen(false)}
             className="flex items-center justify-center gap-1 border-t border-gray-100 px-3 py-2.5 text-sm font-medium text-red-700 transition-colors hover:bg-red-50"
           >
             Lihat Semua Notifikasi

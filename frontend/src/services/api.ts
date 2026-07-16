@@ -18,6 +18,7 @@ function clearLegacyAuthStorage() {
 
 interface RetriableRequestConfig extends InternalAxiosRequestConfig {
   _retry?: boolean
+  _csrfRetry?: boolean
 }
 
 let refreshPromise: Promise<AuthResponse> | null = null
@@ -126,6 +127,24 @@ api.interceptors.response.use(
     }
 
     const responseData = error.response?.data as ApiResponse<unknown> | undefined
+
+    if (
+      error.response?.status === 403 &&
+      originalRequest &&
+      !originalRequest._csrfRetry
+    ) {
+      const msg = String(responseData?.message ?? '')
+      if (msg.includes('CSRF token invalid')) {
+        try {
+          originalRequest._csrfRetry = true
+          await api.get('/agreement-document-types')
+          return api(originalRequest)
+        } catch {
+          // Fall through to reject with original error message.
+        }
+      }
+    }
+
     if (responseData?.message) {
       error.message = responseData.message
     }

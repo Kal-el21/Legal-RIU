@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Download, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -19,20 +19,9 @@ export default function CaseChronologySection({ caseId }: CaseChronologySectionP
   const canManageChronology = hasPermission('case_management.manage_chronology')
   const createChronology = useCreateCaseChronology(caseId)
   const deleteChronology = useDeleteCaseChronology(caseId)
-  const [agendaDate, setAgendaDate] = useState('')
-  const [agenda, setAgenda] = useState('')
-
   const chronologies = legalCase?.chronologies ?? []
-
-  useEffect(() => {
-    if (legalCase) {
-      const latest = chronologies[0]
-      if (latest) {
-        setAgendaDate(latest.agenda_date)
-        setAgenda(latest.agenda)
-      }
-    }
-  }, [legalCase])
+  const [agendaDate, setAgendaDate] = useState(() => chronologies[0]?.agenda_date ?? '')
+  const [agenda, setAgenda] = useState(() => chronologies[0]?.agenda ?? '')
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault()

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { RotateCcw, Save, ShieldCheck, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useUpdateUserPermissions, useUserPermissions } from '@/hooks/usePermission'
@@ -35,23 +35,23 @@ function groupPermissions(permissions: Permission[]) {
 export default function UserPermissionModal({ user, onClose }: UserPermissionModalProps) {
   const { data: access, isLoading } = useUserPermissions(user.id)
   const updateMutation = useUpdateUserPermissions(user.id)
-  const [overrides, setOverrides] = useState<Record<string, OverrideState>>({})
+  const [overrideEdits, setOverrideEdits] = useState<Record<string, OverrideState>>({})
 
-  useEffect(() => {
-    if (!access) return
-    const next: Record<string, OverrideState> = {}
+  const overrides = useMemo(() => {
+    const base: Record<string, OverrideState> = {}
+    if (!access) return base
     access.overrides.forEach((item) => {
-      next[item.code] = item.effect
+      base[item.code] = item.effect
     })
-    setOverrides(next)
-  }, [access])
+    return { ...base, ...overrideEdits }
+  }, [access, overrideEdits])
 
   const grouped = useMemo(() => groupPermissions(access?.permissions ?? []), [access?.permissions])
   const rolePermissionSet = useMemo(() => new Set(access?.role_permissions ?? []), [access?.role_permissions])
   const effectivePermissionSet = useMemo(() => new Set(access?.effective_permissions ?? []), [access?.effective_permissions])
 
   const setOverride = (code: string, effect: OverrideState) => {
-    setOverrides((prev) => {
+    setOverrideEdits((prev) => {
       const next = { ...prev }
       if (effect === 'INHERIT') {
         delete next[code]
@@ -158,7 +158,7 @@ export default function UserPermissionModal({ user, onClose }: UserPermissionMod
         </div>
 
         <div className="flex items-center justify-between gap-3 px-6 py-4 border-t border-gray-100">
-          <Button type="button" variant="outline" onClick={() => setOverrides({})} className="gap-2">
+          <Button type="button" variant="outline" onClick={() => setOverrideEdits({})} className="gap-2">
             <RotateCcw className="w-4 h-4" />
             Reset Default
           </Button>
