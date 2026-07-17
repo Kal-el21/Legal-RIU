@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"log"
 	"github.com/gin-gonic/gin"
 	"legal-riu-portal/internal/dto"
 	"legal-riu-portal/internal/middleware"
@@ -70,11 +71,14 @@ func (h *AgreementDocumentHandler) GetAll(c *gin.Context) {
 }
 func (h *AgreementDocumentHandler) GetByID(c *gin.Context) {
 	all := middleware.RoleWithAllAccess(c, "agreement_document.view.all") != "USER"
+	log.Printf("[agreement] GetByID request id=%s user=%s all=%v", c.Param("id"), middleware.GetUserID(c), all)
 	v, e := h.svc.GetByID(c.Param("id"), middleware.GetUserID(c), all)
 	if e != nil {
+		log.Printf("[agreement] GetByID ERROR id=%s err=%v", c.Param("id"), e)
 		utils.NotFound(c, e.Error())
 		return
 	}
+	log.Printf("[agreement] GetByID OK id=%s status=%s", c.Param("id"), v.Status)
 	utils.OK(c, "Success", v)
 }
 func (h *AgreementDocumentHandler) Update(c *gin.Context) {
@@ -137,11 +141,14 @@ func (h *AgreementDocumentHandler) UpdateStatus(c *gin.Context) {
 }
 func (h *AgreementDocumentHandler) Preview(c *gin.Context) {
 	all := middleware.RoleWithAllAccess(c, "agreement_document.preview.all") != "USER"
+	log.Printf("[agreement] Preview request id=%s user=%s all=%v", c.Param("id"), middleware.GetUserID(c), all)
 	b, e := h.svc.Preview(c, c.Param("id"), middleware.GetUserID(c), all)
 	if e != nil {
+		log.Printf("[agreement] Preview ERROR id=%s err=%v", c.Param("id"), e)
 		utils.InternalError(c, e.Error())
 		return
 	}
+	log.Printf("[agreement] Preview OK id=%s bytes=%d", c.Param("id"), len(b))
 	c.DataFromReader(http.StatusOK, int64(len(b)), "application/pdf", bytes.NewReader(b), map[string]string{"Content-Disposition": "inline; filename=preview.pdf"})
 }
 func (h *AgreementDocumentHandler) DownloadPDF(c *gin.Context)  { h.downloadGenerated(c, "pdf") }

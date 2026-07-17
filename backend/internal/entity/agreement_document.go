@@ -19,6 +19,7 @@ type AgreementCompanyMaster struct {
 	DefaultSignatoryName     string `gorm:"size:255;not null" json:"default_signatory_name"`
 	DefaultSignatoryPosition string `gorm:"size:255;not null" json:"default_signatory_position"`
 	DefaultSigningPlace      string `gorm:"size:255;not null" json:"default_signing_place"`
+	DefaultAgreementNumber   string `gorm:"size:150" json:"default_agreement_number"`
 	IsActive                 bool   `gorm:"not null;default:true;index" json:"is_active"`
 }
 
@@ -30,7 +31,7 @@ type AgreementDocument struct {
 	DocumentTypeCode  string                `gorm:"size:50;not null;index" json:"document_type_code"`
 	FormData          json.RawMessage       `gorm:"type:jsonb;not null" json:"form_data"`
 	PartyOneSnapshot  json.RawMessage       `gorm:"type:jsonb" json:"party_one_snapshot,omitempty"`
-	AgreementNumber   string                `gorm:"size:150;uniqueIndex" json:"agreement_number"`
+	AgreementNumber   *string               `gorm:"size:150;uniqueIndex" json:"agreement_number"`
 	Status            SubmissionStatus      `gorm:"not null;default:'SUBMITTED';index" json:"status"`
 	StatusUpdatedAt   *time.Time            `json:"status_updated_at,omitempty"`
 	ApproverNote      string                `gorm:"type:text" json:"approver_note"`

@@ -2,7 +2,7 @@ import api from './api'
 import axios from 'axios'
 export interface AgreementField {name:string;label:string;type:string;required:boolean}
 export interface AgreementSchema {code:string;name:string;sections:{title:string;fields:AgreementField[]}[]}
-export interface AgreementDocument {id:string;ticket_number:string;document_type_code:string;form_data:Record<string,unknown>;agreement_number:string;status:string;approver_note?:string;attachments?:{id:string;file_name:string}[];generated_file_name?:string;created_at?:string;requester?:{full_name?:string}}
+export interface AgreementDocument {id:string;ticket_number:string;document_type_code:string;form_data:Record<string,unknown>;agreement_number:string;status:string;approver_note?:string;attachments?:{id:string;file_name:string}[];generated_file_name?:string;created_at?:string;user?:{full_name?:string}}
 const data=<T>(r:{data:{data:T}})=>r.data.data
 
 async function fileError(reason: unknown, fallback: string): Promise<Error> {

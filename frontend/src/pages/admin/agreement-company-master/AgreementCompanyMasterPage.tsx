@@ -12,9 +12,10 @@ const fieldLabels: Record<string, string> = {
   phone: 'Telepon',
   email: 'Email',
   pic: 'PIC',
-  default_signatory_name: 'Nama Penandatangan Default',
-  default_signatory_position: 'Jabatan Penandatangan Default',
-  default_signing_place: 'Tempat Penandatangan Default',
+  default_signatory_name: 'Nama Pejabat Pihak Pertama (Default)',
+  default_signatory_position: 'Jabatan Pejabat Pihak Pertama (Default)',
+  default_signing_place: 'Tempat Penandatanganan (Default)',
+  default_agreement_number: 'Nomor Perjanjian (Default)',
 }
 
 const fieldKeys = Object.keys(fieldLabels)

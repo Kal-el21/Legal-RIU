@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Download } from 'lucide-react'
+import { ArrowLeft, Download, FileText } from 'lucide-react'
 import { agreementService, type AgreementDocument } from '@/services/agreement-document.service'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -18,6 +18,9 @@ const approverFieldLabels: Record<string, string> = {
   signing_date: 'Tanggal Penandatanganan',
   party_one_signatory_name: 'Nama Pejabat Pihak Pertama',
   party_one_signatory_position: 'Jabatan Pejabat Pihak Pertama',
+  pic: 'PIC',
+  phone: 'Telepon',
+  email: 'Email',
 }
 
 const formFieldLabels: Record<string, string> = {
@@ -61,6 +64,79 @@ export default function AgreementDocumentDetail({ apiBase = '', approver = false
   const [previewUrl, setPreviewUrl] = useState('')
   const [previewError, setPreviewError] = useState('')
   const [previewRevision, setPreviewRevision] = useState(0)
+  const [previewLoading, setPreviewLoading] = useState(true)
+  const objectUrlRef = useRef('')
+
+  useEffect(() => {
+    if (!id) return
+    console.log('[AgreementDetail] detail effect mulai -> GET detail', { id, apiBase })
+    let active = true
+
+    void (async () => {
+      try {
+        const value = await agreementService.get(id, apiBase)
+        if (!active) return
+        console.log('[AgreementDetail] detail sukses', { id, status: value?.status })
+        // Master hanya tersedia untuk approver (admin/legal). User biasa tidak punya akses endpoint ini.
+        const master = apiBase
+          ? await agreementService.master().catch(() => ({}) as Record<string, string>)
+          : ({} as Record<string, string>)
+        if (!active) return
+        setDocument(value)
+        setMeta({
+          agreement_number: String(master.default_agreement_number || value.agreement_number || ''),
+          signing_place: String(master.default_signing_place || value.form_data.tempat_ttd || ''),
+          signing_date: String(value.form_data.tanggal_ttd || ''),
+          party_one_signatory_name: String(master.default_signatory_name || value.form_data.pihak_pertama_pejabat || ''),
+          party_one_signatory_position: String(master.default_signatory_position || value.form_data.pihak_pertama_jabatan || ''),
+          pic: String(master.pic || ''),
+          phone: String(master.phone || ''),
+          email: String(master.email || ''),
+        })
+        setError('')
+      } catch (reason) {
+        if (!active) return
+        console.error('[AgreementDetail] detail GAGAL', { id, reason })
+        setError(reason instanceof Error ? reason.message : 'Gagal memuat pengajuan')
+      }
+    })()
+
+    return () => {
+      active = false
+    }
+  }, [apiBase, id])
+
+  useEffect(() => {
+    if (!id) return
+    console.log('[AgreementDetail] preview effect mulai -> GET preview', { id, apiBase })
+    let active = true
+
+    void agreementService.preview(apiBase, id)
+      .then((blob) => {
+        if (!active) return
+        console.log('[AgreementDetail] preview sukses, blob size=', blob.size)
+        const url = URL.createObjectURL(blob)
+        if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current)
+        objectUrlRef.current = url
+        setPreviewError('')
+        setPreviewUrl(url)
+        setPreviewLoading(false)
+      })
+      .catch((reason: unknown) => {
+        if (!active) return
+        console.error('[AgreementDetail] preview GAGAL', { id, reason })
+        setPreviewError(reason instanceof Error ? reason.message : 'Gagal memuat preview PDF')
+        setPreviewLoading(false)
+      })
+
+    return () => {
+      active = false
+    }
+  }, [apiBase, id, previewRevision])
+
+  useEffect(() => () => {
+    if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current)
+  }, [])
 
   const load = useCallback(async () => {
     if (!id) return
@@ -69,57 +145,20 @@ export default function AgreementDocumentDetail({ apiBase = '', approver = false
       const master = await agreementService.master().catch(() => ({}) as Record<string, string>)
       setDocument(value)
       setMeta({
-        agreement_number: value.agreement_number,
+        agreement_number: String(master.default_agreement_number || value.agreement_number || ''),
         signing_place: String(master.default_signing_place || value.form_data.tempat_ttd || ''),
         signing_date: String(value.form_data.tanggal_ttd || ''),
         party_one_signatory_name: String(master.default_signatory_name || value.form_data.pihak_pertama_pejabat || ''),
         party_one_signatory_position: String(master.default_signatory_position || value.form_data.pihak_pertama_jabatan || ''),
+        pic: String(master.pic || ''),
+        phone: String(master.phone || ''),
+        email: String(master.email || ''),
       })
       setError('')
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Gagal memuat pengajuan')
     }
   }, [apiBase, id])
-
-  useEffect(() => {
-    if (!id) return
-    agreementService.get(id, apiBase)
-      .then((value) => {
-        setDocument(value)
-        setMeta({
-          agreement_number: value.agreement_number,
-          signing_place: String(value.form_data.tempat_ttd || ''),
-          signing_date: String(value.form_data.tanggal_ttd || ''),
-          party_one_signatory_name: String(value.form_data.pihak_pertama_pejabat || ''),
-          party_one_signatory_position: String(value.form_data.pihak_pertama_jabatan || ''),
-        })
-      })
-      .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : 'Gagal memuat pengajuan'))
-  }, [apiBase, id])
-
-  useEffect(() => {
-    if (!id) return
-
-    let active = true
-    let objectUrl = ''
-
-    void agreementService.preview(apiBase, id)
-      .then((blob) => {
-        if (!active) return
-        objectUrl = URL.createObjectURL(blob)
-        setPreviewError('')
-        setPreviewUrl(objectUrl)
-      })
-      .catch((reason: unknown) => {
-        if (!active) return
-        setPreviewError(reason instanceof Error ? reason.message : 'Gagal memuat preview PDF')
-      })
-
-    return () => {
-      active = false
-      if (objectUrl) URL.revokeObjectURL(objectUrl)
-    }
-  }, [apiBase, id, previewRevision])
 
   const changeStatus = async (status: string) => {
     if (!id) return
@@ -150,7 +189,7 @@ export default function AgreementDocumentDetail({ apiBase = '', approver = false
         </div>
         <h1 className="text-2xl font-bold mt-2" style={{ color: '#0B2545' }}>{document.document_type_code} · {document.ticket_number}</h1>
         <p className="text-sm text-gray-500 mt-0.5">
-          Diajukan oleh: {document.requester?.full_name || '-'} · Dibuat {document.created_at ? formatDateTime(document.created_at) : '-'}
+          Diajukan oleh: {document.user?.full_name || '-'} · Dibuat {document.created_at ? formatDateTime(document.created_at) : '-'}
         </p>
       </div>
     </div>
@@ -160,7 +199,26 @@ export default function AgreementDocumentDetail({ apiBase = '', approver = false
         <h2 className="font-semibold mb-3" style={{ color: '#0B2545' }}>Data Pengajuan</h2>
         {Object.entries(document.form_data).map(([key, value]) => <div key={key} className="grid grid-cols-2 text-sm py-1.5 border-b border-gray-50"><span className="text-gray-500">{formFieldLabels[key] || key.split('_').join(' ')}</span><span className="text-gray-900">{String(value)}</span></div>)}
         <h2 className="font-semibold mt-5 mb-3" style={{ color: '#0B2545' }}>Lampiran</h2>
-        {document.attachments?.map((attachment) => <a key={attachment.id} className="block text-sm font-medium hover:underline" style={{ color: '#C8102E' }} href={`${agreementService.fileUrl(apiBase, id!, 'preview').replace('/preview', `/attachments/${attachment.id}`)}`}>{attachment.file_name}</a>)}
+        {document.attachments && document.attachments.length > 0 ? (
+          <div className="space-y-2">
+            {document.attachments.map((attachment) => (
+              <div key={attachment.id} className="flex items-center gap-3 p-3 rounded-lg bg-gray-50 border border-gray-100">
+                <FileText className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                <p className="flex-1 min-w-0 text-sm text-gray-700 truncate">{attachment.file_name}</p>
+                <a
+                  href={`${agreementService.fileUrl(apiBase, id!, 'preview').replace('/preview', `/attachments/${attachment.id}`)}`}
+                  download
+                  className="p-1.5 rounded-lg hover:bg-gray-200 text-gray-400 hover:text-gray-600"
+                  title="Unduh lampiran"
+                >
+                  <Download className="w-4 h-4" />
+                </a>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-gray-400">Belum ada lampiran.</p>
+        )}
       </div>
       <div>
         {approver && <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-4">
@@ -185,7 +243,7 @@ export default function AgreementDocumentDetail({ apiBase = '', approver = false
           </div>
         </div>}
         {previewError && <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">Preview PDF gagal dimuat: {previewError}</div>}
-        {!previewError && !previewUrl && <div className="h-[650px] rounded-2xl border border-gray-100 bg-gray-50 flex items-center justify-center text-sm text-gray-500">Menyiapkan preview PDF...</div>}
+        {!previewError && previewLoading && <div className="h-[650px] rounded-2xl border border-gray-100 bg-gray-50 flex items-center justify-center text-sm text-gray-500">Menyiapkan preview PDF...</div>}
         {previewUrl && <iframe title="preview" className="w-full h-[650px] rounded-2xl border border-gray-100" src={previewUrl} />}
         {document.status === 'COMPLETED' && <div className="flex gap-2 mt-3">
           <a href={agreementService.fileUrl(apiBase, id!, 'pdf')}><Button className="flex items-center gap-2 text-white transition hover:brightness-95" style={{ background: '#C8102E' }}><Download className="w-4 h-4" /> Download PDF</Button></a>

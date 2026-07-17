@@ -389,10 +389,15 @@ func PrepareAgreementAttachmentColumns(db *gorm.DB) error {
 }
 
 func BackfillAgreementAttachmentColumns(db *gorm.DB) error {
-	var adminID uuid.UUID
+		var adminIDStr string
 	if err := db.Raw(`
 		SELECT id FROM users WHERE role = 'ADMIN' LIMIT 1
-	`).Scan(&adminID).Error; err != nil {
+	`).Scan(&adminIDStr).Error; err != nil {
+		return err
+	}
+
+	adminID, err := uuid.Parse(adminIDStr)
+	if err != nil {
 		return err
 	}
 
@@ -470,36 +475,6 @@ func MigrateTechnicalReserveToDecimal(db *gorm.DB) error {
 }
 
 func RunAllMigrationsAndSeeds(db *gorm.DB) error {
-	if err := PrepareLegalCasePICMigration(db); err != nil {
-		return err
-	}
-	if err := MigrateTechnicalReserveToDecimal(db); err != nil {
-		return err
-	}
-
-	if err := AddStatusUpdatedAtColumns(db); err != nil {
-		return err
-	}
-	if err := BackfillLegalCaseTicketNumbers(db); err != nil {
-		return err
-	}
-
-	if err := PrepareAgreementDocumentUserID(db); err != nil {
-		return err
-	}
-	if err := PrepareAgreementDocumentTicketNumber(db); err != nil {
-		return err
-	}
-	if err := PrepareAgreementDocumentDocumentTypeCode(db); err != nil {
-		return err
-	}
-	if err := PrepareAgreementDocumentFormData(db); err != nil {
-		return err
-	}
-	if err := PrepareAgreementAttachmentColumns(db); err != nil {
-		return err
-	}
-
 	if err := db.AutoMigrate(
 		&entity.Division{},
 		&entity.User{},
@@ -530,6 +505,36 @@ func RunAllMigrationsAndSeeds(db *gorm.DB) error {
 		&entity.AgreementDocument{},
 		&entity.AgreementAttachment{},
 	); err != nil {
+		return err
+	}
+
+	if err := PrepareLegalCasePICMigration(db); err != nil {
+		return err
+	}
+	if err := MigrateTechnicalReserveToDecimal(db); err != nil {
+		return err
+	}
+
+	if err := AddStatusUpdatedAtColumns(db); err != nil {
+		return err
+	}
+	if err := BackfillLegalCaseTicketNumbers(db); err != nil {
+		return err
+	}
+
+	if err := PrepareAgreementDocumentUserID(db); err != nil {
+		return err
+	}
+	if err := PrepareAgreementDocumentTicketNumber(db); err != nil {
+		return err
+	}
+	if err := PrepareAgreementDocumentDocumentTypeCode(db); err != nil {
+		return err
+	}
+	if err := PrepareAgreementDocumentFormData(db); err != nil {
+		return err
+	}
+	if err := PrepareAgreementAttachmentColumns(db); err != nil {
 		return err
 	}
 

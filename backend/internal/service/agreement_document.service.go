@@ -98,7 +98,7 @@ func (s *agreementDocumentService) Create(userID string, req dto.CreateAgreement
 	if e != nil {
 		return nil, e
 	}
-	doc := &entity.AgreementDocument{TicketNumber: utils.GenerateTicketNumber("PK", int(seq)), UserID: uid, DocumentTypeCode: def.Code, FormData: raw, AgreementNumber: fmt.Sprintf("%03d/RM.01.01/HR/IndonesiaRe/%d", seq, time.Now().Year()), Status: entity.StatusSubmitted}
+	doc := &entity.AgreementDocument{TicketNumber: utils.GenerateTicketNumber("PK", int(seq)), UserID: uid, DocumentTypeCode: def.Code, FormData: raw, AgreementNumber: nil, Status: entity.StatusSubmitted}
 	if e = s.repo.Create(doc); e != nil {
 		return nil, errors.New("gagal membuat pengajuan")
 	}
@@ -216,12 +216,16 @@ func (s *agreementDocumentService) UpdateMeta(id string, req dto.AgreementMetaRe
 		return nil, e
 	}
 	if req.AgreementNumber != nil && strings.TrimSpace(*req.AgreementNumber) != "" {
-		d.AgreementNumber = strings.TrimSpace(*req.AgreementNumber)
+		num := strings.TrimSpace(*req.AgreementNumber)
+		d.AgreementNumber = &num
 	}
 	setOptional(data, "tempat_ttd", req.SigningPlace)
 	setOptional(data, "tanggal_ttd", req.SigningDate)
 	setOptional(data, "pihak_pertama_pejabat", req.PartyOneSignatoryName)
 	setOptional(data, "pihak_pertama_jabatan", req.PartyOneSignatoryPosition)
+	setOptional(data, "pihak_pertama_pic", req.Pic)
+	setOptional(data, "pihak_pertama_telepon", req.Phone)
+	setOptional(data, "pihak_pertama_email", req.Email)
 	d.FormData, _ = json.Marshal(data)
 	if e = s.repo.Save(d); e != nil {
 		return nil, e
@@ -232,6 +236,13 @@ func setOptional(m map[string]interface{}, k string, v *string) {
 	if v != nil {
 		m[k] = strings.TrimSpace(*v)
 	}
+}
+
+func strOrDash(v *string) string {
+	if v == nil || strings.TrimSpace(*v) == "" {
+		return "-"
+	}
+	return strings.TrimSpace(*v)
 }
 
 func (s *agreementDocumentService) UpdateStatus(ctx context.Context, id, approverID string, req dto.AgreementStatusRequest) (*entity.AgreementDocument, error) {
@@ -335,11 +346,13 @@ func (s *agreementDocumentService) Preview(ctx context.Context, id, userID strin
 	}
 	if d.Status == entity.StatusCompleted && d.GeneratedPDFPath != "" {
 		obj, err := s.storage.GetFileObject(ctx, d.GeneratedPDFPath)
-		if err != nil {
-			return nil, err
+		if err == nil {
+			defer obj.Close()
+			if data, readErr := io.ReadAll(obj); readErr == nil {
+				return data, nil
+			}
 		}
-		defer obj.Close()
-		return io.ReadAll(obj)
+		// Jatuh kembali ke generate on-the-fly apabila file final di storage tidak ditemukan.
 	}
 	def, e := s.definitionFor(d.DocumentTypeCode)
 	if e != nil {
@@ -375,6 +388,9 @@ func (s *agreementDocumentService) GetGeneratedFile(id, userID string, all bool,
 		path, ext = d.GeneratedDOCXPath, ".docx"
 	}
 	obj, e := s.storage.GetFileObject(context.Background(), path)
+	if e != nil {
+		return nil, "", errors.New("dokumen final tidak tersedia")
+	}
 	return obj, d.GeneratedFileName + ext, e
 }
 func (s *agreementDocumentService) GetAttachment(id, attachmentID, userID string, all bool) (*minio.Object, string, string, error) {
@@ -410,6 +426,7 @@ func (s *agreementDocumentService) UpdateMaster(req dto.AgreementCompanyMasterRe
 	m.DefaultSignatoryName = req.DefaultSignatoryName
 	m.DefaultSignatoryPosition = req.DefaultSignatoryPosition
 	m.DefaultSigningPlace = req.DefaultSigningPlace
+	m.DefaultAgreementNumber = req.DefaultAgreementNumber
 	if e = s.repo.SaveMaster(m); e != nil {
 		return nil, e
 	}
@@ -436,7 +453,19 @@ func partyOneSnapshot(m *entity.AgreementCompanyMaster, data map[string]interfac
 	if place == "" {
 		place = m.DefaultSigningPlace
 	}
-	return map[string]interface{}{"name": m.Name, "address": m.Address, "phone": m.Phone, "email": m.Email, "pic": m.PIC, "signatory_name": name, "signatory_position": pos, "signing_place": place}
+	pic := valueString(data["pihak_pertama_pic"])
+	if pic == "" {
+		pic = m.PIC
+	}
+	phone := valueString(data["pihak_pertama_telepon"])
+	if phone == "" {
+		phone = m.Phone
+	}
+	email := valueString(data["pihak_pertama_email"])
+	if email == "" {
+		email = m.Email
+	}
+	return map[string]interface{}{"name": m.Name, "address": m.Address, "phone": phone, "email": email, "pic": pic, "signatory_name": name, "signatory_position": pos, "signing_place": place}
 }
 func placeholderValues(d *entity.AgreementDocument, data, snap map[string]interface{}) map[string]string {
 	get := func(k string) string {
@@ -457,7 +486,7 @@ func placeholderValues(d *entity.AgreementDocument, data, snap map[string]interf
 	}
 	money := func(k string) int64 { return valueInt64(data[k]) }
 	pct := func(k string) int64 { return valueInt64(data[k]) }
-	return map[string]string{"NOMOR_PIHAK_PERTAMA": d.AgreementNumber, "NOMOR_PIHAK_KEDUA": get("nomor_pihak_kedua"), "HARI_TTD": func() string {
+	return map[string]string{"NOMOR_PIHAK_PERTAMA": strOrDash(d.AgreementNumber), "NOMOR_PIHAK_KEDUA": get("nomor_pihak_kedua"), "HARI_TTD": func() string {
 		if dt.IsZero() {
 			return "-"
 		}

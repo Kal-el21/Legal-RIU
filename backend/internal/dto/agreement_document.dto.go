@@ -25,6 +25,9 @@ type AgreementMetaRequest struct {
 	SigningDate               *string `json:"signing_date"`
 	PartyOneSignatoryName     *string `json:"party_one_signatory_name"`
 	PartyOneSignatoryPosition *string `json:"party_one_signatory_position"`
+	Pic                       *string `json:"pic"`
+	Phone                     *string `json:"phone"`
+	Email                     *string `json:"email"`
 }
 
 type AgreementStatusRequest struct {
@@ -42,6 +45,7 @@ type AgreementCompanyMasterRequest struct {
 	DefaultSignatoryName     string `json:"default_signatory_name" binding:"required"`
 	DefaultSignatoryPosition string `json:"default_signatory_position" binding:"required"`
 	DefaultSigningPlace      string `json:"default_signing_place" binding:"required"`
+	DefaultAgreementNumber   string `json:"default_agreement_number"`
 }
 
 type AgreementTypeResponse struct {

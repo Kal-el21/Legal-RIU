@@ -116,6 +116,7 @@ export default function AgreementDocumentForm() {
       } else {
         await agreementService.create({ document_type_code: 'PKS', form_data: derivedForm }, files)
       }
+      setFiles([])
       navigate('/dashboard/agreement-documents')
     } catch (err) {
       setError((err as Error).message || 'Terjadi kesalahan saat mengirim pengajuan')
@@ -149,10 +150,22 @@ export default function AgreementDocumentForm() {
           ))}
        </div>
      </section>)}
-     <section className="bg-white rounded-2xl border border-gray-100 p-6 mb-6">
-       <h2 className="text-lg font-semibold mb-3" style={{ color: '#0B2545' }}>Lampiran Tambahan</h2>
-       <input type="file" multiple onChange={(e) => setFiles(Array.from(e.target.files || []))} className="block w-full text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-gray-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-gray-700 hover:file:bg-gray-200" />
-     </section>
+      <section className="bg-white rounded-2xl border border-gray-100 p-6 mb-6">
+        <h2 className="text-lg font-semibold mb-3" style={{ color: '#0B2545' }}>Lampiran Tambahan</h2>
+        <input type="file" multiple onChange={(e) => setFiles((prev) => [...prev, ...Array.from(e.target.files || [])])} className="block w-full text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-gray-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-gray-700 hover:file:bg-gray-200" />
+        {files.length > 0 && (
+          <ul className="mt-3 space-y-2">
+            {files.map((file, index) => (
+              <li key={`${file.name}-${index}`} className="flex items-center justify-between gap-3 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-sm">
+                <span className="truncate text-gray-800">{file.name}</span>
+                <button type="button" onClick={() => setFiles((prev) => prev.filter((_, i) => i !== index))} className="shrink-0 text-gray-400 hover:text-red-600" title="Hapus lampiran">
+                  Hapus
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
      <Button onClick={submit} className="flex items-center gap-2 text-white transition hover:brightness-95" style={{ background: '#C8102E' }}>
        <Send className="w-4 h-4" /> {id ? 'Simpan dan Ajukan Ulang' : 'Kirim Pengajuan'}
      </Button>

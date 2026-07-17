@@ -74,7 +74,7 @@ export default function AgreementDocumentList({ basePath, apiBase = '', requeste
                 <td className="px-6 py-4 text-sm text-gray-900">{item.ticket_number}</td>
                 <td className="px-6 py-4 text-sm text-gray-700">{item.document_type_code}</td>
                 <td className="px-6 py-4 text-sm text-gray-700">{item.agreement_number}</td>
-                <td className="px-6 py-4 text-sm text-gray-700">{item.requester?.full_name || '-'}</td>
+                <td className="px-6 py-4 text-sm text-gray-700">{item.user?.full_name || '-'}</td>
                 <td className="px-6 py-4 text-sm text-gray-700">{item.created_at ? formatDate(item.created_at) : '-'}</td>
                 <td className="px-6 py-4"><StatusBadge status={item.status as SubmissionStatus} /></td>
                 <td className="px-6 py-4">
