@@ -409,3 +409,21 @@ type NotificationRead struct {
 	IsRead         bool       `gorm:"not null;default:true" json:"is_read"`
 	ReadAt         *time.Time `json:"read_at"`
 }
+
+// ─── Document Repository ────────────────────────────────────────────
+
+type RepositoryDocument struct {
+	Base
+	Title        string    `gorm:"size:255;not null;index" json:"title"`
+	FeatureCode  string    `gorm:"size:80;not null;index" json:"feature_code"`
+	SourceType   string    `gorm:"size:80;index" json:"source_type"`
+	SourceID     string    `gorm:"size:80;index" json:"source_id"`
+	UploaderType string    `gorm:"size:50" json:"uploader_type"`
+	FilePath     string    `gorm:"size:500;not null" json:"-"`
+	FileName     string    `gorm:"size:255;not null" json:"file_name"`
+	MIMEType     string    `gorm:"size:150" json:"mime_type"`
+	FileSize     int64     `json:"file_size"`
+	IsActive     bool      `gorm:"not null;default:true;index" json:"is_active"`
+	CreatedBy    uuid.UUID `gorm:"type:uuid;not null;index" json:"created_by"`
+	UpdatedBy    uuid.UUID `gorm:"type:uuid;not null;index" json:"updated_by"`
+}

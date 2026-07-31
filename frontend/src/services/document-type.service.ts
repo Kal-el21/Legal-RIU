@@ -3,7 +3,7 @@ import type { ApiResponse, DocumentType, ImportResult } from '@/types'
 
 export const documentTypeService = {
   getAll: async () => {
-    const res = await api.get<ApiResponse<DocumentType[]>>('/admin/document-types')
+    const res = await api.get<ApiResponse<DocumentType[]>>('/document-types')
     return res.data.data ?? []
   },
 

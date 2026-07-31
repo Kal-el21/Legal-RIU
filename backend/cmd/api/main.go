@@ -42,6 +42,7 @@ func main() {
 	documentTypeRepo := repository.NewDocumentTypeRepository(db)
 	materialRepo := repository.NewLegalMaterialRepository(db)
 	permissionRepo := repository.NewPermissionRepository(db)
+	documentRepositoryRepo := repository.NewRepositoryDocumentRepository(db)
 
 	// ── Services ─────────────────────────────────────────────────────────────
 	permissionSvc := service.NewPermissionService(permissionRepo, userRepo)
@@ -57,7 +58,8 @@ func main() {
 	notificationSettingSvc := service.NewNotificationSettingService(notificationSettingRepo, dashRepo)
 	dashSvc := service.NewDashboardService(dashRepo, notificationSettingSvc)
 	auditLogSvc := service.NewAuditLogService(auditLogRepo)
-	legalCaseSvc := service.NewLegalCaseService(legalCaseRepo, store)
+	documentRepositorySvc := service.NewRepositoryDocumentService(documentRepositoryRepo, store)
+	legalCaseSvc := service.NewLegalCaseService(legalCaseRepo, store, documentRepositorySvc)
 	divisionSvc := service.NewDivisionService(divisionRepo)
 	companySvc := service.NewCompanyService(companyRepo)
 	purposeTypeSvc := service.NewPurposeTypeService(purposeTypeRepo)
@@ -86,6 +88,7 @@ func main() {
 	materialHandler := handler.NewLegalMaterialHandler(materialSvc)
 	permissionHandler := handler.NewPermissionHandler(permissionSvc)
 	reportHandler := handler.NewReportHandler(reportSvc)
+	documentRepositoryHandler := handler.NewRepositoryDocumentHandler(documentRepositorySvc)
 
 	// ── Gin ──────────────────────────────────────────────────────────────────
 	if cfg.App.Env == "production" {
@@ -131,12 +134,17 @@ func main() {
 	protected.PUT("/settings/notifications", authHandler.UpdateNotification)
 	protected.PUT("/settings/two-fa", authHandler.Toggle2FA)
 
+	// Document Repository (accessible by all authenticated roles)
+	protected.GET("/document-repositories", requirePermission("document_repository.view"), documentRepositoryHandler.GetAll)
+	protected.GET("/document-repositories/:id", requirePermission("document_repository.view"), documentRepositoryHandler.GetByID)
+	protected.GET("/document-repositories/:id/download", requirePermission("document_repository.view"), documentRepositoryHandler.Download)
+
 	// Dashboard
 	protected.GET("/divisions", divisionHandler.GetAll)
 	protected.GET("/companies", requirePermission("case_management.view", "case_management.create", "master_data.view"), companyHandler.GetAll)
 	protected.GET("/case-types", requirePermission("case_management.view", "case_management.create", "master_data.view"), caseTypeHandler.GetAll)
 	protected.GET("/case-categories", requirePermission("case_management.view", "case_management.create", "master_data.view"), caseCategoryHandler.GetAll)
-	protected.GET("/document-types", requirePermission("case_management.view", "case_management.create", "master_data.view"), documentTypeHandler.GetAll)
+	protected.GET("/document-types", documentTypeHandler.GetAll)
 	protected.GET("/agreement-document-types", requirePermission("agreement_document.view.own", "agreement_document.view.all", "agreement_document.create.own"), agreementHandler.ListTypes)
 	protected.GET("/agreement-document-types/:code/schema", requirePermission("agreement_document.view.own", "agreement_document.view.all", "agreement_document.create.own"), agreementHandler.GetType)
 

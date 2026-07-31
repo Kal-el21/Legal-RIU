@@ -422,6 +422,23 @@ export interface ReportChartResponse {
   series: ReportChartSeries[]
 }
 
+// ─── Document Repository ─────────────────────────────────────
+
+export interface RepositoryDocument {
+  id: string
+  title: string
+  feature_code: string
+  source_type: string
+  source_id: string
+  uploader_type: 'requester' | 'approver'
+  file_name: string
+  mime_type?: string
+  file_size: number
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
 export type ReportFeature = 'legal-cases' | 'legal-opinions' | 'document-reviews'
 
 export type ReportGroupBy =

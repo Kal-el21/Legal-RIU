@@ -62,6 +62,12 @@ import AgreementDocumentList from '@/components/shared/AgreementDocumentList'
 import AgreementDocumentForm from '@/components/shared/AgreementDocumentForm'
 import AgreementDocumentDetail from '@/components/shared/AgreementDocumentDetail'
 import AgreementCompanyMasterPage from '@/pages/admin/agreement-company-master/AgreementCompanyMasterPage'
+import AdminRepositoryDocumentListPage from '@/pages/admin/repository-documents/AdminRepositoryDocumentListPage'
+import LegalRepositoryDocumentListPage from '@/pages/legal/repository-documents/LegalRepositoryDocumentListPage'
+import UserRepositoryDocumentListPage from '@/pages/dashboard/repository-documents/UserRepositoryDocumentListPage'
+import LegalAURepositoryDocumentListPage from '@/pages/legal-au/repository-documents/LegalAURepositoryDocumentListPage'
+import ExternalRepositoryDocumentListPage from '@/pages/external/repository-documents/ExternalRepositoryDocumentListPage'
+import ErrorBoundary from '@/components/common/ErrorBoundary'
 
 import LegalAUCaseListPage from '@/pages/legal-au/legal-cases/LegalAUCaseListPage'
 import LegalAUCaseDetailPage from '@/pages/legal-au/legal-cases/LegalAUCaseDetailPage'
@@ -130,6 +136,7 @@ export const router = createBrowserRouter([
           { path: '/dashboard/agreement-documents/new', element: <AgreementDocumentForm /> },
           { path: '/dashboard/agreement-documents/:id', element: <AgreementDocumentDetail /> },
           { path: '/dashboard/agreement-documents/:id/edit', element: <AgreementDocumentForm /> },
+          { path: '/dashboard/repository-documents', element: <ErrorBoundary><UserRepositoryDocumentListPage /></ErrorBoundary> },
           { path: '/dashboard/legal-cases', element: <AdminLegalCaseListPage /> },
           { path: '/dashboard/legal-cases/:id', element: <AdminLegalCaseDetailPage /> },
           { path: '/dashboard/audit-logs', element: <AuditLogPage /> },
@@ -159,6 +166,7 @@ export const router = createBrowserRouter([
           { path: '/admin/review-documents/:id', element: <AdminReviewDocumentDetailPage /> },
           { path: '/admin/agreement-documents', element: <AgreementDocumentList basePath="/admin/agreement-documents" apiBase="/admin" /> },
           { path: '/admin/agreement-documents/:id', element: <AgreementDocumentDetail apiBase="/admin" approver /> },
+          { path: '/admin/repository-documents', element: <ErrorBoundary><AdminRepositoryDocumentListPage /></ErrorBoundary> },
           { path: '/admin/agreement-company-master', element: <AgreementCompanyMasterPage /> },
           { path: '/admin/legal-cases', element: <AdminLegalCaseListPage /> },
           { path: '/admin/legal-cases/:id', element: <AdminLegalCaseDetailPage /> },
@@ -197,6 +205,7 @@ export const router = createBrowserRouter([
           { path: '/legal/review-documents/:id', element: <LegalReviewDocumentDetailPage /> },
           { path: '/legal/agreement-documents', element: <AgreementDocumentList basePath="/legal/agreement-documents" apiBase="/legal" /> },
           { path: '/legal/agreement-documents/:id', element: <AgreementDocumentDetail apiBase="/legal" approver /> },
+          { path: '/legal/repository-documents', element: <ErrorBoundary><LegalRepositoryDocumentListPage /></ErrorBoundary> },
           { path: '/legal/legal-cases', element: <AdminLegalCaseListPage /> },
           { path: '/legal/legal-cases/:id', element: <AdminLegalCaseDetailPage /> },
           { path: '/legal/audit-logs', element: <AuditLogPage /> },
@@ -235,6 +244,7 @@ export const router = createBrowserRouter([
           { path: '/legal-au/review-documents/:id', element: <LegalReviewDocumentDetailPage /> },
           { path: '/legal-au/review-documents/new', element: <ReviewDocumentFormPage /> },
           { path: '/legal-au/review-documents/:id/edit', element: <ReviewDocumentFormPage /> },
+          { path: '/legal-au/repository-documents', element: <ErrorBoundary><LegalAURepositoryDocumentListPage /></ErrorBoundary> },
           { path: '/legal-au/users', element: <UserManagementPage /> },
         ],
       },
@@ -262,6 +272,7 @@ export const router = createBrowserRouter([
           { path: '/external/review-documents/:id', element: <LegalReviewDocumentDetailPage /> },
           { path: '/external/review-documents/new', element: <ReviewDocumentFormPage /> },
           { path: '/external/review-documents/:id/edit', element: <ReviewDocumentFormPage /> },
+          { path: '/external/repository-documents', element: <ErrorBoundary><ExternalRepositoryDocumentListPage /></ErrorBoundary> },
           { path: '/external/materials', element: <ExternalMaterialManagementPage /> },
           { path: '/external/materials/new', element: <MaterialFormPage /> },
           { path: '/external/materials/:id', element: <MaterialFormPage /> },
