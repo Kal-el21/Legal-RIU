@@ -207,6 +207,12 @@ func (s *documentReviewService) UploadResult(id string, adminID string, req dto.
 		return errors.New("admin tidak valid")
 	}
 
+	// Get current document review to check status
+	dr, err := s.repo.FindByID(uid)
+	if err != nil {
+		return errors.New("pengajuan tidak ditemukan")
+	}
+
 	ctx := context.Background()
 	objectPath, fileName, err := s.storage.UploadFile(ctx, "document-reviews/results", file, fmt.Sprintf("review-result-%s", uid.String()))
 	if err != nil {
@@ -220,7 +226,18 @@ func (s *documentReviewService) UploadResult(id string, adminID string, req dto.
 		FilePath:         objectPath,
 		Notes:            req.Notes,
 	}
-	return s.repo.AddResult(result)
+	if err := s.repo.AddResult(result); err != nil {
+		return errors.New("gagal menyimpan hasil review")
+	}
+
+	// Auto-complete: If status is UNDER_REVIEW, automatically set to COMPLETED
+	if dr.Status == entity.StatusUnderReview {
+		if err := s.repo.UpdateStatus(uid, entity.StatusCompleted, ""); err != nil {
+			return errors.New("gagal mengupdate status ke COMPLETED")
+		}
+	}
+
+	return nil
 }
 
 func (s *documentReviewService) GetPresignedURL(filePath string) (string, error) {

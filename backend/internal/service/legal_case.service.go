@@ -59,13 +59,14 @@ type LegalCaseService interface {
 }
 
 type legalCaseService struct {
-	repo    repository.LegalCaseRepository
-	storage *storage.MinIOClient
-	pdfSvc  PDFService
+	repo         repository.LegalCaseRepository
+	storage      *storage.MinIOClient
+	pdfSvc       PDFService
+	repoDocSvc   RepositoryDocumentService
 }
 
-func NewLegalCaseService(repo repository.LegalCaseRepository, s *storage.MinIOClient) LegalCaseService {
-	return &legalCaseService{repo: repo, storage: s, pdfSvc: NewPDFService()}
+func NewLegalCaseService(repo repository.LegalCaseRepository, s *storage.MinIOClient, repoDocSvc RepositoryDocumentService) LegalCaseService {
+	return &legalCaseService{repo: repo, storage: s, pdfSvc: NewPDFService(), repoDocSvc: repoDocSvc}
 }
 
 func (s *legalCaseService) Create(companyID *uuid.UUID, req dto.CreateLegalCaseRequest) (*dto.LegalCaseResponse, error) {
@@ -281,6 +282,10 @@ func (s *legalCaseService) CreateChronology(caseID string, req dto.CreateCaseChr
 		return nil, errors.New("gagal menambahkan kronologi kasus")
 	}
 
+	for _, path := range documents {
+		_ = s.repoDocSvc.SyncChronologyDocument(chronology.ID.String(), caseID, path)
+	}
+
 	response := toCaseChronologyResponse(chronology)
 	return &response, nil
 }
@@ -325,6 +330,15 @@ func (s *legalCaseService) UpdateChronology(caseID string, chronologyID string, 
 		return nil, errors.New("gagal mengupdate kronologi kasus")
 	}
 
+	_ = s.repoDocSvc.RemoveChronologyDocuments(chronology.ID.String())
+
+	for _, path := range documents {
+		if path == "" {
+			continue
+		}
+		_ = s.repoDocSvc.SyncChronologyDocument(chronology.ID.String(), caseID, path)
+	}
+
 	response := toCaseChronologyResponse(chronology)
 	return &response, nil
 }
@@ -341,6 +355,9 @@ func (s *legalCaseService) DeleteChronology(caseID string, chronologyID string) 
 	if _, err := s.repo.FindChronology(caseUID, chronologyUID); err != nil {
 		return errors.New("kronologi kasus tidak ditemukan")
 	}
+
+	_ = s.repoDocSvc.RemoveChronologyDocuments(chronologyUID.String())
+
 	if err := s.repo.DeleteChronology(caseUID, chronologyUID); err != nil {
 		return errors.New("gagal menghapus kronologi kasus")
 	}
@@ -594,7 +611,10 @@ func (s *legalCaseService) UploadDocument(caseID string, file *multipart.FileHea
 
 	if oldDocumentLink != "" {
 		_ = s.storage.DeleteFile(context.Background(), oldDocumentLink)
+		_ = s.repoDocSvc.RemoveCaseDocuments(caseID)
 	}
+
+	_ = s.repoDocSvc.SyncCaseDocument(caseID, objectName, file.Filename, file.Size)
 
 	response := toLegalCaseResponse(legalCase, true)
 	return &response, nil
@@ -623,6 +643,8 @@ func (s *legalCaseService) DeleteDocument(caseID string) (*dto.LegalCaseResponse
 	}
 
 	_ = s.storage.DeleteFile(context.Background(), oldDocumentLink)
+
+	_ = s.repoDocSvc.RemoveCaseDocuments(caseID)
 
 	response := toLegalCaseResponse(legalCase, true)
 	return &response, nil
@@ -654,7 +676,10 @@ func (s *legalCaseService) UploadPhoto(caseID string, file *multipart.FileHeader
 
 	if oldPhoto != "" {
 		_ = s.storage.DeleteFile(context.Background(), oldPhoto)
+		_ = s.repoDocSvc.RemoveCaseDocuments(caseID)
 	}
+
+	_ = s.repoDocSvc.SyncCasePhoto(caseID, objectName, file.Filename, file.Size)
 
 	response := toLegalCaseResponse(legalCase, true)
 	return &response, nil
@@ -683,6 +708,8 @@ func (s *legalCaseService) DeletePhoto(caseID string) (*dto.LegalCaseResponse, e
 	}
 
 	_ = s.storage.DeleteFile(context.Background(), oldPhoto)
+
+	_ = s.repoDocSvc.RemoveCaseDocuments(caseID)
 
 	response := toLegalCaseResponse(legalCase, true)
 	return &response, nil

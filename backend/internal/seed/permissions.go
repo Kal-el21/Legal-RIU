@@ -134,6 +134,7 @@ func permissionSeedData() []entity.Permission {
 		perm("report.legal_case.view", "report", "legal_case", "all", "Report - Legal Case", "Melihat laporan legal case"),
 		perm("report.legal_opinion.view", "report", "legal_opinion", "all", "Report - Legal Opinion", "Melihat laporan legal opinion"),
 		perm("report.document_review.view", "report", "document_review", "all", "Report - Review Dokumen", "Melihat laporan review dokumen"),
+		perm("document_repository.view", "document_repository", "view", "all", "Document Repository - Lihat", "Melihat dokumen repository"),
 	}
 }
 
@@ -159,6 +160,7 @@ func rolePermissionSeedData(permissionByCode map[string]entity.Permission) map[e
 		"document_review.download.all",
 		"agreement_document.view.own", "agreement_document.create.own", "agreement_document.update.own", "agreement_document.delete.own", "agreement_document.resubmit.own", "agreement_document.preview.own", "agreement_document.download_attachment.own", "agreement_document.download_pdf.own",
 		"legal_material.view",
+		"document_repository.view",
 	}
 
 	legal := []string{
@@ -186,12 +188,14 @@ func rolePermissionSeedData(permissionByCode map[string]entity.Permission) map[e
 		"report.legal_case.view",
 		"report.legal_opinion.view",
 		"report.document_review.view",
+		"document_repository.view",
 	}
 
 	external := []string{
 		"case_management.view",
 		"case_management.manage_document",
 		"case_management.manage_chronology",
+		"document_repository.view",
 	}
 
 	legalAU := []string{
@@ -201,6 +205,7 @@ func rolePermissionSeedData(permissionByCode map[string]entity.Permission) map[e
 		"case_management.manage_chronology",
 		"legal_material.view",
 		"legal_material.manage",
+		"document_repository.view",
 	}
 
 	return map[entity.UserRole][]string{

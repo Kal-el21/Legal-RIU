@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation } from 'react-router-dom'
-import { Scale, LayoutDashboard, FileText, FileSearch, Menu, ChevronRight, ChevronLeft, ScrollText, BarChart3 } from 'lucide-react'
+import { Scale, LayoutDashboard, FileText, FileSearch, Menu, ChevronRight, ChevronLeft, ScrollText, BarChart3, Files } from 'lucide-react'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { dashboardService } from '@/services/dashboard.service'
@@ -14,6 +14,7 @@ const NAV = [
   { label: 'Legal Opinion', href: '/legal/legal-opinions', icon: FileText, permissions: ['legal_opinion.view.all'] },
   { label: 'Review Dokumen', href: '/legal/review-documents', icon: FileSearch, permissions: ['document_review.view.all'] },
   { label: 'Dokumen Perjanjian', href: '/legal/agreement-documents', icon: FileText, permissions: ['agreement_document.view.all'] },
+  { label: 'Dokumen Repository', href: '/legal/repository-documents', icon: Files, permissions: ['document_repository.view'] },
   { label: 'Manajemen Kasus', href: '/legal/legal-cases', icon: Scale, permissions: ['case_management.view'] },
   { label: 'Audit Log', href: '/legal/audit-logs', icon: ScrollText, permissions: ['audit_log.view'] },
 ]

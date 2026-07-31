@@ -504,6 +504,7 @@ func RunAllMigrationsAndSeeds(db *gorm.DB) error {
 		&entity.AgreementCompanyMaster{},
 		&entity.AgreementDocument{},
 		&entity.AgreementAttachment{},
+		&entity.RepositoryDocument{},
 	); err != nil {
 		return err
 	}
@@ -597,6 +598,9 @@ func RunAllMigrationsAndSeeds(db *gorm.DB) error {
 		return err
 	}
 	if err := SeedNotificationSettings(db); err != nil {
+		return err
+	}
+	if err := BackfillRepositoryDocuments(db); err != nil {
 		return err
 	}
 
