@@ -6,7 +6,7 @@ import { auditLogService } from '@/services/audit-log.service'
 import { cn } from '@/lib/utils'
 import type { AuditLog, AuditAction } from '@/types'
 import { useAuthStore } from '@/store/auth.store'
-import { getRoleHome } from '@/routes/guards'
+import { getRoleHome } from '@/routes/role-home'
 
 const ACTION_COLORS: Record<AuditAction, { bg: string; text: string }> = {
   STATUS_CHANGE: { bg: '#FEF3C7', text: '#92400E' },

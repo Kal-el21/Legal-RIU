@@ -1,16 +1,6 @@
 import { Navigate, Outlet } from 'react-router-dom'
 import { useAuthStore } from '@/store/auth.store'
-import type { UserRole } from '@/types'
-
-function getRoleHome(role?: UserRole) {
-  if (role === 'ADMIN') return '/admin'
-  if (role === 'LEGAL') return '/legal'
-  if (role === 'LEGAL_AU') return '/legal-au'
-  if (role === 'EXTERNAL') return '/external/legal-cases'
-  return '/dashboard'
-}
-
-export { getRoleHome }
+import { getRoleHome } from './role-home'
 
 // Redirect to login if not authenticated
 export function PrivateRoute() {

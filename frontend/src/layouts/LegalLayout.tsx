@@ -13,6 +13,7 @@ const NAV = [
   { label: 'Laporan', href: '/legal/reports', icon: BarChart3, permissions: ['report.legal_case.view', 'report.legal_opinion.view', 'report.document_review.view'] },
   { label: 'Legal Opinion', href: '/legal/legal-opinions', icon: FileText, permissions: ['legal_opinion.view.all'] },
   { label: 'Review Dokumen', href: '/legal/review-documents', icon: FileSearch, permissions: ['document_review.view.all'] },
+  { label: 'Dokumen Perjanjian', href: '/legal/agreement-documents', icon: FileText, permissions: ['agreement_document.view.all'] },
   { label: 'Manajemen Kasus', href: '/legal/legal-cases', icon: Scale, permissions: ['case_management.view'] },
   { label: 'Audit Log', href: '/legal/audit-logs', icon: ScrollText, permissions: ['audit_log.view'] },
 ]

@@ -7,7 +7,7 @@ import { useDocumentReviews } from '@/hooks/useDocumentReview'
 import { formatDate } from '@/lib/utils'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/store/auth.store'
-import { getRoleHome } from '@/routes/guards'
+import { getRoleHome } from '@/routes/role-home'
 import type { SubmissionStatus } from '@/types'
 
 const STATUS_FILTERS = [

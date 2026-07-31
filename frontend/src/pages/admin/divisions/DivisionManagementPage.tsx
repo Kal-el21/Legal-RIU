@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -10,6 +10,7 @@ import { useDivisions, useImportDivisions } from '@/hooks/useLegalCase'
 import { legalCaseService } from '@/services/legal-case.service'
 import ImportCard from '@/components/common/ImportCard'
 import api from '@/services/api'
+import { useQueryClient } from '@tanstack/react-query'
 import type { Division } from '@/types'
 
 const schema = z.object({
@@ -49,14 +50,10 @@ export default function DivisionManagementPage() {
   const [search, setSearch] = useState('')
   const [modal, setModal] = useState<'create' | 'edit' | null>(null)
   const [selected, setSelected] = useState<Division | null>(null)
-  const [items, setItems] = useState<Division[]>([])
 
   const { data: divisionsData, isLoading } = useDivisions()
   const importMutation = useImportDivisions()
-
-  useEffect(() => {
-    if (divisionsData) setItems(divisionsData)
-  }, [divisionsData])
+  const queryClient = useQueryClient()
 
   const form = useForm<FormData>({ resolver: zodResolver(schema), defaultValues: { name: '', description: '' } })
 
@@ -85,10 +82,10 @@ export default function DivisionManagementPage() {
   const handleDelete = async (item: Division) => {
     if (!confirm(`Hapus ${item.name}?`)) return
     await api.delete(`/divisions/${item.id}`)
-    setItems(items.filter((i) => i.id !== item.id))
+    queryClient.invalidateQueries({ queryKey: ['legal-cases', 'divisions'] })
   }
 
-  const filtered = items.filter((d) => d.name.toLowerCase().includes(search.toLowerCase()))
+  const filtered = (divisionsData ?? []).filter((d) => d.name.toLowerCase().includes(search.toLowerCase()))
 
   return (
     <div className="p-6 max-w-7xl mx-auto">

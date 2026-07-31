@@ -14,7 +14,6 @@ export default function MaterialManagementPage() {
         onDownloadTemplate={() => materialService.downloadTemplate()}
       />
       <SharedMaterialListPage
-        role="ADMIN"
         basePath="/admin/materials"
         title="Materi Legal"
         description="Kelola materi legal"

@@ -15,6 +15,7 @@ const DATA_MASTER_ITEMS = [
   { label: 'Kabupaten/Kota', href: '/admin/regencies', icon: MapPin, permissions: ['master_data.manage'] },
   { label: 'Cedant', href: '/admin/cedants', icon: UserCog, permissions: ['master_data.manage'] },
   { label: 'Divisi', href: '/admin/divisions', icon: Users, permissions: ['master_data.manage'] },
+  { label: 'Pihak Pertama', href: '/admin/agreement-company-master', icon: Building2, permissions: ['agreement_company_master.view.all'] },
 ]
 
 const NAV = [
@@ -22,6 +23,7 @@ const NAV = [
   { label: 'Laporan', href: '/admin/reports', icon: BarChart3, permissions: ['report.legal_case.view', 'report.legal_opinion.view', 'report.document_review.view'] },
   { label: 'Legal Opinion', href: '/admin/legal-opinions', icon: FileText, permissions: ['legal_opinion.view.all'] },
   { label: 'Review Dokumen', href: '/admin/review-documents', icon: FileSearch, permissions: ['document_review.view.all'] },
+  { label: 'Dokumen Perjanjian', href: '/admin/agreement-documents', icon: FileText, permissions: ['agreement_document.view.all'] },
   { label: 'Manajemen Kasus', href: '/admin/legal-cases', icon: Scale, permissions: ['case_management.view'] },
   { label: 'User Management', href: '/admin/users', icon: Users, permissions: ['user_management.view'] },
   { label: 'Audit Log', href: '/admin/audit-logs', icon: ScrollText, permissions: ['audit_log.view'] },

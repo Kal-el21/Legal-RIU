@@ -58,6 +58,10 @@ import LegalReviewDocumentListPage from '@/pages/legal/review-documents/ReviewDo
 import LegalReviewDocumentDetailPage from '@/pages/legal/review-documents/ReviewDocumentDetailPage'
 import LegalMaterialManagementPage from '@/pages/legal/materials/LegalMaterialManagementPage'
 import LegalMaterialDetailPage from '@/pages/legal/materials/LegalMaterialDetailPage'
+import AgreementDocumentList from '@/components/shared/AgreementDocumentList'
+import AgreementDocumentForm from '@/components/shared/AgreementDocumentForm'
+import AgreementDocumentDetail from '@/components/shared/AgreementDocumentDetail'
+import AgreementCompanyMasterPage from '@/pages/admin/agreement-company-master/AgreementCompanyMasterPage'
 
 import LegalAUCaseListPage from '@/pages/legal-au/legal-cases/LegalAUCaseListPage'
 import LegalAUCaseDetailPage from '@/pages/legal-au/legal-cases/LegalAUCaseDetailPage'
@@ -122,6 +126,10 @@ export const router = createBrowserRouter([
           { path: '/dashboard/review-documents/new', element: <ReviewDocumentFormPage /> },
           { path: '/dashboard/review-documents/:id', element: <ReviewDocumentDetailPage /> },
           { path: '/dashboard/review-documents/:id/edit', element: <ReviewDocumentFormPage /> },
+          { path: '/dashboard/agreement-documents', element: <AgreementDocumentList basePath="/dashboard/agreement-documents" requester /> },
+          { path: '/dashboard/agreement-documents/new', element: <AgreementDocumentForm /> },
+          { path: '/dashboard/agreement-documents/:id', element: <AgreementDocumentDetail /> },
+          { path: '/dashboard/agreement-documents/:id/edit', element: <AgreementDocumentForm /> },
           { path: '/dashboard/legal-cases', element: <AdminLegalCaseListPage /> },
           { path: '/dashboard/legal-cases/:id', element: <AdminLegalCaseDetailPage /> },
           { path: '/dashboard/audit-logs', element: <AuditLogPage /> },
@@ -149,6 +157,9 @@ export const router = createBrowserRouter([
           { path: '/admin/legal-opinions/:id', element: <AdminLegalOpinionDetailPage /> },
           { path: '/admin/review-documents', element: <AdminReviewDocumentListPage /> },
           { path: '/admin/review-documents/:id', element: <AdminReviewDocumentDetailPage /> },
+          { path: '/admin/agreement-documents', element: <AgreementDocumentList basePath="/admin/agreement-documents" apiBase="/admin" /> },
+          { path: '/admin/agreement-documents/:id', element: <AgreementDocumentDetail apiBase="/admin" approver /> },
+          { path: '/admin/agreement-company-master', element: <AgreementCompanyMasterPage /> },
           { path: '/admin/legal-cases', element: <AdminLegalCaseListPage /> },
           { path: '/admin/legal-cases/:id', element: <AdminLegalCaseDetailPage /> },
           { path: '/admin/users', element: <UserManagementPage /> },
@@ -184,6 +195,8 @@ export const router = createBrowserRouter([
           { path: '/legal/legal-opinions/:id', element: <LegalLegalOpinionDetailPage /> },
           { path: '/legal/review-documents', element: <LegalReviewDocumentListPage /> },
           { path: '/legal/review-documents/:id', element: <LegalReviewDocumentDetailPage /> },
+          { path: '/legal/agreement-documents', element: <AgreementDocumentList basePath="/legal/agreement-documents" apiBase="/legal" /> },
+          { path: '/legal/agreement-documents/:id', element: <AgreementDocumentDetail apiBase="/legal" approver /> },
           { path: '/legal/legal-cases', element: <AdminLegalCaseListPage /> },
           { path: '/legal/legal-cases/:id', element: <AdminLegalCaseDetailPage /> },
           { path: '/legal/audit-logs', element: <AuditLogPage /> },

@@ -80,6 +80,32 @@ func main() {
 		log.Fatalf("Failed to create admin user: %v", err)
 	}
 
+	if err := seed.EnforceAgreementDocumentUserIDNotNull(db); err != nil {
+		log.Fatalf("Failed to enforce agreement_documents.user_id NOT NULL: %v", err)
+	}
+
+	if err := seed.EnforceAgreementDocumentTicketNumberNotNull(db); err != nil {
+		log.Fatalf("Failed to enforce agreement_documents.ticket_number NOT NULL: %v", err)
+	}
+
+	if err := seed.BackfillAgreementDocumentDocumentTypeCode(db); err != nil {
+		log.Fatalf("Failed to backfill agreement_documents.document_type_code: %v", err)
+	}
+	if err := seed.EnforceAgreementDocumentDocumentTypeCodeNotNull(db); err != nil {
+		log.Fatalf("Failed to enforce agreement_documents.document_type_code NOT NULL: %v", err)
+	}
+
+	if err := seed.EnforceAgreementDocumentFormDataNotNull(db); err != nil {
+		log.Fatalf("Failed to enforce agreement_documents.form_data NOT NULL: %v", err)
+	}
+
+	if err := seed.BackfillAgreementAttachmentColumns(db); err != nil {
+		log.Fatalf("Failed to backfill agreement_attachments: %v", err)
+	}
+	if err := seed.EnforceAgreementAttachmentColumnsNotNull(db); err != nil {
+		log.Fatalf("Failed to enforce agreement_attachments NOT NULL: %v", err)
+	}
+
 	log.Printf("Admin user %s created successfully", email)
 }
 

@@ -47,7 +47,6 @@ function Field({ label, error, children }: { label: string; error?: string; chil
 }
 
 interface SharedMaterialListPageProps {
-  role: 'ADMIN' | 'LEGAL' | 'LEGAL_AU' | 'USER' | 'EXTERNAL'
   basePath: string
   title: string
   description: string
@@ -57,7 +56,6 @@ interface SharedMaterialListPageProps {
 }
 
 export default function SharedMaterialListPage({
-  role: _role,
   basePath,
   title,
   description,
