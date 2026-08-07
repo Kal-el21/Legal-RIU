@@ -1,0 +1,19 @@
+stages:
+  - validate
+
+frontend_check:
+  stage: validate
+  image: node:20
+  script:
+    - cd frontend
+    - npm ci
+    - npx tsc --noEmit
+    - npm run lint
+
+backend_check:
+  stage: validate
+  image: golang:1.22
+  script:
+    - cd backend
+    - go vet ./...
+    - go test ./...
