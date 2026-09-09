@@ -16,6 +16,7 @@ const DATA_MASTER_ITEMS = [
   { label: 'Cedant', href: '/admin/cedants', icon: UserCog, permissions: ['master_data.manage'] },
   { label: 'Divisi', href: '/admin/divisions', icon: Users, permissions: ['master_data.manage'] },
   { label: 'Pihak Pertama', href: '/admin/agreement-company-master', icon: Building2, permissions: ['agreement_company_master.view.all'] },
+  { label: 'Template Perjanjian', href: '/admin/agreement-templates', icon: FileText, permissions: ['agreement_template.view.all'] },
 ]
 
 const NAV = [

@@ -22,7 +22,7 @@ func TestPKSTemplateGeneration(t *testing.T) {
 	for _, k := range []string{"PIHAK_PERTAMA_ALAMAT", "PIHAK_PERTAMA_TELEPON", "PIHAK_PERTAMA_EMAIL", "PIHAK_PERTAMA_PIC", "PIHAK_KEDUA_TELEPON", "PIHAK_KEDUA_EMAIL", "PIHAK_KEDUA_PIC"} {
 		values[k] = "TEST"
 	}
-	out, _, e := NewAgreementGenerator().Generate(d.Template, values, false)
+	out, _, e := NewAgreementGenerator().Generate(d.Template, values, GenerateOptions{Legacy: true})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -83,7 +83,7 @@ func TestPKSLegacyFieldPlacement(t *testing.T) {
 	values["TERMIN_2_NILAI"] = "Rp 10.000.000"
 	values["TERMIN_2_NILAI_TERBILANG"] = "sepuluh juta"
 
-	out, _, err := NewAgreementGenerator().Generate(definition.Template, values, true)
+	out, _, err := NewAgreementGenerator().Generate(definition.Template, values, GenerateOptions{Draft: true, Legacy: true})
 	if err != nil {
 		t.Fatal(err)
 	}

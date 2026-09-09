@@ -43,12 +43,30 @@ type agreementDocumentService struct {
 	repo      repository.AgreementDocumentRepository
 	storage   *storage.MinIOClient
 	registry  *AgreementRegistry
+	templates AgreementTemplateService
 	generator *AgreementGenerator
 	converter DOCXConverter
 }
 
-func NewAgreementDocumentService(r repository.AgreementDocumentRepository, s *storage.MinIOClient, registry *AgreementRegistry) AgreementDocumentService {
-	return &agreementDocumentService{r, s, registry, NewAgreementGenerator(), DOCXConverter{}}
+func NewAgreementDocumentService(r repository.AgreementDocumentRepository, s *storage.MinIOClient, registry *AgreementRegistry, templates AgreementTemplateService) AgreementDocumentService {
+	return &agreementDocumentService{r, s, registry, templates, NewAgreementGenerator(), DOCXConverter{}}
+}
+
+// templateFor selalu mengutamakan versi yang terkunci di dokumen. Pengajuan yang
+// sedang mengantre review karena itu tidak ikut berubah ketika admin
+// mengaktifkan versi template baru.
+func (s *agreementDocumentService) templateFor(ctx context.Context, d *entity.AgreementDocument) (*entity.AgreementTemplate, []byte, error) {
+	if d.TemplateID != nil {
+		return s.templates.TemplateByID(ctx, *d.TemplateID)
+	}
+	return s.templates.ActiveTemplate(ctx, s.canonicalCode(d.DocumentTypeCode))
+}
+
+func (s *agreementDocumentService) canonicalCode(code string) string {
+	if def, ok := s.registry.Get(code); ok {
+		return def.Code
+	}
+	return strings.ToUpper(strings.TrimSpace(code))
 }
 
 func (s *agreementDocumentService) ListTypes() []dto.AgreementTypeResponse {
@@ -98,7 +116,11 @@ func (s *agreementDocumentService) Create(userID string, req dto.CreateAgreement
 	if e != nil {
 		return nil, e
 	}
-	doc := &entity.AgreementDocument{TicketNumber: utils.GenerateTicketNumber("PK", int(seq)), UserID: uid, DocumentTypeCode: def.Code, FormData: raw, AgreementNumber: nil, Status: entity.StatusSubmitted}
+	tpl, _, e := s.templates.ActiveTemplate(context.Background(), def.Code)
+	if e != nil {
+		return nil, e
+	}
+	doc := &entity.AgreementDocument{TicketNumber: utils.GenerateTicketNumber("PK", int(seq)), UserID: uid, DocumentTypeCode: def.Code, FormData: raw, AgreementNumber: nil, Status: entity.StatusSubmitted, TemplateID: &tpl.ID, TemplateChecksum: tpl.Checksum}
 	if e = s.repo.Create(doc); e != nil {
 		return nil, errors.New("gagal membuat pengajuan")
 	}
@@ -308,8 +330,12 @@ func (s *agreementDocumentService) approve(ctx context.Context, d *entity.Agreem
 	if valueString(data["tanggal_ttd"]) == "" {
 		return nil, errors.New("tanggal tanda tangan wajib diisi approver")
 	}
+	tpl, source, e := s.templateFor(ctx, d)
+	if e != nil {
+		return nil, e
+	}
 	values := placeholderValues(d, data, snapshot)
-	docx, checksum, e := s.generator.Generate(def.Template, values, false)
+	docx, checksum, e := s.generator.Generate(source, values, GenerateOptions{Legacy: tpl.IsLegacy})
 	if e != nil {
 		return nil, e
 	}
@@ -327,7 +353,7 @@ func (s *agreementDocumentService) approve(ctx context.Context, d *entity.Agreem
 	}
 	snap, _ := json.Marshal(snapshot)
 	now := time.Now()
-	ok, e := s.repo.Complete(d.ID, entity.StatusUnderReview, map[string]interface{}{"status": entity.StatusCompleted, "status_updated_at": now, "party_one_snapshot": snap, "generated_docx_path": base + ".docx", "generated_pdf_path": base + ".pdf", "generated_file_name": "perjanjian-" + d.TicketNumber, "template_checksum": checksum, "approved_by": aid, "approved_at": now, "approver_note": ""})
+	ok, e := s.repo.Complete(d.ID, entity.StatusUnderReview, map[string]interface{}{"status": entity.StatusCompleted, "status_updated_at": now, "party_one_snapshot": snap, "generated_docx_path": base + ".docx", "generated_pdf_path": base + ".pdf", "generated_file_name": "perjanjian-" + d.TicketNumber, "template_id": tpl.ID, "template_checksum": checksum, "approved_by": aid, "approved_at": now, "approver_note": ""})
 	if e != nil || !ok {
 		s.storage.DeleteFile(ctx, base+".docx")
 		s.storage.DeleteFile(ctx, base+".pdf")
@@ -354,10 +380,6 @@ func (s *agreementDocumentService) Preview(ctx context.Context, id, userID strin
 		}
 		// Jatuh kembali ke generate on-the-fly apabila file final di storage tidak ditemukan.
 	}
-	def, e := s.definitionFor(d.DocumentTypeCode)
-	if e != nil {
-		return nil, e
-	}
 	data, e := decodeForm(d.FormData)
 	if e != nil {
 		return nil, e
@@ -366,7 +388,11 @@ func (s *agreementDocumentService) Preview(ctx context.Context, id, userID strin
 	if e != nil {
 		return nil, errors.New("Master Pihak Pertama belum tersedia")
 	}
-	docx, _, e := s.generator.Generate(def.Template, placeholderValues(d, data, partyOneSnapshot(master, data)), true)
+	tpl, source, e := s.templateFor(ctx, d)
+	if e != nil {
+		return nil, e
+	}
+	docx, _, e := s.generator.Generate(source, placeholderValues(d, data, partyOneSnapshot(master, data)), GenerateOptions{Draft: true, Legacy: tpl.IsLegacy})
 	if e != nil {
 		return nil, e
 	}

@@ -23,6 +23,37 @@ type AgreementCompanyMaster struct {
 	IsActive                 bool   `gorm:"not null;default:true;index" json:"is_active"`
 }
 
+type TemplateStatus string
+
+const (
+	TemplateStatusDraft    TemplateStatus = "DRAFT"
+	TemplateStatusActive   TemplateStatus = "ACTIVE"
+	TemplateStatusArchived TemplateStatus = "ARCHIVED"
+)
+
+// AgreementTemplate menyimpan setiap versi template DOCX yang pernah diunggah.
+// Versi tidak pernah ditimpa agar dokumen lama tetap dapat ditelusuri ke
+// template persis yang menghasilkannya.
+type AgreementTemplate struct {
+	Base
+	Code          string          `gorm:"size:50;not null;uniqueIndex:idx_agreement_template_code_version" json:"code"`
+	Version       int             `gorm:"not null;uniqueIndex:idx_agreement_template_code_version" json:"version"`
+	Name          string          `gorm:"size:255;not null" json:"name"`
+	FileName      string          `gorm:"size:255;not null" json:"file_name"`
+	FilePath      string          `gorm:"size:500;not null" json:"-"`
+	PreviewPath   string          `gorm:"size:500" json:"-"`
+	Checksum      string          `gorm:"size:64;not null;index" json:"checksum"`
+	Status        TemplateStatus  `gorm:"size:20;not null;default:'DRAFT';index" json:"status"`
+	IsLegacy      bool            `gorm:"not null;default:false" json:"is_legacy"`
+	Placeholders  json.RawMessage `gorm:"type:jsonb" json:"placeholders,omitempty"`
+	Note          string          `gorm:"type:text" json:"note"`
+	EffectiveDate *time.Time      `json:"effective_date,omitempty"`
+	UploadedBy    *uuid.UUID      `gorm:"type:uuid" json:"uploaded_by,omitempty"`
+	Uploader      *User           `gorm:"foreignKey:UploadedBy" json:"uploader,omitempty"`
+	ActivatedBy   *uuid.UUID      `gorm:"type:uuid" json:"activated_by,omitempty"`
+	ActivatedAt   *time.Time      `json:"activated_at,omitempty"`
+}
+
 type AgreementDocument struct {
 	Base
 	TicketNumber      string                `gorm:"size:80;uniqueIndex;not null" json:"ticket_number"`
@@ -38,6 +69,7 @@ type AgreementDocument struct {
 	GeneratedDOCXPath string                `gorm:"size:500" json:"-"`
 	GeneratedPDFPath  string                `gorm:"size:500" json:"-"`
 	GeneratedFileName string                `gorm:"size:255" json:"generated_file_name,omitempty"`
+	TemplateID        *uuid.UUID            `gorm:"type:uuid;index" json:"template_id,omitempty"`
 	TemplateChecksum  string                `gorm:"size:64" json:"template_checksum,omitempty"`
 	ApprovedBy        *uuid.UUID            `gorm:"type:uuid" json:"approved_by,omitempty"`
 	Approver          *User                 `gorm:"foreignKey:ApprovedBy" json:"approver,omitempty"`

@@ -20,7 +20,7 @@ func main() {
 	db := config.InitDatabase(cfg)
 	store := storage.InitMinIO(cfg)
 
-	if err := seed.RunAllMigrationsAndSeeds(db); err != nil {
+	if err := seed.RunAllMigrationsAndSeeds(db, store); err != nil {
 		log.Fatalf("Migration and seed failed: %v", err)
 	}
 
@@ -30,6 +30,7 @@ func main() {
 	loRepo := repository.NewLegalOpinionRepository(db)
 	drRepo := repository.NewDocumentReviewRepository(db)
 	agreementRepo := repository.NewAgreementDocumentRepository(db)
+	agreementTemplateRepo := repository.NewAgreementTemplateRepository(db)
 	dashRepo := repository.NewDashboardRepository(db)
 	auditLogRepo := repository.NewAuditLogRepository(db)
 	legalCaseRepo := repository.NewLegalCaseRepository(db)
@@ -54,7 +55,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("Agreement registry failed: %v", err)
 	}
-	agreementSvc := service.NewAgreementDocumentService(agreementRepo, store, agreementRegistry)
+	agreementTemplateSvc := service.NewAgreementTemplateService(agreementTemplateRepo, store, agreementRegistry)
+	agreementSvc := service.NewAgreementDocumentService(agreementRepo, store, agreementRegistry, agreementTemplateSvc)
 	notificationSettingSvc := service.NewNotificationSettingService(notificationSettingRepo, dashRepo)
 	dashSvc := service.NewDashboardService(dashRepo, notificationSettingSvc)
 	auditLogSvc := service.NewAuditLogService(auditLogRepo)
@@ -75,6 +77,7 @@ func main() {
 	loHandler := handler.NewLegalOpinionHandler(loSvc, auditLogSvc)
 	drHandler := handler.NewDocumentReviewHandler(drSvc, auditLogSvc)
 	agreementHandler := handler.NewAgreementDocumentHandler(agreementSvc)
+	agreementTemplateHandler := handler.NewAgreementTemplateHandler(agreementTemplateSvc)
 	dashHandler := handler.NewDashboardHandler(dashSvc)
 	auditLogHandler := handler.NewAuditLogHandler(auditLogSvc, auditLogRepo)
 	legalCaseHandler := handler.NewLegalCaseHandler(legalCaseSvc, auditLogSvc, userRepo)
@@ -316,6 +319,7 @@ func main() {
 	admin.GET("/agreement-documents/:id/attachments/:attachmentId", requirePermission("agreement_document.download_attachment.all"), agreementHandler.DownloadAttachment)
 	admin.GET("/agreement-company-master", requirePermission("agreement_company_master.view.all"), agreementHandler.GetMaster)
 	admin.PUT("/agreement-company-master", requirePermission("agreement_company_master.manage.all"), agreementHandler.UpdateMaster)
+	registerAgreementTemplateRoutes(admin, requirePermission, agreementTemplateHandler)
 
 	admin.GET("/users", userHandler.GetAll)
 	admin.POST("/users", userHandler.Create)
@@ -366,6 +370,7 @@ func main() {
 	legal.GET("/agreement-documents/:id/pdf", requirePermission("agreement_document.download_pdf.all"), agreementHandler.DownloadPDF)
 	legal.GET("/agreement-documents/:id/docx", requirePermission("agreement_document.download_docx.all"), agreementHandler.DownloadDOCX)
 	legal.GET("/agreement-documents/:id/attachments/:attachmentId", requirePermission("agreement_document.download_attachment.all"), agreementHandler.DownloadAttachment)
+	registerAgreementTemplateRoutes(legal, requirePermission, agreementTemplateHandler)
 
 	registerLegalCaseRoutes(legal, legalCaseHandler, requirePermission)
 
@@ -419,6 +424,16 @@ func main() {
 	if err := r.Run(":" + cfg.App.Port); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}
+}
+
+func registerAgreementTemplateRoutes(group *gin.RouterGroup, requirePermission func(...string) gin.HandlerFunc, h *handler.AgreementTemplateHandler) {
+	group.GET("/agreement-templates", requirePermission("agreement_template.view.all"), h.List)
+	group.GET("/agreement-templates/placeholders", requirePermission("agreement_template.view.all"), h.Placeholders)
+	group.GET("/agreement-templates/:id", requirePermission("agreement_template.view.all"), h.GetByID)
+	group.GET("/agreement-templates/:id/preview", requirePermission("agreement_template.view.all"), h.Preview)
+	group.GET("/agreement-templates/:id/download", requirePermission("agreement_template.view.all"), h.Download)
+	group.POST("/agreement-templates", requirePermission("agreement_template.manage.all"), h.Upload)
+	group.POST("/agreement-templates/:id/activate", requirePermission("agreement_template.manage.all"), h.Activate)
 }
 
 func registerLegalCaseRoutes(group *gin.RouterGroup, legalCaseHandler *handler.LegalCaseHandler, requirePermission func(...string) gin.HandlerFunc) {
