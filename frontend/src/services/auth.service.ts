@@ -19,11 +19,6 @@ export const authService = {
     return res.data.data!;
   },
 
-  // Microsoft Login URL
-  microsoftLoginUrl: (): string => {
-    return '/api/v1/auth/microsoft/login';
-  },
-
   refresh: async (): Promise<AuthResponse> => {
     const res = await api.post<ApiResponse<AuthResponse>>('/auth/refresh');
     return res.data.data!;

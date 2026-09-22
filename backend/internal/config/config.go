@@ -13,6 +13,7 @@ type Config struct {
 	App      AppConfig
 	Database DatabaseConfig
 	JWT      JWTConfig
+	LDAP     LDAPConfig
 	MinIO    MinIOConfig
 	Security SecurityConfig
 }
@@ -35,6 +36,24 @@ type JWTConfig struct {
 	Secret              string
 	ExpiresHours        int
 	RefreshExpiresHours int
+}
+
+type LDAPConfig struct {
+	Host               string
+	Port               string
+	UseSSL             bool
+	InsecureSkipVerify bool
+	BindDN             string
+	BindPassword       string
+	BaseDN             string
+	UserFilter         string
+	AttrName           string
+	AttrEmail          string
+	AttrPosition       string
+	AttrDivision       string
+	DefaultEmailDomain string
+	DefaultPosition    string
+	DefaultDivision    string
 }
 
 type MinIOConfig struct {
@@ -63,6 +82,8 @@ func Load() *Config {
 	jwtExpires, _ := strconv.Atoi(getEnv("JWT_EXPIRES_HOURS", "24"))
 	refreshExpires, _ := strconv.Atoi(getEnv("JWT_REFRESH_EXPIRES_HOURS", "168"))
 	minioSSL, _ := strconv.ParseBool(getEnv("MINIO_USE_SSL", "false"))
+	ldapSSL, _ := strconv.ParseBool(getEnv("LDAP_USE_SSL", "false"))
+	ldapInsecureSkipVerify, _ := strconv.ParseBool(getEnv("LDAP_INSECURE_SKIP_VERIFY", "false"))
 	presignExpires, _ := strconv.Atoi(getEnv("MINIO_PRESIGN_EXPIRES_MINUTES", "15"))
 	loginRateLimit, _ := strconv.Atoi(getEnv("LOGIN_RATE_LIMIT", "5"))
 	loginRateWindow, _ := strconv.Atoi(getEnv("LOGIN_RATE_WINDOW_MINUTES", "15"))
@@ -84,6 +105,23 @@ func Load() *Config {
 			Secret:              getEnv("JWT_SECRET", "secret"),
 			ExpiresHours:        jwtExpires,
 			RefreshExpiresHours: refreshExpires,
+		},
+		LDAP: LDAPConfig{
+			Host:               getEnv("LDAP_HOST", "localhost"),
+			Port:               getEnv("LDAP_PORT", "389"),
+			UseSSL:             ldapSSL,
+			InsecureSkipVerify: ldapInsecureSkipVerify,
+			BindDN:             getEnv("LDAP_BIND_DN", ""),
+			BindPassword:       getEnv("LDAP_BIND_PASSWORD", ""),
+			BaseDN:             getEnv("LDAP_BASE_DN", ""),
+			UserFilter:         getEnv("LDAP_USER_FILTER", "(sAMAccountName=%s)"),
+			AttrName:           getEnv("LDAP_ATTR_NAME", "displayName"),
+			AttrEmail:          getEnv("LDAP_ATTR_EMAIL", "mail"),
+			AttrPosition:       getEnv("LDAP_ATTR_POSITION", "title"),
+			AttrDivision:       getEnv("LDAP_ATTR_DIVISION", "department"),
+			DefaultEmailDomain: getEnv("LDAP_DEFAULT_EMAIL_DOMAIN", ""),
+			DefaultPosition:    getEnv("LDAP_DEFAULT_POSITION", "Staff"),
+			DefaultDivision:    getEnv("LDAP_DEFAULT_DIVISION", "IT"),
 		},
 		MinIO: MinIOConfig{
 			Endpoint:              getEnv("MINIO_ENDPOINT", "localhost:9000"),

@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useLogin } from '@/hooks/useAuth'
-import { authService } from '@/services/auth.service'
 
 const loginSchema = z.object({
   email: z.string().email('Email tidak valid'),
@@ -19,10 +18,6 @@ type LoginForm = z.infer<typeof loginSchema>
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const login = useLogin()
-
-  const handleMicrosoftLogin = () => {
-    window.location.href = authService.microsoftLoginUrl()
-  }
 
   const {
     register,
@@ -164,14 +159,6 @@ export default function LoginPage() {
               style={{ background: login.isPending ? '#999' : '#C8102E' }}
             >
               {login.isPending ? 'Memproses...' : 'Masuk'}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full"
-              onClick={handleMicrosoftLogin}
-            >
-              Sign in with Microsoft
             </Button>
           </form>
 

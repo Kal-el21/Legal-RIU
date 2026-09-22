@@ -1,7 +1,10 @@
 package service
 
 import (
+	"crypto/tls"
 	"errors"
+	"fmt"
+	"strings"
 	"time"
 
 	"legal-riu-portal/internal/config"
@@ -10,12 +13,14 @@ import (
 	"legal-riu-portal/internal/repository"
 	"legal-riu-portal/internal/utils"
 
+	"github.com/go-ldap/ldap/v3"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 )
 
 type AuthService interface {
 	Login(req dto.LoginRequest, ipAddress, userAgent *string) (*dto.LoginResponse, error)
+	LDAPLogin(req dto.LDAPLoginRequest, ipAddress, userAgent *string) (*dto.LoginResponse, error)
 	RefreshToken(req dto.RefreshTokenRequest) (*dto.LoginResponse, error)
 	Logout(req dto.LogoutRequest) error
 	GetUserByID(id string) (*dto.UserResponse, error)
@@ -52,6 +57,122 @@ func (s *authService) Login(req dto.LoginRequest, ipAddress, userAgent *string) 
 	}
 
 	return s.issueTokens(user, ipAddress, userAgent)
+}
+
+func (s *authService) LDAPLogin(req dto.LDAPLoginRequest, ipAddress, userAgent *string) (*dto.LoginResponse, error) {
+	protocol := "ldap"
+	if s.cfg.LDAP.UseSSL {
+		protocol = "ldaps"
+	}
+	ldapURL := fmt.Sprintf("%s://%s:%s", protocol, s.cfg.LDAP.Host, s.cfg.LDAP.Port)
+	conn, err := ldap.DialURL(ldapURL, ldap.DialWithTLSConfig(&tls.Config{InsecureSkipVerify: s.cfg.LDAP.InsecureSkipVerify}))
+	if err != nil {
+		return nil, errors.New("server LDAP tidak dapat dihubungi")
+	}
+	defer conn.Close()
+
+	if s.cfg.LDAP.BindDN != "" {
+		if err := conn.Bind(s.cfg.LDAP.BindDN, s.cfg.LDAP.BindPassword); err != nil {
+			return nil, errors.New("autentikasi server LDAP gagal")
+		}
+	}
+
+	filter := fmt.Sprintf(s.cfg.LDAP.UserFilter, ldap.EscapeFilter(req.Username))
+	search, err := conn.Search(ldap.NewSearchRequest(
+		s.cfg.LDAP.BaseDN,
+		ldap.ScopeWholeSubtree,
+		ldap.NeverDerefAliases,
+		0,
+		0,
+		false,
+		filter,
+		[]string{s.cfg.LDAP.AttrName, s.cfg.LDAP.AttrEmail, s.cfg.LDAP.AttrPosition, s.cfg.LDAP.AttrDivision},
+		nil,
+	))
+	if err != nil || len(search.Entries) != 1 {
+		return nil, errors.New("username LDAP tidak ditemukan")
+	}
+
+	entry := search.Entries[0]
+	if err := conn.Bind(entry.DN, req.Password); err != nil {
+		return nil, errors.New("username atau password LDAP salah")
+	}
+
+	username := strings.TrimSpace(req.Username)
+	email := strings.TrimSpace(entry.GetAttributeValue(s.cfg.LDAP.AttrEmail))
+	if email == "" && s.cfg.LDAP.DefaultEmailDomain != "" {
+		email = username + "@" + s.cfg.LDAP.DefaultEmailDomain
+	}
+	if email == "" {
+		return nil, errors.New("email user LDAP tidak tersedia")
+	}
+
+	user, err := s.userRepo.FindByEmail(email)
+	if err != nil {
+		name := strings.TrimSpace(entry.GetAttributeValue(s.cfg.LDAP.AttrName))
+		if name == "" {
+			name = username
+		}
+		position := entry.GetAttributeValue(s.cfg.LDAP.AttrPosition)
+		if position == "" {
+			position = s.cfg.LDAP.DefaultPosition
+		}
+		division := entry.GetAttributeValue(s.cfg.LDAP.AttrDivision)
+		if division == "" {
+			division = s.cfg.LDAP.DefaultDivision
+		}
+
+		divisionID := lookupDivisionID(s.userRepo, division)
+		companyID := lookupCompanyID(s.userRepo, email)
+		temporaryPassword, tokenErr := utils.GenerateSecureToken(32)
+		if tokenErr != nil {
+			return nil, errors.New("gagal membuat akun LDAP")
+		}
+		passwordHash, hashErr := bcrypt.GenerateFromPassword([]byte(temporaryPassword), bcrypt.DefaultCost)
+		if hashErr != nil {
+			return nil, errors.New("gagal membuat akun LDAP")
+		}
+
+		user = &entity.User{
+			FullName:     name,
+			Email:        email,
+			PasswordHash: string(passwordHash),
+			Position:     position,
+			Division:     division,
+			DivisionID:   divisionID,
+			Role:         entity.RoleUser,
+			Status:       entity.UserActive,
+			CompanyID:    companyID,
+		}
+		if err := s.userRepo.Create(user); err != nil {
+			return nil, errors.New("gagal membuat akun LDAP")
+		}
+	}
+
+	if user.Status == entity.UserInactive {
+		return nil, errors.New("akun anda tidak aktif, hubungi administrator")
+	}
+	return s.issueTokens(user, ipAddress, userAgent)
+}
+
+func lookupDivisionID(repo repository.UserRepository, name string) *uuid.UUID {
+	division, err := repo.FindDivisionByName(name)
+	if err != nil {
+		return nil
+	}
+	return &division.ID
+}
+
+func lookupCompanyID(repo repository.UserRepository, email string) *uuid.UUID {
+	parts := strings.SplitN(email, "@", 2)
+	if len(parts) != 2 {
+		return nil
+	}
+	company, err := repo.FindCompanyByDomain(parts[1])
+	if err != nil {
+		return nil
+	}
+	return &company.ID
 }
 
 func (s *authService) RefreshToken(req dto.RefreshTokenRequest) (*dto.LoginResponse, error) {

@@ -118,8 +118,6 @@ func main() {
 
 	// ── Public auth ───────────────────────────────────────────────────────────
 	api.POST("/auth/ldap-login", loginLimiter.Middleware(), authHandler.LDAPLogin)
-	api.GET("/auth/microsoft/login", authHandler.MicrosoftLogin)
-	api.GET("/auth/microsoft/callback", authHandler.MicrosoftCallback)
 	api.POST("/auth/login", loginLimiter.Middleware(), authHandler.Login)
 	api.POST("/auth/refresh", loginLimiter.Middleware(), authHandler.RefreshToken)
 	api.POST("/auth/logout", authHandler.Logout)
