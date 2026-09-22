@@ -263,6 +263,9 @@ func main() {
 	admin.GET("/document-types/import/template", requirePermission("master_data.view"), documentTypeHandler.DownloadDocumentTypeTemplate)
 
 	admin.GET("/regencies", legalCaseHandler.ListRegencies)
+	admin.POST("/regencies", requirePermission("case_management.manage_reference"), legalCaseHandler.CreateRegency)
+	admin.PUT("/regencies/:id", requirePermission("case_management.manage_reference"), legalCaseHandler.UpdateRegency)
+	admin.DELETE("/regencies/:id", requirePermission("case_management.manage_reference"), legalCaseHandler.DeleteRegency)
 	admin.GET("/cedants", legalCaseHandler.ListCedants)
 	admin.POST("/cedants", legalCaseHandler.CreateCedant)
 	admin.PUT("/cedants/:id", legalCaseHandler.UpdateCedant)

@@ -46,6 +46,9 @@ type LegalCaseService interface {
 	ViewFile(filePath string) (*minio.Object, string, error)
 
 	ListRegencies(search string, limit int) ([]dto.RegencyResponse, error)
+	CreateRegency(req dto.CreateRegencyRequest) (*dto.RegencyResponse, error)
+	UpdateRegency(id string, req dto.UpdateRegencyRequest) (*dto.RegencyResponse, error)
+	DeleteRegency(id string) error
 	ListCedants(search string, limit int) ([]dto.CedantResponse, error)
 	CreateCedant(req dto.CreateCedantRequest) (*dto.CedantResponse, error)
 	UpdateCedant(id string, req dto.UpdateCedantRequest) (*dto.CedantResponse, error)
@@ -381,6 +384,91 @@ func (s *legalCaseService) ListRegencies(search string, limit int) ([]dto.Regenc
 		responses = append(responses, toRegencyResponse(&items[i]))
 	}
 	return responses, nil
+}
+
+func (s *legalCaseService) CreateRegency(req dto.CreateRegencyRequest) (*dto.RegencyResponse, error) {
+	name, province, regencyType, err := sanitizeRegencyInput(req)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.repo.FindRegencyByNameAndProvince(name, province); err == nil {
+		return nil, errors.New("kabupaten/kota sudah ada di provinsi tersebut")
+	}
+
+	regency := &entity.Regency{Name: name, Province: province, Type: regencyType}
+	if err := s.repo.CreateRegency(regency); err != nil {
+		return nil, errors.New("gagal membuat kabupaten/kota")
+	}
+	response := toRegencyResponse(regency)
+	return &response, nil
+}
+
+func (s *legalCaseService) UpdateRegency(id string, req dto.UpdateRegencyRequest) (*dto.RegencyResponse, error) {
+	uid, err := parseUUID(id)
+	if err != nil {
+		return nil, errors.New("ID kabupaten/kota tidak valid")
+	}
+	regency, err := s.repo.FindRegencyByID(uid)
+	if err != nil {
+		return nil, errors.New("kabupaten/kota tidak ditemukan")
+	}
+	name, province, regencyType, err := sanitizeRegencyInput(req)
+	if err != nil {
+		return nil, err
+	}
+	// Pasangan nama+provinsi unik, jadi bentrokan dengan baris lain harus
+	// ditolak lebih dulu agar tidak muncul sebagai error constraint mentah.
+	if existing, err := s.repo.FindRegencyByNameAndProvince(name, province); err == nil && existing.ID != regency.ID {
+		return nil, errors.New("kabupaten/kota sudah ada di provinsi tersebut")
+	}
+
+	regency.Name = name
+	regency.Province = province
+	regency.Type = regencyType
+	if err := s.repo.UpdateRegency(regency); err != nil {
+		return nil, errors.New("gagal mengupdate kabupaten/kota")
+	}
+	response := toRegencyResponse(regency)
+	return &response, nil
+}
+
+func (s *legalCaseService) DeleteRegency(id string) error {
+	uid, err := parseUUID(id)
+	if err != nil {
+		return errors.New("ID kabupaten/kota tidak valid")
+	}
+	if _, err := s.repo.FindRegencyByID(uid); err != nil {
+		return errors.New("kabupaten/kota tidak ditemukan")
+	}
+	// legal_cases.location_regency_id NOT NULL, jadi menghapus lokasi yang masih
+	// dirujuk akan merusak data perkara.
+	used, err := s.repo.CountLegalCasesByRegency(uid)
+	if err != nil {
+		return errors.New("gagal memeriksa penggunaan kabupaten/kota")
+	}
+	if used > 0 {
+		return fmt.Errorf("kabupaten/kota masih dipakai %d perkara dan tidak dapat dihapus", used)
+	}
+	if err := s.repo.DeleteRegency(uid); err != nil {
+		return errors.New("gagal menghapus kabupaten/kota")
+	}
+	return nil
+}
+
+func sanitizeRegencyInput(req dto.CreateRegencyRequest) (name, province, regencyType string, err error) {
+	name = strings.TrimSpace(req.Name)
+	province = strings.TrimSpace(req.Province)
+	regencyType = strings.TrimSpace(req.Type)
+	if name == "" {
+		return "", "", "", errors.New("nama kabupaten/kota wajib diisi")
+	}
+	if province == "" {
+		return "", "", "", errors.New("provinsi wajib diisi")
+	}
+	if regencyType == "" {
+		return "", "", "", errors.New("tipe wajib diisi")
+	}
+	return name, province, regencyType, nil
 }
 
 func (s *legalCaseService) ListCedants(search string, limit int) ([]dto.CedantResponse, error) {

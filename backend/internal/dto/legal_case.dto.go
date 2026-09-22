@@ -53,6 +53,14 @@ type CreateCedantRequest struct {
 
 type UpdateCedantRequest = CreateCedantRequest
 
+type CreateRegencyRequest struct {
+	Name     string `json:"name" binding:"required"`
+	Province string `json:"province" binding:"required"`
+	Type     string `json:"type" binding:"required"`
+}
+
+type UpdateRegencyRequest = CreateRegencyRequest
+
 type CompanyResponse struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`

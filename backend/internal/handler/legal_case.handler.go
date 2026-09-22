@@ -361,6 +361,54 @@ func (h *LegalCaseHandler) ListCedants(c *gin.Context) {
 	utils.OK(c, "Success", items)
 }
 
+func (h *LegalCaseHandler) CreateRegency(c *gin.Context) {
+	var req dto.CreateRegencyRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "Validasi gagal", err.Error())
+		return
+	}
+
+	regency, err := h.svc.CreateRegency(req)
+	if err != nil {
+		utils.BadRequest(c, err.Error(), nil)
+		return
+	}
+
+	middleware.SetAuditContext(c, entity.ActionUserUpdate, "regency", regency.ID)
+	c.Set("audit_description", "Regency created")
+	utils.Created(c, "Kabupaten/Kota berhasil dibuat", regency)
+}
+
+func (h *LegalCaseHandler) UpdateRegency(c *gin.Context) {
+	var req dto.UpdateRegencyRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "Validasi gagal", err.Error())
+		return
+	}
+
+	regency, err := h.svc.UpdateRegency(c.Param("id"), req)
+	if err != nil {
+		utils.BadRequest(c, err.Error(), nil)
+		return
+	}
+
+	middleware.SetAuditContext(c, entity.ActionUserUpdate, "regency", regency.ID)
+	c.Set("audit_description", "Regency updated")
+	utils.OK(c, "Kabupaten/Kota berhasil diupdate", regency)
+}
+
+func (h *LegalCaseHandler) DeleteRegency(c *gin.Context) {
+	id := c.Param("id")
+	if err := h.svc.DeleteRegency(id); err != nil {
+		utils.BadRequest(c, err.Error(), nil)
+		return
+	}
+
+	middleware.SetAuditContext(c, entity.ActionDelete, "regency", id)
+	c.Set("audit_description", "Regency deleted")
+	utils.OK(c, "Kabupaten/Kota berhasil dihapus", nil)
+}
+
 func (h *LegalCaseHandler) CreateCedant(c *gin.Context) {
 	var req dto.CreateCedantRequest
 	if err := c.ShouldBindJSON(&req); err != nil {

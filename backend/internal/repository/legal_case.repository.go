@@ -42,6 +42,9 @@ type LegalCaseRepository interface {
 	FindRegencyByID(id uuid.UUID) (*entity.Regency, error)
 	FindRegencyByNameAndProvince(name string, province string) (*entity.Regency, error)
 	CreateRegency(regency *entity.Regency) error
+	UpdateRegency(regency *entity.Regency) error
+	DeleteRegency(id uuid.UUID) error
+	CountLegalCasesByRegency(id uuid.UUID) (int64, error)
 
 	ListCedants(search string, limit int) ([]entity.Cedant, error)
 	FindCedantByID(id uuid.UUID) (*entity.Cedant, error)
@@ -224,6 +227,20 @@ func (r *legalCaseRepository) FindRegencyByNameAndProvince(name string, province
 
 func (r *legalCaseRepository) CreateRegency(regency *entity.Regency) error {
 	return r.db.Create(regency).Error
+}
+
+func (r *legalCaseRepository) UpdateRegency(regency *entity.Regency) error {
+	return r.db.Save(regency).Error
+}
+
+func (r *legalCaseRepository) DeleteRegency(id uuid.UUID) error {
+	return r.db.Delete(&entity.Regency{}, "id = ?", id).Error
+}
+
+func (r *legalCaseRepository) CountLegalCasesByRegency(id uuid.UUID) (int64, error) {
+	var total int64
+	err := r.db.Model(&entity.LegalCase{}).Where("location_regency_id = ?", id).Count(&total).Error
+	return total, err
 }
 
 func (r *legalCaseRepository) ListCedants(search string, limit int) ([]entity.Cedant, error) {
