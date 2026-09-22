@@ -23,7 +23,9 @@ func main() {
 		defer sqlDB.Close()
 	}
 
-	if err := seed.RunAllMigrationsAndSeeds(db); err != nil {
+	// Seeder admin tidak terhubung ke MinIO; pendaftaran template bawaan
+	// dijalankan saat API boot yang memang sudah menunggu object storage siap.
+	if err := seed.RunAllMigrationsAndSeeds(db, nil); err != nil {
 		log.Fatalf("Migration and seed failed: %v", err)
 	}
 

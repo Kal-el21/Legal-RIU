@@ -28,7 +28,21 @@ var wordParagraphRE = regexp.MustCompile(`(?s)<w:p(?:\s[^>]*)?>.*?</w:p>`)
 var placeholderRE = regexp.MustCompile(`\{\{[A-Z0-9_]+\}\}`)
 var scopePrefixRE = regexp.MustCompile(`^\s*(?:(?:[-*•])|(?:\d+|[A-Za-z])[.)])\s*`)
 
-func (g *AgreementGenerator) Generate(template []byte, values map[string]string, draft bool) ([]byte, string, error) {
+// scopeListPlaceholder digandakan satu paragraf per baris ruang lingkup, jadi
+// penomoran a/b/c-nya harus berasal dari numbered list Word pada paragraf itu.
+const scopeListPlaceholder = "{{RUANG_LINGKUP_LIST}}"
+
+// GenerateOptions mengatur perlakuan khusus saat dokumen dibentuk.
+//
+// Legacy hanya boleh diaktifkan untuk template bawaan lama yang belum memakai
+// placeholder sama sekali. Penambalan berbasis pencocokan teks paragraf di
+// prepareLegacyPKS akan merusak template baru yang disusun ulang tim legal.
+type GenerateOptions struct {
+	Draft  bool
+	Legacy bool
+}
+
+func (g *AgreementGenerator) Generate(template []byte, values map[string]string, opt GenerateOptions) ([]byte, string, error) {
 	if len(template) == 0 {
 		return nil, "", errors.New("template dokumen tidak ditemukan")
 	}
@@ -61,7 +75,7 @@ func (g *AgreementGenerator) Generate(template []byte, values map[string]string,
 		}
 		if strings.HasPrefix(f.Name, "word/") && strings.HasSuffix(f.Name, ".xml") {
 			text := string(data)
-			if f.Name == "word/document.xml" && !strings.Contains(text, "{{NOMOR_PIHAK_PERTAMA}}") {
+			if opt.Legacy && f.Name == "word/document.xml" && !strings.Contains(text, "{{NOMOR_PIHAK_PERTAMA}}") {
 				text = prepareLegacyPKS(text)
 			}
 			if f.Name == "word/document.xml" {
@@ -76,7 +90,7 @@ func (g *AgreementGenerator) Generate(template []byte, values map[string]string,
 					text = next
 				}
 			}
-			if draft && f.Name == "word/document.xml" {
+			if opt.Draft && f.Name == "word/document.xml" {
 				text = strings.Replace(text, "<w:body>", `<w:body><w:p><w:r><w:rPr><w:b/><w:color w:val="C8102E"/></w:rPr><w:t>DRAFT - PREVIEW</w:t></w:r></w:p>`, 1)
 			}
 			data = []byte(text)
@@ -329,6 +343,55 @@ func findDOCXPlaceholders(data []byte) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// InspectTemplate membaca placeholder yang dipakai sebuah template dan
+// memeriksa apakah paragraf daftar ruang lingkup sudah diformat sebagai
+// numbered list Word. Dipakai saat validasi unggahan template baru.
+func InspectTemplate(docx []byte) (placeholders []string, scopeListNumbered bool, err error) {
+	r, e := zip.NewReader(bytes.NewReader(docx), int64(len(docx)))
+	if e != nil {
+		return nil, false, errors.New("file bukan DOCX yang valid")
+	}
+	set := map[string]bool{}
+	scopeListNumbered = true
+	for _, f := range r.File {
+		if !strings.HasPrefix(f.Name, "word/") || !strings.HasSuffix(f.Name, ".xml") {
+			continue
+		}
+		s, e := f.Open()
+		if e != nil {
+			return nil, false, e
+		}
+		b, e := io.ReadAll(s)
+		s.Close()
+		if e != nil {
+			return nil, false, e
+		}
+		text := string(b)
+		for _, p := range placeholderRE.FindAllString(text, -1) {
+			set[p] = true
+		}
+		if f.Name == "word/document.xml" && strings.Contains(text, scopeListPlaceholder) {
+			scopeListNumbered = scopeParagraphIsNumbered(text)
+		}
+	}
+	placeholders = make([]string, 0, len(set))
+	for p := range set {
+		placeholders = append(placeholders, p)
+	}
+	sort.Strings(placeholders)
+	return placeholders, scopeListNumbered, nil
+}
+
+func scopeParagraphIsNumbered(xmlText string) bool {
+	for _, loc := range wordParagraphRE.FindAllStringIndex(xmlText, -1) {
+		paragraph := xmlText[loc[0]:loc[1]]
+		if strings.Contains(paragraphText(paragraph), scopeListPlaceholder) {
+			return strings.Contains(paragraph, "<w:numPr>")
+		}
+	}
+	return false
 }
 
 type DOCXConverter struct{}

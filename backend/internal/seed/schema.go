@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"legal-riu-portal/internal/entity"
+	"legal-riu-portal/internal/storage"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -389,7 +390,7 @@ func PrepareAgreementAttachmentColumns(db *gorm.DB) error {
 }
 
 func BackfillAgreementAttachmentColumns(db *gorm.DB) error {
-		var adminIDStr string
+	var adminIDStr string
 	if err := db.Raw(`
 		SELECT id FROM users WHERE role = 'ADMIN' LIMIT 1
 	`).Scan(&adminIDStr).Error; err != nil {
@@ -474,7 +475,7 @@ func MigrateTechnicalReserveToDecimal(db *gorm.DB) error {
 	`).Error
 }
 
-func RunAllMigrationsAndSeeds(db *gorm.DB) error {
+func RunAllMigrationsAndSeeds(db *gorm.DB, store *storage.MinIOClient) error {
 	if err := db.AutoMigrate(
 		&entity.Division{},
 		&entity.User{},
@@ -502,6 +503,7 @@ func RunAllMigrationsAndSeeds(db *gorm.DB) error {
 		&entity.DocumentType{},
 		&entity.LegalMaterial{},
 		&entity.AgreementCompanyMaster{},
+		&entity.AgreementTemplate{},
 		&entity.AgreementDocument{},
 		&entity.AgreementAttachment{},
 		&entity.RepositoryDocument{},
@@ -587,6 +589,13 @@ func RunAllMigrationsAndSeeds(db *gorm.DB) error {
 	}
 	if err := SeedAgreementCompanyMaster(db); err != nil {
 		return err
+	}
+	// store bernilai nil pada seeder admin yang tidak terhubung ke object
+	// storage; template bawaan didaftarkan saat API boot.
+	if store != nil {
+		if err := SeedAgreementTemplate(db, store); err != nil {
+			return err
+		}
 	}
 	if err := BackfillLegalCaseDefaults(db); err != nil {
 		return err
