@@ -111,6 +111,10 @@ func (s *authService) LDAPLogin(req dto.LDAPLoginRequest, ipAddress, userAgent *
 
 	user, err := s.userRepo.FindByEmail(email)
 	if err != nil {
+		// Akun yang dihapus admin tidak dibuat ulang otomatis.
+		if s.userRepo.EmailDeleted(email) {
+			return nil, errors.New("akun anda sudah dihapus, hubungi administrator")
+		}
 		name := strings.TrimSpace(entry.GetAttributeValue(s.cfg.LDAP.AttrName))
 		if name == "" {
 			name = username

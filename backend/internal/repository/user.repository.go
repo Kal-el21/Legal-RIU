@@ -9,6 +9,7 @@ import (
 
 type UserRepository interface {
 	FindByEmail(email string) (*entity.User, error)
+	EmailDeleted(email string) bool
 	FindByID(id uuid.UUID) (*entity.User, error)
 	Create(user *entity.User) error
 	Update(user *entity.User) error
@@ -46,6 +47,15 @@ func (r *userRepository) FindByEmail(email string) (*entity.User, error) {
 		return nil, err
 	}
 	return &user, nil
+}
+
+// EmailDeleted — true kalau email dipakai user yang sudah dihapus (soft delete)
+func (r *userRepository) EmailDeleted(email string) bool {
+	var count int64
+	r.db.Unscoped().Model(&entity.User{}).
+		Where("LOWER(email) = LOWER(?) AND deleted_at IS NOT NULL", email).
+		Count(&count)
+	return count > 0
 }
 
 func (r *userRepository) FindByID(id uuid.UUID) (*entity.User, error) {
