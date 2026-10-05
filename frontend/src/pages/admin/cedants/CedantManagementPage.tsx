@@ -103,7 +103,7 @@ export default function CedantManagementPage() {
       </div>
 
       <ImportCard
-        title="Impor dari Excel"
+        title="Impor dari Excel/CSV"
         onImport={(file) => importMutation.mutateAsync(file)}
         onDownloadTemplate={() => legalCaseService.downloadCedantTemplate()}
       />

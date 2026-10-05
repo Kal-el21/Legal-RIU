@@ -52,7 +52,7 @@ export default function ImportCard({ title, onImport, onDownloadTemplate }: Impo
       <div className="flex flex-wrap items-center gap-3">
         <input
           type="file"
-          accept=".xlsx"
+          accept=".xlsx,.csv"
           className="block w-full text-xs text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-[#C8102E] file:px-3 file:py-1.5 file:text-white hover:file:opacity-90"
           onChange={(e) => setImportFile(e.target.files?.[0] ?? null)}
         />

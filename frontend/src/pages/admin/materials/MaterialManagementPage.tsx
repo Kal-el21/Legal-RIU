@@ -9,7 +9,7 @@ export default function MaterialManagementPage() {
   return (
     <div className="p-6 max-w-7xl mx-auto">
       <ImportCard
-        title="Impor dari Excel"
+        title="Impor dari Excel/CSV"
         onImport={(file) => importMutation.mutateAsync(file)}
         onDownloadTemplate={() => materialService.downloadTemplate()}
       />
