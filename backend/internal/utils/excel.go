@@ -1,7 +1,11 @@
 package utils
 
 import (
+	"bytes"
+	"encoding/csv"
+	"io"
 	"mime/multipart"
+	"path/filepath"
 	"strings"
 
 	"github.com/xuri/excelize/v2"
@@ -40,6 +44,10 @@ func ReadSheet(file *multipart.FileHeader, sheetIndex int) ([][]string, error) {
 	}
 	defer src.Close()
 
+	if strings.EqualFold(filepath.Ext(file.Filename), ".csv") {
+		return readCSV(src)
+	}
+
 	wb, err := excelize.OpenReader(src)
 	if err != nil {
 		return nil, err
@@ -52,6 +60,26 @@ func ReadSheet(file *multipart.FileHeader, sheetIndex int) ([][]string, error) {
 		return nil, err
 	}
 	return rows, nil
+}
+
+// readCSV membaca CSV hasil "Save As" Excel: pemisah bisa koma atau titik koma
+// (regional Indonesia), dan bisa diawali BOM UTF-8.
+// Catatan: isi file dianggap UTF-8; CSV non-UTF-8 (ANSI) dengan huruf beraksen
+// akan terbaca salah, tambahkan konversi encoding kalau itu jadi kebutuhan.
+func readCSV(r io.Reader) ([][]string, error) {
+	data, err := io.ReadAll(r)
+	if err != nil {
+		return nil, err
+	}
+	data = bytes.TrimPrefix(data, []byte("\xEF\xBB\xBF"))
+
+	reader := csv.NewReader(bytes.NewReader(data))
+	reader.FieldsPerRecord = -1
+	header, _, _ := bytes.Cut(data, []byte("\n"))
+	if bytes.Count(header, []byte(";")) > bytes.Count(header, []byte(",")) {
+		reader.Comma = ';'
+	}
+	return reader.ReadAll()
 }
 
 func GenerateTemplate(wb *excelize.File, sheetName string, headers []string, examples [][]string) {
