@@ -121,7 +121,7 @@ func Load() *Config {
 			AttrDivision:       getEnv("LDAP_ATTR_DIVISION", "department"),
 			DefaultEmailDomain: getEnv("LDAP_DEFAULT_EMAIL_DOMAIN", ""),
 			DefaultPosition:    getEnv("LDAP_DEFAULT_POSITION", "Staff"),
-			DefaultDivision:    getEnv("LDAP_DEFAULT_DIVISION", "IT"),
+			DefaultDivision:    getEnv("LDAP_DEFAULT_DIVISION", ""),
 		},
 		MinIO: MinIOConfig{
 			Endpoint:              getEnv("MINIO_ENDPOINT", "localhost:9000"),

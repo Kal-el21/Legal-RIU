@@ -119,13 +119,20 @@ func (s *authService) LDAPLogin(req dto.LDAPLoginRequest, ipAddress, userAgent *
 		if position == "" {
 			position = s.cfg.LDAP.DefaultPosition
 		}
-		division := entry.GetAttributeValue(s.cfg.LDAP.AttrDivision)
+		division := strings.TrimSpace(entry.GetAttributeValue(s.cfg.LDAP.AttrDivision))
+		if division == "" {
+			division = divisionFromDN(entry.DN)
+		}
 		if division == "" {
 			division = s.cfg.LDAP.DefaultDivision
 		}
 
 		divisionID := lookupDivisionID(s.userRepo, division)
 		companyID := lookupCompanyID(s.userRepo, email)
+		if companyID == nil {
+			// User dari AD adalah karyawan Indonesia Re walau domain emailnya berbeda.
+			companyID = lookupCompanyID(s.userRepo, "@indonesiare.co.id")
+		}
 		temporaryPassword, tokenErr := utils.GenerateSecureToken(32)
 		if tokenErr != nil {
 			return nil, errors.New("gagal membuat akun LDAP")
@@ -155,6 +162,23 @@ func (s *authService) LDAPLogin(req dto.LDAPLoginRequest, ipAddress, userAgent *
 		return nil, errors.New("akun anda tidak aktif, hubungi administrator")
 	}
 	return s.issueTokens(user, ipAddress, userAgent)
+}
+
+// divisionFromDN mengambil OU terdekat dari DN user, mis.
+// "CN=Budi,OU=IT Division,OU=Kantor,DC=x" menjadi "IT Division".
+func divisionFromDN(dn string) string {
+	parsed, err := ldap.ParseDN(dn)
+	if err != nil {
+		return ""
+	}
+	for _, rdn := range parsed.RDNs {
+		for _, attr := range rdn.Attributes {
+			if strings.EqualFold(attr.Type, "OU") {
+				return attr.Value
+			}
+		}
+	}
+	return ""
 }
 
 func lookupDivisionID(repo repository.UserRepository, name string) *uuid.UUID {
