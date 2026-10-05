@@ -9,7 +9,11 @@ export function useLogin() {
   const setAuth = useAuthStore((s) => s.setAuth)
 
   return useMutation({
-    mutationFn: (data: LoginRequest) => authService.login(data),
+    // Isian ber-"@" adalah email akun lokal; selain itu username akun kantor (LDAP).
+    mutationFn: (data: LoginRequest) =>
+      data.email.includes('@')
+        ? authService.login(data)
+        : authService.ldapLogin({ username: data.email, password: data.password }),
     onSuccess: (res) => {
       setAuth(res.user, res.permissions ?? [])
       if (res.user.role === 'ADMIN') {

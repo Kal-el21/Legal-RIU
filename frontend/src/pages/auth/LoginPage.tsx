@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label'
 import { useLogin } from '@/hooks/useAuth'
 
 const loginSchema = z.object({
-  email: z.string().email('Email tidak valid'),
+  email: z.string().trim().min(1, 'Email atau username wajib diisi'),
   password: z.string().min(1, 'Password wajib diisi'),
 })
 
@@ -111,13 +111,13 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
             <div className="space-y-1.5">
               <Label htmlFor="email" className="text-gray-700 text-sm font-medium">
-                Email Kantor
+                Email atau Username
               </Label>
               <Input
                 id="email"
-                type="email"
-                placeholder="nama@indonesiare.co.id"
-                autoComplete="email"
+                type="text"
+                placeholder="nama@indonesiare.co.id atau username"
+                autoComplete="username"
                 {...register('email')}
                 className={errors.email ? 'border-red-400 focus-visible:ring-red-400' : ''}
               />
