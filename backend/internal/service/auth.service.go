@@ -77,7 +77,10 @@ func (s *authService) LDAPLogin(req dto.LDAPLoginRequest, ipAddress, userAgent *
 		}
 	}
 
-	filter := fmt.Sprintf(s.cfg.LDAP.UserFilter, ldap.EscapeFilter(req.Username))
+	// Username AD tidak membedakan huruf besar/kecil; diseragamkan supaya
+	// "Budi" dan "budi" tidak menjadi dua akun.
+	username := strings.ToLower(strings.TrimSpace(req.Username))
+	filter := fmt.Sprintf(s.cfg.LDAP.UserFilter, ldap.EscapeFilter(username))
 	search, err := conn.Search(ldap.NewSearchRequest(
 		s.cfg.LDAP.BaseDN,
 		ldap.ScopeWholeSubtree,
@@ -98,8 +101,7 @@ func (s *authService) LDAPLogin(req dto.LDAPLoginRequest, ipAddress, userAgent *
 		return nil, errors.New("username atau password LDAP salah")
 	}
 
-	username := strings.TrimSpace(req.Username)
-	email := strings.TrimSpace(entry.GetAttributeValue(s.cfg.LDAP.AttrEmail))
+	email := strings.ToLower(strings.TrimSpace(entry.GetAttributeValue(s.cfg.LDAP.AttrEmail)))
 	if email == "" && s.cfg.LDAP.DefaultEmailDomain != "" {
 		email = username + "@" + s.cfg.LDAP.DefaultEmailDomain
 	}

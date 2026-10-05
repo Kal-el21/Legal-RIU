@@ -40,7 +40,7 @@ func (r *userRepository) FindByEmail(email string) (*entity.User, error) {
 		Preload("DivisionRef").
 		Preload("Company").
 		Preload("PurposeType").
-		Where("email = ? AND deleted_at IS NULL", email).
+		Where("LOWER(email) = LOWER(?) AND deleted_at IS NULL", email).
 		First(&user).Error
 	if err != nil {
 		return nil, err
