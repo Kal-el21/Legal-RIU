@@ -4,6 +4,8 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"log"
+	"net"
 	"strings"
 	"time"
 
@@ -59,21 +61,36 @@ func (s *authService) Login(req dto.LoginRequest, ipAddress, userAgent *string) 
 	return s.issueTokens(user, ipAddress, userAgent)
 }
 
+// Batas waktu koneksi dan tiap operasi LDAP, supaya request tidak menggantung
+// saat server AD lambat.
+const ldapTimeout = 10 * time.Second
+
+var (
+	errLDAPServer      = errors.New("server LDAP tidak dapat dihubungi, hubungi administrator")
+	errLDAPCredentials = errors.New("username atau password salah")
+)
+
 func (s *authService) LDAPLogin(req dto.LDAPLoginRequest, ipAddress, userAgent *string) (*dto.LoginResponse, error) {
 	protocol := "ldap"
 	if s.cfg.LDAP.UseSSL {
 		protocol = "ldaps"
 	}
 	ldapURL := fmt.Sprintf("%s://%s:%s", protocol, s.cfg.LDAP.Host, s.cfg.LDAP.Port)
-	conn, err := ldap.DialURL(ldapURL, ldap.DialWithTLSConfig(&tls.Config{InsecureSkipVerify: s.cfg.LDAP.InsecureSkipVerify}))
+	conn, err := ldap.DialURL(ldapURL,
+		ldap.DialWithTLSConfig(&tls.Config{InsecureSkipVerify: s.cfg.LDAP.InsecureSkipVerify}),
+		ldap.DialWithDialer(&net.Dialer{Timeout: ldapTimeout}),
+	)
 	if err != nil {
-		return nil, errors.New("server LDAP tidak dapat dihubungi")
+		log.Printf("LDAP: gagal terhubung ke %s: %v", ldapURL, err)
+		return nil, errLDAPServer
 	}
 	defer conn.Close()
+	conn.SetTimeout(ldapTimeout)
 
 	if s.cfg.LDAP.BindDN != "" {
 		if err := conn.Bind(s.cfg.LDAP.BindDN, s.cfg.LDAP.BindPassword); err != nil {
-			return nil, errors.New("autentikasi server LDAP gagal")
+			log.Printf("LDAP: akun bind %q ditolak: %v", s.cfg.LDAP.BindDN, err)
+			return nil, errLDAPServer
 		}
 	}
 
@@ -92,13 +109,23 @@ func (s *authService) LDAPLogin(req dto.LDAPLoginRequest, ipAddress, userAgent *
 		[]string{s.cfg.LDAP.AttrName, s.cfg.LDAP.AttrEmail, s.cfg.LDAP.AttrPosition, s.cfg.LDAP.AttrDivision},
 		nil,
 	))
-	if err != nil || len(search.Entries) != 1 {
-		return nil, errors.New("username LDAP tidak ditemukan")
+	if err != nil {
+		log.Printf("LDAP: pencarian %q di %q gagal: %v", filter, s.cfg.LDAP.BaseDN, err)
+		return nil, errLDAPServer
+	}
+	// Username tidak dikenal dan password salah sengaja diberi pesan yang sama.
+	if len(search.Entries) != 1 {
+		log.Printf("LDAP: pencarian %q menemukan %d entri, harus tepat 1", filter, len(search.Entries))
+		return nil, errLDAPCredentials
 	}
 
 	entry := search.Entries[0]
 	if err := conn.Bind(entry.DN, req.Password); err != nil {
-		return nil, errors.New("username atau password LDAP salah")
+		log.Printf("LDAP: login %q ditolak: %v", username, err)
+		if ldap.IsErrorWithCode(err, ldap.LDAPResultInvalidCredentials) {
+			return nil, errLDAPCredentials
+		}
+		return nil, errLDAPServer
 	}
 
 	email := strings.ToLower(strings.TrimSpace(entry.GetAttributeValue(s.cfg.LDAP.AttrEmail)))

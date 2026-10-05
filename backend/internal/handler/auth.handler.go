@@ -258,5 +258,7 @@ func (h *AuthHandler) LDAPLogin(c *gin.Context) {
 	}
 
 	h.setAuthCookies(c, res.AccessToken, res.RefreshToken)
+	userUUID, _ := uuid.Parse(res.User.ID)
+	_ = h.auditLogSvc.Log(userUUID, entity.ActionLogin, "auth", userUUID, nil, nil, stringPtr("Login LDAP"), ip, ua)
 	utils.OK(c, "Login LDAP berhasil", res)
 }
