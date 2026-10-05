@@ -117,9 +117,9 @@ func main() {
 	loginLimiter := middleware.NewLoginRateLimiter(cfg.Security.LoginRateLimit, cfg.Security.LoginRateWindowMinutes)
 
 	// ── Public auth ───────────────────────────────────────────────────────────
-	api.POST("/auth/ldap-login", loginLimiter.Middleware(), authHandler.LDAPLogin)
-	api.POST("/auth/login", loginLimiter.Middleware(), authHandler.Login)
-	api.POST("/auth/refresh", loginLimiter.Middleware(), authHandler.RefreshToken)
+	api.POST("/auth/ldap-login", loginLimiter.Middleware("username"), authHandler.LDAPLogin)
+	api.POST("/auth/login", loginLimiter.Middleware("email"), authHandler.Login)
+	api.POST("/auth/refresh", loginLimiter.Middleware(""), authHandler.RefreshToken)
 	api.POST("/auth/logout", authHandler.Logout)
 	requirePermission := func(codes ...string) gin.HandlerFunc {
 		return middleware.RequirePermission(permissionSvc, codes...)

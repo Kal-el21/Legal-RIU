@@ -1,6 +1,8 @@
 package middleware
 
 import (
+	"bytes"
+	"encoding/json"
 	"io"
 	"net/http"
 	"strconv"
@@ -45,27 +47,25 @@ func NewLoginRateLimiter(limit, windowMinutes int) *LoginRateLimiter {
 	return limiter
 }
 
-// Middleware returns middleware that extracts email from request body for rate limiting
-func (l *LoginRateLimiter) Middleware() gin.HandlerFunc {
+// Middleware membatasi percobaan login per akun. field adalah nama isian di
+// body yang dipakai handler sebagai identitas ("email" atau "username"); kalau
+// kosong atau tidak ada di body, kuncinya alamat IP.
+func (l *LoginRateLimiter) Middleware(field string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Read body to extract email for key
 		bodyBytes, _ := io.ReadAll(c.Request.Body)
-		c.Request.Body = io.NopCloser(strings.NewReader(string(bodyBytes)))
+		c.Request.Body = io.NopCloser(bytes.NewReader(bodyBytes))
 
-		// Extract email from JSON body (simple string search for performance)
-		email := extractEmailFromJSON(string(bodyBytes))
-		if email == "" {
-			email = c.ClientIP()
+		key := rateLimitKey(field, bodyBytes)
+		if key == "" {
+			key = "ip:" + c.ClientIP()
 		}
 
 		now := time.Now()
 		l.mu.Lock()
-		attempt, ok := l.attempts[email]
+		attempt, ok := l.attempts[key]
 		if !ok || now.After(attempt.resetAt) {
-			l.attempts[email] = &loginAttempt{count: 1, resetAt: now.Add(l.window)}
-			l.mu.Unlock()
-			c.Next()
-			return
+			attempt = &loginAttempt{resetAt: now.Add(l.window)}
+			l.attempts[key] = attempt
 		}
 
 		if attempt.count >= l.limit {
@@ -85,33 +85,37 @@ func (l *LoginRateLimiter) Middleware() gin.HandlerFunc {
 		attempt.count++
 		l.mu.Unlock()
 		c.Next()
+
+		// Login yang berhasil menghapus hitungan, supaya hanya kegagalan yang dibatasi.
+		if c.Writer.Status() < http.StatusBadRequest {
+			l.mu.Lock()
+			delete(l.attempts, key)
+			l.mu.Unlock()
+		}
 	}
 }
 
-func extractEmailFromJSON(body string) string {
-	// Simple extraction - find "email":"value" pattern
-	start := strings.Index(body, `"email"`)
-	if start == -1 {
+// rateLimitKey membaca body dengan parser JSON yang sama seperti handler, jadi
+// isian lain yang disisipkan di body tidak bisa mengganti kunci.
+func rateLimitKey(field string, body []byte) string {
+	var req struct {
+		Email    string `json:"email"`
+		Username string `json:"username"`
+	}
+	_ = json.Unmarshal(body, &req)
+
+	value := ""
+	switch field {
+	case "email":
+		value = req.Email
+	case "username":
+		value = req.Username
+	}
+	value = strings.ToLower(strings.TrimSpace(value))
+	if value == "" {
 		return ""
 	}
-	remaining := body[start:]
-	colonIdx := strings.Index(remaining, ":")
-	if colonIdx == -1 {
-		return ""
-	}
-	start = colonIdx + 1
-	// Skip whitespace and quotes
-	for start < len(remaining) && (remaining[start] == ' ' || remaining[start] == '"' || remaining[start] == ':') {
-		start++
-	}
-	end := start
-	for end < len(remaining) && remaining[end] != '"' && remaining[end] != ',' && remaining[end] != '}' {
-		end++
-	}
-	if start >= end || start >= len(remaining) {
-		return ""
-	}
-	return strings.ToLower(strings.TrimSpace(remaining[start:end]))
+	return field + ":" + value
 }
 
 func (l *LoginRateLimiter) cleanup() {
