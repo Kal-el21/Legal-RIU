@@ -51,19 +51,18 @@ backend/
 │   │   └── main.go             # Router setup, middleware, server start
 │   └── seed-admin/             # CLI seed untuk buat admin default
 ├── internal/
-│   ├── config/                 # Environment config (viper)
+│   ├── assets/templates/       # Template dokumen perjanjian bawaan
+│   ├── config/                 # Environment config (godotenv) + koneksi database
 │   ├── dto/                    # Request/Response DTOs
 │   ├── entity/                 # Database models (GORM)
 │   ├── handler/                # HTTP handlers (controllers)
-│   ├── middleware/             # Auth, permission, role middleware
+│   ├── middleware/             # Auth, role, permission, audit log, rate limit, CSRF
 │   ├── repository/             # Database queries (repository pattern)
-│   ├── seed/                   # Permission & role seed data
+│   ├── seed/                   # Migrasi skema, katalog permission, data master
 │   │   └── data/
 │   ├── service/                # Business logic
 │   ├── storage/                # MinIO file storage
-│   ├── utils/                  # Helpers (JWT, pagination, etc.)
-│   └── validator/              # Request validation
-├── migrations/                 # SQL migrations
+│   └── utils/                  # Helpers (JWT, response, nomor tiket, Excel)
 └── go.mod
 ```
 
@@ -75,9 +74,10 @@ HTTP Request
     ▼
 ┌─────────────────────┐
 │   main.go: Router   │
-│   Group by module   │
-│   /admin, /legal,   │
-│   /external, etc.   │
+│   Prefix /api/v1    │
+│   Group: /admin,    │
+│   /legal, /legal-au,│
+│   /external         │
 └──────────┬──────────┘
            │
            ▼
@@ -98,8 +98,8 @@ HTTP Request
            │
            ▼
 ┌─────────────────────┐
-│Permission Middleware │
-│ hasPermission(code)  │
+│ RequirePermission    │
+│ (dipasang per route) │
 │ = role + ALLOW - DENY│
 └──────────┬──────────┘
            │
@@ -136,13 +136,16 @@ HTTP Request
 | File | Purpose |
 |------|---------|
 | `cmd/api/main.go` | Router setup, middleware chain, server bootstrap |
-| `internal/middleware/auth.go` | JWT validation, user context injection |
-| `internal/middleware/role.go` | Role-based access control |
-| `internal/middleware/permission.go` | Permission-based access control with override calc |
-| `internal/handler/*.go` | HTTP handlers per module |
-| `internal/service/*.go` | Business logic layer |
-| `internal/repository/*.go` | Database access layer |
+| `internal/middleware/auth.middleware.go` | `AuthMiddleware` (JWT validation, user context injection) dan `RoleMiddleware` (role-based access control) |
+| `internal/middleware/permission.middleware.go` | `PermissionContextMiddleware` memuat permission efektif user, `RequirePermission` menolak dengan 403 |
+| `internal/middleware/audit_log.middleware.go` | Mencatat aksi ke audit log |
+| `internal/middleware/rate_limit.go` | Batas percobaan login |
+| `internal/middleware/security.go` | CSRF dan security headers |
+| `internal/handler/*.handler.go` | HTTP handlers per module |
+| `internal/service/*.service.go` | Business logic layer |
+| `internal/repository/*.repository.go` | Database access layer |
 | `internal/entity/*.go` | GORM models |
+| `internal/seed/schema.go` | `RunAllMigrationsAndSeeds`: AutoMigrate + migrasi manual + seed |
 | `internal/seed/permissions.go` | Permission catalog + role baseline assignments |
 
 ### Backend Naming Convention
@@ -168,17 +171,21 @@ frontend/src/
 │   │   ├── PermissionGate.tsx   # Reusable permission wrapper (optional)
 │   │   ├── StatusBadge.tsx
 │   │   └── ...
-│   └── shared/             # Shared page-level components
-│       ├── MaterialListPage.tsx
-│       ├── LegalOpinionListPage.tsx
-│       └── ReviewDocumentListPage.tsx
+│   ├── features/           # Komponen khusus satu fitur (dashboard, legal-opinion, review-document)
+│   ├── shared/             # Shared page-level components
+│   │   ├── MaterialListPage.tsx
+│   │   ├── LegalOpinionListPage.tsx
+│   │   └── ReviewDocumentListPage.tsx
+│   └── ui/                 # Komponen dasar shadcn
 ├── constants/              # App-wide constants
 ├── hooks/                  # React Query hooks per module
 ├── layouts/                # Layout components per role
 │   ├── AdminLayout.tsx
 │   ├── LegalLayout.tsx
+│   ├── LegalAULayout.tsx
 │   ├── DashboardLayout.tsx
-│   └── ExternalLayout.tsx
+│   ├── ExternalLayout.tsx
+│   └── PublicLayout.tsx
 ├── lib/                    # Utils, formatters
 ├── pages/
 │   ├── admin/              # ADMIN role pages
@@ -186,16 +193,18 @@ frontend/src/
 │   ├── legal/              # LEGAL role pages
 │   ├── legal-au/           # LEGAL_AU role pages
 │   ├── external/           # EXTERNAL role pages (some dormant)
+│   ├── materials/          # Form materi yang dipakai lintas peran
+│   ├── reports/            # Halaman laporan
 │   ├── settings/           # Shared settings page
 │   ├── auth/               # Login page
 │   └── public/             # Public/landing pages
 ├── routes/                 # Route definitions + guards
 │   ├── index.tsx           # Main router
-│   └── guards.tsx          # Role-based route guards
+│   ├── guards.tsx          # Role-based route guards
+│   └── role-home.ts        # Halaman awal per peran
 ├── services/               # API service layer
 ├── store/                  # Zustand auth store
-├── types/                  # TypeScript interfaces
-└── utils/                  # Helper functions
+└── types/                  # TypeScript interfaces
 ```
 
 ### Request Flow (Frontend)
@@ -223,7 +232,8 @@ User Action (click button)
 │ Service Layer       │
 │ Call API endpoint   │
 │ Example:            │
-│ caseService.update()│
+│ legalCaseService    │
+│   .update()         │
 └──────────┬──────────┘
            │
            ▼
@@ -271,42 +281,49 @@ URL Entered
 
 ### Available Route Guards
 
-| Guard | Role | Redirect To |
-|-------|------|-------------|
-| `UserRoute` | `USER` | `/login` if not authenticated |
-| `AdminRoute` | `ADMIN` | `/login` if not authenticated |
-| `LegalRoute` | `LEGAL` | `/login` if not authenticated |
-| `LegalAURoute` | `LEGAL_AU` | `/login` if not authenticated |
-| `ExternalRoute` | `EXTERNAL` | `/login` if not authenticated |
-| `PrivateRoute` | Any authenticated | `/login` if not authenticated |
-| `GuestRoute` | Any authenticated | `/dashboard` or role home |
+Semua guard ada di `routes/guards.tsx`. Belum login selalu diarahkan ke `/login`;
+sudah login tapi perannya tidak cocok diarahkan ke halaman awal perannya sendiri.
+
+| Guard | Yang boleh masuk | Kalau tidak boleh |
+|-------|------------------|-------------------|
+| `UserRoute` | `USER` | `/login`, atau role home kalau peran lain |
+| `AdminRoute` | `ADMIN` | `/login`, atau role home kalau peran lain |
+| `LegalRoute` | `LEGAL` | `/login`, atau role home kalau peran lain |
+| `LegalAURoute` | `LEGAL_AU` | `/login`, atau role home kalau peran lain |
+| `ExternalRoute` | `EXTERNAL` | `/login`, atau role home kalau peran lain |
+| `PrivateRoute` | Siapa pun yang sudah login | `/login` |
+| `GuestRoute` | Yang belum login | Role home |
 
 ### Frontend Service Layer Pattern
 
+`services/api.ts` adalah instance axios dengan `baseURL: '/api/v1'`. Tiap modul punya
+satu file `services/<modul>.service.ts` yang mengembalikan isi `data`, bukan response axios.
+
 ```typescript
-// services/case.service.ts
+// services/legal-case.service.ts (disederhanakan)
 import api from './api'
 
-export const caseService = {
-  getAll: (params) => api.get('/cases', { params }),
-  getById: (id) => api.get(`/cases/${id}`),
-  create: (data) => api.post('/cases', data),
-  update: (id, data) => api.put(`/cases/${id}`, data),
-  delete: (id) => api.delete(`/cases/${id}`),
+export const legalCaseService = {
+  getAll: async (params?: LegalCaseFilters) => {
+    const res = await api.get<ApiResponse<PaginatedData<LegalCase>>>(getLegalCaseRouteBase(), { params })
+    return res.data.data!
+  },
 }
 ```
+
+Modul yang dipakai beberapa peran memilih prefix endpoint lewat fungsi route base
+(mis. `getLegalCaseRouteBase()`), karena backend memisahkan route per peran.
 
 ### Frontend Route Base Pattern
 
 ```typescript
-const getRoleHome = (role: string) => {
-  switch (role) {
-    case 'ADMIN': return '/admin'
-    case 'LEGAL': return '/legal'
-    case 'LEGAL_AU': return '/legal-au'
-    case 'EXTERNAL': return '/external/legal-cases'
-    default: return '/dashboard'
-  }
+// routes/role-home.ts
+export function getRoleHome(role?: UserRole) {
+  if (role === 'ADMIN') return '/admin'
+  if (role === 'LEGAL') return '/legal'
+  if (role === 'LEGAL_AU') return '/legal-au'
+  if (role === 'EXTERNAL') return '/external/legal-cases'
+  return '/dashboard'
 }
 ```
 
@@ -323,9 +340,15 @@ User Login
 ┌─────────────────────┐
 │ JWT Token Generated │
 │ Contains:           │
-│ - user_id           │
+│ - sub (user id)     │
+│ - email             │
 │ - role              │
-│ - permissions[]     │
+└──────────┬──────────┘
+           │
+           ▼
+┌─────────────────────┐
+│ GET /auth/permissions│
+│ (tidak ada di JWT)  │
 └──────────┬──────────┘
            │
            ▼
@@ -346,7 +369,7 @@ User Login
            ▼
 ┌─────────────────────┐
 │ Backend:            │
-│ PermissionMiddleware│
+│ RequirePermission   │
 │ → 403 if no access  │
 └─────────────────────┘
 ```
@@ -363,11 +386,11 @@ Examples:
 
 ### Permission Seed Assignment
 
-Backend seed assigns baseline permissions per role in `internal/seed/permissions.go`:
+Katalog permission didefinisikan di `permissionSeedData()`, lalu dibagikan ke tiap role
+oleh `rolePermissionSeedData()`. Keduanya ada di `internal/seed/permissions.go`:
 
 | Role | Assign Method |
 |------|---------------|
-| SUPER_ADMIN | `permissionSeedData()` — all permissions |
 | ADMIN | `rolePermissionSeedData()` — all permissions |
 | LEGAL | `rolePermissionSeedData()` — specific subset |
 | LEGAL_AU | `rolePermissionSeedData()` — limited subset |
@@ -379,7 +402,7 @@ Backend seed assigns baseline permissions per role in `internal/seed/permissions
 Admin dapat mengubah permission user via:
 
 1. **UI**: `UserManagementPage` → Detail User → Tab "Permission"
-2. **API**: `PUT /admin/users/:id/permissions`
+2. **API**: `PUT /api/v1/admin/users/:id/permissions`
 
 Override types:
 - `DEFAULT` — baseline role permission
@@ -395,14 +418,15 @@ Override types:
 ```
 1. User login → JWT with role=USER
 2. Navigate to /dashboard/legal-opinions/new
-3. MaterialFormPage checks:
+3. LegalOpinionFormPage checks:
    - hasPermission('legal_opinion.create.own') → true
    - Render form
 4. User submits form
-5. Frontend calls: POST /api/dashboard/legal-opinions
+5. Frontend calls: POST /api/v1/legal-opinions
 6. Backend:
    - AuthMiddleware → validate JWT
-   - PermissionMiddleware → check 'legal_opinion.create.own'
+   - RoleMiddleware("USER")
+   - RequirePermission → check 'legal_opinion.create.own'
    - Handler → create DTO
    - Service → create entity
    - Repository → save to DB
@@ -412,27 +436,27 @@ Override types:
    - Redirect to detail page
 ```
 
-### Example 2: LEGAL Updates Case Status
+### Example 2: LEGAL_AU Updates Case Status
 
 ```
-1. LEGAL login → JWT with role=LEGAL
-2. Navigate to /legal/legal-cases/:id
-3. AdminLegalCaseDetailPage checks:
-   - hasPermission('case_management.update_status') → true
-   - Render "Update Status" card
-4. LEGAL changes status to "APPROVED"
-5. Frontend calls: PATCH /api/legal/legal-cases/:id/status
-6. Backend:
+1. LEGAL_AU login → JWT with role=LEGAL_AU
+2. Navigate to /legal-au/cases/:id (LegalAUCaseDetailPage)
+3. Request: PATCH /api/v1/legal-au/cases/:id/status
+   Body: { status: '<status baru>' }
+4. Backend:
    - AuthMiddleware → validate JWT
-   - PermissionMiddleware → check 'case_management.update_status'
-   - Handler → update status
-   - Service → create chronology entry
-   - Repository → save + audit log
-   - Response → { current_status: 'APPROVED' }
-7. Frontend:
-   - Update local state
-   - Show success toast
+   - RoleMiddleware("LEGAL_AU")
+   - RequirePermission → check 'case_management.update_status'
+   - Handler → pastikan kasus milik perusahaan user (403 kalau bukan)
+   - Service → UpdateStatus
+   - Repository → simpan status + waktu perubahan status
+   - Audit log → STATUS_CHANGE pada 'legal_case'
+   - Response → "Status kasus berhasil diupdate"
 ```
+
+Catatan: endpoint `/status` untuk perkara hanya ada di grup `/legal-au`. Peran lain
+(ADMIN, LEGAL, USER, EXTERNAL) mengubah perkara lewat `PUT /legal-cases/:id` dengan
+permission `case_management.update`.
 
 ### Example 3: Admin Override Permission
 
@@ -441,11 +465,11 @@ Override types:
 2. Navigate to /admin/users/:id/permissions
 3. Admin finds EXTERNAL user
 4. Admin grants ALLOW for 'legal_opinion.view.own'
-5. Frontend calls: PUT /admin/users/:id/permissions
+5. Frontend calls: PUT /api/v1/admin/users/:id/permissions
    Body: { effect: 'ALLOW', permission_id: '<uuid>' }
 6. Backend:
    - AuthMiddleware → validate JWT (ADMIN)
-   - PermissionMiddleware → check 'user_management.manage_permissions'
+   - RequirePermission → check 'user_management.manage_permissions'
    - Handler → upsert permission override
    - Service → log audit (PERMISSION_UPDATE)
 7. Next time EXTERNAL user loads page:
@@ -463,7 +487,7 @@ Override types:
 |------|-----------|---------|
 | Component | PascalCase | `MaterialListPage.tsx` |
 | Hook | camelCase + `use` prefix | `useMaterial.ts` |
-| Service | camelCase + `Service` suffix | `caseService.ts` |
+| Service | kebab-case + `.service.ts`, objeknya camelCase + `Service` | `legal-case.service.ts` → `legalCaseService` |
 | Store | camelCase + `Store` suffix | `auth.store.ts` |
 | API route | kebab-case path | `/legal-opinions` |
 | Permission code | snake_case | `case_management.create` |
@@ -497,7 +521,7 @@ export default function SomePage() {
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/store/auth.store'
-import { getRoleHome } from '@/routes/guards'
+import { getRoleHome } from '@/routes/role-home'
 
 export default function SomePage() {
   const navigate = useNavigate()
@@ -522,7 +546,7 @@ export default function SomePage() {
 
 1. **Backend**
    - [ ] Create entity in `internal/entity/`
-   - [ ] Add migration in `migrations/`
+   - [ ] Daftarkan entity di `db.AutoMigrate(...)` dalam `internal/seed/schema.go`; kalau perlu rename/backfill/NOT NULL, tulis fungsi migrasi di file yang sama dan panggil dari `RunAllMigrationsAndSeeds`
    - [ ] Create DTO in `internal/dto/`
    - [ ] Create repository in `internal/repository/`
    - [ ] Create service in `internal/service/`
@@ -563,8 +587,9 @@ cd frontend && npm install && npm run dev
 ```
 
 ### Database Migrations
-- Auto-migrated by GORM on startup (`cmd/api/main.go`)
-- Manual migrations in `backend/migrations/`
+- Tidak ada file SQL. `cmd/api/main.go` memanggil `seed.RunAllMigrationsAndSeeds` setiap server start
+- Skema dibuat GORM AutoMigrate; daftar entity-nya ada di `internal/seed/schema.go`
+- Perubahan yang tidak bisa ditangani AutoMigrate (rename kolom, backfill, NOT NULL) ditulis sebagai fungsi di `internal/seed/schema.go` dan harus aman dijalankan berulang kali
 
 ### Seed Data
 - Permissions auto-seed on first run
