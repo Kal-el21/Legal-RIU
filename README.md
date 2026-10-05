@@ -209,6 +209,7 @@ Key variables:
 - `DB_*` — PostgreSQL connection
 - `JWT_SECRET` — JWT signing secret
 - `MINIO_*` — MinIO S3 storage credentials
+- `LDAP_*` — Active Directory connection for signing in with an office username; `LDAP_BIND_PASSWORD` must be set, and `LDAP_DEFAULT_DIVISION` should stay empty so the division comes from the user's OU
 - `ADMIN_EMAIL`, `ADMIN_PASSWORD` — Initial admin account
 
 ## Architecture Docs
