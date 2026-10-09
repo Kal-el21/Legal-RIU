@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation } from 'react-router-dom'
-import { Scale, LayoutDashboard, FileText, FileSearch, Menu, ChevronRight, ChevronLeft, ScrollText, BarChart3, Users, Files } from 'lucide-react'
+import { Scale, LayoutDashboard, FileText, FileSearch, Menu, Home, ChevronRight, ChevronLeft, ScrollText, BarChart3, Users, Files } from 'lucide-react'
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
 import SidebarUserButton from '@/components/common/SidebarUserButton'
@@ -99,8 +99,9 @@ export default function LegalAULayout() {
           </button>
           <div className="flex-1" />
           <NotificationDropdown />
-          <Link to="/" className="text-sm text-gray-500 hover:text-gray-700 transition-colors">
-            ← Kembali ke Beranda
+          <Link to="/" title="Ke beranda portal" className="inline-flex h-9 items-center gap-2 rounded-lg px-2 text-sm text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800">
+            <Home className="h-5 w-5" />
+            <span className="hidden sm:inline">Beranda</span>
           </Link>
         </header>
         <main className="flex-1"><Outlet /></main>
