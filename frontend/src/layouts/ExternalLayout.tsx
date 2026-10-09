@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation } from 'react-router-dom'
-import { Scale, LayoutDashboard, FileText, FileSearch, Menu, Home, ChevronRight, ChevronLeft, ScrollText, BarChart3, Users, Files } from 'lucide-react'
+import { Scale, FileText, FileSearch, Menu, Home, ChevronRight, ChevronLeft, ScrollText, BarChart3, Users, Files } from 'lucide-react'
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
 import SidebarUserButton from '@/components/common/SidebarUserButton'
@@ -7,7 +7,6 @@ import NotificationDropdown from '@/components/common/NotificationDropdown'
 import { useAuthStore } from '@/store/auth.store'
 
 const NAV = [
-  { label: 'Dashboard', href: '/external', icon: LayoutDashboard, exact: true, permissions: ['dashboard.user.view'] },
   { label: 'Laporan', href: '/external/reports', icon: BarChart3, permissions: ['report.legal_case.view', 'report.legal_opinion.view', 'report.document_review.view'] },
   { label: 'Legal Opinion', href: '/external/legal-opinions', icon: FileText, permissions: ['legal_opinion.view.own'] },
   { label: 'Review Dokumen', href: '/external/review-documents', icon: FileSearch, permissions: ['document_review.view.own'] },
@@ -23,8 +22,7 @@ export default function ExternalLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
-  const isActive = (href: string, exact?: boolean) =>
-    exact ? location.pathname === href : location.pathname.startsWith(href)
+  const isActive = (href: string) => location.pathname.startsWith(href)
 
   const permissions = useAuthStore((state) => state.permissions)
   const user = useAuthStore((state) => state.user)
@@ -62,7 +60,7 @@ export default function ExternalLayout() {
               className={cn(
                 'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all',
                 sidebarCollapsed && 'justify-center px-2',
-                isActive(item.href, item.exact)
+                isActive(item.href)
                   ? 'bg-white/10 text-white'
                   : 'text-white/50 hover:bg-white/5 hover:text-white'
               )}
@@ -70,7 +68,7 @@ export default function ExternalLayout() {
             >
               <item.icon className="w-4 h-4 flex-shrink-0" />
               {!sidebarCollapsed && item.label}
-              {!sidebarCollapsed && isActive(item.href, item.exact) && <ChevronRight className="w-3.5 h-3.5 ml-auto opacity-60" />}
+              {!sidebarCollapsed && isActive(item.href) && <ChevronRight className="w-3.5 h-3.5 ml-auto opacity-60" />}
             </Link>
           ))}
         </nav>
