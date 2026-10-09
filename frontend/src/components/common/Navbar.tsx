@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom'
 import { ChevronDown, Menu, X, Scale, LayoutDashboard, LogOut } from 'lucide-react'
 import { useAuthStore } from '@/store/auth.store'
 import { useLogout } from '@/hooks/useAuth'
+import { getRoleHome } from '@/routes/role-home'
 import { cn } from '@/lib/utils'
 
 const NAV_LINKS = [
@@ -26,14 +27,7 @@ export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
-  const dashboardPath =
-    user?.role === 'ADMIN'
-      ? '/admin'
-      : user?.role === 'LEGAL'
-        ? '/legal'
-        : user?.role === 'EXTERNAL'
-          ? '/external/legal-cases'
-          : '/dashboard'
+  const dashboardPath = getRoleHome(user?.role)
 
   return (
     <nav className="sticky top-0 z-50 bg-white border-b border-gray-100 shadow-sm">
