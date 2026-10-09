@@ -11,6 +11,7 @@ import LegalAULayout from '@/layouts/LegalAULayout'
 import HomePage from '@/pages/public/HomePage'
 import AktaPerusahaanPage from '@/pages/public/AktaPerusahaanPage'
 import ComingSoonPage from '@/pages/public/ComingSoonPage'
+import NotFoundPage from '@/pages/public/NotFoundPage'
 import LoginPage from '@/pages/auth/LoginPage'
 
 import UserDashboardPage from '@/pages/dashboard/UserDashboardPage'
@@ -76,12 +77,6 @@ import LegalAUCaseFormPage from '@/pages/legal-au/legal-cases/LegalAUCaseFormPag
 import LegalAU_OpinionListPage from '@/pages/legal-au/legal-opinions/LegalAU_OpinionListPage'
 import LegalAU_ReviewDocumentListPage from '@/pages/legal-au/review-documents/LegalAU_ReviewDocumentListPage'
 import LegalAUMaterialManagementPage from '@/pages/legal-au/materials/LegalAUMaterialManagementPage'
-
-const notFoundElement = (
-  <div className="flex items-center justify-center min-h-[60vh]">
-    <h1 className="text-2xl font-semibold text-gray-400">404 - Halaman tidak ditemukan</h1>
-  </div>
-)
 
 export const router = createBrowserRouter([
   // ─── Public ───────────────────────────────────────────────────────────────
@@ -284,5 +279,5 @@ export const router = createBrowserRouter([
     ],
   },
 
-  { path: '*', element: notFoundElement },
+  { path: '*', element: <NotFoundPage /> },
 ])
