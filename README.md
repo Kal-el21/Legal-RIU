@@ -103,6 +103,9 @@ cd frontend && npm install && npm run dev
 
 Frontend runs at `http://localhost:5173`, Backend API at `http://localhost:8080`.
 
+Before pushing, run every check (go vet, go test, tsc, lint, build) from PowerShell:
+`.\scripts\cek.ps1`. It stops at the first check that fails.
+
 ## Environment Variables
 
 Copy `.env.example` to `.env` and configure:
