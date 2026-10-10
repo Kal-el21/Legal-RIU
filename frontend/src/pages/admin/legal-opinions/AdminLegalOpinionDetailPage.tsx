@@ -152,7 +152,7 @@ export default function AdminLegalOpinionDetailPage() {
   return (
     <SharedLegalOpinionDetailPage
       showDownloadPDF={true}
-      downloadPDFMutation={downloadPDF as any}
+      downloadPDFMutation={downloadPDF}
     >
       {actionCards}
     </SharedLegalOpinionDetailPage>

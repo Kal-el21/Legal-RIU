@@ -5,11 +5,12 @@ import StatusBadge from '@/components/common/StatusBadge'
 import { useDocumentReview } from '@/hooks/useDocumentReview'
 import { documentReviewService } from '@/services/document-review.service'
 import { formatDateTime, formatFileSize } from '@/lib/utils'
+import type { UseMutationResult } from '@tanstack/react-query'
 import type { SubmissionStatus } from '@/types'
 
 interface SharedReviewDocumentDetailPageProps {
   showDownloadPDF?: boolean
-  downloadPDFMutation?: any
+  downloadPDFMutation?: UseMutationResult<{ blob: Blob; filename: string }, Error, string>
   onBack?: () => void
   children?: React.ReactNode
 }

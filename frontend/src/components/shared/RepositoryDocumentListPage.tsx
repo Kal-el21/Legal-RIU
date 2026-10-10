@@ -36,7 +36,6 @@ interface RepositoryDocumentListPageProps {
 }
 
 export default function RepositoryDocumentListPage({
-  basePath: _,
   title,
   description,
 }: RepositoryDocumentListPageProps) {

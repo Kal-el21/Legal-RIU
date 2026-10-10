@@ -443,7 +443,7 @@ export default function UserManagementPage() {
               )}
               {createMutation.isError && createMutation.error && (
                <p className="text-xs text-red-500">
-                 {(createMutation.error as any)?.response?.data?.message || (createMutation.error as Error)?.message}
+                 {createMutation.error.message}
                </p>
              )}
             <div className="flex gap-2 pt-2">
