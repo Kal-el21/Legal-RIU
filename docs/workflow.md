@@ -48,7 +48,7 @@ Dokumen ini menjelaskan alur kerja development untuk frontend dan backend, mulai
 backend/
 ├── cmd/
 │   ├── api/                    # Main HTTP server entrypoint
-│   │   └── main.go             # Router setup, middleware, server start
+│   │   └── main.go             # Bootstrap: config, DB, MinIO, migrasi, server start
 │   └── seed-admin/             # CLI seed untuk buat admin default
 ├── internal/
 │   ├── assets/templates/       # Template dokumen perjanjian bawaan
@@ -58,6 +58,7 @@ backend/
 │   ├── handler/                # HTTP handlers (controllers)
 │   ├── middleware/             # Auth, role, permission, audit log, rate limit, CSRF
 │   ├── repository/             # Database queries (repository pattern)
+│   ├── router/                 # Router setup: semua route dan middleware chain
 │   ├── seed/                   # Migrasi skema, katalog permission, data master
 │   │   └── data/
 │   ├── service/                # Business logic
@@ -73,7 +74,7 @@ HTTP Request
     │
     ▼
 ┌─────────────────────┐
-│   main.go: Router   │
+│  router.go: Router  │
 │   Prefix /api/v1    │
 │   Group: /admin,    │
 │   /legal, /legal-au,│
@@ -135,7 +136,8 @@ HTTP Request
 
 | File | Purpose |
 |------|---------|
-| `cmd/api/main.go` | Router setup, middleware chain, server bootstrap |
+| `cmd/api/main.go` | Server bootstrap (config, database, MinIO, migrasi) |
+| `internal/router/router.go` | Router setup, middleware chain |
 | `internal/middleware/auth.middleware.go` | `AuthMiddleware` (JWT validation, user context injection) dan `RoleMiddleware` (role-based access control) |
 | `internal/middleware/permission.middleware.go` | `PermissionContextMiddleware` memuat permission efektif user, `RequirePermission` menolak dengan 403 |
 | `internal/middleware/audit_log.middleware.go` | Mencatat aksi ke audit log |
@@ -551,7 +553,7 @@ export default function SomePage() {
    - [ ] Create repository in `internal/repository/`
    - [ ] Create service in `internal/service/`
    - [ ] Create handler in `internal/handler/`
-   - [ ] Register routes in `cmd/api/main.go`
+   - [ ] Register routes in `internal/router/router.go`
    - [ ] Add permission codes in `internal/seed/permissions.go`
    - [ ] Assign to roles in `rolePermissionSeedData()`
 
