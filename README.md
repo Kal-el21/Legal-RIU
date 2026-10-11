@@ -106,6 +106,15 @@ Frontend runs at `http://localhost:5173`, Backend API at `http://localhost:8080`
 Before pushing, run every check (go vet, go test, tsc, lint, build) from PowerShell:
 `.\scripts\cek.ps1`. It stops at the first check that fails.
 
+The backend API tests (`backend/internal/router`) need PostgreSQL and MinIO running.
+They read connection settings from `backend/.env`, recreate their own database
+(`legal_riu_test`) on every run and use their own bucket (`legal-riu-test`), so
+development data is never touched. Set `TES_API_LEWATI=1` to skip them.
+
+`testdata/akses.golden` records which roles can reach each endpoint. When an access
+change is intentional, refresh it from `backend/` and commit the result:
+`go test ./internal/router -run TestFotoHakAkses -update`.
+
 ## Environment Variables
 
 Copy `.env.example` to `.env` and configure:

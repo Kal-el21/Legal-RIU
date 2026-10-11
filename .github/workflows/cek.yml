@@ -5,8 +5,31 @@ on: push
 jobs:
   cek:
     runs-on: ubuntu-latest
+
+    # Tes API backend butuh Postgres dan MinIO. Keduanya memakai nilai bawaan
+    # yang sama dengan internal/config (postgres/postgres, minioadmin/minioadmin).
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
     steps:
       - uses: actions/checkout@v4
+
+      # MinIO butuh argumen "server /data", yang tidak bisa diberikan lewat
+      # services, jadi dinyalakan sebagai langkah biasa.
+      - name: Nyalakan MinIO
+        run: |
+          docker run -d -p 9000:9000 minio/minio server /data
+          curl --retry 15 --retry-delay 2 --retry-all-errors -fsS http://localhost:9000/minio/health/live
 
       - uses: actions/setup-go@v5
         with:
