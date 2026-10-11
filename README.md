@@ -115,6 +115,11 @@ GitHub Actions cannot pull the MinIO image any more, so it runs with
 `TES_TANPA_MINIO=1`: everything that only needs PostgreSQL still runs there, and
 tests that touch file storage run locally only. Do not set it on your machine.
 
+Before deploying, also run `.\scripts\cek-docker.ps1`. It runs the same API tests inside
+the `legal_riu_backend` container, the only place with PostgreSQL, MinIO and LibreOffice
+together, so it is the only run that covers agreement approval (DOCX to PDF). Use
+`-Tes <name>` to run matching tests only and `-Rinci` to list every test.
+
 Tests that describe correct behaviour the code does not have yet are skipped with
 `bugDiketahui(...)`; run `go test ./internal/router -v` and look for "BUG DIKETAHUI" to
 list them. After fixing one, check it with `TES_BUG=1` and then delete that call.

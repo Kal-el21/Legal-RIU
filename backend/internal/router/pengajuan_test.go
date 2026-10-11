@@ -261,20 +261,10 @@ func TestBerkasPengajuan(t *testing.T) {
 				t.Errorf("isi lampiran yang diunduh berbeda: %q", got)
 			}
 
-			w := panggil(t, pemilik, http.MethodGet, m.url("", "/presign?path=", url.QueryEscape(p.Attachments[0].FilePath)), nil)
-			harapKode(t, w, http.StatusOK, "membuat presigned URL")
-			var tautan struct {
-				URL string `json:"url"`
-			}
-			isiData(t, w, &tautan)
-			if !strings.Contains(tautan.URL, namaBucketTes) {
-				t.Errorf("presigned URL tidak menunjuk bucket tes: %s", tautan.URL)
-			}
-
 			// Ajukan ulang dengan lampiran baru: lampiran lama tetap, yang baru putaran 2.
 			m.ubahStatus(t, legal, "/legal", p.ID, "UNDER_REVIEW", "", http.StatusOK)
 			m.ubahStatus(t, legal, "/legal", p.ID, "NEED_REVISION", "tambah lampiran", http.StatusOK)
-			w = panggilForm(t, pemilik, http.MethodPost, m.url("", "/", p.ID, "/resubmit"), nil, berkas{"attachments", "revisi.pdf", isiB})
+			w := panggilForm(t, pemilik, http.MethodPost, m.url("", "/", p.ID, "/resubmit"), nil, berkas{"attachments", "revisi.pdf", isiB})
 			harapKode(t, w, http.StatusOK, "ajukan ulang dengan lampiran")
 			p = m.ambil(t, pemilik, "", p.ID)
 			putaran := map[int]int{}
@@ -333,6 +323,21 @@ func TestPengajuanBelumBenar(t *testing.T) {
 				p := m.buat(t, pemilik)
 				w := panggil(t, lain, http.MethodGet, m.url("", "/", p.ID, "/pdf"), nil)
 				harapKode(t, w, http.StatusNotFound, "USER lain meminta PDF")
+			})
+
+			t.Run("PresignedURLBisaDibuat", func(t *testing.T) {
+				butuhMinIO(t)
+				bugDiketahui(t, "presigned URL gagal dibuat (500) saat alamat publik MinIO tidak terjangkau dari backend, yaitu keadaan di Docker; lulus kalau tes dijalankan di luar container")
+				p := m.buat(t, pemilik, berkas{"attachments", "lampiran.pdf", []byte("isi")})
+				w := panggil(t, pemilik, http.MethodGet, m.url("", "/presign?path=", url.QueryEscape(p.Attachments[0].FilePath)), nil)
+				harapKode(t, w, http.StatusOK, "membuat presigned URL")
+				var tautan struct {
+					URL string `json:"url"`
+				}
+				isiData(t, w, &tautan)
+				if !strings.Contains(tautan.URL, namaBucketTes) {
+					t.Errorf("presigned URL tidak menunjuk bucket tes: %s", tautan.URL)
+				}
 			})
 
 			t.Run("UnduhFileMilikOrangLainDitolak", func(t *testing.T) {

@@ -340,9 +340,8 @@ func TestLampiranPerjanjian(t *testing.T) {
 
 // Persetujuan akhir membentuk DOCX dan PDF dari template.
 //
-// Catatan: saat ditulis, tes ini belum pernah dijalankan sampai selesai karena
-// belum ada mesin yang punya MinIO dan LibreOffice sekaligus. Kalau gagal saat
-// pertama kali jalan, periksa dulu apakah tesnya yang keliru.
+// Butuh LibreOffice, jadi hanya jalan di dalam container backend: lihat
+// scripts/cek-docker.ps1.
 func TestPersetujuanPerjanjian(t *testing.T) {
 	butuhMinIO(t)
 	butuhLibreOffice(t)
