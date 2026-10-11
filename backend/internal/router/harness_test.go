@@ -4,7 +4,8 @@ package router
 // tes, lalu memanggil endpoint lewat router tanpa membuka port.
 //
 // Butuh Postgres dan MinIO hidup. Tanpa keduanya tes ini gagal; untuk sengaja
-// melewatinya, set TES_API_LEWATI=1.
+// melewatinya, set TES_API_LEWATI=1. TES_TANPA_MINIO=1 menjalankan tes yang
+// tidak menyentuh file dengan Postgres saja.
 
 import (
 	"bytes"
@@ -46,6 +47,11 @@ var semuaPeran = []entity.UserRole{
 	entity.RoleAdmin, entity.RoleLegal, entity.RoleLegalAU, entity.RoleUser, entity.RoleExternal,
 }
 
+// tanpaMinIO dipakai di GitHub Actions, karena image MinIO tidak bisa diunduh
+// lagi di sana. Aplikasi dirakit tanpa penyimpanan file, dan tes yang butuh
+// file harus melewati dirinya sendiri. Di lokal jangan di-set.
+var tanpaMinIO = os.Getenv("TES_TANPA_MINIO") != ""
+
 var (
 	app       *gin.Engine
 	dbTes     *gorm.DB
@@ -84,15 +90,20 @@ func siapkan() error {
 	if err := cekHidup(alamatDB); err != nil {
 		return fmt.Errorf("Postgres tidak hidup di %s: %w", alamatDB, err)
 	}
-	if err := cekHidup(cfg.MinIO.Endpoint); err != nil {
-		return fmt.Errorf("MinIO tidak hidup di %s: %w", cfg.MinIO.Endpoint, err)
+	if !tanpaMinIO {
+		if err := cekHidup(cfg.MinIO.Endpoint); err != nil {
+			return fmt.Errorf("MinIO tidak hidup di %s: %w", cfg.MinIO.Endpoint, err)
+		}
 	}
 
 	if err := buatUlangDB(cfg); err != nil {
 		return fmt.Errorf("membuat database %s: %w", namaDBTes, err)
 	}
 	dbTes = config.InitDatabase(cfg)
-	store := storage.InitMinIO(cfg)
+	var store *storage.MinIOClient
+	if !tanpaMinIO {
+		store = storage.InitMinIO(cfg)
+	}
 
 	// Dua kali: migrasi harus jalan di database kosong dan aman diulang.
 	for i := 1; i <= 2; i++ {

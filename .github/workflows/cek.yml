@@ -6,8 +6,8 @@ jobs:
   cek:
     runs-on: ubuntu-latest
 
-    # Tes API backend butuh Postgres dan MinIO. Keduanya memakai nilai bawaan
-    # yang sama dengan internal/config (postgres/postgres, minioadmin/minioadmin).
+    # Tes API backend butuh Postgres, dengan nilai bawaan yang sama dengan
+    # internal/config (postgres/postgres).
     services:
       postgres:
         image: postgres:15-alpine
@@ -24,13 +24,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # MinIO butuh argumen "server /data", yang tidak bisa diberikan lewat
-      # services, jadi dinyalakan sebagai langkah biasa.
-      - name: Nyalakan MinIO
-        run: |
-          docker run -d -p 9000:9000 minio/minio server /data
-          curl --retry 15 --retry-delay 2 --retry-all-errors -fsS http://localhost:9000/minio/health/live
-
       - uses: actions/setup-go@v5
         with:
           go-version-file: backend/go.mod
@@ -46,5 +39,9 @@ jobs:
         working-directory: frontend
 
       # Skrip yang sama dengan yang dijalankan di lokal sebelum push.
+      # Image MinIO sudah tidak bisa diunduh, jadi di sini tes yang butuh
+      # penyimpanan file dilewati; tes itu hanya dijaga di lokal.
       - run: ./scripts/cek.ps1
         shell: pwsh
+        env:
+          TES_TANPA_MINIO: 1

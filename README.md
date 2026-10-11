@@ -111,6 +111,10 @@ They read connection settings from `backend/.env`, recreate their own database
 (`legal_riu_test`) on every run and use their own bucket (`legal-riu-test`), so
 development data is never touched. Set `TES_API_LEWATI=1` to skip them.
 
+GitHub Actions cannot pull the MinIO image any more, so it runs with
+`TES_TANPA_MINIO=1`: everything that only needs PostgreSQL still runs there, and
+tests that touch file storage run locally only. Do not set it on your machine.
+
 `testdata/akses.golden` records which roles can reach each endpoint. When an access
 change is intentional, refresh it from `backend/` and commit the result:
 `go test ./internal/router -run TestFotoHakAkses -update`.
