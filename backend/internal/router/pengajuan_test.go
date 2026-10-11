@@ -221,20 +221,23 @@ func TestAlurPengajuan(t *testing.T) {
 	}
 }
 
-// Pemilik bisa menghapus pengajuannya selagi SUBMITTED.
+// Pemilik bisa menghapus pengajuannya selagi SUBMITTED, dan penghapusan itu
+// tidak mengganggu pengajuan berikutnya: nomor tiket yang sudah dipakai tidak
+// boleh dipakai lagi.
 func TestHapusPengajuan(t *testing.T) {
 	pemilik := masukPeran(t, entity.RoleUser)
 	for _, m := range semuaModulPengajuan {
 		t.Run(m.nama, func(t *testing.T) {
 			p := m.buat(t, pemilik)
-			// Baris yang dihapus dibuang sungguhan setelah tes. Kalau dibiarkan,
-			// pengajuan berikutnya gagal dibuat (lihat BuatSetelahHapusBerhasil).
-			t.Cleanup(func() { dbTes.Exec("DELETE FROM "+m.tabel+" WHERE id = ?", p.ID) })
 
 			harapKode(t, panggil(t, pemilik, http.MethodDelete, m.url("", "/", p.ID), nil), http.StatusOK, "pemilik menghapus")
 			harapKode(t, panggil(t, pemilik, http.MethodGet, m.url("", "/", p.ID), nil), http.StatusNotFound, "melihat yang sudah dihapus")
 			if m.adaDiDaftar(t, pemilik, "", p.ID) {
 				t.Error("pengajuan yang dihapus masih muncul di daftar")
+			}
+
+			if lagi := m.buat(t, pemilik); lagi.TicketNumber == p.TicketNumber {
+				t.Errorf("nomor tiket %s dipakai ulang setelah pengajuannya dihapus", lagi.TicketNumber)
 			}
 		})
 	}
@@ -320,15 +323,6 @@ func TestPengajuanBelumBenar(t *testing.T) {
 				if w.Code >= 500 {
 					t.Fatalf("daftar dengan limit=0: dapat %d", w.Code)
 				}
-			})
-
-			t.Run("BuatSetelahHapusBerhasil", func(t *testing.T) {
-				bugDiketahui(t, "setelah satu pengajuan dihapus, nomor tiket berikutnya bentrok dan semua pengajuan baru gagal (500) sampai ganti bulan")
-				p := m.buat(t, pemilik)
-				t.Cleanup(func() { dbTes.Exec("DELETE FROM "+m.tabel+" WHERE id = ?", p.ID) })
-				harapKode(t, panggil(t, pemilik, http.MethodDelete, m.url("", "/", p.ID), nil), http.StatusOK, "pemilik menghapus")
-				w := panggilForm(t, pemilik, http.MethodPost, m.url(""), m.kolom)
-				harapKode(t, w, http.StatusCreated, "membuat pengajuan setelah ada yang dihapus")
 			})
 
 			t.Run("PDFMilikOrangLainDitolak", func(t *testing.T) {
