@@ -28,6 +28,7 @@ import (
 	"legal-riu-portal/internal/storage"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/joho/godotenv"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/driver/postgres"
@@ -160,10 +161,6 @@ func surelPeran(peran entity.UserRole) string {
 // buatUserTes membuat satu user per peran, plus USER kedua yang dipakai tes
 // override permission dan sebagai "orang lain" di tes kepemilikan.
 func buatUserTes() error {
-	hash, err := bcrypt.GenerateFromPassword([]byte(sandiTes), bcrypt.MinCost)
-	if err != nil {
-		return err
-	}
 	companyID, err := seed.FindFirstCompanyID(dbTes)
 	if err != nil {
 		return err
@@ -174,21 +171,29 @@ func buatUserTes() error {
 		daftar[surelPeran(peran)] = peran
 	}
 	for surel, peran := range daftar {
-		user := entity.User{
-			FullName:     "Tes " + string(peran),
-			Email:        surel,
-			PasswordHash: string(hash),
-			Position:     "Staff",
-			Division:     "Divisi Tes",
-			Role:         peran,
-			Status:       entity.UserActive,
-			CompanyID:    &companyID,
-		}
-		if err := dbTes.Create(&user).Error; err != nil {
+		if err := tambahUser(surel, peran, companyID); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// tambahUser membuat user aktif dengan sandi tes, langsung di database.
+func tambahUser(surel string, peran entity.UserRole, companyID uuid.UUID) error {
+	hash, err := bcrypt.GenerateFromPassword([]byte(sandiTes), bcrypt.MinCost)
+	if err != nil {
+		return err
+	}
+	return dbTes.Create(&entity.User{
+		FullName:     "Tes " + string(peran),
+		Email:        surel,
+		PasswordHash: string(hash),
+		Position:     "Staff",
+		Division:     "Divisi Tes",
+		Role:         peran,
+		Status:       entity.UserActive,
+		CompanyID:    &companyID,
+	}).Error
 }
 
 // masuk login lewat endpoint asli dan mengembalikan access token. Hasilnya
