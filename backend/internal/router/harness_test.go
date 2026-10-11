@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"mime/multipart"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -40,7 +41,7 @@ const (
 	namaDBTes     = "legal_riu_test"
 	namaBucketTes = "legal-riu-test"
 	sandiTes      = "sandi-tes-123"
-	surelOverride = "tes-override@example.com"
+	surelUserLain = "tes-user-lain@example.com"
 )
 
 var semuaPeran = []entity.UserRole{
@@ -156,8 +157,8 @@ func surelPeran(peran entity.UserRole) string {
 	return "tes-" + strings.ToLower(strings.ReplaceAll(string(peran), "_", "-")) + "@example.com"
 }
 
-// buatUserTes membuat satu user per peran, plus satu user berperan USER yang
-// khusus dipakai tes override permission.
+// buatUserTes membuat satu user per peran, plus USER kedua yang dipakai tes
+// override permission dan sebagai "orang lain" di tes kepemilikan.
 func buatUserTes() error {
 	hash, err := bcrypt.GenerateFromPassword([]byte(sandiTes), bcrypt.MinCost)
 	if err != nil {
@@ -168,7 +169,7 @@ func buatUserTes() error {
 		return err
 	}
 
-	daftar := map[string]entity.UserRole{surelOverride: entity.RoleUser}
+	daftar := map[string]entity.UserRole{surelUserLain: entity.RoleUser}
 	for _, peran := range semuaPeran {
 		daftar[surelPeran(peran)] = peran
 	}
@@ -234,15 +235,96 @@ func panggil(t testing.TB, token, method, path string, body any) *httptest.Respo
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
+	return kirim(t, token, req)
+}
+
+// berkas adalah satu file yang dikirim lewat form.
+type berkas struct {
+	kolom, nama string
+	isi         []byte
+}
+
+// panggilForm mengirim multipart/form-data, seperti form unggah di frontend.
+func panggilForm(t testing.TB, token, method, path string, kolom map[string]string, files ...berkas) *httptest.ResponseRecorder {
+	t.Helper()
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	for nama, nilai := range kolom {
+		if err := mw.WriteField(nama, nilai); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, f := range files {
+		bagian, err := mw.CreateFormFile(f.kolom, f.nama)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := bagian.Write(f.isi); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := mw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(method, path, &buf)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	return kirim(t, token, req)
+}
+
+func kirim(t testing.TB, token string, req *http.Request) *httptest.ResponseRecorder {
+	t.Helper()
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
-		if method != http.MethodGet && method != http.MethodHead {
+		if req.Method != http.MethodGet && req.Method != http.MethodHead {
 			req.Header.Set("X-CSRF-Token", ambilCSRF(t, token))
 		}
 	}
 	w := httptest.NewRecorder()
 	app.ServeHTTP(w, req)
 	return w
+}
+
+// harapKode menggagalkan tes kalau kode status tidak sesuai, dan menampilkan
+// isi jawaban supaya penyebabnya langsung terlihat.
+func harapKode(t testing.TB, w *httptest.ResponseRecorder, kode int, konteks string) {
+	t.Helper()
+	if w.Code != kode {
+		t.Fatalf("%s: dapat %d, harap %d\n  isi: %s", konteks, w.Code, kode, w.Body)
+	}
+}
+
+// isiData membaca kolom "data" dari jawaban API ke dalam tujuan.
+func isiData(t testing.TB, w *httptest.ResponseRecorder, tujuan any) {
+	t.Helper()
+	var amplop struct {
+		Data json.RawMessage `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &amplop); err != nil {
+		t.Fatalf("jawaban bukan JSON: %v\n  isi: %s", err, w.Body)
+	}
+	if err := json.Unmarshal(amplop.Data, tujuan); err != nil {
+		t.Fatalf("kolom data tidak terbaca: %v\n  isi: %s", err, w.Body)
+	}
+}
+
+// bugDiketahui melewati tes yang harapannya benar tetapi belum dipenuhi kode,
+// supaya temuan tercatat tanpa membuat seluruh pemeriksaan merah. Setelah
+// perbaikannya masuk, hapus panggilannya. TES_BUG=1 menjalankan tesnya apa
+// adanya, untuk memastikan sebuah perbaikan benar-benar bekerja.
+func bugDiketahui(t testing.TB, ringkas string) {
+	t.Helper()
+	if os.Getenv("TES_BUG") == "" {
+		t.Skip("BUG DIKETAHUI: " + ringkas)
+	}
+}
+
+// butuhMinIO melewati tes yang mengunggah atau mengunduh file saat aplikasi
+// dirakit tanpa penyimpanan file (GitHub Actions).
+func butuhMinIO(t testing.TB) {
+	t.Helper()
+	if tanpaMinIO {
+		t.Skip("butuh MinIO; dilewati karena TES_TANPA_MINIO di-set")
+	}
 }
 
 // ambilCSRF mengambil token CSRF dari jawaban GET, sama seperti yang dilakukan

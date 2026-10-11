@@ -115,6 +115,10 @@ GitHub Actions cannot pull the MinIO image any more, so it runs with
 `TES_TANPA_MINIO=1`: everything that only needs PostgreSQL still runs there, and
 tests that touch file storage run locally only. Do not set it on your machine.
 
+Tests that describe correct behaviour the code does not have yet are skipped with
+`bugDiketahui(...)`; run `go test ./internal/router -v` and look for "BUG DIKETAHUI" to
+list them. After fixing one, check it with `TES_BUG=1` and then delete that call.
+
 `testdata/akses.golden` records which roles can reach each endpoint. When an access
 change is intentional, refresh it from `backend/` and commit the result:
 `go test ./internal/router -run TestFotoHakAkses -update`.

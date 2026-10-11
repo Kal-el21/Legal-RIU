@@ -131,10 +131,10 @@ func TestFotoHakAkses(t *testing.T) {
 // bawaan peran, dan menghapus override mengembalikan keadaan semula.
 func TestOverridePermission(t *testing.T) {
 	admin := masukPeran(t, entity.RoleAdmin)
-	user := masuk(t, surelOverride)
+	user := masuk(t, surelUserLain)
 
 	var target entity.User
-	if err := dbTes.Where("email = ?", surelOverride).First(&target).Error; err != nil {
+	if err := dbTes.Where("email = ?", surelUserLain).First(&target).Error; err != nil {
 		t.Fatal(err)
 	}
 	atur := func(overrides ...map[string]string) {
