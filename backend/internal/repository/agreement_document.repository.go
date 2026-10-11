@@ -1,7 +1,6 @@
 package repository
 
 import (
-	"time"
 
 	"legal-riu-portal/internal/entity"
 
@@ -18,7 +17,7 @@ type AgreementDocumentRepository interface {
 	AddAttachment(*entity.AgreementAttachment) error
 	FindAttachment(uuid.UUID, uuid.UUID) (*entity.AgreementAttachment, error)
 	LatestUploadRound(uuid.UUID) (int, error)
-	NextAgreementSequence(int) (int64, error)
+	NextTicketSequence(prefix string) (int, error)
 	Complete(uuid.UUID, entity.SubmissionStatus, map[string]interface{}) (bool, error)
 	GetActiveMaster() (*entity.AgreementCompanyMaster, error)
 	SaveMaster(*entity.AgreementCompanyMaster) error
@@ -84,10 +83,8 @@ func (r *agreementDocumentRepository) LatestUploadRound(id uuid.UUID) (int, erro
 	err := r.db.Model(&entity.AgreementAttachment{}).Where("agreement_document_id = ?", id).Select("COALESCE(MAX(upload_round), 0)").Scan(&n).Error
 	return n, err
 }
-func (r *agreementDocumentRepository) NextAgreementSequence(year int) (int64, error) {
-	var n int64
-	err := r.db.Model(&entity.AgreementDocument{}).Where("agreement_number LIKE ?", "%/"+time.Date(year, 1, 1, 0, 0, 0, 0, time.Local).Format("2006")).Count(&n).Error
-	return n + 1, err
+func (r *agreementDocumentRepository) NextTicketSequence(prefix string) (int, error) {
+	return nextTicketSequence(r.db, &entity.AgreementDocument{}, prefix)
 }
 func (r *agreementDocumentRepository) Complete(id uuid.UUID, expected entity.SubmissionStatus, updates map[string]interface{}) (bool, error) {
 	tx := r.db.Model(&entity.AgreementDocument{}).Where("id = ? AND status = ?", id, expected).Updates(updates)
