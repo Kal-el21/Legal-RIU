@@ -1,6 +1,6 @@
 import { Outlet, Link, useLocation } from 'react-router-dom'
 import { Scale, Menu, Home, ChevronRight, PanelLeftClose, PanelLeftOpen, type LucideIcon } from 'lucide-react'
-import { useState, useSyncExternalStore } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import { cn } from '@/lib/utils'
 import SidebarUserButton from '@/components/common/SidebarUserButton'
 import NotificationDropdown from '@/components/common/NotificationDropdown'
@@ -53,6 +53,16 @@ export default function PanelLayout({ panelLabel, settingsPath, nav }: PanelLayo
     setCollapsedPref(!collapsedPref)
   }
 
+  // Escape menutup laci di layar kecil
+  useEffect(() => {
+    if (!sidebarOpen) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setSidebarOpen(false)
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [sidebarOpen])
+
   const isActive = (href: string, exact?: boolean) =>
     exact ? location.pathname === href : location.pathname.startsWith(href)
 
@@ -84,7 +94,8 @@ export default function PanelLayout({ panelLabel, settingsPath, nav }: PanelLayo
         sidebarCollapsed ? 'w-16' : 'w-60',
         'border-r border-white/10',
         'lg:translate-x-0 lg:h-screen',
-        sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        // `invisible` mengeluarkan menu dari urutan Tab selama laci tertutup
+        sidebarOpen ? 'translate-x-0' : '-translate-x-full max-lg:invisible'
       )} style={{ background: '#0B2545' }}>
         <div className={cn('h-16 flex items-center border-b border-white/10 overflow-hidden', sidebarCollapsed ? 'px-4' : 'px-5')}>
           <Link to="/" className="flex items-center gap-2.5">
