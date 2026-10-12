@@ -495,6 +495,7 @@ func RunAllMigrationsAndSeeds(db *gorm.DB, store *storage.MinIOClient) error {
 		&entity.CaseChronology{},
 		&entity.AuditLog{},
 		&entity.NotificationSetting{},
+		&entity.NotificationRead{},
 		&entity.UserSettings{},
 		&entity.Company{},
 		&entity.PurposeType{},

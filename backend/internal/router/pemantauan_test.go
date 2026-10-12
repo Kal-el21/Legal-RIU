@@ -79,7 +79,6 @@ type pengingat struct {
 // Pengajuan yang lama tidak ditangani muncul sebagai pengingat merah, dan bisa
 // ditandai sudah dibaca.
 func TestPengingat(t *testing.T) {
-	bugDiketahui(t, "tabel notification_reads tidak ikut dibuat saat migrasi, jadi di database baru semua endpoint pengingat (lonceng notifikasi) menjawab 500")
 	const surel = "tes-pengingat@example.com"
 	userKhusus(t, surel)
 	pemilik := masuk(t, surel)
