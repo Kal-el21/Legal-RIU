@@ -4,6 +4,8 @@ import type { ApiResponse, UserDashboardStats, AdminDashboardStats, LegalOpinion
 export interface ReminderParams {
   page?: number
   limit?: number
+  // Hanya pengajuan yang sudah melewati ambang kuning atau merah
+  warning_only?: boolean
 }
 
 export interface MarkReminderReadPayload {

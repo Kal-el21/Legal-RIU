@@ -13,7 +13,6 @@ export type MenuItem = {
   icon: LucideIcon
   permissions: string[]
   exact?: boolean
-  badge?: number
 }
 
 // Grup menu yang bisa dilipat, mis. Data Master di panel Admin
@@ -168,14 +167,7 @@ export default function PanelLayout({ panelLabel, settingsPath, nav }: PanelLayo
               )}
               title={sidebarCollapsed ? item.label : undefined}
             >
-              <span className="relative flex-shrink-0">
-                <item.icon className="w-4 h-4" />
-                {item.badge ? (
-                  <span className="absolute -top-1.5 -right-2 inline-flex items-center justify-center rounded-full text-[10px] font-bold px-1 min-w-[16px] h-4 bg-red-500 text-white border-2 border-[#0B2545]">
-                    {item.badge}
-                  </span>
-                ) : null}
-              </span>
+              <item.icon className="w-4 h-4 flex-shrink-0" />
               {!sidebarCollapsed && item.label}
               {!sidebarCollapsed && isActive(item.href, item.exact) && <ChevronRight className="w-3.5 h-3.5 ml-auto opacity-60" />}
             </Link>

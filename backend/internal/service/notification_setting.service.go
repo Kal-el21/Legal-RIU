@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"slices"
 	"sort"
 	"time"
 
@@ -18,9 +19,9 @@ type NotificationSettingService interface {
 	Update(id string, req dto.UpdateNotificationSettingRequest) (*dto.NotificationSettingResponse, error)
 	GetActiveSettings() (map[string]map[string]*entity.NotificationSetting, error)
 	GetThresholdFor(submissionType, warningLevel string) (int, error)
-	GetReminders(userID string, role string, page int, limit int) (*dto.RemindersResponse, error)
+	GetReminders(userID string, access ReminderAccess, page int, limit int, warningOnly bool) (*dto.RemindersResponse, error)
 	MarkReminderRead(userID string, submissionType string, submissionID string) error
-	MarkAllRemindersRead(userID string, role string) error
+	MarkAllRemindersRead(userID string, access ReminderAccess) error
 }
 
 type notificationSettingService struct {
@@ -152,22 +153,67 @@ const (
 	WarningLevelRed    WarningLevel = "RED"
 )
 
-func (s *notificationSettingService) GetReminders(userID string, role string, page int, limit int) (*dto.RemindersResponse, error) {
+// ReminderScope adalah hak seorang user atas satu modul pengajuan, dihitung
+// handler dari permission efektifnya.
+type ReminderScope struct {
+	Owner     bool // boleh melihat pengajuan: diberi kabar saat status pengajuannya berubah
+	Processor bool // boleh mengubah status: diberi kabar pengajuan masuk dan peringatan
+}
+
+// ReminderAccess memetakan submission_type ke hak user di modul itu.
+type ReminderAccess map[string]ReminderScope
+
+// Status hasil tindakan pemroses, jadi kabar bagi pemilik pengajuan.
+var ownerStatuses = []entity.SubmissionStatus{
+	entity.StatusUnderReview, entity.StatusNeedRevision, entity.StatusRejected, entity.StatusCompleted,
+}
+
+// Status yang masih menunggu pemroses.
+var processorStatuses = []entity.SubmissionStatus{
+	entity.StatusSubmitted, entity.StatusResubmitted, entity.StatusUnderReview,
+}
+
+// reminderSource adalah bagian pengajuan yang dibutuhkan lonceng, sama untuk
+// semua modul.
+type reminderSource struct {
+	submissionType  string
+	id              uuid.UUID
+	ownerID         uuid.UUID
+	requesterName   string
+	ticketNumber    string
+	title           string
+	status          entity.SubmissionStatus
+	note            string
+	createdAt       time.Time
+	statusUpdatedAt *time.Time
+}
+
+// reminderRow adalah satu baris lonceng berikut waktu terakhir ia berubah
+// (masuk status sekarang atau naik level), yang dipakai untuk mengurutkan.
+type reminderRow struct {
+	item      dto.ReminderItem
+	changedAt time.Time
+}
+
+func (s *notificationSettingService) GetReminders(userID string, access ReminderAccess, page int, limit int, warningOnly bool) (*dto.RemindersResponse, error) {
 	uid, err := uuid.Parse(userID)
 	if err != nil {
 		return nil, err
 	}
 
-	result, err := s.buildReminderResponse(uid, role)
+	rows, err := s.loadReminders(uid, access)
 	if err != nil {
 		return nil, err
 	}
-
-	if err := s.applyReminderReadState(result, uid); err != nil {
+	if err := s.applyReminderReadState(rows, uid); err != nil {
 		return nil, err
 	}
-	s.applyReminderPagination(result, page, limit)
-	return result, nil
+	if warningOnly {
+		rows = slices.DeleteFunc(rows, func(row reminderRow) bool {
+			return row.item.WarningLevel == string(WarningLevelNone)
+		})
+	}
+	return paginateReminders(rows, page, limit), nil
 }
 
 func (s *notificationSettingService) MarkReminderRead(userID string, submissionType string, submissionID string) error {
@@ -186,29 +232,25 @@ func (s *notificationSettingService) MarkReminderRead(userID string, submissionT
 	return s.repo.MarkNotificationRead(uid, submissionType, submissionUUID)
 }
 
-func (s *notificationSettingService) MarkAllRemindersRead(userID string, role string) error {
+func (s *notificationSettingService) MarkAllRemindersRead(userID string, access ReminderAccess) error {
 	uid, err := uuid.Parse(userID)
 	if err != nil {
 		return errors.New("user tidak valid")
 	}
 
-	result, err := s.buildReminderResponse(uid, role)
+	rows, err := s.loadReminders(uid, access)
 	if err != nil {
 		return err
 	}
 
-	items := make([]dto.ReminderItem, 0, len(result.Red)+len(result.Yellow))
-	items = append(items, result.Red...)
-	items = append(items, result.Yellow...)
-
-	reads := make([]entity.NotificationRead, 0, len(items))
-	for _, item := range items {
-		submissionID, err := uuid.Parse(item.ID)
+	reads := make([]entity.NotificationRead, 0, len(rows))
+	for _, row := range rows {
+		submissionID, err := uuid.Parse(row.item.ID)
 		if err != nil {
 			return errors.New("submission tidak valid")
 		}
 		reads = append(reads, entity.NotificationRead{
-			SubmissionType: item.SubmissionType,
+			SubmissionType: row.item.SubmissionType,
 			SubmissionID:   submissionID,
 		})
 	}
@@ -216,212 +258,135 @@ func (s *notificationSettingService) MarkAllRemindersRead(userID string, role st
 	return s.repo.MarkNotificationsRead(uid, reads)
 }
 
-func (s *notificationSettingService) buildReminderResponse(userID uuid.UUID, role string) (*dto.RemindersResponse, error) {
+// loadReminders mengumpulkan semua baris lonceng seorang user dari tiap modul
+// pengajuan yang boleh ia lihat atau proses.
+func (s *notificationSettingService) loadReminders(userID uuid.UUID, access ReminderAccess) ([]reminderRow, error) {
 	settings, err := s.GetActiveSettings()
 	if err != nil {
 		return nil, err
 	}
 
-	yellowThresholds := make(map[string]int)
-	redThresholds := make(map[string]int)
-
-	if val, ok := settings["legal_opinion"]; ok {
-		if setting, ok := val["YELLOW"]; ok {
-			yellowThresholds["legal_opinion"] = setting.DaysThreshold
-		}
-		if setting, ok := val["RED"]; ok {
-			redThresholds["legal_opinion"] = setting.DaysThreshold
-		}
-	}
-	if val, ok := settings["document_review"]; ok {
-		if setting, ok := val["YELLOW"]; ok {
-			yellowThresholds["document_review"] = setting.DaysThreshold
-		}
-		if setting, ok := val["RED"]; ok {
-			redThresholds["document_review"] = setting.DaysThreshold
+	now := time.Now()
+	rows := []reminderRow{}
+	add := func(src reminderSource) {
+		thresholds := settings[src.submissionType]
+		row, ok := buildReminderRow(src, access[src.submissionType], userID,
+			thresholdDays(thresholds["YELLOW"]), thresholdDays(thresholds["RED"]), now)
+		if ok {
+			rows = append(rows, row)
 		}
 	}
 
-	result := &dto.RemindersResponse{
-		Yellow: []dto.ReminderItem{},
-		Red:    []dto.ReminderItem{},
-		None:   []dto.ReminderItem{},
-	}
-
-	if role == "ADMIN" || role == "LEGAL" {
-		if err := s.loadAllReminders(result, yellowThresholds, redThresholds); err != nil {
+	if scope := access["legal_opinion"]; scope.Owner || scope.Processor {
+		items, err := s.dashboardRepo.ReminderLegalOpinions(userID, statusesIf(scope.Owner, ownerStatuses), statusesIf(scope.Processor, processorStatuses))
+		if err != nil {
 			return nil, err
 		}
-		return result, nil
+		for i := range items {
+			lo := &items[i]
+			add(reminderSource{
+				submissionType: "legal_opinion", id: lo.ID, ownerID: lo.UserID, requesterName: lo.User.FullName,
+				ticketNumber: lo.TicketNumber, title: lo.Title, status: lo.Status, note: lo.AdminNote,
+				createdAt: lo.CreatedAt, statusUpdatedAt: lo.StatusUpdatedAt,
+			})
+		}
 	}
 
-	if err := s.loadUserReminders(result, userID, yellowThresholds, redThresholds); err != nil {
-		return nil, err
+	if scope := access["document_review"]; scope.Owner || scope.Processor {
+		items, err := s.dashboardRepo.ReminderDocumentReviews(userID, statusesIf(scope.Owner, ownerStatuses), statusesIf(scope.Processor, processorStatuses))
+		if err != nil {
+			return nil, err
+		}
+		for i := range items {
+			dr := &items[i]
+			add(reminderSource{
+				submissionType: "document_review", id: dr.ID, ownerID: dr.UserID, requesterName: dr.User.FullName,
+				ticketNumber: dr.TicketNumber, title: dr.DocumentName, status: dr.Status, note: dr.AdminNote,
+				createdAt: dr.CreatedAt, statusUpdatedAt: dr.StatusUpdatedAt,
+			})
+		}
 	}
-	return result, nil
+
+	return rows, nil
 }
 
-func (s *notificationSettingService) loadAllReminders(result *dto.RemindersResponse, yellowThresholds, redThresholds map[string]int) error {
-	los, err := s.dashboardRepo.RecentAllLegalOpinions(1000)
-	if err != nil {
-		return err
-	}
-	for i := range los {
-		item := s.mapLOToReminder(&los[i], yellowThresholds["legal_opinion"], redThresholds["legal_opinion"])
-		s.appendReminder(result, &item)
-	}
-
-	drs, err := s.dashboardRepo.RecentAllDocumentReviews(1000)
-	if err != nil {
-		return err
-	}
-	for i := range drs {
-		item := s.mapDRToReminder(&drs[i], yellowThresholds["document_review"], redThresholds["document_review"])
-		s.appendReminder(result, &item)
+func statusesIf(ok bool, statuses []entity.SubmissionStatus) []entity.SubmissionStatus {
+	if ok {
+		return statuses
 	}
 	return nil
 }
 
-func (s *notificationSettingService) loadUserReminders(result *dto.RemindersResponse, userID uuid.UUID, yellowThresholds, redThresholds map[string]int) error {
-	los, err := s.dashboardRepo.RecentLegalOpinionsByUser(userID, 1000)
-	if err != nil {
-		return err
+// thresholdDays mengembalikan 0 untuk ambang yang tidak ada atau tidak aktif.
+func thresholdDays(setting *entity.NotificationSetting) int {
+	if setting == nil {
+		return 0
 	}
-	for i := range los {
-		item := s.mapLOToReminder(&los[i], yellowThresholds["legal_opinion"], redThresholds["legal_opinion"])
-		s.appendReminder(result, &item)
-	}
-
-	drs, err := s.dashboardRepo.RecentDocumentReviewsByUser(userID, 1000)
-	if err != nil {
-		return err
-	}
-	for i := range drs {
-		item := s.mapDRToReminder(&drs[i], yellowThresholds["document_review"], redThresholds["document_review"])
-		s.appendReminder(result, &item)
-	}
-	return nil
+	return setting.DaysThreshold
 }
 
-func (s *notificationSettingService) mapLOToReminder(lo *entity.LegalOpinion, yellowDays, redDays int) dto.ReminderItem {
-	submittedAt := lo.CreatedAt
-	lastUpdatedAt := &lo.UpdatedAt
-	if lo.UpdatedAt.Equal(lo.CreatedAt) {
-		lastUpdatedAt = nil
+// buildReminderRow menentukan apakah satu pengajuan masuk lonceng seorang user.
+// Pemilik diberi kabar status yang diubah pemroses. Pemroses diberi kabar
+// pengajuan yang baru masuk atau diajukan ulang, dan pengajuan yang sedang
+// direview hanya kalau sudah melewati ambang peringatan.
+func buildReminderRow(src reminderSource, scope ReminderScope, viewerID uuid.UUID, yellowDays, redDays int, now time.Time) (reminderRow, bool) {
+	eventAt := src.createdAt
+	if src.statusUpdatedAt != nil {
+		eventAt = *src.statusUpdatedAt
+	}
+	daysWaiting := int(now.Sub(eventAt).Hours() / 24)
+
+	// Peringatan hanya untuk pemroses, dan hanya selama pengajuan masih menunggunya
+	level, changedAt := WarningLevelNone, eventAt
+	if scope.Processor && slices.Contains(processorStatuses, src.status) {
+		level, changedAt = warningLevel(eventAt, daysWaiting, yellowDays, redDays)
 	}
 
-	daysSinceSubmission := int(time.Since(submittedAt).Hours() / 24)
-	daysSinceLastUpdate := 0
-	if lastUpdatedAt != nil {
-		daysSinceLastUpdate = int(time.Since(*lastUpdatedAt).Hours() / 24)
+	asOwner := scope.Owner && src.ownerID == viewerID && slices.Contains(ownerStatuses, src.status)
+	asProcessor := scope.Processor &&
+		(src.status == entity.StatusSubmitted || src.status == entity.StatusResubmitted || level != WarningLevelNone)
+	if !asOwner && !asProcessor {
+		return reminderRow{}, false
 	}
 
-	level, color := s.calculateWarning(daysSinceLastUpdate, daysSinceSubmission, yellowDays, redDays)
-
-	name := ""
-	if lo.User.FullName != "" {
-		name = lo.User.FullName
+	// Catatan lama tetap tersimpan setelah status berganti, jadi hanya dikirim
+	// selagi masih berlaku
+	note := ""
+	if src.status == entity.StatusNeedRevision || src.status == entity.StatusRejected {
+		note = src.note
 	}
 
-	var lastUpdatedStr *string
-	if lastUpdatedAt != nil {
-		value := lastUpdatedAt.Format(time.RFC3339)
-		lastUpdatedStr = &value
-	}
-
-	return dto.ReminderItem{
-		ID:                  lo.ID.String(),
-		SubmissionType:      "legal_opinion",
-		TicketNumber:        lo.TicketNumber,
-		Title:               lo.Title,
-		Status:              string(lo.Status),
-		SubmittedAt:         submittedAt.Format(time.RFC3339),
-		LastUpdatedAt:       lastUpdatedStr,
-		DaysSinceSubmission: daysSinceSubmission,
-		DaysSinceLastUpdate: daysSinceLastUpdate,
-		WarningLevel:        string(level),
-		WarningColor:        color,
-		AssignedLegalName:   name,
-	}
+	return reminderRow{
+		item: dto.ReminderItem{
+			ID:             src.id.String(),
+			SubmissionType: src.submissionType,
+			TicketNumber:   src.ticketNumber,
+			Title:          src.title,
+			Status:         string(src.status),
+			RequesterName:  src.requesterName,
+			Note:           note,
+			EventAt:        eventAt.Format(time.RFC3339),
+			DaysWaiting:    daysWaiting,
+			WarningLevel:   string(level),
+		},
+		changedAt: changedAt,
+	}, true
 }
 
-func (s *notificationSettingService) mapDRToReminder(dr *entity.DocumentReview, yellowDays, redDays int) dto.ReminderItem {
-	submittedAt := dr.CreatedAt
-	lastUpdatedAt := &dr.UpdatedAt
-	if dr.UpdatedAt.Equal(dr.CreatedAt) {
-		lastUpdatedAt = nil
+// warningLevel mengembalikan level peringatan dan kapan pengajuan masuk ke
+// level itu. Ambang 0 berarti tidak aktif.
+func warningLevel(eventAt time.Time, daysWaiting, yellowDays, redDays int) (WarningLevel, time.Time) {
+	const day = 24 * time.Hour
+	if redDays > 0 && daysWaiting >= redDays {
+		return WarningLevelRed, eventAt.Add(time.Duration(redDays) * day)
 	}
-
-	daysSinceSubmission := int(time.Since(submittedAt).Hours() / 24)
-	daysSinceLastUpdate := 0
-	if lastUpdatedAt != nil {
-		daysSinceLastUpdate = int(time.Since(*lastUpdatedAt).Hours() / 24)
+	if yellowDays > 0 && daysWaiting >= yellowDays {
+		return WarningLevelYellow, eventAt.Add(time.Duration(yellowDays) * day)
 	}
-
-	level, color := s.calculateWarning(daysSinceLastUpdate, daysSinceSubmission, yellowDays, redDays)
-
-	name := ""
-	if dr.User.FullName != "" {
-		name = dr.User.FullName
-	}
-
-	var lastUpdatedStr *string
-	if lastUpdatedAt != nil {
-		value := lastUpdatedAt.Format(time.RFC3339)
-		lastUpdatedStr = &value
-	}
-
-	return dto.ReminderItem{
-		ID:                  dr.ID.String(),
-		SubmissionType:      "document_review",
-		TicketNumber:        dr.TicketNumber,
-		Title:               dr.DocumentName,
-		Status:              string(dr.Status),
-		SubmittedAt:         submittedAt.Format(time.RFC3339),
-		LastUpdatedAt:       lastUpdatedStr,
-		DaysSinceSubmission: daysSinceSubmission,
-		DaysSinceLastUpdate: daysSinceLastUpdate,
-		WarningLevel:        string(level),
-		WarningColor:        color,
-		AssignedLegalName:   name,
-	}
+	return WarningLevelNone, eventAt
 }
 
-func (s *notificationSettingService) calculateWarning(daysSinceLastUpdate, daysSinceSubmission, yellowDays, redDays int) (WarningLevel, string) {
-	if yellowDays <= 0 && redDays > 0 {
-		if daysSinceSubmission >= redDays || daysSinceLastUpdate >= redDays {
-			return WarningLevelRed, "#DC2626"
-		}
-		return WarningLevelNone, ""
-	}
-	if redDays <= 0 && yellowDays > 0 {
-		if daysSinceSubmission >= yellowDays || daysSinceLastUpdate >= yellowDays {
-			return WarningLevelYellow, "#F59E0B"
-		}
-		return WarningLevelNone, ""
-	}
-
-	if daysSinceSubmission >= redDays || daysSinceLastUpdate >= redDays {
-		return WarningLevelRed, "#DC2626"
-	}
-	if daysSinceSubmission >= yellowDays || daysSinceLastUpdate >= yellowDays {
-		return WarningLevelYellow, "#F59E0B"
-	}
-	return WarningLevelNone, ""
-}
-
-func (s *notificationSettingService) appendReminder(result *dto.RemindersResponse, item *dto.ReminderItem) {
-	switch WarningLevel(item.WarningLevel) {
-	case WarningLevelRed:
-		result.Red = append(result.Red, *item)
-	case WarningLevelYellow:
-		result.Yellow = append(result.Yellow, *item)
-	default:
-		result.None = append(result.None, *item)
-	}
-}
-
-func (s *notificationSettingService) applyReminderReadState(result *dto.RemindersResponse, userID uuid.UUID) error {
+func (s *notificationSettingService) applyReminderReadState(rows []reminderRow, userID uuid.UUID) error {
 	reads, err := s.repo.GetNotificationReadsByUser(userID)
 	if err != nil {
 		return err
@@ -431,64 +396,47 @@ func (s *notificationSettingService) applyReminderReadState(result *dto.Reminder
 	for _, read := range reads {
 		readMap[read.SubmissionType+":"+read.SubmissionID.String()] = read.IsRead
 	}
-
-	apply := func(items []dto.ReminderItem) {
-		for i := range items {
-			items[i].IsRead = readMap[items[i].SubmissionType+":"+items[i].ID]
-		}
+	for i := range rows {
+		rows[i].item.IsRead = readMap[rows[i].item.SubmissionType+":"+rows[i].item.ID]
 	}
-
-	apply(result.Red)
-	apply(result.Yellow)
-	apply(result.None)
 	return nil
 }
 
-func (s *notificationSettingService) applyReminderPagination(result *dto.RemindersResponse, page int, limit int) {
+// paginateReminders mengurutkan dari yang terakhir berubah, lalu memotong
+// sesuai halaman.
+func paginateReminders(rows []reminderRow, page int, limit int) *dto.RemindersResponse {
 	if page < 1 {
 		page = 1
 	}
 	if limit < 1 {
 		limit = 10
 	}
-	if limit > 100 {
-		limit = 100
-	}
 
-	items := make([]dto.ReminderItem, 0, len(result.Red)+len(result.Yellow))
-	items = append(items, result.Red...)
-	items = append(items, result.Yellow...)
-
-	sort.SliceStable(items, func(i, j int) bool {
-		return items[i].SubmittedAt > items[j].SubmittedAt
+	sort.SliceStable(rows, func(i, j int) bool {
+		return rows[i].changedAt.After(rows[j].changedAt)
 	})
 
-	total := len(items)
 	unreadTotal := 0
-	for _, item := range items {
-		if !item.IsRead {
+	for _, row := range rows {
+		if !row.item.IsRead {
 			unreadTotal++
 		}
 	}
-	totalPages := 0
-	if total > 0 {
-		totalPages = (total + limit - 1) / limit
+
+	total := len(rows)
+	start := min((page-1)*limit, total)
+	end := min(start+limit, total)
+	items := make([]dto.ReminderItem, 0, end-start)
+	for _, row := range rows[start:end] {
+		items = append(items, row.item)
 	}
 
-	start := (page - 1) * limit
-	if start >= total {
-		result.Items = []dto.ReminderItem{}
-	} else {
-		end := start + limit
-		if end > total {
-			end = total
-		}
-		result.Items = items[start:end]
+	return &dto.RemindersResponse{
+		Items:       items,
+		Total:       total,
+		UnreadTotal: unreadTotal,
+		Page:        page,
+		Limit:       limit,
+		TotalPages:  (total + limit - 1) / limit,
 	}
-
-	result.Total = total
-	result.UnreadTotal = unreadTotal
-	result.Page = page
-	result.Limit = limit
-	result.TotalPages = totalPages
 }

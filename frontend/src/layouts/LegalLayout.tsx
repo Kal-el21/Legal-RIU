@@ -1,6 +1,4 @@
 import { Scale, LayoutDashboard, FileText, FileSearch, ScrollText, BarChart3, Files, Handshake } from 'lucide-react'
-import { useQuery } from '@tanstack/react-query'
-import { dashboardService } from '@/services/dashboard.service'
 import PanelLayout, { type MenuItem } from '@/layouts/PanelLayout'
 
 const NAV: MenuItem[] = [
@@ -15,15 +13,5 @@ const NAV: MenuItem[] = [
 ]
 
 export default function LegalLayout() {
-  const { data: reminders } = useQuery({
-    queryKey: ['dashboard', 'legal', 'reminders'],
-    queryFn: () => dashboardService.getReminders(),
-  })
-
-  const reminderCount = (reminders?.yellow?.length ?? 0) + (reminders?.red?.length ?? 0)
-
-  // Jumlah pengingat ditempel di ikon Dashboard
-  const nav = NAV.map((item) => (item.exact ? { ...item, badge: reminderCount } : item))
-
-  return <PanelLayout panelLabel="Legal Panel" settingsPath="/legal/settings" nav={nav} />
+  return <PanelLayout panelLabel="Legal Panel" settingsPath="/legal/settings" nav={NAV} />
 }

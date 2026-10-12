@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Bell, ChevronRight, Loader2 } from 'lucide-react'
@@ -6,13 +6,8 @@ import WarningBadge from '@/components/common/WarningBadge'
 import { dashboardService } from '@/services/dashboard.service'
 import { useAuthStore } from '@/store/auth.store'
 import { cn, formatDate } from '@/lib/utils'
-import { getNotificationBasePath, getReminderDetailPath, getReminderTypeLabel } from '@/lib/reminders'
+import { getNotificationBasePath, getReminderDetailPath, getReminderMessage, getReminderTypeLabel } from '@/lib/reminders'
 import type { ReminderItem } from '@/types'
-
-function normalizeItems(dataItems?: ReminderItem[], red?: ReminderItem[], yellow?: ReminderItem[]) {
-  if (dataItems?.length) return dataItems
-  return [...(red ?? []), ...(yellow ?? [])].slice(0, 5)
-}
 
 export default function NotificationDropdown() {
   const [open, setOpen] = useState(false)
@@ -36,9 +31,9 @@ export default function NotificationDropdown() {
   })
 
   const basePath = getNotificationBasePath(user?.role)
-  const items = useMemo(() => normalizeItems(data?.items, data?.red, data?.yellow), [data])
-  const total = data?.total ?? ((data?.red?.length ?? 0) + (data?.yellow?.length ?? 0))
-  const unreadTotal = data?.unread_total ?? items.filter((item) => !item.is_read).length
+  const items = data?.items ?? []
+  const total = data?.total ?? 0
+  const unreadTotal = data?.unread_total ?? 0
   const countLabel = unreadTotal > 99 ? '99+' : String(unreadTotal)
 
   const handleItemClick = (item: ReminderItem) => {
@@ -93,7 +88,7 @@ export default function NotificationDropdown() {
             {!isLoading && items.length === 0 ? (
               <div className="px-3 py-7 text-center">
                 <p className="text-sm font-medium text-gray-700">Tidak ada notifikasi</p>
-                <p className="mt-1 text-xs text-gray-400">Semua pengajuan masih dalam batas waktu.</p>
+                <p className="mt-1 text-xs text-gray-400">Belum ada kabar baru tentang pengajuan.</p>
               </div>
             ) : null}
 
@@ -110,7 +105,10 @@ export default function NotificationDropdown() {
                 <div className="flex items-start gap-2.5">
                   <div className={cn(
                     'mt-1 h-2 w-2 shrink-0 rounded-full',
-                    item.is_read ? 'bg-gray-300' : item.warning_level === 'RED' ? 'bg-red-500' : 'bg-amber-400',
+                    item.is_read ? 'bg-gray-300'
+                      : item.warning_level === 'RED' ? 'bg-red-500'
+                      : item.warning_level === 'YELLOW' ? 'bg-amber-400'
+                      : 'bg-[#0B2545]',
                   )} />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
@@ -122,11 +120,14 @@ export default function NotificationDropdown() {
                       'mt-0.5 line-clamp-2 text-sm text-gray-900',
                       item.is_read ? 'font-medium' : 'font-semibold',
                     )}>{item.title}</p>
-                    <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                      {item.warning_level !== 'NONE' ? <WarningBadge level={item.warning_level} /> : null}
-                      <span className="text-xs text-gray-400">{item.days_since_submission} hari sejak pengajuan</span>
-                    </div>
-                    <p className="mt-0.5 text-xs text-gray-400">{formatDate(item.submitted_at)}</p>
+                    <p className="mt-0.5 text-xs text-gray-600">{getReminderMessage(item)}</p>
+                    {item.warning_level !== 'NONE' ? (
+                      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                        <WarningBadge level={item.warning_level} />
+                        <span className="text-xs text-gray-400">Menunggu {item.days_waiting} hari</span>
+                      </div>
+                    ) : null}
+                    <p className="mt-0.5 text-xs text-gray-400">{formatDate(item.event_at)}</p>
                   </div>
                 </div>
               </Link>

@@ -5,7 +5,8 @@ import { dashboardService } from '@/services/dashboard.service'
 import StatusBadge from '@/components/common/StatusBadge'
 import WarningBadge from '@/components/common/WarningBadge'
 import { formatDate } from '@/lib/utils'
-import type { SubmissionStatus } from '@/types'
+import { getReminderMessage } from '@/lib/reminders'
+import type { ReminderItem, SubmissionStatus } from '@/types'
 
 function StatCard({ icon: Icon, label, value, color, bg }: {
   icon: React.ElementType; label: string; value: number | undefined; color: string; bg: string
@@ -23,16 +24,7 @@ function StatCard({ icon: Icon, label, value, color, bg }: {
   )
 }
 
-function ReminderItemRow({ item }: { item: {
-  id: string
-  submission_type: string
-  ticket_number: string
-  title: string
-  days_since_submission: number
-  days_since_last_update: number
-  warning_level: string
-  warning_color: string
-} }) {
+function ReminderItemRow({ item }: { item: ReminderItem }) {
   const href = item.submission_type === 'legal_opinion'
     ? `/admin/legal-opinions/${item.id}`
     : `/admin/review-documents/${item.id}`
@@ -42,7 +34,7 @@ function ReminderItemRow({ item }: { item: {
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium text-gray-900 truncate">{item.ticket_number} — {item.title}</p>
         <p className="text-xs text-gray-400 mt-0.5">
-          {item.days_since_submission} hari sejak pengajuan · {item.days_since_last_update} hari sejak update terakhir
+          {getReminderMessage(item)} · menunggu {item.days_waiting} hari
         </p>
       </div>
       <WarningBadge level={item.warning_level as 'YELLOW' | 'RED'} />
@@ -53,11 +45,12 @@ function ReminderItemRow({ item }: { item: {
 function RemindersSection() {
   const { data: reminders } = useQuery({
     queryKey: ['dashboard', 'admin', 'reminders'],
-    queryFn: () => dashboardService.getReminders(),
+    queryFn: () => dashboardService.getReminders({ warning_only: true, limit: 100 }),
   })
 
-  const yellow = reminders?.yellow ?? []
-  const red = reminders?.red ?? []
+  const items = reminders?.items ?? []
+  const yellow = items.filter((item) => item.warning_level === 'YELLOW')
+  const red = items.filter((item) => item.warning_level === 'RED')
 
   if (!yellow.length && !red.length) return null
 

@@ -36,6 +36,19 @@ func parseReminderPagination(c *gin.Context) (int, int) {
 	return page, limit
 }
 
+// reminderAccess menghitung hak user di tiap modul pengajuan dari permission
+// efektifnya. Nama modul sama dengan submission_type di lonceng.
+func reminderAccess(c *gin.Context) service.ReminderAccess {
+	access := service.ReminderAccess{}
+	for _, feature := range []string{"legal_opinion", "document_review"} {
+		access[feature] = service.ReminderScope{
+			Owner:     middleware.HasAnyPermission(c, feature+".view.own", feature+".view.all"),
+			Processor: middleware.HasPermission(c, feature+".update_status.all"),
+		}
+	}
+	return access
+}
+
 // GET /api/v1/admin/notification-settings
 func (h *NotificationSettingHandler) GetAll(c *gin.Context) {
 	settings, err := h.svc.GetAll()
@@ -75,10 +88,9 @@ func (h *NotificationSettingHandler) Update(c *gin.Context) {
 // GET /api/v1/notifications
 func (h *NotificationSettingHandler) GetReminders(c *gin.Context) {
 	userID := middleware.GetUserID(c)
-	role := middleware.GetUserRole(c)
 	page, limit := parseReminderPagination(c)
 
-	result, err := h.svc.GetReminders(userID, role, page, limit)
+	result, err := h.svc.GetReminders(userID, reminderAccess(c), page, limit, c.Query("warning_only") == "true")
 	if err != nil {
 		utils.InternalError(c, err.Error())
 		return
@@ -107,9 +119,8 @@ func (h *NotificationSettingHandler) MarkReminderRead(c *gin.Context) {
 // PATCH /api/v1/notifications/read-all
 func (h *NotificationSettingHandler) MarkAllRemindersRead(c *gin.Context) {
 	userID := middleware.GetUserID(c)
-	role := middleware.GetUserRole(c)
 
-	if err := h.svc.MarkAllRemindersRead(userID, role); err != nil {
+	if err := h.svc.MarkAllRemindersRead(userID, reminderAccess(c)); err != nil {
 		utils.InternalError(c, err.Error())
 		return
 	}

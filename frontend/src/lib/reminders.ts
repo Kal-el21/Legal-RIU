@@ -22,6 +22,25 @@ export function getReminderDetailPath(item: ReminderItem, role?: UserRole | null
   return `${basePath}/${segment}/${item.id}`
 }
 
+// Kalimat item lonceng, mengikuti status pengajuan saat ini. Pemilik menerima
+// status yang diubah pemroses; pemroses menerima pengajuan yang masuk.
+export function getReminderMessage(item: ReminderItem) {
+  switch (item.status) {
+    case 'SUBMITTED':
+      return `Pengajuan baru dari ${item.requester_name}`
+    case 'RESUBMITTED':
+      return `Diajukan ulang oleh ${item.requester_name}`
+    case 'NEED_REVISION':
+      return 'Perlu revisi dari Anda'
+    case 'REJECTED':
+      return 'Ditolak'
+    case 'COMPLETED':
+      return 'Selesai, hasil bisa diunduh'
+    default:
+      return 'Sedang direview'
+  }
+}
+
 export function getReminderTypeLabel(item: ReminderItem) {
   return item.submission_type === 'document_review' ? 'Review Dokumen' : 'Legal Opinion'
 }

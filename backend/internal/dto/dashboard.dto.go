@@ -18,25 +18,20 @@ type AdminDashboardStats struct {
 }
 
 type ReminderItem struct {
-	ID                  string  `json:"id"`
-	SubmissionType      string  `json:"submission_type"`
-	TicketNumber        string  `json:"ticket_number"`
-	Title               string  `json:"title"`
-	Status              string  `json:"status"`
-	SubmittedAt         string  `json:"submitted_at"`
-	LastUpdatedAt       *string `json:"last_updated_at"`
-	DaysSinceSubmission int     `json:"days_since_submission"`
-	DaysSinceLastUpdate int     `json:"days_since_last_update"`
-	WarningLevel        string  `json:"warning_level"`
-	WarningColor        string  `json:"warning_color"`
-	IsRead              bool    `json:"is_read"`
-	AssignedLegalName   string  `json:"assigned_legal_name,omitempty"`
+	ID             string `json:"id"`
+	SubmissionType string `json:"submission_type"`
+	TicketNumber   string `json:"ticket_number"`
+	Title          string `json:"title"`
+	Status         string `json:"status"`
+	RequesterName  string `json:"requester_name"`
+	Note           string `json:"note,omitempty"` // catatan pemroses saat minta revisi atau menolak
+	EventAt        string `json:"event_at"`       // kapan pengajuan masuk ke status sekarang
+	DaysWaiting    int    `json:"days_waiting"`   // hari penuh sejak EventAt
+	WarningLevel   string `json:"warning_level"`
+	IsRead         bool   `json:"is_read"`
 }
 
 type RemindersResponse struct {
-	Yellow      []ReminderItem `json:"yellow"`
-	Red         []ReminderItem `json:"red"`
-	None        []ReminderItem `json:"none"`
 	Items       []ReminderItem `json:"items"`
 	Total       int            `json:"total"`
 	UnreadTotal int            `json:"unread_total"`

@@ -7,7 +7,7 @@ import WarningBadge from '@/components/common/WarningBadge'
 import { dashboardService } from '@/services/dashboard.service'
 import { useAuthStore } from '@/store/auth.store'
 import { cn, formatDate } from '@/lib/utils'
-import { getReminderDetailPath, getReminderTypeLabel } from '@/lib/reminders'
+import { getReminderDetailPath, getReminderMessage, getReminderTypeLabel } from '@/lib/reminders'
 import type { ReminderItem, SubmissionStatus } from '@/types'
 
 const PAGE_LIMIT = 10
@@ -19,7 +19,9 @@ function parsePage(value: string | null) {
 
 function NotificationIcon({ item }: { item: ReminderItem }) {
   const Icon = item.submission_type === 'document_review' ? FileSearch : FileText
-  const color = item.warning_level === 'RED' ? 'text-red-600 bg-red-50' : 'text-amber-600 bg-amber-50'
+  const color = item.warning_level === 'RED' ? 'text-red-600 bg-red-50'
+    : item.warning_level === 'YELLOW' ? 'text-amber-600 bg-amber-50'
+    : 'text-gray-600 bg-gray-100'
 
   return (
     <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${color}`}>
@@ -58,7 +60,7 @@ export default function NotificationListPage() {
 
   const items = data?.items ?? []
   const total = data?.total ?? 0
-  const unreadTotal = data?.unread_total ?? items.filter((item) => !item.is_read).length
+  const unreadTotal = data?.unread_total ?? 0
   const totalPages = data?.total_pages ?? 0
   const canGoPrev = page > 1
   const canGoNext = totalPages > 0 && page < totalPages
@@ -89,7 +91,7 @@ export default function NotificationListPage() {
             <Bell className="h-5 w-5 text-red-700" />
             <h1 className="text-2xl font-bold" style={{ color: '#0B2545' }}>Notifikasi</h1>
           </div>
-          <p className="mt-1 text-sm text-gray-500">Daftar pengajuan yang perlu perhatian berdasarkan batas waktu.</p>
+          <p className="mt-1 text-sm text-gray-500">Kabar terbaru tentang pengajuan: perubahan status dan yang menunggu ditindak.</p>
         </div>
         <div className="flex flex-col items-start gap-2 sm:items-end">
           <div className="text-sm text-gray-500">
@@ -118,7 +120,7 @@ export default function NotificationListPage() {
         {!isLoading && items.length === 0 ? (
           <div className="px-6 py-16 text-center">
             <p className="text-sm font-medium text-gray-700">Tidak ada notifikasi</p>
-            <p className="mt-1 text-sm text-gray-400">Belum ada pengajuan yang melewati batas peringatan.</p>
+            <p className="mt-1 text-sm text-gray-400">Belum ada kabar baru tentang pengajuan.</p>
           </div>
         ) : null}
 
@@ -149,11 +151,15 @@ export default function NotificationListPage() {
                   )}>{item.title}</p>
                   <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-500">
                     <StatusBadge status={item.status as SubmissionStatus} />
-                    <span>{item.days_since_submission} hari sejak pengajuan</span>
-                    <span className="text-gray-300">-</span>
-                    <span>{item.days_since_last_update} hari sejak update terakhir</span>
+                    <span>{getReminderMessage(item)}</span>
+                    {item.warning_level !== 'NONE' ? (
+                      <>
+                        <span className="text-gray-300">-</span>
+                        <span>Menunggu {item.days_waiting} hari</span>
+                      </>
+                    ) : null}
                   </div>
-                  <p className="mt-2 text-xs text-gray-400">Tanggal pengajuan: {formatDate(item.submitted_at)}</p>
+                  <p className="mt-2 text-xs text-gray-400">{formatDate(item.event_at)}</p>
                 </div>
                 <ChevronRight className="mt-2 h-4 w-4 shrink-0 text-gray-300" />
               </Link>

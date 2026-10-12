@@ -66,59 +66,153 @@ func TestDashboard(t *testing.T) {
 	}
 }
 
-type pengingat struct {
-	Red []struct {
-		ID             string `json:"id"`
-		SubmissionType string `json:"submission_type"`
-		IsRead         bool   `json:"is_read"`
-	} `json:"red"`
-	Total       int `json:"total"`
-	UnreadTotal int `json:"unread_total"`
+// barisPengingat adalah satu baris lonceng notifikasi.
+type barisPengingat struct {
+	ID             string `json:"id"`
+	SubmissionType string `json:"submission_type"`
+	Status         string `json:"status"`
+	Note           string `json:"note"`
+	WarningLevel   string `json:"warning_level"`
+	IsRead         bool   `json:"is_read"`
 }
 
-// Pengajuan yang lama tidak ditangani muncul sebagai pengingat merah, dan bisa
-// ditandai sudah dibaca.
+type pengingat struct {
+	Items       []barisPengingat `json:"items"`
+	Total       int              `json:"total"`
+	UnreadTotal int              `json:"unread_total"`
+}
+
+const alamatPengingat = "/api/v1/notifications"
+
+// ambilPengingat mengambil lonceng milik token. saringan ditempel ke alamat,
+// mis. "&warning_only=true".
+func ambilPengingat(t *testing.T, token, saringan string) pengingat {
+	t.Helper()
+	w := panggil(t, token, http.MethodGet, alamatPengingat+"?limit=100"+saringan, nil)
+	harapKode(t, w, http.StatusOK, "mengambil pengingat")
+	var p pengingat
+	isiData(t, w, &p)
+	return p
+}
+
+// cari mengembalikan baris lonceng untuk satu pengajuan, atau nil kalau tidak ada.
+func (p pengingat) cari(id string) *barisPengingat {
+	for i := range p.Items {
+		if p.Items[i].ID == id {
+			return &p.Items[i]
+		}
+	}
+	return nil
+}
+
+// Lonceng memberi kabar ke pemilik setiap status pengajuannya diubah pemroses,
+// dan ke pemroses saat ada pengajuan masuk atau yang terlalu lama belum selesai.
 func TestPengingat(t *testing.T) {
 	const surel = "tes-pengingat@example.com"
 	userKhusus(t, surel)
 	pemilik := masuk(t, surel)
-	const alamat = "/api/v1/notifications"
+	legal := masukPeran(t, entity.RoleLegal)
+	admin := masukPeran(t, entity.RoleAdmin)
 
-	ambil := func() pengingat {
-		t.Helper()
-		w := panggil(t, pemilik, http.MethodGet, alamat+"?limit=100", nil)
-		harapKode(t, w, http.StatusOK, "mengambil pengingat")
-		var p pengingat
-		isiData(t, w, &p)
-		return p
+	for _, m := range semuaModulPengajuan {
+		t.Run(m.nama, func(t *testing.T) {
+			// harap memeriksa lonceng milik token: status kosong berarti pengajuan
+			// tidak boleh ada di sana.
+			harap := func(token, siapa, id, status string) *barisPengingat {
+				t.Helper()
+				b := ambilPengingat(t, token, "").cari(id)
+				switch {
+				case status == "" && b != nil:
+					t.Errorf("lonceng %s memuat pengajuan berstatus %s, harap tidak ada", siapa, b.Status)
+				case status != "" && b == nil:
+					t.Errorf("lonceng %s tidak memuat pengajuan, harap ada dengan status %s", siapa, status)
+				case status != "" && b.Status != status:
+					t.Errorf("lonceng %s: status %s, harap %s", siapa, b.Status, status)
+				}
+				return b
+			}
+			mundurkan := func(id string) {
+				t.Helper()
+				// Melewati ambang merah bawaan (14 hari). Relatif terhadap hari ini
+				// supaya tes tidak kedaluwarsa.
+				if err := dbTes.Exec("UPDATE "+m.tabel+" SET status_updated_at = now() - interval '30 days' WHERE id = ?", id).Error; err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			// Baru masuk: kabar untuk pemroses, bukan untuk pemilik yang mengajukannya.
+			p := m.buat(t, pemilik)
+			harap(pemilik, "pemilik", p.ID, "")
+			harap(legal, "LEGAL", p.ID, "SUBMITTED")
+			harap(admin, "ADMIN", p.ID, "SUBMITTED")
+
+			// Mulai direview: kabar untuk pemilik, dan hilang dari lonceng pemroses.
+			m.ubahStatus(t, legal, "/legal", p.ID, "UNDER_REVIEW", "", http.StatusOK)
+			harap(pemilik, "pemilik", p.ID, "UNDER_REVIEW")
+			harap(legal, "LEGAL", p.ID, "")
+			harap(admin, "ADMIN", p.ID, "")
+
+			// Terlalu lama direview: muncul lagi di pemroses sebagai peringatan
+			// merah. Peringatan bukan urusan pemilik.
+			mundurkan(p.ID)
+			if b := ambilPengingat(t, legal, "&warning_only=true").cari(p.ID); b == nil || b.WarningLevel != "RED" {
+				t.Errorf("pengajuan 30 hari direview di lonceng LEGAL: %+v, harap peringatan RED", b)
+			}
+			if b := harap(pemilik, "pemilik", p.ID, "UNDER_REVIEW"); b != nil && b.WarningLevel != "NONE" {
+				t.Errorf("pemilik mendapat peringatan %s atas pengajuannya sendiri", b.WarningLevel)
+			}
+			if ambilPengingat(t, pemilik, "&warning_only=true").cari(p.ID) != nil {
+				t.Error("saringan peringatan milik pemilik memuat pengajuannya sendiri")
+			}
+
+			// Minta revisi: catatan sampai ke lonceng pemilik, pemroses tidak lagi menunggu.
+			m.ubahStatus(t, legal, "/legal", p.ID, "NEED_REVISION", "lengkapi data", http.StatusOK)
+			if b := harap(pemilik, "pemilik", p.ID, "NEED_REVISION"); b != nil && b.Note != "lengkapi data" {
+				t.Errorf("catatan revisi di lonceng pemilik: %q", b.Note)
+			}
+			harap(legal, "LEGAL", p.ID, "")
+
+			// Ajukan ulang: tindakan pemilik sendiri, jadi kabarnya untuk pemroses.
+			harapKode(t, panggil(t, pemilik, http.MethodPost, m.url("", "/", p.ID, "/resubmit"), nil), http.StatusOK, "ajukan ulang")
+			harap(pemilik, "pemilik", p.ID, "")
+			harap(legal, "LEGAL", p.ID, "RESUBMITTED")
+
+			// Selesai: kabar untuk pemilik. Pengajuan selesai tidak pernah menjadi
+			// peringatan, selama apa pun umurnya.
+			m.ubahStatus(t, legal, "/legal", p.ID, "UNDER_REVIEW", "", http.StatusOK)
+			m.ubahStatus(t, legal, "/legal", p.ID, "COMPLETED", "", http.StatusOK)
+			mundurkan(p.ID)
+			if b := harap(pemilik, "pemilik", p.ID, "COMPLETED"); b != nil && b.Note != "" {
+				t.Errorf("catatan revisi lama ikut terkirim setelah selesai: %q", b.Note)
+			}
+			harap(legal, "LEGAL", p.ID, "")
+			if ambilPengingat(t, legal, "&warning_only=true").cari(p.ID) != nil {
+				t.Error("pengajuan yang sudah selesai masih menjadi peringatan di lonceng LEGAL")
+			}
+
+			// Tandai dibaca: hanya baris itu, dan hanya untuk user yang menandai.
+			sebelum := ambilPengingat(t, pemilik, "")
+			w := panggil(t, pemilik, http.MethodPatch, alamatPengingat+"/read",
+				map[string]string{"submission_type": sebelum.cari(p.ID).SubmissionType, "submission_id": p.ID})
+			harapKode(t, w, http.StatusOK, "menandai pengingat dibaca")
+			sesudah := ambilPengingat(t, pemilik, "")
+			if b := sesudah.cari(p.ID); b == nil || !b.IsRead || sesudah.UnreadTotal != sebelum.UnreadTotal-1 {
+				t.Errorf("setelah ditandai dibaca: baris %+v, belum dibaca %d (sebelumnya %d)", b, sesudah.UnreadTotal, sebelum.UnreadTotal)
+			}
+		})
 	}
 
+	harapKode(t, panggil(t, pemilik, http.MethodPatch, alamatPengingat+"/read", map[string]string{}), http.StatusBadRequest, "tandai dibaca tanpa isi")
+
+	// Tandai semua dibaca.
 	baru := semuaModulPengajuan[0].buat(t, pemilik)
-	if n := len(ambil().Red); n != 0 {
-		t.Fatalf("pengajuan yang baru dibuat sudah menjadi pengingat merah (%d)", n)
+	semuaModulPengajuan[0].ubahStatus(t, legal, "/legal", baru.ID, "UNDER_REVIEW", "", http.StatusOK)
+	if n := ambilPengingat(t, pemilik, "").UnreadTotal; n == 0 {
+		t.Fatal("kabar baru tidak terhitung belum dibaca")
 	}
-
-	// Dimundurkan 30 hari, melewati ambang merah bawaan (14 hari). Tanggalnya
-	// relatif terhadap hari ini supaya tes tidak kedaluwarsa.
-	if err := dbTes.Exec("UPDATE legal_opinions SET created_at = now() - interval '30 days', updated_at = now() - interval '30 days', status_updated_at = NULL WHERE id = ?", baru.ID).Error; err != nil {
-		t.Fatal(err)
-	}
-	p := ambil()
-	if len(p.Red) != 1 || p.Red[0].ID != baru.ID || p.Red[0].IsRead || p.UnreadTotal != 1 {
-		t.Fatalf("pengingat setelah pengajuan berumur 30 hari: %+v", p)
-	}
-
-	w := panggil(t, pemilik, http.MethodPatch, alamat+"/read", map[string]string{"submission_type": p.Red[0].SubmissionType, "submission_id": baru.ID})
-	harapKode(t, w, http.StatusOK, "menandai pengingat dibaca")
-	if p = ambil(); len(p.Red) != 1 || !p.Red[0].IsRead || p.UnreadTotal != 0 {
-		t.Errorf("pengingat setelah ditandai dibaca: %+v", p)
-	}
-	harapKode(t, panggil(t, pemilik, http.MethodPatch, alamat+"/read", map[string]string{}), http.StatusBadRequest, "tandai dibaca tanpa isi")
-	harapKode(t, panggil(t, pemilik, http.MethodPatch, alamat+"/read-all", nil), http.StatusOK, "menandai semua dibaca")
-
-	// ADMIN dan LEGAL memakai alamat yang sama dan melihat pengingat semua pengajuan.
-	for _, peran := range []entity.UserRole{entity.RoleAdmin, entity.RoleLegal} {
-		harapKode(t, panggil(t, masukPeran(t, peran), http.MethodGet, alamat, nil), http.StatusOK, "pengingat "+string(peran))
+	harapKode(t, panggil(t, pemilik, http.MethodPatch, alamatPengingat+"/read-all", nil), http.StatusOK, "menandai semua dibaca")
+	if n := ambilPengingat(t, pemilik, "").UnreadTotal; n != 0 {
+		t.Errorf("belum dibaca setelah tandai semua: %d, harap 0", n)
 	}
 }
 
@@ -126,7 +220,7 @@ func TestPengingat(t *testing.T) {
 // LEGAL_AU bawaannya ditolak, dan diterima setelah diberi override.
 func TestPengingatMengikutiPermission(t *testing.T) {
 	admin := masukPeran(t, entity.RoleAdmin)
-	const alamat = "/api/v1/notifications"
+	const alamat = alamatPengingat
 
 	for _, peran := range []entity.UserRole{entity.RoleExternal, entity.RoleLegalAU} {
 		token := masukPeran(t, peran)
