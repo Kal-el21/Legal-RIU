@@ -103,6 +103,31 @@ cd frontend && npm install && npm run dev
 
 Frontend runs at `http://localhost:5173`, Backend API at `http://localhost:8080`.
 
+Before pushing, run every check (go vet, go test, tsc, lint, build) from PowerShell:
+`.\scripts\cek.ps1`. It stops at the first check that fails.
+
+The backend API tests (`backend/internal/router`) need PostgreSQL and MinIO running.
+They read connection settings from `backend/.env`, recreate their own database
+(`legal_riu_test`) on every run and use their own bucket (`legal-riu-test`), so
+development data is never touched. Set `TES_API_LEWATI=1` to skip them.
+
+GitHub Actions cannot pull the MinIO image any more, so it runs with
+`TES_TANPA_MINIO=1`: everything that only needs PostgreSQL still runs there, and
+tests that touch file storage run locally only. Do not set it on your machine.
+
+Before deploying, also run `.\scripts\cek-docker.ps1`. It runs the same API tests inside
+the `legal_riu_backend` container, the only place with PostgreSQL, MinIO and LibreOffice
+together, so it is the only run that covers agreement approval (DOCX to PDF). Use
+`-Tes <name>` to run matching tests only and `-Rinci` to list every test.
+
+Tests that describe correct behaviour the code does not have yet are skipped with
+`bugDiketahui(...)`; run `go test ./internal/router -v` and look for "BUG DIKETAHUI" to
+list them. After fixing one, check it with `TES_BUG=1` and then delete that call.
+
+`testdata/akses.golden` records which roles can reach each endpoint. When an access
+change is intentional, refresh it from `backend/` and commit the result:
+`go test ./internal/router -run TestFotoHakAkses -update`.
+
 ## Environment Variables
 
 Copy `.env.example` to `.env` and configure:

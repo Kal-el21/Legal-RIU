@@ -1,0 +1,47 @@
+name: Cek
+
+on: push
+
+jobs:
+  cek:
+    runs-on: ubuntu-latest
+
+    # Tes API backend butuh Postgres, dengan nilai bawaan yang sama dengan
+    # internal/config (postgres/postgres).
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+        working-directory: frontend
+
+      # Skrip yang sama dengan yang dijalankan di lokal sebelum push.
+      # Image MinIO sudah tidak bisa diunduh, jadi di sini tes yang butuh
+      # penyimpanan file dilewati; tes itu hanya dijaga di lokal.
+      - run: ./scripts/cek.ps1
+        shell: pwsh
+        env:
+          TES_TANPA_MINIO: 1
