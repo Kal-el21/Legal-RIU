@@ -72,40 +72,7 @@ func (h *NotificationSettingHandler) Update(c *gin.Context) {
 	utils.OK(c, "Setting notifikasi berhasil diperbarui", item)
 }
 
-// GET /api/v1/admin/reminders-dashboard
-func (h *NotificationSettingHandler) GetRemindersDashboard(c *gin.Context) {
-	userID := middleware.GetUserID(c)
-	role := middleware.GetUserRole(c)
-	page, limit := parseReminderPagination(c)
-
-	result, err := h.svc.GetReminders(userID, role, page, limit)
-	if err != nil {
-		utils.InternalError(c, err.Error())
-		return
-	}
-
-	totalPendingYellow := len(result.Yellow)
-	totalPendingRed := len(result.Red)
-	totalOverdue := totalPendingRed
-
-	summary := map[string]interface{}{
-		"total_pending_yellow": totalPendingYellow,
-		"total_pending_red":    totalPendingRed,
-		"total_overdue":        totalOverdue,
-		"yellow":               result.Yellow,
-		"red":                  result.Red,
-		"none":                 result.None,
-		"items":                result.Items,
-		"total":                result.Total,
-		"unread_total":         result.UnreadTotal,
-		"page":                 result.Page,
-		"limit":                result.Limit,
-		"total_pages":          result.TotalPages,
-	}
-	utils.OK(c, "Success", summary)
-}
-
-// GET /api/v1/dashboard/reminders
+// GET /api/v1/notifications
 func (h *NotificationSettingHandler) GetReminders(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 	role := middleware.GetUserRole(c)
@@ -119,7 +86,7 @@ func (h *NotificationSettingHandler) GetReminders(c *gin.Context) {
 	utils.OK(c, "Success", result)
 }
 
-// PATCH /api/v1/dashboard/reminders/read
+// PATCH /api/v1/notifications/read
 func (h *NotificationSettingHandler) MarkReminderRead(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 
@@ -137,7 +104,7 @@ func (h *NotificationSettingHandler) MarkReminderRead(c *gin.Context) {
 	utils.OK(c, "Notifikasi berhasil ditandai terbaca", nil)
 }
 
-// PATCH /api/v1/dashboard/reminders/read-all
+// PATCH /api/v1/notifications/read-all
 func (h *NotificationSettingHandler) MarkAllRemindersRead(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 	role := middleware.GetUserRole(c)
@@ -148,18 +115,4 @@ func (h *NotificationSettingHandler) MarkAllRemindersRead(c *gin.Context) {
 	}
 
 	utils.OK(c, "Semua notifikasi berhasil ditandai terbaca", nil)
-}
-
-// GET /api/v1/legal/reminders
-func (h *NotificationSettingHandler) GetLegalReminders(c *gin.Context) {
-	userID := middleware.GetUserID(c)
-	role := middleware.GetUserRole(c)
-	page, limit := parseReminderPagination(c)
-
-	result, err := h.svc.GetReminders(userID, role, page, limit)
-	if err != nil {
-		utils.InternalError(c, err.Error())
-		return
-	}
-	utils.OK(c, "Success", result)
 }

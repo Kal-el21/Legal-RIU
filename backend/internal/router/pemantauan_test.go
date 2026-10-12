@@ -82,7 +82,7 @@ func TestPengingat(t *testing.T) {
 	const surel = "tes-pengingat@example.com"
 	userKhusus(t, surel)
 	pemilik := masuk(t, surel)
-	const alamat = "/api/v1/dashboard/reminders"
+	const alamat = "/api/v1/notifications"
 
 	ambil := func() pengingat {
 		t.Helper()
@@ -116,12 +116,35 @@ func TestPengingat(t *testing.T) {
 	harapKode(t, panggil(t, pemilik, http.MethodPatch, alamat+"/read", map[string]string{}), http.StatusBadRequest, "tandai dibaca tanpa isi")
 	harapKode(t, panggil(t, pemilik, http.MethodPatch, alamat+"/read-all", nil), http.StatusOK, "menandai semua dibaca")
 
-	// ADMIN dan LEGAL melihat pengingat semua pengajuan.
-	for _, s := range []struct{ token, alamat string }{
-		{masukPeran(t, entity.RoleAdmin), "/api/v1/admin/dashboard/reminders"},
-		{masukPeran(t, entity.RoleLegal), "/api/v1/legal/dashboard/reminders"},
-	} {
-		harapKode(t, panggil(t, s.token, http.MethodGet, s.alamat, nil), http.StatusOK, "pengingat "+s.alamat)
+	// ADMIN dan LEGAL memakai alamat yang sama dan melihat pengingat semua pengajuan.
+	for _, peran := range []entity.UserRole{entity.RoleAdmin, entity.RoleLegal} {
+		harapKode(t, panggil(t, masukPeran(t, peran), http.MethodGet, alamat, nil), http.StatusOK, "pengingat "+string(peran))
+	}
+}
+
+// Lonceng dibuka oleh permission lihat pengajuan, bukan oleh peran: EXTERNAL dan
+// LEGAL_AU bawaannya ditolak, dan diterima setelah diberi override.
+func TestPengingatMengikutiPermission(t *testing.T) {
+	admin := masukPeran(t, entity.RoleAdmin)
+	const alamat = "/api/v1/notifications"
+
+	for _, peran := range []entity.UserRole{entity.RoleExternal, entity.RoleLegalAU} {
+		token := masukPeran(t, peran)
+		harapKode(t, panggil(t, token, http.MethodGet, alamat, nil), http.StatusForbidden, "pengingat "+string(peran)+" bawaan")
+
+		var idUser string
+		if err := dbTes.Raw("SELECT id FROM users WHERE email = ?", surelPeran(peran)).Scan(&idUser).Error; err != nil {
+			t.Fatal(err)
+		}
+		atur := func(overrides []map[string]string) {
+			t.Helper()
+			w := panggil(t, admin, http.MethodPut, "/api/v1/admin/users/"+idUser+"/permissions", map[string]any{"overrides": overrides})
+			harapKode(t, w, http.StatusOK, "mengatur override "+string(peran))
+		}
+		t.Cleanup(func() { atur([]map[string]string{}) })
+
+		atur([]map[string]string{{"code": "legal_opinion.view.own", "effect": "ALLOW"}})
+		harapKode(t, panggil(t, token, http.MethodGet, alamat, nil), http.StatusOK, "pengingat "+string(peran)+" dengan override")
 	}
 }
 

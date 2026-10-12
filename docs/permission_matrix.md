@@ -119,9 +119,8 @@ Catatan: Master data mencakup Company, Purpose Type, Case Type, Case Category, D
 |-------------|-------|-----------|
 | `notification_setting.view` | View Settings | Melihat pengaturan notifikasi |
 | `notification_setting.manage` | Manage Settings | Mengubah threshold notifikasi |
-| `notification.view_reminders` | View Reminders | Melihat daftar reminder |
-| `notification.mark_read` | Mark as Read | Menandai reminder sudah dibaca |
-| `notification.mark_all_read` | Mark All as Read | Menandai semua reminder sudah dibaca |
+
+Lonceng notifikasi tidak punya kode permission sendiri. Ketiga endpoint-nya (`GET /notifications`, `PATCH /notifications/read`, `PATCH /notifications/read-all`) terbuka bagi siapa pun yang memegang salah satu dari `legal_opinion.view.own`, `legal_opinion.view.all`, `document_review.view.own`, atau `document_review.view.all`, apa pun perannya. Frontend menyembunyikan lonceng dengan aturan yang sama (`NOTIFICATION_PERMISSIONS` di `frontend/src/lib/reminders.ts`).
 
 ### 2.9 Legal Material
 | Action Code | Label | Keterangan |
@@ -202,8 +201,8 @@ Tabel ini menunjukkan permission default yang dimiliki setiap role **sebelum ove
 | **Notifications** | View Settings | ✅ | ❌ | ❌ | ❌ | ❌ |
 | | Manage Settings | ✅ | ❌ | ❌ | ❌ | ❌ |
 | | View Reminders | ✅ | ✅ | ❌ | ✅ | ❌ |
-| | Mark Read | ✅ | ❌ | ❌ | ✅ | ❌ |
-| | Mark All Read | ✅ | ❌ | ❌ | ✅ | ❌ |
+| | Mark Read | ✅ | ✅ | ❌ | ✅ | ❌ |
+| | Mark All Read | ✅ | ✅ | ❌ | ✅ | ❌ |
 | **Legal Material** | View | ✅ | ✅ | ✅ | ❌ | ❌ |
 | | Manage | ✅ | ✅ | ✅ | ❌ | ❌ |
 | **Settings** | Update Profile | ✅ | ❌ | ❌ | ✅ | ✅ |
@@ -402,9 +401,9 @@ Bagian ini menjelaskan status implementasi permission untuk setiap fitur, termas
 |------|--------|--------|
 | View Settings | ✅ | `notification_setting.view` (implied dari admin access) |
 | Manage Settings | ✅ | `notification_setting.manage` |
-| View Reminders | ✅ | `notification.view_reminders` |
-| Mark Read | ✅ | `notification.mark_read` |
-| Mark All Read | ✅ | `notification.mark_all_read` |
+| View Reminders | ✅ | `GET /notifications`, mengikuti permission lihat Legal Opinion atau Review Dokumen (lihat 2.8) |
+| Mark Read | ✅ | `PATCH /notifications/read`, penjaga yang sama |
+| Mark All Read | ✅ | `PATCH /notifications/read-all`, penjaga yang sama |
 | **Kekurangan / Belum Ada** | | |
 | `notification.export_reminders` | ⚠️ | Belum ada export daftar reminders. |
 

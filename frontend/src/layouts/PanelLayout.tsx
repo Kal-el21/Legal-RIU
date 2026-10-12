@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils'
 import SidebarUserButton from '@/components/common/SidebarUserButton'
 import NotificationDropdown from '@/components/common/NotificationDropdown'
 import { useAuthStore } from '@/store/auth.store'
+import { NOTIFICATION_PERMISSIONS } from '@/lib/reminders'
 
 export type MenuItem = {
   label: string
@@ -86,6 +87,9 @@ export default function PanelLayout({ panelLabel, settingsPath, nav }: PanelLayo
   const navItems = nav
     .map((item) => ('children' in item ? { ...item, children: item.children.filter(allowed) } : item))
     .filter((item) => ('children' in item ? item.children.length > 0 : allowed(item)))
+
+  const showNotifications =
+    user?.role === 'ADMIN' || NOTIFICATION_PERMISSIONS.some((permission) => permissions.includes(permission))
 
   return (
     <div className="min-h-screen flex" style={{ background: '#f8fafc' }}>
@@ -208,7 +212,7 @@ export default function PanelLayout({ panelLabel, settingsPath, nav }: PanelLayo
             {sidebarCollapsed ? <PanelLeftOpen className="w-5 h-5 text-gray-600" /> : <PanelLeftClose className="w-5 h-5 text-gray-600" />}
           </button>
           <div className="flex-1" />
-          <NotificationDropdown />
+          {showNotifications && <NotificationDropdown />}
           <Link to="/" title="Ke beranda portal" className="inline-flex h-9 items-center gap-2 rounded-lg px-2 text-sm text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800">
             <Home className="h-5 w-5" />
             <span className="hidden sm:inline">Beranda</span>

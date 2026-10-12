@@ -52,7 +52,7 @@ func New(cfg *config.Config, db *gorm.DB, store *storage.MinIOClient) (*gin.Engi
 	agreementTemplateSvc := service.NewAgreementTemplateService(agreementTemplateRepo, store, agreementRegistry)
 	agreementSvc := service.NewAgreementDocumentService(agreementRepo, store, agreementRegistry, agreementTemplateSvc)
 	notificationSettingSvc := service.NewNotificationSettingService(notificationSettingRepo, dashRepo)
-	dashSvc := service.NewDashboardService(dashRepo, notificationSettingSvc)
+	dashSvc := service.NewDashboardService(dashRepo)
 	auditLogSvc := service.NewAuditLogService(auditLogRepo)
 	documentRepositorySvc := service.NewRepositoryDocumentService(documentRepositoryRepo, store)
 	legalCaseSvc := service.NewLegalCaseService(legalCaseRepo, store, documentRepositorySvc)
@@ -146,14 +146,17 @@ func New(cfg *config.Config, db *gorm.DB, store *storage.MinIOClient) (*gin.Engi
 	protected.GET("/agreement-document-types", requirePermission("agreement_document.view.own", "agreement_document.view.all", "agreement_document.create.own"), agreementHandler.ListTypes)
 	protected.GET("/agreement-document-types/:code/schema", requirePermission("agreement_document.view.own", "agreement_document.view.all", "agreement_document.create.own"), agreementHandler.GetType)
 
+	// Lonceng notifikasi: satu alamat untuk semua peran, terbuka bagi yang boleh melihat pengajuan
+	lihatPengajuan := requirePermission("legal_opinion.view.own", "legal_opinion.view.all", "document_review.view.own", "document_review.view.all")
+	protected.GET("/notifications", lihatPengajuan, notificationSettingHandler.GetReminders)
+	protected.PATCH("/notifications/read", lihatPengajuan, notificationSettingHandler.MarkReminderRead)
+	protected.PATCH("/notifications/read-all", lihatPengajuan, notificationSettingHandler.MarkAllRemindersRead)
+
 	userOnly := protected.Group("")
 	userOnly.Use(middleware.RoleMiddleware("USER"))
 
 	userOnly.GET("/dashboard/stats", requirePermission("dashboard.user.view"), dashHandler.UserStats)
 	userOnly.GET("/dashboard/recent", requirePermission("dashboard.user.view"), dashHandler.UserRecent)
-	userOnly.GET("/dashboard/reminders", requirePermission("dashboard.user.view"), dashHandler.GetReminders)
-	userOnly.PATCH("/dashboard/reminders/read", requirePermission("dashboard.user.view"), notificationSettingHandler.MarkReminderRead)
-	userOnly.PATCH("/dashboard/reminders/read-all", requirePermission("dashboard.user.view"), notificationSettingHandler.MarkAllRemindersRead)
 
 	// Legal opinions — presign
 	userOnly.GET("/legal-opinions/presign", requirePermission("legal_opinion.view.own", "legal_opinion.view.all"), loHandler.GetPresignedURL)
@@ -193,9 +196,6 @@ func New(cfg *config.Config, db *gorm.DB, store *storage.MinIOClient) (*gin.Engi
 
 	admin.GET("/dashboard/stats", dashHandler.AdminStats)
 	admin.GET("/dashboard/recent", dashHandler.AdminRecent)
-	admin.GET("/dashboard/reminders", notificationSettingHandler.GetRemindersDashboard)
-	admin.PATCH("/dashboard/reminders/read", notificationSettingHandler.MarkReminderRead)
-	admin.PATCH("/dashboard/reminders/read-all", notificationSettingHandler.MarkAllRemindersRead)
 
 	admin.GET("/legal-opinions/presign", loHandler.GetPresignedURL)
 	admin.GET("/legal-opinions/download", loHandler.Download)
@@ -315,9 +315,6 @@ func New(cfg *config.Config, db *gorm.DB, store *storage.MinIOClient) (*gin.Engi
 
 	legal.GET("/dashboard/stats", requirePermission("dashboard.legal.view"), dashHandler.LegalStats)
 	legal.GET("/dashboard/recent", requirePermission("dashboard.legal.view"), dashHandler.LegalRecent)
-	legal.GET("/dashboard/reminders", requirePermission("dashboard.legal.view"), notificationSettingHandler.GetLegalReminders)
-	legal.PATCH("/dashboard/reminders/read", notificationSettingHandler.MarkReminderRead)
-	legal.PATCH("/dashboard/reminders/read-all", notificationSettingHandler.MarkAllRemindersRead)
 
 	legal.GET("/legal-opinions/presign", requirePermission("legal_opinion.view.all"), loHandler.GetPresignedURL)
 	legal.GET("/legal-opinions/download", requirePermission("legal_opinion.download.all", "legal_opinion.view.all"), loHandler.Download)

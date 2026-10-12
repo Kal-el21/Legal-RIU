@@ -61,7 +61,6 @@ GET /api/v1/admin/companies: ADMIN
 GET /api/v1/admin/companies/:id: ADMIN
 GET /api/v1/admin/companies/import/template: ADMIN
 GET /api/v1/admin/dashboard/recent: ADMIN
-GET /api/v1/admin/dashboard/reminders: ADMIN
 GET /api/v1/admin/dashboard/stats: ADMIN
 GET /api/v1/admin/divisions: ADMIN
 GET /api/v1/admin/divisions/:id: ADMIN
@@ -118,7 +117,6 @@ GET /api/v1/case-categories: ADMIN LEGAL LEGAL_AU EXTERNAL
 GET /api/v1/case-types: ADMIN LEGAL LEGAL_AU EXTERNAL
 GET /api/v1/companies: ADMIN LEGAL LEGAL_AU EXTERNAL
 GET /api/v1/dashboard/recent: USER
-GET /api/v1/dashboard/reminders: USER
 GET /api/v1/dashboard/stats: USER
 GET /api/v1/divisions: ADMIN LEGAL LEGAL_AU USER EXTERNAL
 GET /api/v1/document-repositories: ADMIN LEGAL LEGAL_AU USER EXTERNAL
@@ -174,7 +172,6 @@ GET /api/v1/legal/agreement-templates/:id/preview: LEGAL
 GET /api/v1/legal/agreement-templates/placeholders: LEGAL
 GET /api/v1/legal/audit-logs: LEGAL
 GET /api/v1/legal/dashboard/recent: LEGAL
-GET /api/v1/legal/dashboard/reminders: LEGAL
 GET /api/v1/legal/dashboard/stats: LEGAL
 GET /api/v1/legal/legal-cases: LEGAL
 GET /api/v1/legal/legal-cases/:id: LEGAL
@@ -205,26 +202,23 @@ GET /api/v1/legal/review-documents/download: LEGAL
 GET /api/v1/legal/review-documents/presign: LEGAL
 GET /api/v1/materials: ADMIN LEGAL LEGAL_AU USER
 GET /api/v1/materials/:id: ADMIN LEGAL LEGAL_AU USER
+GET /api/v1/notifications: ADMIN LEGAL USER
 GET /api/v1/review-documents: USER
 GET /api/v1/review-documents/:id: USER
 GET /api/v1/review-documents/download: USER
 GET /api/v1/review-documents/presign: USER
 PATCH /api/v1/admin/agreement-documents/:id/meta: ADMIN
 PATCH /api/v1/admin/agreement-documents/:id/status: ADMIN
-PATCH /api/v1/admin/dashboard/reminders/read: ADMIN
-PATCH /api/v1/admin/dashboard/reminders/read-all: ADMIN
 PATCH /api/v1/admin/legal-opinions/:id/status: ADMIN
 PATCH /api/v1/admin/review-documents/:id/status: ADMIN
 PATCH /api/v1/admin/users/:id/status: ADMIN
-PATCH /api/v1/dashboard/reminders/read: USER
-PATCH /api/v1/dashboard/reminders/read-all: USER
 PATCH /api/v1/legal-au/cases/:id/status: LEGAL_AU
 PATCH /api/v1/legal/agreement-documents/:id/meta: LEGAL
 PATCH /api/v1/legal/agreement-documents/:id/status: LEGAL
-PATCH /api/v1/legal/dashboard/reminders/read: LEGAL
-PATCH /api/v1/legal/dashboard/reminders/read-all: LEGAL
 PATCH /api/v1/legal/legal-opinions/:id/status: LEGAL
 PATCH /api/v1/legal/review-documents/:id/status: LEGAL
+PATCH /api/v1/notifications/read: ADMIN LEGAL USER
+PATCH /api/v1/notifications/read-all: ADMIN LEGAL USER
 POST /api/v1/admin/agreement-templates: ADMIN
 POST /api/v1/admin/agreement-templates/:id/activate: ADMIN
 POST /api/v1/admin/case-categories: ADMIN
