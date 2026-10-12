@@ -2,13 +2,12 @@ import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { FileText, FileSearch, Clock, AlertCircle, RefreshCw, ArrowRight, AlertTriangle } from 'lucide-react'
+import { FileText, FileSearch, Clock, AlertCircle, RefreshCw, ArrowRight } from 'lucide-react'
 import { dashboardService } from '@/services/dashboard.service'
 import StatusBadge from '@/components/common/StatusBadge'
-import WarningBadge from '@/components/common/WarningBadge'
+import WarningReminders from '@/components/common/WarningReminders'
 import { formatDate } from '@/lib/utils'
-import { getReminderMessage } from '@/lib/reminders'
-import type { ReminderItem, SubmissionStatus } from '@/types'
+import type { SubmissionStatus } from '@/types'
 import { useAuthStore } from '@/store/auth.store'
 
 function StatCard({ icon: Icon, label, value, color, bg }: {
@@ -65,7 +64,7 @@ export default function LegalDashboardPage() {
       </div>
 
       {/* Reminders */}
-      <RemindersSection />
+      <WarningReminders />
 
       {/* Recent submissions */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -127,67 +126,6 @@ export default function LegalDashboardPage() {
           </div>
         </div>
       </div>
-    </div>
-  )
-}
-
-function ReminderItemRow({ item }: { item: ReminderItem }) {
-  const href = item.submission_type === 'legal_opinion'
-    ? `/legal/legal-opinions/${item.id}`
-    : `/legal/review-documents/${item.id}`
-
-  return (
-    <Link to={href} className="flex items-center gap-3 px-6 py-3.5 hover:bg-gray-50/50 transition-colors">
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-gray-900 truncate">{item.ticket_number} — {item.title}</p>
-        <p className="text-xs text-gray-400 mt-0.5">
-          {getReminderMessage(item)} · menunggu {item.days_waiting} hari
-        </p>
-      </div>
-      <WarningBadge level={item.warning_level as 'YELLOW' | 'RED'} />
-    </Link>
-  )
-}
-
-function RemindersSection() {
-  const { data: reminders } = useQuery({
-    queryKey: ['dashboard', 'legal', 'reminders'],
-    queryFn: () => dashboardService.getReminders({ warning_only: true, limit: 100 }),
-  })
-
-  const items = reminders?.items ?? []
-  const yellow = items.filter((item) => item.warning_level === 'YELLOW')
-  const red = items.filter((item) => item.warning_level === 'RED')
-
-  if (!yellow.length && !red.length) return null
-
-  return (
-    <div className="space-y-4">
-      {red.length > 0 && (
-        <div className="bg-white rounded-2xl border border-red-100 overflow-hidden">
-          <div className="px-6 py-4 border-b border-red-50 flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 text-red-500" />
-            <h2 className="text-sm font-semibold text-red-700">Terlambat</h2>
-            <span className="text-xs text-red-500">{red.length}</span>
-          </div>
-          <div className="divide-y divide-red-50">
-            {red.map((item) => <ReminderItemRow key={item.id} item={item} />)}
-          </div>
-        </div>
-      )}
-
-      {yellow.length > 0 && (
-        <div className="bg-white rounded-2xl border border-amber-100 overflow-hidden">
-          <div className="px-6 py-4 border-b border-amber-50 flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 text-amber-500" />
-            <h2 className="text-sm font-semibold text-amber-700">Perlu Perhatian</h2>
-            <span className="text-xs text-amber-600">{yellow.length}</span>
-          </div>
-          <div className="divide-y divide-amber-50">
-            {yellow.map((item) => <ReminderItemRow key={item.id} item={item} />)}
-          </div>
-        </div>
-      )}
     </div>
   )
 }

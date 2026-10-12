@@ -41,6 +41,20 @@ export function getReminderMessage(item: ReminderItem) {
   }
 }
 
+// Baris yang menunggu tindakan penerimanya: pemroses atas pengajuan yang masuk
+// atau terlambat, pemilik atas permintaan revisi. Sisanya hanya kabar.
+export function reminderNeedsAction(item: ReminderItem) {
+  return item.warning_level !== 'NONE' || ['SUBMITTED', 'RESUBMITTED', 'NEED_REVISION'].includes(item.status)
+}
+
+// Latar baris notifikasi: netral untuk yang belum dibaca. Kuning dan merah hanya
+// dipakai badge peringatan.
+export function getReminderRowTone(item: ReminderItem) {
+  return item.is_read
+    ? 'hover:bg-gray-50 focus:bg-gray-50'
+    : 'bg-[#0B2545]/5 hover:bg-[#0B2545]/10 focus:bg-[#0B2545]/10'
+}
+
 export function getReminderTypeLabel(item: ReminderItem) {
   return item.submission_type === 'document_review' ? 'Review Dokumen' : 'Legal Opinion'
 }

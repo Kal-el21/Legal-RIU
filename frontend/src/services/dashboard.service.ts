@@ -6,6 +6,7 @@ export interface ReminderParams {
   limit?: number
   // Hanya pengajuan yang sudah melewati ambang kuning atau merah
   warning_only?: boolean
+  unread_only?: boolean
 }
 
 export interface MarkReminderReadPayload {
