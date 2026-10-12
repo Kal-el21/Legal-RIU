@@ -105,7 +105,7 @@ export default function PanelLayout({ panelLabel, settingsPath, nav }: PanelLayo
             {!sidebarCollapsed && (
               <div className="whitespace-nowrap">
                 <p className="font-bold text-sm text-white">Legal RIU</p>
-                <p className="text-xs text-white/40 leading-none">{panelLabel}</p>
+                <p className="text-xs text-white/60 leading-none">{panelLabel}</p>
               </div>
             )}
           </Link>

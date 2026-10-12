@@ -41,7 +41,7 @@ export default function SidebarUserButton({ settingsPath, collapsed = false }: S
         {!collapsed && (
           <div className="min-w-0 flex-1 text-left">
             <p className="text-sm font-medium truncate text-white">{user?.full_name}</p>
-            <p className="text-xs truncate text-white/40">{user?.division}</p>
+            <p className="text-xs truncate text-white/60">{user?.division}</p>
           </div>
         )}
         <ChevronUp className={cn(
@@ -75,7 +75,7 @@ export default function SidebarUserButton({ settingsPath, collapsed = false }: S
             </Link>
             <button
               onClick={() => { setOpen(false); logout() }}
-              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 transition-colors"
+              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-400 hover:bg-red-500/10 transition-colors"
             >
               <LogOut className="w-4 h-4" />
               Keluar
