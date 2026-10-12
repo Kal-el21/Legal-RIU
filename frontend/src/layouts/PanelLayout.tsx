@@ -1,6 +1,6 @@
 import { Outlet, Link, useLocation } from 'react-router-dom'
-import { Scale, Menu, Home, ChevronRight, ChevronLeft, type LucideIcon } from 'lucide-react'
-import { useState } from 'react'
+import { Scale, Menu, Home, ChevronRight, PanelLeftClose, PanelLeftOpen, type LucideIcon } from 'lucide-react'
+import { useState, useSyncExternalStore } from 'react'
 import { cn } from '@/lib/utils'
 import SidebarUserButton from '@/components/common/SidebarUserButton'
 import NotificationDropdown from '@/components/common/NotificationDropdown'
@@ -28,12 +28,30 @@ interface PanelLayoutProps {
   nav: (MenuItem | MenuGroup)[]
 }
 
+const COLLAPSED_KEY = 'sidebar_collapsed'
+
+// Sama dengan breakpoint `lg` Tailwind
+const desktop = window.matchMedia('(min-width: 64rem)')
+const subscribeDesktop = (onChange: () => void) => {
+  desktop.addEventListener('change', onChange)
+  return () => desktop.removeEventListener('change', onChange)
+}
+
 // Kerangka semua panel setelah login: sidebar, header, dan area konten
 export default function PanelLayout({ panelLabel, settingsPath, nav }: PanelLayoutProps) {
   const location = useLocation()
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [collapsedPref, setCollapsedPref] = useState(() => localStorage.getItem(COLLAPSED_KEY) === '1')
   const [openGroup, setOpenGroup] = useState<string | null>(null)
+
+  // Mode ciut hanya berlaku di desktop; di layar kecil sidebar selalu tampil lebar sebagai laci
+  const isDesktop = useSyncExternalStore(subscribeDesktop, () => desktop.matches)
+  const sidebarCollapsed = collapsedPref && isDesktop
+
+  const toggleCollapsed = () => {
+    localStorage.setItem(COLLAPSED_KEY, collapsedPref ? '0' : '1')
+    setCollapsedPref(!collapsedPref)
+  }
 
   const isActive = (href: string, exact?: boolean) =>
     exact ? location.pathname === href : location.pathname.startsWith(href)
@@ -57,13 +75,13 @@ export default function PanelLayout({ panelLabel, settingsPath, nav }: PanelLayo
         'lg:translate-x-0 lg:h-screen',
         sidebarOpen ? 'translate-x-0' : '-translate-x-full'
       )} style={{ background: '#0B2545' }}>
-        <div className="h-16 flex items-center px-5 border-b border-white/10">
+        <div className={cn('h-16 flex items-center border-b border-white/10 overflow-hidden', sidebarCollapsed ? 'px-4' : 'px-5')}>
           <Link to="/" className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: '#C8102E' }}>
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: '#C8102E' }}>
               <Scale className="w-4 h-4 text-white" />
             </div>
             {!sidebarCollapsed && (
-              <div>
+              <div className="whitespace-nowrap">
                 <p className="font-bold text-sm text-white">Legal RIU</p>
                 <p className="text-xs text-white/40 leading-none">{panelLabel}</p>
               </div>
@@ -71,11 +89,12 @@ export default function PanelLayout({ panelLabel, settingsPath, nav }: PanelLayo
           </Link>
         </div>
 
-        <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+        <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto overflow-x-hidden whitespace-nowrap">
           {navItems.map((item) => 'children' in item ? (
             <div key={item.label} className="py-2">
               <button
                 onClick={() => setOpenGroup(openGroup === item.label ? null : item.label)}
+                aria-expanded={openGroup === item.label}
                 className={cn(
                   'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all w-full',
                   'text-white/50 hover:bg-white/5 hover:text-white'
@@ -89,6 +108,7 @@ export default function PanelLayout({ panelLabel, settingsPath, nav }: PanelLayo
                 <div className="ml-4 mt-1 space-y-0.5">
                   {item.children.map((child) => (
                     <Link key={child.href} to={child.href} onClick={() => setSidebarOpen(false)}
+                      aria-current={isActive(child.href) ? 'page' : undefined}
                       className={cn(
                         'flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all',
                         isActive(child.href)
@@ -105,6 +125,7 @@ export default function PanelLayout({ panelLabel, settingsPath, nav }: PanelLayo
             </div>
           ) : (
             <Link key={item.href} to={item.href} onClick={() => setSidebarOpen(false)}
+              aria-current={isActive(item.href, item.exact) ? 'page' : undefined}
               className={cn(
                 'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all',
                 sidebarCollapsed && 'justify-center px-2',
@@ -140,15 +161,22 @@ export default function PanelLayout({ panelLabel, settingsPath, nav }: PanelLayo
         sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-60'
       )}>
         <header className="h-16 bg-white border-b border-gray-100 flex items-center px-4 gap-3 sticky top-0 z-30">
-          <button onClick={() => setSidebarOpen(true)} className="lg:hidden p-2 rounded-lg hover:bg-gray-100">
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="lg:hidden p-2 rounded-lg hover:bg-gray-100"
+            aria-label="Buka menu"
+            aria-expanded={sidebarOpen}
+          >
             <Menu className="w-5 h-5 text-gray-600" />
           </button>
           <button
-            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+            onClick={toggleCollapsed}
             className="hidden lg:flex p-2 rounded-lg hover:bg-gray-100"
-            title={sidebarCollapsed ? 'Buka Sidebar' : 'Tutup Sidebar'}
+            title={sidebarCollapsed ? 'Lebarkan sidebar' : 'Ciutkan sidebar'}
+            aria-label={sidebarCollapsed ? 'Lebarkan sidebar' : 'Ciutkan sidebar'}
+            aria-expanded={!sidebarCollapsed}
           >
-            {sidebarCollapsed ? <ChevronRight className="w-5 h-5 text-gray-600" /> : <ChevronLeft className="w-5 h-5 text-gray-600" />}
+            {sidebarCollapsed ? <PanelLeftOpen className="w-5 h-5 text-gray-600" /> : <PanelLeftClose className="w-5 h-5 text-gray-600" />}
           </button>
           <div className="flex-1" />
           <NotificationDropdown />
