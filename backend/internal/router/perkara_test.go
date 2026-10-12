@@ -775,3 +775,85 @@ func TestPerkaraUserTidakTerbaca(t *testing.T) {
 		t.Errorf("daftar perkara tetap terbuka untuk user yang datanya sudah tidak ada (status %d)", kode)
 	}
 }
+
+// Legal AU membuat perkara untuk perusahaannya dan melampirkan dokumen serta
+// foto. Halaman form Legal AU memakai alamat di bawah /legal-au/cases, jadi
+// semua yang dipanggil form itu harus tersedia di sana.
+func TestLegalAUMengelolaPerkara(t *testing.T) {
+	admin := masukPeran(t, entity.RoleAdmin)
+
+	w := panggil(t, admin, http.MethodPost, "/api/v1/admin/companies",
+		map[string]any{"name": "PT Anak Legal AU Uji", "email_domain": "anak-legal-au.example", "is_internal": false})
+	harapKode(t, w, http.StatusCreated, "membuat perusahaan anak usaha")
+	var anak struct {
+		ID string `json:"id"`
+	}
+	isiData(t, w, &anak)
+	const surel = "tes-legal-au-anak@example.com"
+	if err := tambahUser(surel, entity.RoleLegalAU, uuid.MustParse(anak.ID)); err != nil {
+		t.Fatal(err)
+	}
+	legalAU := masuk(t, surel)
+
+	// Daftar pilihan yang dimuat form.
+	cedantTes(t)
+	for _, daftar := range []string{"/regencies?limit=5", "/cedants"} {
+		w := panggil(t, legalAU, http.MethodGet, perkaraLegalAU+daftar, nil)
+		harapKode(t, w, http.StatusOK, "Legal AU memuat "+daftar)
+		if len(idDariDaftar(t, w)) == 0 {
+			t.Errorf("daftar %s kosong untuk Legal AU", daftar)
+		}
+	}
+
+	// Perkara tersimpan atas perusahaannya sendiri, apa pun pilihan di form.
+	form := formPerkara(t)
+	w = panggil(t, legalAU, http.MethodPost, perkaraLegalAU, form)
+	harapKode(t, w, http.StatusCreated, "Legal AU membuat perkara")
+	var p perkara
+	isiData(t, w, &p)
+	if p.CompanyID != anak.ID {
+		t.Fatalf("perkara Legal AU tersimpan atas %s, harap perusahaannya sendiri %s", p.CompanyID, anak.ID)
+	}
+	if !perkaraDiDaftar(t, legalAU, perkaraLegalAU, p.ID) {
+		t.Error("perkara baru tidak muncul di daftar Legal AU")
+	}
+	// Induk melihat perkara anak usaha.
+	ambilPerkara(t, masukPeran(t, entity.RoleLegal), perkaraLegal, p.ID)
+
+	// Legal AU tidak mendapat izin mengubah data pokok atau menghapus perkara.
+	for _, k := range []struct{ nama, metode string }{{"mengubah", http.MethodPut}, {"menghapus", http.MethodDelete}} {
+		if kode := panggil(t, legalAU, k.metode, perkaraLegalAU+"/"+p.ID, form).Code; kode < 400 {
+			t.Errorf("Legal AU %s perkara: dapat %d, harap ditolak", k.nama, kode)
+		}
+	}
+
+	t.Run("DokumenDanFoto", func(t *testing.T) {
+		butuhMinIO(t)
+		isiDok, isiFoto := []byte("dokumen dari Legal AU"), []byte("foto dari Legal AU")
+		dasar := perkaraLegalAU + "/" + p.ID
+
+		w := panggilForm(t, legalAU, http.MethodPost, dasar+"/upload-document", nil, berkas{"document", "gugatan.pdf", isiDok})
+		harapKode(t, w, http.StatusOK, "Legal AU mengunggah dokumen")
+		isiData(t, w, &p)
+		w = panggil(t, legalAU, http.MethodGet, perkaraLegalAU+"/download?path="+url.QueryEscape(p.DocumentLink), nil)
+		harapKode(t, w, http.StatusOK, "Legal AU mengunduh dokumen")
+		if !bytes.Equal(w.Body.Bytes(), isiDok) {
+			t.Errorf("isi dokumen yang diunduh Legal AU berbeda: %q", w.Body)
+		}
+
+		w = panggilForm(t, legalAU, http.MethodPost, dasar+"/photo", nil, berkas{"photo", "sidang.png", isiFoto})
+		harapKode(t, w, http.StatusOK, "Legal AU mengunggah foto")
+		isiData(t, w, &p)
+		w = panggil(t, legalAU, http.MethodGet, perkaraLegalAU+"/file?path="+url.QueryEscape(p.Photo), nil)
+		harapKode(t, w, http.StatusOK, "Legal AU melihat foto")
+		if !bytes.Equal(w.Body.Bytes(), isiFoto) {
+			t.Errorf("isi foto yang dilihat Legal AU berbeda: %q", w.Body)
+		}
+
+		harapKode(t, panggil(t, legalAU, http.MethodDelete, dasar+"/document", nil), http.StatusOK, "Legal AU menghapus dokumen")
+		harapKode(t, panggil(t, legalAU, http.MethodDelete, dasar+"/photo", nil), http.StatusOK, "Legal AU menghapus foto")
+		if got := ambilPerkara(t, legalAU, perkaraLegalAU, p.ID); got.DocumentLink != "" || got.Photo != "" {
+			t.Errorf("setelah dihapus: dokumen %q, foto %q", got.DocumentLink, got.Photo)
+		}
+	})
+}

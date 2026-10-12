@@ -99,7 +99,7 @@ export interface User {
   email_notifications: boolean
   two_fa_enabled: boolean
   company_id: string
-  company_detail?: Company
+  company?: Company
   purpose_type_id?: string
   purpose_type_detail?: PurposeType
   created_at: string
