@@ -1,4 +1,4 @@
-import { FileSearch, FileText } from 'lucide-react'
+import { FileSearch, FileText, Handshake } from 'lucide-react'
 import WarningBadge from '@/components/common/WarningBadge'
 import { cn, formatDate } from '@/lib/utils'
 import { getReminderMessage, getReminderTypeLabel, reminderNeedsAction } from '@/lib/reminders'
@@ -7,7 +7,9 @@ import type { ReminderItem } from '@/types'
 // Isi satu baris notifikasi, dipakai lonceng (compact) dan halaman daftar.
 // Tautan pembungkusnya disediakan pemakai.
 export default function NotificationRow({ item, compact }: { item: ReminderItem; compact?: boolean }) {
-  const Icon = item.submission_type === 'document_review' ? FileSearch : FileText
+  const Icon = item.submission_type === 'document_review' ? FileSearch
+    : item.submission_type === 'agreement_document' ? Handshake
+    : FileText
 
   return (
     <div className={cn('flex w-full items-start text-left', compact ? 'gap-2.5' : 'gap-4')}>
@@ -20,7 +22,7 @@ export default function NotificationRow({ item, compact }: { item: ReminderItem;
         <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-gray-500">
           {item.is_read ? null : (
             <>
-              <span className="h-2 w-2 shrink-0 rounded-full bg-[#0B2545]" />
+              <span className="h-2 w-2 shrink-0 rounded-full bg-navy" />
               <span className="sr-only">Belum dibaca.</span>
             </>
           )}
@@ -42,7 +44,7 @@ export default function NotificationRow({ item, compact }: { item: ReminderItem;
             </>
           ) : reminderNeedsAction(item) ? (
             <>
-              <span className="inline-flex items-center rounded-full bg-[#0B2545]/10 px-2.5 py-1 text-xs font-medium text-[#0B2545]">
+              <span className="inline-flex items-center rounded-full bg-navy/10 px-2.5 py-1 text-xs font-medium text-navy">
                 Perlu tindakan
               </span>
               <span className="text-gray-300">-</span>

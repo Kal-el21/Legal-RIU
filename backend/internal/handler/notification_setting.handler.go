@@ -40,7 +40,7 @@ func parseReminderPagination(c *gin.Context) (int, int) {
 // efektifnya. Nama modul sama dengan submission_type di lonceng.
 func reminderAccess(c *gin.Context) service.ReminderAccess {
 	access := service.ReminderAccess{}
-	for _, feature := range []string{"legal_opinion", "document_review"} {
+	for _, feature := range service.ReminderTypes {
 		access[feature] = service.ReminderScope{
 			Owner:     middleware.HasAnyPermission(c, feature+".view.own", feature+".view.all"),
 			Processor: middleware.HasPermission(c, feature+".update_status.all"),

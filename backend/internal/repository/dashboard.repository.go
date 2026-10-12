@@ -30,6 +30,7 @@ type DashboardRepository interface {
 	// Lonceng notifikasi
 	ReminderLegalOpinions(ownerID uuid.UUID, ownerStatuses, processorStatuses []entity.SubmissionStatus) ([]entity.LegalOpinion, error)
 	ReminderDocumentReviews(ownerID uuid.UUID, ownerStatuses, processorStatuses []entity.SubmissionStatus) ([]entity.DocumentReview, error)
+	ReminderAgreementDocuments(ownerID uuid.UUID, ownerStatuses, processorStatuses []entity.SubmissionStatus) ([]entity.AgreementDocument, error)
 }
 
 type dashboardRepository struct {
@@ -134,6 +135,12 @@ func (r *dashboardRepository) ReminderLegalOpinions(ownerID uuid.UUID, ownerStat
 
 func (r *dashboardRepository) ReminderDocumentReviews(ownerID uuid.UUID, ownerStatuses, processorStatuses []entity.SubmissionStatus) ([]entity.DocumentReview, error) {
 	var items []entity.DocumentReview
+	err := r.reminderQuery(ownerID, ownerStatuses, processorStatuses).Find(&items).Error
+	return items, err
+}
+
+func (r *dashboardRepository) ReminderAgreementDocuments(ownerID uuid.UUID, ownerStatuses, processorStatuses []entity.SubmissionStatus) ([]entity.AgreementDocument, error) {
+	var items []entity.AgreementDocument
 	err := r.reminderQuery(ownerID, ownerStatuses, processorStatuses).Find(&items).Error
 	return items, err
 }

@@ -70,6 +70,7 @@ func TestDashboard(t *testing.T) {
 type barisPengingat struct {
 	ID             string `json:"id"`
 	SubmissionType string `json:"submission_type"`
+	Title          string `json:"title"`
 	Status         string `json:"status"`
 	Note           string `json:"note"`
 	WarningLevel   string `json:"warning_level"`
@@ -240,6 +241,77 @@ func TestPengingat(t *testing.T) {
 	if n := ambilPengingat(t, pemilik, "").UnreadTotal; n != 0 {
 		t.Errorf("belum dibaca setelah tandai semua: %d, harap 0", n)
 	}
+}
+
+// Dokumen Perjanjian masuk lonceng dengan aturan yang sama, tetapi tanpa
+// peringatan karena tidak punya ambang hari. Persetujuan akhir tidak diuji di
+// sini: butuh LibreOffice.
+func TestPengingatPerjanjian(t *testing.T) {
+	butuhMinIO(t)
+	const surel = "tes-pengingat-perjanjian@example.com"
+	userKhusus(t, surel)
+	pemilik := masuk(t, surel)
+	legal := masukPeran(t, entity.RoleLegal)
+
+	// harap memeriksa lonceng milik token: status kosong berarti perjanjian tidak
+	// boleh ada di sana.
+	harap := func(token, siapa, id, status string) *barisPengingat {
+		t.Helper()
+		b := ambilPengingat(t, token, "").cari(id)
+		switch {
+		case status == "" && b != nil:
+			t.Errorf("lonceng %s memuat perjanjian berstatus %s, harap tidak ada", siapa, b.Status)
+		case status != "" && b == nil:
+			t.Errorf("lonceng %s tidak memuat perjanjian, harap ada dengan status %s", siapa, status)
+		case status != "" && (b.Status != status || b.SubmissionType != "agreement_document"):
+			t.Errorf("lonceng %s: %s berstatus %s, harap agreement_document berstatus %s", siapa, b.SubmissionType, b.Status, status)
+		}
+		return b
+	}
+
+	p := buatPerjanjian(t, pemilik, formPerjanjian())
+	harap(pemilik, "pemilik", p.ID, "")
+	if b := harap(legal, "LEGAL", p.ID, "SUBMITTED"); b != nil && b.Title != "PKS - PT Mitra Tes" {
+		t.Errorf("judul baris perjanjian: %q", b.Title)
+	}
+
+	statusPerjanjian(t, legal, p.ID, "UNDER_REVIEW", "", http.StatusOK)
+	harap(pemilik, "pemilik", p.ID, "UNDER_REVIEW")
+	harap(legal, "LEGAL", p.ID, "")
+
+	// Selama apa pun direview, perjanjian tidak menjadi peringatan.
+	if err := dbTes.Exec("UPDATE agreement_documents SET status_updated_at = now() - interval '30 days' WHERE id = ?", p.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if ambilPengingat(t, legal, "&warning_only=true").cari(p.ID) != nil {
+		t.Error("perjanjian yang lama direview menjadi peringatan, padahal tidak punya ambang")
+	}
+
+	statusPerjanjian(t, legal, p.ID, "NEED_REVISION", "lengkapi alamat", http.StatusOK)
+	b := harap(pemilik, "pemilik", p.ID, "NEED_REVISION")
+	if b == nil || b.Note != "lengkapi alamat" {
+		t.Fatalf("kabar revisi perjanjian di lonceng pemilik: %+v", b)
+	}
+	harap(legal, "LEGAL", p.ID, "")
+
+	// Tandai dibaca menerima jenis agreement_document.
+	w := panggil(t, pemilik, http.MethodPatch, alamatPengingat+"/read",
+		map[string]string{"submission_type": b.SubmissionType, "submission_id": b.ID})
+	harapKode(t, w, http.StatusOK, "menandai kabar perjanjian dibaca")
+	if b := ambilPengingat(t, pemilik, "").cari(p.ID); b == nil || !b.IsRead {
+		t.Errorf("kabar perjanjian setelah ditandai dibaca: %+v", b)
+	}
+
+	harapKode(t, panggil(t, pemilik, http.MethodPost, urlPerjanjian("", "/", p.ID, "/resubmit"), nil), http.StatusOK, "ajukan ulang perjanjian")
+	harap(pemilik, "pemilik", p.ID, "")
+	harap(legal, "LEGAL", p.ID, "RESUBMITTED")
+
+	statusPerjanjian(t, legal, p.ID, "UNDER_REVIEW", "", http.StatusOK)
+	statusPerjanjian(t, legal, p.ID, "REJECTED", "tidak sesuai kebijakan", http.StatusOK)
+	if b := harap(pemilik, "pemilik", p.ID, "REJECTED"); b != nil && (b.Note != "tidak sesuai kebijakan" || b.IsRead) {
+		t.Errorf("kabar ditolak di lonceng pemilik: catatan %q, terbaca %v", b.Note, b.IsRead)
+	}
+	harap(legal, "LEGAL", p.ID, "")
 }
 
 // Lonceng dibuka oleh permission lihat pengajuan, bukan oleh peran: EXTERNAL dan

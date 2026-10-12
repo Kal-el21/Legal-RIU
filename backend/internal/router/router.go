@@ -147,7 +147,11 @@ func New(cfg *config.Config, db *gorm.DB, store *storage.MinIOClient) (*gin.Engi
 	protected.GET("/agreement-document-types/:code/schema", requirePermission("agreement_document.view.own", "agreement_document.view.all", "agreement_document.create.own"), agreementHandler.GetType)
 
 	// Lonceng notifikasi: satu alamat untuk semua peran, terbuka bagi yang boleh melihat pengajuan
-	lihatPengajuan := requirePermission("legal_opinion.view.own", "legal_opinion.view.all", "document_review.view.own", "document_review.view.all")
+	lihatPengajuan := requirePermission(
+		"legal_opinion.view.own", "legal_opinion.view.all",
+		"document_review.view.own", "document_review.view.all",
+		"agreement_document.view.own", "agreement_document.view.all",
+	)
 	protected.GET("/notifications", lihatPengajuan, notificationSettingHandler.GetReminders)
 	protected.PATCH("/notifications/read", lihatPengajuan, notificationSettingHandler.MarkReminderRead)
 	protected.PATCH("/notifications/read-all", lihatPengajuan, notificationSettingHandler.MarkAllRemindersRead)

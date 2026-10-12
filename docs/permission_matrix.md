@@ -120,7 +120,7 @@ Catatan: Master data mencakup Company, Purpose Type, Case Type, Case Category, D
 | `notification_setting.view` | View Settings | Melihat pengaturan notifikasi |
 | `notification_setting.manage` | Manage Settings | Mengubah threshold notifikasi |
 
-Lonceng notifikasi tidak punya kode permission sendiri. Ketiga endpoint-nya (`GET /notifications`, `PATCH /notifications/read`, `PATCH /notifications/read-all`) terbuka bagi siapa pun yang memegang salah satu dari `legal_opinion.view.own`, `legal_opinion.view.all`, `document_review.view.own`, atau `document_review.view.all`, apa pun perannya. Frontend menyembunyikan lonceng dengan aturan yang sama (`NOTIFICATION_PERMISSIONS` di `frontend/src/lib/reminders.ts`).
+Lonceng notifikasi tidak punya kode permission sendiri. Ketiga endpoint-nya (`GET /notifications`, `PATCH /notifications/read`, `PATCH /notifications/read-all`) terbuka bagi siapa pun yang memegang salah satu permission lihat pengajuan (`legal_opinion.view.own`/`.view.all`, `document_review.view.own`/`.view.all`, `agreement_document.view.own`/`.view.all`), apa pun perannya. Isinya mengikuti permission per modul: pemegang `view` menerima kabar status pengajuannya sendiri, pemegang `update_status.all` menerima pengajuan yang masuk dan peringatan. Frontend menyembunyikan lonceng dengan aturan yang sama (`NOTIFICATION_PERMISSIONS` di `frontend/src/lib/reminders.ts`).
 
 ### 2.9 Legal Material
 | Action Code | Label | Keterangan |

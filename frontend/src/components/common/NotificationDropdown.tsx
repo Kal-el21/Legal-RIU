@@ -11,7 +11,7 @@ import { getNotificationBasePath, getReminderDetailPath, getReminderRowTone } fr
 // Item menu memakai primitif Radix langsung: DropdownMenuItem bawaan shadcn
 // memaksa warna semua teks di dalamnya saat difokus, yang merusak badge.
 const actionClass =
-  'flex cursor-pointer items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-[#0B2545] outline-none select-none hover:bg-gray-100 focus:bg-gray-100 data-disabled:pointer-events-none data-disabled:opacity-50'
+  'flex cursor-pointer items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-navy outline-none select-none hover:bg-gray-100 focus:bg-gray-100 data-disabled:pointer-events-none data-disabled:opacity-50'
 
 export default function NotificationDropdown() {
   const user = useAuthStore((state) => state.user)

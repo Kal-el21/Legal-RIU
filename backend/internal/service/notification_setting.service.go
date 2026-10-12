@@ -1,6 +1,7 @@
 package service
 
 import (
+	"encoding/json"
 	"errors"
 	"slices"
 	"sort"
@@ -163,6 +164,10 @@ type ReminderScope struct {
 // ReminderAccess memetakan submission_type ke hak user di modul itu.
 type ReminderAccess map[string]ReminderScope
 
+// ReminderTypes adalah modul pengajuan yang masuk lonceng. Namanya dipakai
+// sebagai submission_type dan sama dengan nama fitur di kode permission.
+var ReminderTypes = []string{"legal_opinion", "document_review", "agreement_document"}
+
 // ReminderFilter mempersempit daftar lonceng sebelum dipotong per halaman.
 type ReminderFilter struct {
 	WarningOnly bool // hanya yang sudah melewati ambang kuning atau merah
@@ -234,7 +239,7 @@ func (s *notificationSettingService) MarkReminderRead(userID string, submissionT
 	if err != nil {
 		return errors.New("submission tidak valid")
 	}
-	if submissionType != "legal_opinion" && submissionType != "document_review" {
+	if !slices.Contains(ReminderTypes, submissionType) {
 		return errors.New("tipe submission tidak valid")
 	}
 
@@ -316,7 +321,38 @@ func (s *notificationSettingService) loadReminders(userID uuid.UUID, access Remi
 		}
 	}
 
+	// Perjanjian tidak punya ambang peringatan, jadi pemroses hanya menerima
+	// yang baru masuk dan yang diajukan ulang
+	if scope := access["agreement_document"]; scope.Owner || scope.Processor {
+		items, err := s.dashboardRepo.ReminderAgreementDocuments(userID, statusesIf(scope.Owner, ownerStatuses), statusesIf(scope.Processor, processorStatuses))
+		if err != nil {
+			return nil, err
+		}
+		for i := range items {
+			doc := &items[i]
+			add(reminderSource{
+				submissionType: "agreement_document", id: doc.ID, ownerID: doc.UserID, requesterName: doc.User.FullName,
+				ticketNumber: doc.TicketNumber, title: agreementTitle(doc), status: doc.Status, note: doc.ApproverNote,
+				createdAt: doc.CreatedAt, statusUpdatedAt: doc.StatusUpdatedAt,
+			})
+		}
+	}
+
 	return rows, nil
+}
+
+// agreementTitle menyusun judul baris lonceng untuk perjanjian, yang tidak punya
+// kolom judul: jenis dokumennya, ditambah nama pihak kedua kalau formulirnya
+// memuatnya.
+func agreementTitle(doc *entity.AgreementDocument) string {
+	var form struct {
+		PihakKedua string `json:"pihak_kedua_nama"`
+	}
+	_ = json.Unmarshal(doc.FormData, &form)
+	if form.PihakKedua == "" {
+		return doc.DocumentTypeCode
+	}
+	return doc.DocumentTypeCode + " - " + form.PihakKedua
 }
 
 func statusesIf(ok bool, statuses []entity.SubmissionStatus) []entity.SubmissionStatus {

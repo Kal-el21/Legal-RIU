@@ -6,7 +6,18 @@ export const NOTIFICATION_PERMISSIONS = [
   'legal_opinion.view.all',
   'document_review.view.own',
   'document_review.view.all',
+  'agreement_document.view.own',
+  'agreement_document.view.all',
 ]
+
+// Modul pengajuan yang masuk lonceng: label dan bagian alamat halaman detailnya
+const REMINDER_TYPES: Record<string, { label: string; segment: string }> = {
+  legal_opinion: { label: 'Legal Opinion', segment: 'legal-opinions' },
+  document_review: { label: 'Review Dokumen', segment: 'review-documents' },
+  agreement_document: { label: 'Dokumen Perjanjian', segment: 'agreement-documents' },
+}
+
+const reminderType = (item: ReminderItem) => REMINDER_TYPES[item.submission_type] ?? REMINDER_TYPES.legal_opinion
 
 export function getNotificationBasePath(role?: UserRole | null) {
   if (role === 'ADMIN') return '/admin'
@@ -17,9 +28,7 @@ export function getNotificationBasePath(role?: UserRole | null) {
 }
 
 export function getReminderDetailPath(item: ReminderItem, role?: UserRole | null) {
-  const basePath = getNotificationBasePath(role)
-  const segment = item.submission_type === 'document_review' ? 'review-documents' : 'legal-opinions'
-  return `${basePath}/${segment}/${item.id}`
+  return `${getNotificationBasePath(role)}/${reminderType(item).segment}/${item.id}`
 }
 
 // Kalimat item lonceng, mengikuti status pengajuan saat ini. Pemilik menerima
@@ -52,9 +61,9 @@ export function reminderNeedsAction(item: ReminderItem) {
 export function getReminderRowTone(item: ReminderItem) {
   return item.is_read
     ? 'hover:bg-gray-50 focus:bg-gray-50'
-    : 'bg-[#0B2545]/5 hover:bg-[#0B2545]/10 focus:bg-[#0B2545]/10'
+    : 'bg-navy/5 hover:bg-navy/10 focus:bg-navy/10'
 }
 
 export function getReminderTypeLabel(item: ReminderItem) {
-  return item.submission_type === 'document_review' ? 'Review Dokumen' : 'Legal Opinion'
+  return reminderType(item).label
 }
