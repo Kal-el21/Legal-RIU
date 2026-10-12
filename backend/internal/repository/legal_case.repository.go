@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type LegalCaseFilter struct {
@@ -55,6 +56,7 @@ type LegalCaseRepository interface {
 	FindDivisionByID(id uuid.UUID) (*entity.Division, error)
 	FindCaseTypeByID(id uuid.UUID) (*entity.CaseType, error)
 	FindCaseCategoryByID(id uuid.UUID) (*entity.CaseCategory, error)
+	FindCompanyByID(id uuid.UUID) (*entity.Company, error)
 }
 
 type legalCaseRepository struct {
@@ -133,8 +135,12 @@ func (r *legalCaseRepository) FindByID(id uuid.UUID) (*entity.LegalCase, error) 
 	return &legalCase, nil
 }
 
+// Update menyimpan perkara tanpa menyentuh relasinya. Perkara dibaca bersama
+// relasinya (perusahaan, pihak terkait, kabupaten, dan lain-lain); kalau relasi
+// itu ikut disimpan, GORM mengisi lagi kolom ID-nya dari relasi yang lama dan
+// perubahan pilihan di form hilang.
 func (r *legalCaseRepository) Update(legalCase *entity.LegalCase) error {
-	return r.db.Save(legalCase).Error
+	return r.db.Omit(clause.Associations).Save(legalCase).Error
 }
 
 func (r *legalCaseRepository) UpdateStatus(id uuid.UUID, status string, statusUpdatedAt *time.Time) error {
@@ -285,6 +291,15 @@ func (r *legalCaseRepository) FindDivisionByID(id uuid.UUID) (*entity.Division, 
 		return nil, err
 	}
 	return &division, nil
+}
+
+func (r *legalCaseRepository) FindCompanyByID(id uuid.UUID) (*entity.Company, error) {
+	var company entity.Company
+	err := r.db.Where("id = ?", id).First(&company).Error
+	if err != nil {
+		return nil, err
+	}
+	return &company, nil
 }
 
 func (r *legalCaseRepository) FindCaseTypeByID(id uuid.UUID) (*entity.CaseType, error) {

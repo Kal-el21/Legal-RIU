@@ -508,3 +508,118 @@ func TestPerkaraPerPerusahaan(t *testing.T) {
 		}
 	})
 }
+
+// Perusahaan pemilik perkara mengikuti pilihan di form untuk user induk, saat
+// membuat maupun mengubah. User dari perusahaan non-internal selalu memakai
+// perusahaannya sendiri. Aturannya ada di docs/case_company_access.md.
+func TestPerusahaanPemilikPerkara(t *testing.T) {
+	admin := masukPeran(t, entity.RoleAdmin)
+	induk := masukPeran(t, entity.RoleLegal) // perusahaannya internal
+
+	buatPerusahaan := func(nama, domain string) string {
+		t.Helper()
+		w := panggil(t, admin, http.MethodPost, "/api/v1/admin/companies", map[string]any{"name": nama, "email_domain": domain, "is_internal": false})
+		harapKode(t, w, http.StatusCreated, "membuat perusahaan "+nama)
+		var p struct {
+			ID string `json:"id"`
+		}
+		isiData(t, w, &p)
+		return p.ID
+	}
+	anak := buatPerusahaan("PT Anak Pemilik Uji", "anak-pemilik.example")
+	lain := buatPerusahaan("PT Anak Lain Uji", "anak-lain.example")
+
+	t.Run("UserInduk", func(t *testing.T) {
+		form := formPerkara(t)
+		form["company_id"] = anak
+		w := panggil(t, induk, http.MethodPost, perkaraLegal, form)
+		harapKode(t, w, http.StatusCreated, "induk membuat perkara untuk anak usaha")
+		var p perkara
+		isiData(t, w, &p)
+		if p.CompanyID != anak {
+			t.Fatalf("perkara dibuat untuk %s, tersimpan atas %s", anak, p.CompanyID)
+		}
+
+		// Memindahkan perkara ke perusahaan lain lewat ubah.
+		form["company_id"] = lain
+		harapKode(t, panggil(t, induk, http.MethodPut, perkaraLegal+"/"+p.ID, form), http.StatusOK, "induk mengubah perusahaan perkara")
+		if got := ambilPerkara(t, induk, perkaraLegal, p.ID).CompanyID; got != lain {
+			t.Errorf("perusahaan setelah diubah: dapat %s, harap %s", got, lain)
+		}
+
+		form["company_id"] = uuid.NewString()
+		harapKode(t, panggil(t, induk, http.MethodPost, perkaraLegal, form), http.StatusBadRequest, "membuat perkara untuk perusahaan yang tidak ada")
+		harapKode(t, panggil(t, induk, http.MethodPut, perkaraLegal+"/"+p.ID, form), http.StatusBadRequest, "memindahkan perkara ke perusahaan yang tidak ada")
+	})
+
+	t.Run("UserAnakUsaha", func(t *testing.T) {
+		const surel = "tes-legal-anak@example.com"
+		if err := tambahUser(surel, entity.RoleLegal, uuid.MustParse(anak)); err != nil {
+			t.Fatal(err)
+		}
+		orangAnak := masuk(t, surel)
+
+		// Pilihan perusahaan lain di form diabaikan.
+		form := formPerkara(t)
+		form["company_id"] = lain
+		w := panggil(t, orangAnak, http.MethodPost, perkaraLegal, form)
+		harapKode(t, w, http.StatusCreated, "user anak usaha membuat perkara")
+		var p perkara
+		isiData(t, w, &p)
+		if p.CompanyID != anak {
+			t.Fatalf("perkara user anak usaha tersimpan atas %s, harap perusahaannya sendiri %s", p.CompanyID, anak)
+		}
+
+		// Ia juga tidak bisa memindahkannya lewat ubah.
+		harapKode(t, panggil(t, orangAnak, http.MethodPut, perkaraLegal+"/"+p.ID, form), http.StatusOK, "user anak usaha mengubah perkaranya")
+		if got := ambilPerkara(t, orangAnak, perkaraLegal, p.ID).CompanyID; got != anak {
+			t.Errorf("perusahaan setelah diubah user anak usaha: dapat %s, harap tetap %s", got, anak)
+		}
+	})
+}
+
+// Mengubah pilihan rujukan di form edit (pihak terkait, jenis, kategori, PIC,
+// kabupaten) harus benar-benar tersimpan, bukan hanya dijawab berhasil.
+func TestUbahRujukanPerkara(t *testing.T) {
+	legal := masukPeran(t, entity.RoleLegal)
+	p := buatPerkara(t, legal)
+
+	idKedua := func(tabel string) string {
+		t.Helper()
+		var id string
+		if err := dbTes.Raw("SELECT id FROM " + tabel + " WHERE deleted_at IS NULL ORDER BY created_at OFFSET 1 LIMIT 1").Scan(&id).Error; err != nil || id == "" {
+			t.Fatalf("tabel %s butuh minimal dua baris: %v", tabel, err)
+		}
+		return id
+	}
+	w := panggil(t, legal, http.MethodPost, perkaraLegal+"/cedants", map[string]string{"name": "Cedant Pengganti Uji"})
+	harapKode(t, w, http.StatusCreated, "membuat cedant pengganti")
+	var cedant struct {
+		ID string `json:"id"`
+	}
+	isiData(t, w, &cedant)
+
+	form := formPerkara(t)
+	baru := map[string]string{
+		"related_party_id":    cedant.ID,
+		"case_type_id":        idKedua("case_types"),
+		"category_id":         idKedua("case_categories"),
+		"pic":                 idKedua("divisions"),
+		"location_regency_id": idKedua("regencies"),
+	}
+	for kolom, nilai := range baru {
+		if form[kolom] == nilai {
+			t.Fatalf("nilai pengganti untuk %s sama dengan nilai awal", kolom)
+		}
+		form[kolom] = nilai
+	}
+	harapKode(t, panggil(t, legal, http.MethodPut, perkaraLegal+"/"+p.ID, form), http.StatusOK, "mengubah rujukan perkara")
+
+	var tersimpan map[string]any
+	isiData(t, panggil(t, legal, http.MethodGet, perkaraLegal+"/"+p.ID, nil), &tersimpan)
+	for kolom, nilai := range baru {
+		if tersimpan[kolom] != nilai {
+			t.Errorf("%s setelah diubah: dapat %v, harap %s", kolom, tersimpan[kolom], nilai)
+		}
+	}
+}

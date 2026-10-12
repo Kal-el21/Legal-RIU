@@ -99,17 +99,7 @@ func (h *LegalCaseHandler) Create(c *gin.Context) {
 		return
 	}
 
-	userID := middleware.GetUserID(c)
-	user, err := h.userRepo.FindByID(mustParseUUID(userID))
-	if err != nil {
-		utils.BadRequest(c, "User tidak ditemukan", nil)
-		return
-	}
-	if user.CompanyID != nil && user.Company.IsInternal {
-		req.CompanyID = user.CompanyID.String()
-	}
-
-	legalCase, err := h.svc.Create(user.CompanyID, req)
+	legalCase, err := h.svc.Create(h.getCompanyID(c), req)
 	if err != nil {
 		utils.BadRequest(c, err.Error(), nil)
 		return
@@ -127,7 +117,7 @@ func (h *LegalCaseHandler) Update(c *gin.Context) {
 		return
 	}
 
-	legalCase, err := h.svc.Update(c.Param("id"), req)
+	legalCase, err := h.svc.Update(h.getCompanyID(c), c.Param("id"), req)
 	if err != nil {
 		utils.BadRequest(c, err.Error(), nil)
 		return

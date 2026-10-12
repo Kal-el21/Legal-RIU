@@ -24,11 +24,11 @@ import (
 )
 
 type LegalCaseService interface {
-	Create(companyID *uuid.UUID, req dto.CreateLegalCaseRequest) (*dto.LegalCaseResponse, error)
+	Create(scope *uuid.UUID, req dto.CreateLegalCaseRequest) (*dto.LegalCaseResponse, error)
 	GetAll(companyID *uuid.UUID, query dto.LegalCaseListQuery) ([]dto.LegalCaseResponse, int64, error)
 	GetLatest(companyID *uuid.UUID) (*dto.LegalCaseResponse, error)
 	GetByID(companyID *uuid.UUID, id string) (*dto.LegalCaseResponse, error)
-	Update(id string, req dto.UpdateLegalCaseRequest) (*dto.LegalCaseResponse, error)
+	Update(scope *uuid.UUID, id string, req dto.UpdateLegalCaseRequest) (*dto.LegalCaseResponse, error)
 	UpdateStatus(id string, status string) error
 	Delete(id string) error
 
@@ -72,14 +72,37 @@ func NewLegalCaseService(repo repository.LegalCaseRepository, s *storage.MinIOCl
 	return &legalCaseService{repo: repo, storage: s, pdfSvc: NewPDFService(), repoDocSvc: repoDocSvc}
 }
 
-func (s *legalCaseService) Create(companyID *uuid.UUID, req dto.CreateLegalCaseRequest) (*dto.LegalCaseResponse, error) {
+// ownerCompany menentukan perusahaan pemilik perkara. scope adalah perusahaan
+// si pemanggil kalau ia dibatasi (perusahaannya non-internal), nil kalau tidak.
+// User yang dibatasi selalu memakai perusahaannya sendiri; user lain memakai
+// pilihan di form. Aturannya ada di docs/case_company_access.md.
+func (s *legalCaseService) ownerCompany(scope *uuid.UUID, requested string) (*uuid.UUID, error) {
+	if scope != nil {
+		return scope, nil
+	}
+	id, err := parseUUID(requested)
+	if err != nil {
+		return nil, errors.New("perusahaan tidak valid")
+	}
+	if _, err := s.repo.FindCompanyByID(id); err != nil {
+		return nil, errors.New("perusahaan tidak ditemukan")
+	}
+	return &id, nil
+}
+
+func (s *legalCaseService) Create(scope *uuid.UUID, req dto.CreateLegalCaseRequest) (*dto.LegalCaseResponse, error) {
+	owner, err := s.ownerCompany(scope, req.CompanyID)
+	if err != nil {
+		return nil, err
+	}
+
 	seq, err := s.repo.NextTicketSequence("LC")
 	if err != nil {
 		return nil, errors.New("gagal generate ticket number")
 	}
 	ticket := utils.GenerateTicketNumber(utils.PrefixLegalCase, seq)
 
-	legalCase, err := s.buildLegalCase(companyID, req)
+	legalCase, err := s.buildLegalCase(owner, req)
 	if err != nil {
 		return nil, err
 	}
@@ -157,7 +180,7 @@ func (s *legalCaseService) GetByID(companyID *uuid.UUID, id string) (*dto.LegalC
 	return &response, nil
 }
 
-func (s *legalCaseService) Update(id string, req dto.UpdateLegalCaseRequest) (*dto.LegalCaseResponse, error) {
+func (s *legalCaseService) Update(scope *uuid.UUID, id string, req dto.UpdateLegalCaseRequest) (*dto.LegalCaseResponse, error) {
 	uid, err := parseUUID(id)
 	if err != nil {
 		return nil, errors.New("ID tidak valid")
@@ -168,7 +191,16 @@ func (s *legalCaseService) Update(id string, req dto.UpdateLegalCaseRequest) (*d
 		return nil, errors.New("kasus hukum tidak ditemukan")
 	}
 
-	updated, err := s.buildLegalCase(existing.CompanyID, req)
+	// Hanya user yang tidak dibatasi yang boleh memindahkan perkara ke
+	// perusahaan lain; untuk user lain perusahaannya tidak berubah.
+	owner := existing.CompanyID
+	if scope == nil {
+		if owner, err = s.ownerCompany(nil, req.CompanyID); err != nil {
+			return nil, err
+		}
+	}
+
+	updated, err := s.buildLegalCase(owner, req)
 	if err != nil {
 		return nil, err
 	}
@@ -189,6 +221,7 @@ func (s *legalCaseService) Update(id string, req dto.UpdateLegalCaseRequest) (*d
 	existing.Level = updated.Level
 	existing.AdditionalNotes = updated.AdditionalNotes
 	existing.LocationRegencyID = updated.LocationRegencyID
+	existing.CompanyID = updated.CompanyID
 
 	if err := s.repo.Update(existing); err != nil {
 		return nil, errors.New("gagal mengupdate kasus hukum")
