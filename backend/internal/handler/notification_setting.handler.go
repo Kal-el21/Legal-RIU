@@ -90,7 +90,11 @@ func (h *NotificationSettingHandler) GetReminders(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 	page, limit := parseReminderPagination(c)
 
-	result, err := h.svc.GetReminders(userID, reminderAccess(c), page, limit, c.Query("warning_only") == "true")
+	filter := service.ReminderFilter{
+		WarningOnly: c.Query("warning_only") == "true",
+		UnreadOnly:  c.Query("unread_only") == "true",
+	}
+	result, err := h.svc.GetReminders(userID, reminderAccess(c), filter, page, limit)
 	if err != nil {
 		utils.InternalError(c, err.Error())
 		return

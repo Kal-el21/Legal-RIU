@@ -19,7 +19,7 @@ type NotificationSettingService interface {
 	Update(id string, req dto.UpdateNotificationSettingRequest) (*dto.NotificationSettingResponse, error)
 	GetActiveSettings() (map[string]map[string]*entity.NotificationSetting, error)
 	GetThresholdFor(submissionType, warningLevel string) (int, error)
-	GetReminders(userID string, access ReminderAccess, page int, limit int, warningOnly bool) (*dto.RemindersResponse, error)
+	GetReminders(userID string, access ReminderAccess, filter ReminderFilter, page int, limit int) (*dto.RemindersResponse, error)
 	MarkReminderRead(userID string, submissionType string, submissionID string) error
 	MarkAllRemindersRead(userID string, access ReminderAccess) error
 }
@@ -163,6 +163,16 @@ type ReminderScope struct {
 // ReminderAccess memetakan submission_type ke hak user di modul itu.
 type ReminderAccess map[string]ReminderScope
 
+// ReminderFilter mempersempit daftar lonceng sebelum dipotong per halaman.
+type ReminderFilter struct {
+	WarningOnly bool // hanya yang sudah melewati ambang kuning atau merah
+	UnreadOnly  bool // hanya yang belum dibaca
+}
+
+// Kabar selesai atau ditolak yang lebih tua dari ini tidak lagi ditampilkan ke
+// pemiliknya: sudah bukan kabar, dan tanpa batas ini daftarnya tumbuh terus.
+const finishedNewsMaxAge = 30 * 24 * time.Hour
+
 // Status hasil tindakan pemroses, jadi kabar bagi pemilik pengajuan.
 var ownerStatuses = []entity.SubmissionStatus{
 	entity.StatusUnderReview, entity.StatusNeedRevision, entity.StatusRejected, entity.StatusCompleted,
@@ -195,7 +205,7 @@ type reminderRow struct {
 	changedAt time.Time
 }
 
-func (s *notificationSettingService) GetReminders(userID string, access ReminderAccess, page int, limit int, warningOnly bool) (*dto.RemindersResponse, error) {
+func (s *notificationSettingService) GetReminders(userID string, access ReminderAccess, filter ReminderFilter, page int, limit int) (*dto.RemindersResponse, error) {
 	uid, err := uuid.Parse(userID)
 	if err != nil {
 		return nil, err
@@ -208,11 +218,10 @@ func (s *notificationSettingService) GetReminders(userID string, access Reminder
 	if err := s.applyReminderReadState(rows, uid); err != nil {
 		return nil, err
 	}
-	if warningOnly {
-		rows = slices.DeleteFunc(rows, func(row reminderRow) bool {
-			return row.item.WarningLevel == string(WarningLevelNone)
-		})
-	}
+	rows = slices.DeleteFunc(rows, func(row reminderRow) bool {
+		return (filter.WarningOnly && row.item.WarningLevel == string(WarningLevelNone)) ||
+			(filter.UnreadOnly && row.item.IsRead)
+	})
 	return paginateReminders(rows, page, limit), nil
 }
 
@@ -342,7 +351,9 @@ func buildReminderRow(src reminderSource, scope ReminderScope, viewerID uuid.UUI
 		level, changedAt = warningLevel(eventAt, daysWaiting, yellowDays, redDays)
 	}
 
-	asOwner := scope.Owner && src.ownerID == viewerID && slices.Contains(ownerStatuses, src.status)
+	finished := src.status == entity.StatusCompleted || src.status == entity.StatusRejected
+	asOwner := scope.Owner && src.ownerID == viewerID && slices.Contains(ownerStatuses, src.status) &&
+		!(finished && now.Sub(eventAt) > finishedNewsMaxAge)
 	asProcessor := scope.Processor &&
 		(src.status == entity.StatusSubmitted || src.status == entity.StatusResubmitted || level != WarningLevelNone)
 	if !asOwner && !asProcessor {
@@ -386,18 +397,26 @@ func warningLevel(eventAt time.Time, daysWaiting, yellowDays, redDays int) (Warn
 	return WarningLevelNone, eventAt
 }
 
+// applyReminderReadState menandai baris yang sudah dibaca. Tanda terbaca gugur
+// kalau baris berubah lagi setelah dibaca: statusnya berganti, atau levelnya
+// naik.
 func (s *notificationSettingService) applyReminderReadState(rows []reminderRow, userID uuid.UUID) error {
 	reads, err := s.repo.GetNotificationReadsByUser(userID)
 	if err != nil {
 		return err
 	}
 
-	readMap := make(map[string]bool, len(reads))
+	readAt := make(map[string]time.Time, len(reads))
 	for _, read := range reads {
-		readMap[read.SubmissionType+":"+read.SubmissionID.String()] = read.IsRead
+		at := read.UpdatedAt
+		if read.ReadAt != nil {
+			at = *read.ReadAt
+		}
+		readAt[read.SubmissionType+":"+read.SubmissionID.String()] = at
 	}
 	for i := range rows {
-		rows[i].item.IsRead = readMap[rows[i].item.SubmissionType+":"+rows[i].item.ID]
+		at, ok := readAt[rows[i].item.SubmissionType+":"+rows[i].item.ID]
+		rows[i].item.IsRead = ok && !at.Before(rows[i].changedAt)
 	}
 	return nil
 }

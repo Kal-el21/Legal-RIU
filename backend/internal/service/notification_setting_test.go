@@ -35,7 +35,11 @@ func TestBuildReminderRow(t *testing.T) {
 		berubahLalu int // hari sejak baris terakhir berubah
 	}{
 		{"pemilik diberi kabar saat direview", hanyaPemilik, pemilik, entity.StatusUnderReview, 0, 3, 14, true, WarningLevelNone, 0},
-		{"pemilik diberi kabar saat selesai", hanyaPemilik, pemilik, entity.StatusCompleted, 40, 3, 14, true, WarningLevelNone, 40},
+		{"pemilik diberi kabar saat selesai", hanyaPemilik, pemilik, entity.StatusCompleted, 10, 3, 14, true, WarningLevelNone, 10},
+		{"kabar selesai tepat 30 hari masih tampil", hanyaPemilik, pemilik, entity.StatusCompleted, 30, 3, 14, true, WarningLevelNone, 30},
+		{"kabar selesai lebih dari 30 hari tidak tampil", hanyaPemilik, pemilik, entity.StatusCompleted, 31, 3, 14, false, "", 0},
+		{"kabar ditolak lebih dari 30 hari tidak tampil", hanyaPemilik, pemilik, entity.StatusRejected, 31, 3, 14, false, "", 0},
+		{"permintaan revisi lama tetap tampil", hanyaPemilik, pemilik, entity.StatusNeedRevision, 40, 3, 14, true, WarningLevelNone, 40},
 		{"pemilik tidak diberi kabar atas pengajuannya sendiri", hanyaPemilik, pemilik, entity.StatusSubmitted, 0, 3, 14, false, "", 0},
 		{"pemilik tidak diberi kabar atas ajukan ulangnya sendiri", hanyaPemilik, pemilik, entity.StatusResubmitted, 0, 3, 14, false, "", 0},
 		{"pemilik tidak mendapat peringatan", hanyaPemilik, pemilik, entity.StatusUnderReview, 30, 3, 14, true, WarningLevelNone, 30},
