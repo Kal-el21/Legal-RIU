@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils'
 import SidebarUserButton from '@/components/common/SidebarUserButton'
 import NotificationDropdown from '@/components/common/NotificationDropdown'
 import { useAuthStore } from '@/store/auth.store'
+import { NOTIFICATION_PERMISSIONS } from '@/lib/reminders'
 
 export type MenuItem = {
   label: string
@@ -12,7 +13,6 @@ export type MenuItem = {
   icon: LucideIcon
   permissions: string[]
   exact?: boolean
-  badge?: number
 }
 
 // Grup menu yang bisa dilipat, mis. Data Master di panel Admin
@@ -86,6 +86,9 @@ export default function PanelLayout({ panelLabel, settingsPath, nav }: PanelLayo
   const navItems = nav
     .map((item) => ('children' in item ? { ...item, children: item.children.filter(allowed) } : item))
     .filter((item) => ('children' in item ? item.children.length > 0 : allowed(item)))
+
+  const showNotifications =
+    user?.role === 'ADMIN' || NOTIFICATION_PERMISSIONS.some((permission) => permissions.includes(permission))
 
   return (
     <div className="min-h-screen flex" style={{ background: '#f8fafc' }}>
@@ -164,14 +167,7 @@ export default function PanelLayout({ panelLabel, settingsPath, nav }: PanelLayo
               )}
               title={sidebarCollapsed ? item.label : undefined}
             >
-              <span className="relative flex-shrink-0">
-                <item.icon className="w-4 h-4" />
-                {item.badge ? (
-                  <span className="absolute -top-1.5 -right-2 inline-flex items-center justify-center rounded-full text-[10px] font-bold px-1 min-w-[16px] h-4 bg-red-500 text-white border-2 border-[#0B2545]">
-                    {item.badge}
-                  </span>
-                ) : null}
-              </span>
+              <item.icon className="w-4 h-4 flex-shrink-0" />
               {!sidebarCollapsed && item.label}
               {!sidebarCollapsed && isActive(item.href, item.exact) && <ChevronRight className="w-3.5 h-3.5 ml-auto opacity-60" />}
             </Link>
@@ -208,7 +204,7 @@ export default function PanelLayout({ panelLabel, settingsPath, nav }: PanelLayo
             {sidebarCollapsed ? <PanelLeftOpen className="w-5 h-5 text-gray-600" /> : <PanelLeftClose className="w-5 h-5 text-gray-600" />}
           </button>
           <div className="flex-1" />
-          <NotificationDropdown />
+          {showNotifications && <NotificationDropdown />}
           <Link to="/" title="Ke beranda portal" className="inline-flex h-9 items-center gap-2 rounded-lg px-2 text-sm text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800">
             <Home className="h-5 w-5" />
             <span className="hidden sm:inline">Beranda</span>

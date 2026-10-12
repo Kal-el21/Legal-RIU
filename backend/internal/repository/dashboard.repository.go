@@ -26,6 +26,11 @@ type DashboardRepository interface {
 	RecentDocumentReviewsByUser(userID uuid.UUID, limit int) ([]entity.DocumentReview, error)
 	RecentAllLegalOpinions(limit int) ([]entity.LegalOpinion, error)
 	RecentAllDocumentReviews(limit int) ([]entity.DocumentReview, error)
+
+	// Lonceng notifikasi
+	ReminderLegalOpinions(ownerID uuid.UUID, ownerStatuses, processorStatuses []entity.SubmissionStatus) ([]entity.LegalOpinion, error)
+	ReminderDocumentReviews(ownerID uuid.UUID, ownerStatuses, processorStatuses []entity.SubmissionStatus) ([]entity.DocumentReview, error)
+	ReminderAgreementDocuments(ownerID uuid.UUID, ownerStatuses, processorStatuses []entity.SubmissionStatus) ([]entity.AgreementDocument, error)
 }
 
 type dashboardRepository struct {
@@ -111,5 +116,31 @@ func (r *dashboardRepository) RecentAllLegalOpinions(limit int) ([]entity.LegalO
 func (r *dashboardRepository) RecentAllDocumentReviews(limit int) ([]entity.DocumentReview, error) {
 	var items []entity.DocumentReview
 	err := r.db.Preload("User").Order("created_at DESC").Limit(limit).Find(&items).Error
+	return items, err
+}
+
+// reminderQuery menyaring pengajuan untuk lonceng seorang user: miliknya yang
+// berstatus ownerStatuses, ditambah milik siapa pun yang berstatus
+// processorStatuses. Daftar kosong berarti bagian itu tidak diambil.
+func (r *dashboardRepository) reminderQuery(ownerID uuid.UUID, ownerStatuses, processorStatuses []entity.SubmissionStatus) *gorm.DB {
+	return r.db.Preload("User").
+		Where("((user_id = ? AND status IN ?) OR status IN ?)", ownerID, ownerStatuses, processorStatuses)
+}
+
+func (r *dashboardRepository) ReminderLegalOpinions(ownerID uuid.UUID, ownerStatuses, processorStatuses []entity.SubmissionStatus) ([]entity.LegalOpinion, error) {
+	var items []entity.LegalOpinion
+	err := r.reminderQuery(ownerID, ownerStatuses, processorStatuses).Find(&items).Error
+	return items, err
+}
+
+func (r *dashboardRepository) ReminderDocumentReviews(ownerID uuid.UUID, ownerStatuses, processorStatuses []entity.SubmissionStatus) ([]entity.DocumentReview, error) {
+	var items []entity.DocumentReview
+	err := r.reminderQuery(ownerID, ownerStatuses, processorStatuses).Find(&items).Error
+	return items, err
+}
+
+func (r *dashboardRepository) ReminderAgreementDocuments(ownerID uuid.UUID, ownerStatuses, processorStatuses []entity.SubmissionStatus) ([]entity.AgreementDocument, error) {
+	var items []entity.AgreementDocument
+	err := r.reminderQuery(ownerID, ownerStatuses, processorStatuses).Find(&items).Error
 	return items, err
 }

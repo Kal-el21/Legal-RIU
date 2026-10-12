@@ -112,7 +112,7 @@ func (s *agreementDocumentService) Create(userID string, req dto.CreateAgreement
 	if e != nil {
 		return nil, e
 	}
-	seq, e := s.repo.NextAgreementSequence(time.Now().Year())
+	seq, e := s.repo.NextTicketSequence("PK")
 	if e != nil {
 		return nil, e
 	}
@@ -120,7 +120,7 @@ func (s *agreementDocumentService) Create(userID string, req dto.CreateAgreement
 	if e != nil {
 		return nil, e
 	}
-	doc := &entity.AgreementDocument{TicketNumber: utils.GenerateTicketNumber("PK", int(seq)), UserID: uid, DocumentTypeCode: def.Code, FormData: raw, AgreementNumber: nil, Status: entity.StatusSubmitted, TemplateID: &tpl.ID, TemplateChecksum: tpl.Checksum}
+	doc := &entity.AgreementDocument{TicketNumber: utils.GenerateTicketNumber("PK", seq), UserID: uid, DocumentTypeCode: def.Code, FormData: raw, AgreementNumber: nil, Status: entity.StatusSubmitted, TemplateID: &tpl.ID, TemplateChecksum: tpl.Checksum}
 	if e = s.repo.Create(doc); e != nil {
 		return nil, errors.New("gagal membuat pengajuan")
 	}

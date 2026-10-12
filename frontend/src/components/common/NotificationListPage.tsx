@@ -1,14 +1,11 @@
 import { Link, useSearchParams } from 'react-router-dom'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Bell, CheckCheck, ChevronLeft, ChevronRight, FileSearch, FileText, Loader2 } from 'lucide-react'
+import { Bell, CheckCheck, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import StatusBadge from '@/components/common/StatusBadge'
-import WarningBadge from '@/components/common/WarningBadge'
-import { dashboardService } from '@/services/dashboard.service'
+import NotificationRow from '@/components/common/NotificationRow'
+import { useMarkAllNotificationsRead, useMarkNotificationRead, useNotifications } from '@/hooks/useNotifications'
 import { useAuthStore } from '@/store/auth.store'
-import { cn, formatDate } from '@/lib/utils'
-import { getReminderDetailPath, getReminderTypeLabel } from '@/lib/reminders'
-import type { ReminderItem, SubmissionStatus } from '@/types'
+import { cn } from '@/lib/utils'
+import { getReminderDetailPath, getReminderRowTone } from '@/lib/reminders'
 
 const PAGE_LIMIT = 10
 
@@ -17,51 +14,28 @@ function parsePage(value: string | null) {
   return Number.isFinite(page) && page > 0 ? Math.floor(page) : 1
 }
 
-function NotificationIcon({ item }: { item: ReminderItem }) {
-  const Icon = item.submission_type === 'document_review' ? FileSearch : FileText
-  const color = item.warning_level === 'RED' ? 'text-red-600 bg-red-50' : 'text-amber-600 bg-amber-50'
-
-  return (
-    <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${color}`}>
-      <Icon className="h-5 w-5" />
-    </div>
-  )
-}
-
 export default function NotificationListPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const user = useAuthStore((state) => state.user)
-  const queryClient = useQueryClient()
   const page = parsePage(searchParams.get('page'))
+  const unreadOnly = searchParams.get('filter') === 'unread'
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['notifications', 'list', page],
-    queryFn: () => dashboardService.getReminders({ page, limit: PAGE_LIMIT }),
-    enabled: Boolean(user),
+  const { data, isLoading, isError, refetch } = useNotifications({
+    page,
+    limit: PAGE_LIMIT,
+    unread_only: unreadOnly || undefined,
   })
-
-  const markRead = useMutation({
-    mutationFn: dashboardService.markReminderRead,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['notifications'] })
-      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
-    },
-  })
-
-  const markAllRead = useMutation({
-    mutationFn: dashboardService.markAllRemindersRead,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['notifications'] })
-      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
-    },
-  })
+  const markRead = useMarkNotificationRead()
+  const markAllRead = useMarkAllNotificationsRead()
 
   const items = data?.items ?? []
   const total = data?.total ?? 0
-  const unreadTotal = data?.unread_total ?? items.filter((item) => !item.is_read).length
+  const unreadTotal = data?.unread_total ?? 0
   const totalPages = data?.total_pages ?? 0
   const canGoPrev = page > 1
   const canGoNext = totalPages > 0 && page < totalPages
+  // Data lama tetap ditampilkan kalau hanya pemuatan ulangnya yang gagal
+  const failed = isError && !data
 
   const setPage = (nextPage: number) => {
     const next = new URLSearchParams(searchParams)
@@ -73,12 +47,9 @@ export default function NotificationListPage() {
     setSearchParams(next)
   }
 
-  const handleItemClick = (item: ReminderItem) => {
-    if (item.is_read) return
-    markRead.mutate({
-      submission_type: item.submission_type,
-      submission_id: item.id,
-    })
+  const toggleUnreadOnly = () => {
+    // Kembali ke halaman pertama: jumlah halaman berubah saat saringan berganti
+    setSearchParams(unreadOnly ? {} : { filter: 'unread' })
   }
 
   return (
@@ -89,21 +60,31 @@ export default function NotificationListPage() {
             <Bell className="h-5 w-5 text-red-700" />
             <h1 className="text-2xl font-bold" style={{ color: '#0B2545' }}>Notifikasi</h1>
           </div>
-          <p className="mt-1 text-sm text-gray-500">Daftar pengajuan yang perlu perhatian berdasarkan batas waktu.</p>
+          <p className="mt-1 text-sm text-gray-500">Kabar terbaru tentang pengajuan: perubahan status dan yang menunggu ditindak.</p>
         </div>
         <div className="flex flex-col items-start gap-2 sm:items-end">
           <div className="text-sm text-gray-500">
-            {unreadTotal} belum dibaca dari {total}
+            {unreadOnly ? `${total} belum dibaca` : `${unreadTotal} belum dibaca dari ${total}`}
           </div>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => markAllRead.mutate()}
-            disabled={unreadTotal === 0 || markAllRead.isPending}
-          >
-            {markAllRead.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCheck className="h-4 w-4" />}
-            Tandai semua terbaca
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant={unreadOnly ? 'default' : 'outline'}
+              aria-pressed={unreadOnly}
+              onClick={toggleUnreadOnly}
+            >
+              Belum dibaca
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => markAllRead.mutate()}
+              disabled={unreadTotal === 0 || markAllRead.isPending}
+            >
+              {markAllRead.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCheck className="h-4 w-4" />}
+              Tandai semua terbaca
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -115,47 +96,40 @@ export default function NotificationListPage() {
           </div>
         ) : null}
 
-        {!isLoading && items.length === 0 ? (
-          <div className="px-6 py-16 text-center">
-            <p className="text-sm font-medium text-gray-700">Tidak ada notifikasi</p>
-            <p className="mt-1 text-sm text-gray-400">Belum ada pengajuan yang melewati batas peringatan.</p>
+        {failed ? (
+          <div className="flex flex-col items-center gap-3 px-6 py-16 text-center">
+            <div>
+              <p className="text-sm font-medium text-gray-700">Gagal memuat notifikasi</p>
+              <p className="mt-1 text-sm text-gray-400">Periksa sambungan Anda, lalu coba lagi.</p>
+            </div>
+            <Button type="button" variant="outline" onClick={() => refetch()}>Coba lagi</Button>
           </div>
         ) : null}
 
-        {!isLoading && items.length > 0 ? (
+        {!isLoading && !failed && items.length === 0 ? (
+          <div className="px-6 py-16 text-center">
+            <p className="text-sm font-medium text-gray-700">
+              {unreadOnly ? 'Semua notifikasi sudah dibaca' : 'Tidak ada notifikasi'}
+            </p>
+            <p className="mt-1 text-sm text-gray-400">
+              {unreadOnly ? 'Matikan saringan untuk melihat yang sudah dibaca.' : 'Belum ada kabar baru tentang pengajuan.'}
+            </p>
+          </div>
+        ) : null}
+
+        {items.length > 0 ? (
           <div className="divide-y divide-gray-100">
             {items.map((item) => (
               <Link
                 key={`${item.submission_type}-${item.id}`}
                 to={getReminderDetailPath(item, user?.role)}
-                onClick={() => handleItemClick(item)}
-                className={cn(
-                  'flex gap-4 px-5 py-4 transition-colors hover:bg-gray-50',
-                  !item.is_read && 'bg-red-50/30',
-                )}
+                onClick={() => {
+                  if (!item.is_read) markRead.mutate({ submission_type: item.submission_type, submission_id: item.id })
+                }}
+                className={cn('flex items-center gap-4 px-5 py-4 transition-colors', getReminderRowTone(item))}
               >
-                <NotificationIcon item={item} />
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    {!item.is_read ? <span className="h-2 w-2 rounded-full bg-red-500" /> : null}
-                    <span className="text-xs font-medium text-gray-500">{getReminderTypeLabel(item)}</span>
-                    <span className="text-xs text-gray-300">-</span>
-                    <span className="text-xs font-medium text-gray-500">{item.ticket_number}</span>
-                    {item.warning_level !== 'NONE' ? <WarningBadge level={item.warning_level} /> : null}
-                  </div>
-                  <p className={cn(
-                    'mt-1 text-sm text-gray-900',
-                    item.is_read ? 'font-medium' : 'font-semibold',
-                  )}>{item.title}</p>
-                  <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-500">
-                    <StatusBadge status={item.status as SubmissionStatus} />
-                    <span>{item.days_since_submission} hari sejak pengajuan</span>
-                    <span className="text-gray-300">-</span>
-                    <span>{item.days_since_last_update} hari sejak update terakhir</span>
-                  </div>
-                  <p className="mt-2 text-xs text-gray-400">Tanggal pengajuan: {formatDate(item.submitted_at)}</p>
-                </div>
-                <ChevronRight className="mt-2 h-4 w-4 shrink-0 text-gray-300" />
+                <NotificationRow item={item} />
+                <ChevronRight className="h-4 w-4 shrink-0 text-gray-300" />
               </Link>
             ))}
           </div>

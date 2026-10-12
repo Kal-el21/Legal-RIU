@@ -1,24 +1,17 @@
 import api from './api'
-import { useAuthStore } from '@/store/auth.store'
 import type { ApiResponse, UserDashboardStats, AdminDashboardStats, LegalOpinion, DocumentReview, RemindersResponse } from '@/types'
 
 export interface ReminderParams {
   page?: number
   limit?: number
+  // Hanya pengajuan yang sudah melewati ambang kuning atau merah
+  warning_only?: boolean
+  unread_only?: boolean
 }
 
 export interface MarkReminderReadPayload {
   submission_type: string
   submission_id: string
-}
-
-function getReminderEndpoint() {
-  const role = useAuthStore.getState().user?.role
-  const pathname = typeof window === 'undefined' ? '' : window.location.pathname
-  if (role === 'EXTERNAL' || pathname.startsWith('/external')) return '/external/dashboard/reminders'
-  if (role === 'ADMIN' || pathname.startsWith('/admin')) return '/admin/dashboard/reminders'
-  if (role === 'LEGAL' || pathname.startsWith('/legal')) return '/legal/dashboard/reminders'
-  return '/dashboard/reminders'
 }
 
 export const dashboardService = {
@@ -63,15 +56,15 @@ export const dashboardService = {
   },
 
   getReminders: async (params?: ReminderParams): Promise<RemindersResponse> => {
-    const res = await api.get<ApiResponse<RemindersResponse>>(getReminderEndpoint(), { params })
+    const res = await api.get<ApiResponse<RemindersResponse>>('/notifications', { params })
     return res.data.data!
   },
 
   markReminderRead: async (payload: MarkReminderReadPayload): Promise<void> => {
-    await api.patch(`${getReminderEndpoint()}/read`, payload)
+    await api.patch('/notifications/read', payload)
   },
 
   markAllRemindersRead: async (): Promise<void> => {
-    await api.patch(`${getReminderEndpoint()}/read-all`)
+    await api.patch('/notifications/read-all')
   },
 }

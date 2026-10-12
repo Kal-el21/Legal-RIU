@@ -1,7 +1,6 @@
 package repository
 
 import (
-	"fmt"
 	"time"
 
 	"legal-riu-portal/internal/entity"
@@ -17,7 +16,7 @@ type DocumentReviewRepository interface {
 	Update(dr *entity.DocumentReview) error
 	Delete(id uuid.UUID) error
 	UpdateStatus(id uuid.UUID, status entity.SubmissionStatus, adminNote string) error
-	CountByMonthAndPrefix(prefix string) (int64, error)
+	NextTicketSequence(prefix string) (int, error)
 	AddAttachment(att *entity.DocumentReviewAttachment) error
 	GetLatestUploadRound(drID uuid.UUID) (int, error)
 	AddResult(result *entity.DocumentReviewResult) error
@@ -93,15 +92,8 @@ func (r *documentReviewRepository) UpdateStatus(id uuid.UUID, status entity.Subm
 	return r.db.Model(&entity.DocumentReview{}).Where("id = ?", id).Updates(updates).Error
 }
 
-func (r *documentReviewRepository) CountByMonthAndPrefix(prefix string) (int64, error) {
-	var count int64
-	now := time.Now()
-	start := fmt.Sprintf("%s-%s-", prefix, now.Format("200601"))
-	err := r.db.Model(&entity.DocumentReview{}).
-		Where("ticket_number LIKE ? AND created_at >= ?", start+"%",
-			time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())).
-		Count(&count).Error
-	return count, err
+func (r *documentReviewRepository) NextTicketSequence(prefix string) (int, error) {
+	return nextTicketSequence(r.db, &entity.DocumentReview{}, prefix)
 }
 
 func (r *documentReviewRepository) AddAttachment(att *entity.DocumentReviewAttachment) error {

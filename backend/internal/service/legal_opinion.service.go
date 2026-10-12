@@ -47,11 +47,11 @@ func (s *legalOpinionService) Create(userID string, req dto.CreateLegalOpinionRe
 	}
 
 	// Generate ticket number
-	count, err := s.repo.CountByMonthAndPrefix("LO")
+	seq, err := s.repo.NextTicketSequence("LO")
 	if err != nil {
 		return nil, errors.New("gagal generate ticket number")
 	}
-	ticket := utils.GenerateTicketNumber(utils.PrefixLegalOpinion, int(count)+1)
+	ticket := utils.GenerateTicketNumber(utils.PrefixLegalOpinion, seq)
 
 	lo := &entity.LegalOpinion{
 		TicketNumber:      ticket,

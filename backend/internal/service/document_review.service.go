@@ -47,11 +47,11 @@ func (s *documentReviewService) Create(userID string, req dto.CreateDocumentRevi
 		return nil, errors.New("user tidak valid")
 	}
 
-	count, err := s.repo.CountByMonthAndPrefix("RD")
+	seq, err := s.repo.NextTicketSequence("RD")
 	if err != nil {
 		return nil, errors.New("gagal generate ticket number")
 	}
-	ticket := utils.GenerateTicketNumber(utils.PrefixDocumentReview, int(count)+1)
+	ticket := utils.GenerateTicketNumber(utils.PrefixDocumentReview, seq)
 
 	dr := &entity.DocumentReview{
 		TicketNumber:      ticket,

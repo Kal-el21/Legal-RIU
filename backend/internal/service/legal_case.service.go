@@ -73,11 +73,11 @@ func NewLegalCaseService(repo repository.LegalCaseRepository, s *storage.MinIOCl
 }
 
 func (s *legalCaseService) Create(companyID *uuid.UUID, req dto.CreateLegalCaseRequest) (*dto.LegalCaseResponse, error) {
-	count, err := s.repo.CountByMonthAndPrefix("LC")
+	seq, err := s.repo.NextTicketSequence("LC")
 	if err != nil {
 		return nil, errors.New("gagal generate ticket number")
 	}
-	ticket := utils.GenerateTicketNumber(utils.PrefixLegalCase, int(count)+1)
+	ticket := utils.GenerateTicketNumber(utils.PrefixLegalCase, seq)
 
 	legalCase, err := s.buildLegalCase(companyID, req)
 	if err != nil {
