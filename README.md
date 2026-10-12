@@ -148,3 +148,4 @@ Key variables:
 
 - [Workflow](docs/workflow.md) — Backend & frontend request flow, conventions, how to add features
 - [Permission Matrix](docs/permission_matrix.md) — Permission catalog, role baseline, override mechanics, coverage status
+- [Case Access per Company](docs/case_company_access.md) — Who can see a case: parent company vs subsidiaries (Legal AU), and what to do with cases created before the rule
