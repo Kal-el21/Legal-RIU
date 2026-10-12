@@ -469,16 +469,8 @@ func TestPerkaraPerPerusahaan(t *testing.T) {
 		IsInternal bool      `json:"is_internal"`
 	}
 	isiData(t, w, &luar)
-	t.Run("PerusahaanNonInternalTersimpan", func(t *testing.T) {
-		bugDiketahui(t, "perusahaan yang dibuat dengan is_internal=false tersimpan sebagai internal, jadi pembatasan per perusahaan tidak pernah berlaku untuk perusahaan baru")
-		if luar.IsInternal {
-			t.Error("perusahaan dibuat dengan is_internal=false, tetapi tersimpan sebagai internal")
-		}
-	})
-	// Sampai bug di atas diperbaiki, tandanya dibetulkan langsung di database
-	// supaya sisa tes ini tetap menguji pembatasannya.
-	if err := dbTes.Exec("UPDATE companies SET is_internal = false WHERE id = ?", luar.ID).Error; err != nil {
-		t.Fatal(err)
+	if luar.IsInternal {
+		t.Fatal("perusahaan dibuat dengan is_internal=false, tetapi tersimpan sebagai internal")
 	}
 	const surel = "tes-legal-au-luar@example.com"
 	if err := tambahUser(surel, entity.RoleLegalAU, luar.ID); err != nil {

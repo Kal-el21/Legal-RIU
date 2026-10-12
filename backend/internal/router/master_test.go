@@ -162,11 +162,44 @@ func TestMasterData(t *testing.T) {
 	}
 }
 
-// Perusahaan bisa dijadikan non-internal lewat ubah. Tanda ini menentukan
-// apakah usernya dibatasi ke perkara perusahaannya sendiri.
+// Tanda internal sebuah perusahaan tersimpan sesuai yang diminta, lewat tambah,
+// impor, maupun ubah. Tanda ini menentukan apakah usernya dibatasi ke perkara
+// perusahaannya sendiri.
 func TestPerusahaanNonInternal(t *testing.T) {
 	admin := masukPeran(t, entity.RoleAdmin)
 	const alamat = "/api/v1/admin/companies"
+
+	internal := func(id string) bool {
+		t.Helper()
+		var p struct {
+			IsInternal bool `json:"is_internal"`
+		}
+		w := panggil(t, admin, http.MethodGet, alamat+"/"+id, nil)
+		harapKode(t, w, http.StatusOK, "mengambil perusahaan")
+		isiData(t, w, &p)
+		return p.IsInternal
+	}
+
+	// Dibuat non-internal: tersimpan non-internal, juga setelah dibaca ulang.
+	w0 := panggil(t, admin, http.MethodPost, alamat, map[string]any{"name": "PT Luar Uji", "email_domain": "luar-uji.example", "is_internal": false})
+	harapKode(t, w0, http.StatusCreated, "membuat perusahaan non-internal")
+	var luar struct {
+		ID         string `json:"id"`
+		IsInternal bool   `json:"is_internal"`
+	}
+	isiData(t, w0, &luar)
+	if luar.IsInternal || internal(luar.ID) {
+		t.Error("perusahaan dibuat dengan is_internal=false, tetapi tersimpan sebagai internal")
+	}
+
+	// Perusahaan hasil impor selalu non-internal.
+	w0 = panggilForm(t, admin, http.MethodPost, alamat+"/import", nil, berkas{"file", "perusahaan.csv", []byte("name,email_domain\nPT Impor Luar,impor-luar.example\n")})
+	harapKode(t, w0, http.StatusOK, "impor perusahaan")
+	var idImpor string
+	dbTes.Raw("SELECT id FROM companies WHERE email_domain = ?", "impor-luar.example").Scan(&idImpor)
+	if idImpor == "" || internal(idImpor) {
+		t.Errorf("perusahaan hasil impor tersimpan sebagai internal (id %q)", idImpor)
+	}
 
 	w := panggil(t, admin, http.MethodPost, alamat, map[string]any{"name": "PT Anak Usaha Uji", "email_domain": "anak-uji.example", "is_internal": true})
 	harapKode(t, w, http.StatusCreated, "membuat perusahaan")

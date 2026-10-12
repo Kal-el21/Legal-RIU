@@ -244,7 +244,10 @@ type Company struct {
 	Base
 	Name        string `gorm:"size:255;not null;uniqueIndex" json:"name"`
 	EmailDomain string `gorm:"size:255;not null;uniqueIndex" json:"email_domain"`
-	IsInternal  bool   `gorm:"not null;default:true" json:"is_internal"`
+	// Tanpa nilai bawaan di GORM: dengan default:true, nilai false diganti
+	// nilai bawaan itu saat baris dibuat, sehingga perusahaan non-internal
+	// tersimpan sebagai internal.
+	IsInternal bool `gorm:"not null" json:"is_internal"`
 }
 
 type PurposeType struct {
