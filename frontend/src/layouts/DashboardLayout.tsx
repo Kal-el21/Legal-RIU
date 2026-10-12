@@ -34,19 +34,19 @@ export default function DashboardLayout() {
       <aside className={cn(
         'fixed inset-y-0 left-0 z-50 flex flex-col transition-all duration-200',
         sidebarCollapsed ? 'w-16' : 'w-60',
-        'bg-white border-r border-gray-100',
+        'border-r border-white/10',
         'lg:translate-x-0 lg:h-screen',
         sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-      )}>
-        <div className="h-16 flex items-center px-5 border-b border-gray-100">
+      )} style={{ background: '#0B2545' }}>
+        <div className="h-16 flex items-center px-5 border-b border-white/10">
           <Link to="/" className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: '#C8102E' }}>
               <Scale className="w-4 h-4 text-white" />
             </div>
             {!sidebarCollapsed && (
               <div>
-                <p className="font-bold text-sm" style={{ color: '#0B2545' }}>Legal RIU</p>
-                <p className="text-xs text-gray-400 leading-none">Indonesia Re</p>
+                <p className="font-bold text-sm text-white">Legal RIU</p>
+                <p className="text-xs text-white/40 leading-none">Indonesia Re</p>
               </div>
             )}
           </Link>
@@ -59,24 +59,23 @@ export default function DashboardLayout() {
                 'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all',
                 sidebarCollapsed && 'justify-center px-2',
                 isActive(item.href, item.exact)
-                  ? 'text-white shadow-sm'
-                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                  ? 'bg-white/10 text-white'
+                  : 'text-white/50 hover:bg-white/5 hover:text-white'
               )}
-              style={isActive(item.href, item.exact) ? { background: '#C8102E' } : {}}
               title={sidebarCollapsed ? item.label : undefined}
             >
               <item.icon className="w-4 h-4 flex-shrink-0" />
               {!sidebarCollapsed && item.label}
-              {!sidebarCollapsed && isActive(item.href, item.exact) && <ChevronRight className="w-3.5 h-3.5 ml-auto opacity-70" />}
+              {!sidebarCollapsed && isActive(item.href, item.exact) && <ChevronRight className="w-3.5 h-3.5 ml-auto opacity-60" />}
             </Link>
           ))}
         </nav>
 
-        <SidebarUserButton settingsPath="/dashboard/settings" dark={false} collapsed={sidebarCollapsed} />
+        <SidebarUserButton settingsPath="/dashboard/settings" dark={true} collapsed={sidebarCollapsed} />
       </aside>
 
       {sidebarOpen && (
-        <div className="fixed inset-0 z-40 bg-black/20 lg:hidden" onClick={() => setSidebarOpen(false)} />
+        <div className="fixed inset-0 z-40 bg-black/30 lg:hidden" onClick={() => setSidebarOpen(false)} />
       )}
 
       <div className={cn(
