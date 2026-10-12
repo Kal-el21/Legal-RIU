@@ -42,7 +42,7 @@ export default function PanelLayout({ panelLabel, settingsPath, nav }: PanelLayo
   const location = useLocation()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [collapsedPref, setCollapsedPref] = useState(() => localStorage.getItem(COLLAPSED_KEY) === '1')
-  const [openGroup, setOpenGroup] = useState<string | null>(null)
+  const [groupOpen, setGroupOpen] = useState<Record<string, boolean>>({})
 
   // Mode ciut hanya berlaku di desktop; di layar kecil sidebar selalu tampil lebar sebagai laci
   const isDesktop = useSyncExternalStore(subscribeDesktop, () => desktop.matches)
@@ -55,6 +55,17 @@ export default function PanelLayout({ panelLabel, settingsPath, nav }: PanelLayo
 
   const isActive = (href: string, exact?: boolean) =>
     exact ? location.pathname === href : location.pathname.startsWith(href)
+
+  const hasActiveChild = (group: MenuGroup) => group.children.some((child) => isActive(child.href))
+
+  // Grup mengikuti halaman yang sedang dibuka sampai pengguna membuka atau menutupnya sendiri
+  const isGroupOpen = (group: MenuGroup) => groupOpen[group.label] ?? hasActiveChild(group)
+
+  const toggleGroup = (group: MenuGroup) => {
+    // Saat ciut anak grup tidak muat, jadi sidebar dilebarkan dulu
+    if (sidebarCollapsed) toggleCollapsed()
+    setGroupOpen({ ...groupOpen, [group.label]: sidebarCollapsed || !isGroupOpen(group) })
+  }
 
   const permissions = useAuthStore((state) => state.permissions)
   const user = useAuthStore((state) => state.user)
@@ -93,18 +104,25 @@ export default function PanelLayout({ panelLabel, settingsPath, nav }: PanelLayo
           {navItems.map((item) => 'children' in item ? (
             <div key={item.label} className="py-2">
               <button
-                onClick={() => setOpenGroup(openGroup === item.label ? null : item.label)}
-                aria-expanded={openGroup === item.label}
+                onClick={() => toggleGroup(item)}
+                aria-expanded={isGroupOpen(item) && !sidebarCollapsed}
                 className={cn(
                   'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all w-full',
-                  'text-white/50 hover:bg-white/5 hover:text-white'
+                  sidebarCollapsed && 'justify-center px-2',
+                  // Latar aktif hanya saat anaknya tidak terlihat, supaya tidak dobel dengan anak yang aktif
+                  !hasActiveChild(item)
+                    ? 'text-white/50 hover:bg-white/5 hover:text-white'
+                    : isGroupOpen(item) && !sidebarCollapsed
+                      ? 'text-white hover:bg-white/5'
+                      : 'bg-white/10 text-white'
                 )}
+                title={sidebarCollapsed ? item.label : undefined}
               >
                 <item.icon className="w-4 h-4 flex-shrink-0" />
                 {!sidebarCollapsed && <span>{item.label}</span>}
-                {!sidebarCollapsed && <ChevronRight className={cn('w-3.5 h-3.5 ml-auto opacity-60 transition-transform', openGroup === item.label && 'rotate-90')} />}
+                {!sidebarCollapsed && <ChevronRight className={cn('w-3.5 h-3.5 ml-auto opacity-60 transition-transform', isGroupOpen(item) && 'rotate-90')} />}
               </button>
-              {openGroup === item.label && !sidebarCollapsed && (
+              {isGroupOpen(item) && !sidebarCollapsed && (
                 <div className="ml-4 mt-1 space-y-0.5">
                   {item.children.map((child) => (
                     <Link key={child.href} to={child.href} onClick={() => setSidebarOpen(false)}
