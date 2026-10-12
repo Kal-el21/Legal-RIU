@@ -29,16 +29,17 @@ func NewLegalCaseHandler(svc service.LegalCaseService, auditLogSvc service.Audit
 }
 
 // companyScope mengembalikan perusahaan yang membatasi si pemanggil, atau nil
-// kalau ia tidak dibatasi (perusahaannya internal, atau ia tidak terikat
-// perusahaan). Kalau data usernya tidak bisa dibaca, permintaan ditolak; tidak
-// dianggap "tidak dibatasi".
+// kalau ia tidak dibatasi (ia ADMIN, perusahaannya internal, atau ia tidak
+// terikat perusahaan). Kalau data usernya tidak bisa dibaca, permintaan
+// ditolak; tidak dianggap "tidak dibatasi".
 func (h *LegalCaseHandler) companyScope(c *gin.Context) (*uuid.UUID, bool) {
 	user, err := h.userRepo.FindByID(mustParseUUID(middleware.GetUserID(c)))
 	if err != nil {
 		utils.Forbidden(c, "Data pengguna tidak dapat dibaca")
 		return nil, false
 	}
-	if user.CompanyID == nil || user.Company.IsInternal {
+	// ADMIN mengelola seluruh sistem, di perusahaan mana pun ia terdaftar.
+	if user.Role == entity.RoleAdmin || user.CompanyID == nil || user.Company.IsInternal {
 		return nil, true
 	}
 	return user.CompanyID, true

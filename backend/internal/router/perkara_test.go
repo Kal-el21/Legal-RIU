@@ -459,8 +459,9 @@ func TestBerkasPerkara(t *testing.T) {
 // Perkara dibatasi per perusahaan untuk user dari perusahaan non-internal:
 // mereka hanya melihat dan mengelola perkara perusahaannya sendiri.
 func TestPerkaraPerPerusahaan(t *testing.T) {
-	// Perusahaan hasil seed semuanya internal, jadi perusahaan luar dan usernya
-	// dibuat di sini.
+	// Memakai perusahaan non-internal buatan sendiri, supaya tes ini tidak
+	// bergantung pada perusahaan bawaan mana yang bertanda internal. Aturan untuk
+	// perusahaan bawaan diuji di TestAnakUsahaBawaanDibatasi.
 	w := panggil(t, masukPeran(t, entity.RoleAdmin), http.MethodPost, "/api/v1/admin/companies",
 		map[string]any{"name": "PT Luar Tes", "email_domain": "luar-tes.example", "is_internal": false})
 	harapKode(t, w, http.StatusCreated, "membuat perusahaan non-internal")
@@ -856,4 +857,72 @@ func TestLegalAUMengelolaPerkara(t *testing.T) {
 			t.Errorf("setelah dihapus: dokumen %q, foto %q", got.DocumentLink, got.Photo)
 		}
 	})
+}
+
+// Aturan utama di docs/case_company_access.md, dengan perusahaan bawaan: Legal
+// AU sebuah anak usaha hanya melihat perkara perusahaannya, sedangkan induk dan
+// ADMIN melihat perkara semua perusahaan.
+func TestAnakUsahaBawaanDibatasi(t *testing.T) {
+	idPerusahaan := func(domain string) string {
+		t.Helper()
+		var id string
+		if err := dbTes.Raw("SELECT id FROM companies WHERE email_domain = ? AND deleted_at IS NULL", domain).Scan(&id).Error; err != nil || id == "" {
+			t.Fatalf("perusahaan %s tidak ada: %v", domain, err)
+		}
+		return id
+	}
+	asei, syariah := idPerusahaan("asei.co.id"), idPerusahaan("resyariah.co.id")
+
+	pengguna := func(surel string, peran entity.UserRole, perusahaan string) string {
+		t.Helper()
+		if err := tambahUser(surel, peran, uuid.MustParse(perusahaan)); err != nil {
+			t.Fatal(err)
+		}
+		return masuk(t, surel)
+	}
+	auAsei := pengguna("tes-au-asei@example.com", entity.RoleLegalAU, asei)
+	auSyariah := pengguna("tes-au-syariah@example.com", entity.RoleLegalAU, syariah)
+	// ADMIN mengelola seluruh sistem, jadi tidak dibatasi walau terdaftar di anak usaha.
+	adminAsei := pengguna("tes-admin-asei@example.com", entity.RoleAdmin, asei)
+	induk := masukPeran(t, entity.RoleLegal)
+
+	buatUntuk := func(perusahaan string) perkara {
+		t.Helper()
+		form := formPerkara(t)
+		form["company_id"] = perusahaan
+		w := panggil(t, induk, http.MethodPost, perkaraLegal, form)
+		harapKode(t, w, http.StatusCreated, "induk membuat perkara untuk anak usaha")
+		var p perkara
+		isiData(t, w, &p)
+		if p.CompanyID != perusahaan {
+			t.Fatalf("perkara tersimpan atas %s, harap %s; apakah user LEGAL tes bukan dari induk?", p.CompanyID, perusahaan)
+		}
+		return p
+	}
+	milikAsei, milikSyariah := buatUntuk(asei), buatUntuk(syariah)
+
+	kasus := []struct {
+		nama, token, alamat string
+		lihatAsei, lihatSya bool
+	}{
+		{"Legal AU ASEI", auAsei, perkaraLegalAU, true, false},
+		{"Legal AU Reasuransi Syariah", auSyariah, perkaraLegalAU, false, true},
+		{"LEGAL induk", induk, perkaraLegal, true, true},
+		{"ADMIN yang terdaftar di ASEI", adminAsei, perkaraAdmin, true, true},
+	}
+	for _, k := range kasus {
+		for _, p := range []struct {
+			milik string
+			id    string
+			harap bool
+		}{{"ASEI", milikAsei.ID, k.lihatAsei}, {"Reasuransi Syariah", milikSyariah.ID, k.lihatSya}} {
+			if got := perkaraDiDaftar(t, k.token, k.alamat, p.id); got != p.harap {
+				t.Errorf("%s, perkara %s di daftar: dapat %v, harap %v", k.nama, p.milik, got, p.harap)
+			}
+			kode := panggil(t, k.token, http.MethodGet, k.alamat+"/"+p.id, nil).Code
+			if (kode == http.StatusOK) != p.harap {
+				t.Errorf("%s, detail perkara %s: dapat %d, harap terlihat=%v", k.nama, p.milik, kode, p.harap)
+			}
+		}
+	}
 }

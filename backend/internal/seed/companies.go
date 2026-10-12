@@ -1,6 +1,7 @@
 package seed
 
 import (
+	"errors"
 	"fmt"
 	"legal-riu-portal/internal/entity"
 	"strings"
@@ -9,35 +10,41 @@ import (
 	"gorm.io/gorm"
 )
 
+// Hanya induk yang internal. User perusahaan internal melihat perkara semua
+// perusahaan; user anak usaha hanya perkara perusahaannya sendiri. Aturannya ada
+// di docs/case_company_access.md.
 var DEFAULT_COMPANIES = []entity.Company{
 	{Name: "PT Reasuransi Indonesia Utama", EmailDomain: "indonesiare.co.id", IsInternal: true},
-	{Name: "PT Asuransi ASEI Indonesia", EmailDomain: "asei.co.id", IsInternal: true},
-	{Name: "PT Reasuransi Syariah Indonesia", EmailDomain: "resyariah.co.id", IsInternal: true},
+	{Name: "PT Asuransi ASEI Indonesia", EmailDomain: "asei.co.id", IsInternal: false},
+	{Name: "PT Reasuransi Syariah Indonesia", EmailDomain: "resyariah.co.id", IsInternal: false},
 }
 
+// SeedCompanies membuat perusahaan bawaan yang belum ada. Perusahaan yang sudah
+// ada tidak disentuh: tanda internalnya diatur ADMIN lewat menu, jadi di
+// database lama anak usaha tetap internal sampai centangnya dicabut di sana.
 func SeedCompanies(db *gorm.DB) error {
 	for _, c := range DEFAULT_COMPANIES {
 		expectedID := uuid.NewSHA1(uuid.NameSpaceOID, []byte("company:"+c.EmailDomain))
 
-	var existing entity.Company
-	if err := db.Where("id = ?", expectedID).First(&existing).Error; err != nil {
-		if err != gorm.ErrRecordNotFound {
-			return err
-		}
-		if err := db.Where("email_domain = ?", c.EmailDomain).First(&existing).Error; err == nil {
+		// Unscoped: perusahaan bawaan yang sudah dihapus lewat menu tetap dianggap
+		// ada. Kalau tidak, seed mencoba membuatnya lagi dengan ID yang sama dan
+		// server gagal start.
+		var existing entity.Company
+		err := db.Unscoped().Where("id = ? OR email_domain = ?", expectedID, c.EmailDomain).First(&existing).Error
+		if err == nil {
 			continue
 		}
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
 		if err := db.Create(&entity.Company{
-			Base: entity.Base{
-				ID: expectedID,
-			},
+			Base:        entity.Base{ID: expectedID},
 			Name:        c.Name,
 			EmailDomain: c.EmailDomain,
 			IsInternal:  c.IsInternal,
 		}).Error; err != nil {
 			return err
 		}
-	}
 	}
 	return nil
 }
@@ -56,9 +63,12 @@ func FindCompanyIDByDomain(db *gorm.DB, email string) (uuid.UUID, error) {
 	return company.ID, nil
 }
 
+// FindFirstCompanyID mengembalikan perusahaan cadangan untuk user yang surelnya
+// tidak cocok dengan perusahaan mana pun. Perusahaan internal (induk)
+// didahulukan, supaya admin bawaan tidak terdaftar di anak usaha.
 func FindFirstCompanyID(db *gorm.DB) (uuid.UUID, error) {
 	var company entity.Company
-	if err := db.First(&company).Error; err != nil {
+	if err := db.Order("is_internal DESC").First(&company).Error; err != nil {
 		return uuid.Nil, err
 	}
 	return company.ID, nil

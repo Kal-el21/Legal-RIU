@@ -34,6 +34,10 @@ anak usaha terlihat oleh induk. Anak usaha tidak melihat perkara anak usaha lain
 Pembatasan ditentukan oleh **perusahaan user**, bukan oleh perannya. User dari
 perusahaan non-internal dibatasi ke perkara perusahaannya, apa pun perannya.
 
+Satu pengecualian: **ADMIN tidak dibatasi**, di perusahaan mana pun ia
+terdaftar. ADMIN mengelola seluruh sistem, dan admin bawaan yang dibuat saat
+pemasangan bisa saja terdaftar di anak usaha.
+
 ## 3. Siapa melihat apa
 
 | Perkara milik | Dibuat oleh | Induk | Legal AU ASEI | Legal AU Reasuransi Syariah |
@@ -91,11 +95,14 @@ Perubahan perusahaan tercatat di audit log sebagai perubahan perkara.
 | Detail, PDF, ubah, hapus, status, dokumen, foto, kronologi (termasuk impor) dibatasi per perusahaan | Ya |
 | File perkara yang diambil lewat alamat file (unduh dan lihat) dibatasi per perusahaan | Ya |
 | Legal AU bisa membuat perkara dan melampirkan dokumen serta foto | Ya di backend. Form di frontend sudah disesuaikan, tetapi belum dicoba di browser |
-| Anak usaha bertanda non-internal (seed dan database yang sudah ada) | Belum. Semua perusahaan bawaan bertanda internal |
+| Anak usaha bertanda non-internal di database baru | Ya. Dari tiga perusahaan bawaan hanya induk yang internal |
+| Anak usaha bertanda non-internal di database yang sudah ada | Tidak otomatis. ADMIN mencabut centangnya lewat menu, lihat bagian 8 |
+| ADMIN tidak dibatasi perusahaannya | Ya |
 | Dokumen perkara di Repositori Dokumen dibatasi per perusahaan | Belum. Semua peran melihat semua dokumen |
 
-Selama dua baris tentang tanda non-internal belum berlaku, hampir tidak ada user
-yang benar-benar dibatasi, karena semua perusahaan bawaan bertanda internal.
+Pembatasan ini baru berlaku nyata untuk sebuah anak usaha setelah centang
+"Internal"-nya kosong. Sejak itu user anak usaha tersebut hanya melihat perkara
+perusahaannya sendiri.
 
 ## 7. Yang belum diputuskan
 
@@ -108,6 +115,19 @@ Tanda internal diatur ADMIN di menu **Data Master > Perusahaan**. Centang
 "Internal" hanya untuk induk. Mencentangnya pada anak usaha membuat semua user
 anak usaha itu melihat perkara semua perusahaan.
 
-Rujukan kode: penentuan perusahaan user ada di `getCompanyID()` pada
-`backend/internal/handler/legal_case.handler.go`, dan tesnya di
-`TestPerkaraPerPerusahaan` pada `backend/internal/router/perkara_test.go`.
+Perubahan centang berlaku saat itu juga dan tidak berubah sendiri: server yang
+dinyalakan ulang tidak mengembalikannya. Tiga perusahaan bawaan (induk, ASEI,
+Reasuransi Syariah) hanya dibuat otomatis kalau belum ada, dengan hanya induk
+yang internal.
+
+Di server yang sudah berjalan sebelum aturan ini, ASEI dan Reasuransi Syariah
+masih bertanda internal. ADMIN perlu mencabut centang keduanya satu kali.
+Sebelum mencabut, pastikan tidak ada user LEGAL yang terdaftar di anak usaha
+itu, karena ia akan ikut dibatasi.
+
+Rujukan kode: penentuan cakupan user ada di `companyScope()` pada
+`backend/internal/handler/legal_case.handler.go`, dan pemeriksaannya di
+`findCase()` pada `backend/internal/service/legal_case.service.go`. Tesnya di
+`backend/internal/router/perkara_test.go`: `TestAnakUsahaBawaanDibatasi`
+(aturan utama), `TestOperasiPerkaraPerPerusahaan` (semua operasi), dan
+`TestPerusahaanPemilikPerkara` (perusahaan pemilik).

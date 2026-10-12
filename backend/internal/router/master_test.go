@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"legal-riu-portal/internal/entity"
+	"legal-riu-portal/internal/seed"
 
 	"github.com/google/uuid"
 )
@@ -258,4 +259,58 @@ func TestMateriHukum(t *testing.T) {
 
 	harapKode(t, panggil(t, legal, http.MethodDelete, kelola+"/"+m.ID, nil), http.StatusOK, "menghapus materi")
 	harapKode(t, panggil(t, user, http.MethodGet, baca+"/"+m.ID, nil), http.StatusNotFound, "membaca materi yang dihapus")
+}
+
+// Di database baru, dari tiga perusahaan bawaan hanya induk yang internal.
+// Setelah itu tandanya milik ADMIN: seed hanya membuat yang belum ada.
+func TestSeedPerusahaanBawaan(t *testing.T) {
+	harap := map[string]bool{"indonesiare.co.id": true, "asei.co.id": false, "resyariah.co.id": false}
+	cek := func(konteks string) {
+		t.Helper()
+		var baris []struct {
+			EmailDomain string
+			IsInternal  bool
+		}
+		dbTes.Raw("SELECT email_domain, is_internal FROM companies WHERE email_domain IN ? AND deleted_at IS NULL", []string{"indonesiare.co.id", "asei.co.id", "resyariah.co.id"}).Scan(&baris)
+		if len(baris) != len(harap) {
+			t.Fatalf("%s: %d perusahaan bawaan, harap %d", konteks, len(baris), len(harap))
+		}
+		for _, b := range baris {
+			if b.IsInternal != harap[b.EmailDomain] {
+				t.Errorf("%s: %s internal=%v, harap %v", konteks, b.EmailDomain, b.IsInternal, harap[b.EmailDomain])
+			}
+		}
+	}
+	cek("setelah seed di database baru")
+
+	// Tanda internal anak usaha diatur ADMIN lewat menu. Seed berikutnya (server
+	// dinyalakan ulang) tidak boleh mengembalikannya.
+	const diatur = "asei.co.id"
+	if err := dbTes.Exec("UPDATE companies SET is_internal = true WHERE email_domain = ?", diatur).Error; err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { dbTes.Exec("UPDATE companies SET is_internal = false WHERE email_domain = ?", diatur) })
+	for putaran := 1; putaran <= 2; putaran++ {
+		if err := seed.SeedCompanies(dbTes); err != nil {
+			t.Fatalf("seed perusahaan putaran %d: %v", putaran, err)
+		}
+	}
+	harap[diatur] = true
+	cek("setelah seed berikutnya")
+
+	// Perusahaan bawaan yang dihapus admin tidak membuat server gagal start, dan
+	// tidak dibuat lagi.
+	const dihapus = "resyariah.co.id"
+	if err := dbTes.Exec("UPDATE companies SET deleted_at = now() WHERE email_domain = ?", dihapus).Error; err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { dbTes.Exec("UPDATE companies SET deleted_at = NULL WHERE email_domain = ?", dihapus) })
+	if err := seed.SeedCompanies(dbTes); err != nil {
+		t.Fatalf("seed setelah perusahaan bawaan dihapus: %v", err)
+	}
+	var jumlah int64
+	dbTes.Raw("SELECT count(*) FROM companies WHERE email_domain = ?", dihapus).Scan(&jumlah)
+	if jumlah != 1 {
+		t.Errorf("perusahaan bawaan yang dihapus: %d baris, harap tetap 1", jumlah)
+	}
 }
