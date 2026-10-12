@@ -490,18 +490,15 @@ func TestPerkaraPerPerusahaan(t *testing.T) {
 	}
 
 	t.Run("DetailDitolak", func(t *testing.T) {
-		bugDiketahui(t, "detail perkara tidak dibatasi per perusahaan: user perusahaan lain yang tahu ID-nya bisa melihat seluruh isi perkara")
 		harapKode(t, panggil(t, orangLuar, http.MethodGet, perkaraLegalAU+"/"+p.ID, nil), http.StatusNotFound, "user perusahaan lain melihat detail perkara")
 	})
 	t.Run("PDFDitolak", func(t *testing.T) {
-		bugDiketahui(t, "PDF perkara tidak dibatasi per perusahaan")
 		w := panggil(t, orangLuar, http.MethodGet, perkaraLegalAU+"/"+p.ID+"/pdf", nil)
 		if w.Code == http.StatusOK {
 			t.Fatalf("user perusahaan lain berhasil mengunduh PDF perkara")
 		}
 	})
 	t.Run("KronologiDitolak", func(t *testing.T) {
-		bugDiketahui(t, "kronologi perkara tidak dibatasi per perusahaan: user perusahaan lain bisa menambah kronologi ke perkara yang bukan miliknya")
 		w := panggil(t, orangLuar, http.MethodPost, perkaraLegalAU+"/"+p.ID+"/chronology", map[string]string{"agenda_date": "2026-10-09", "agenda": "Disisipkan orang luar"})
 		if w.Code == http.StatusCreated {
 			t.Fatalf("user perusahaan lain berhasil menambah kronologi")
@@ -621,5 +618,160 @@ func TestUbahRujukanPerkara(t *testing.T) {
 		if tersimpan[kolom] != nilai {
 			t.Errorf("%s setelah diubah: dapat %v, harap %s", kolom, tersimpan[kolom], nilai)
 		}
+	}
+}
+
+// Semua operasi perkara dibatasi ke perusahaan penggunanya: user dari
+// perusahaan non-internal tidak bisa menyentuh perkara perusahaan lain lewat
+// jalur mana pun, dan tetap bisa mengelola perkara perusahaannya sendiri.
+func TestOperasiPerkaraPerPerusahaan(t *testing.T) {
+	admin := masukPeran(t, entity.RoleAdmin)
+	induk := masukPeran(t, entity.RoleLegal)
+
+	w := panggil(t, admin, http.MethodPost, "/api/v1/admin/companies",
+		map[string]any{"name": "PT Operasi Uji", "email_domain": "operasi-uji.example", "is_internal": false})
+	harapKode(t, w, http.StatusCreated, "membuat perusahaan non-internal")
+	var perusahaan struct {
+		ID string `json:"id"`
+	}
+	isiData(t, w, &perusahaan)
+	// Peran LEGAL dipakai supaya semua alamat perkara tersedia; yang membatasi
+	// adalah perusahaannya, bukan perannya.
+	const surel = "tes-legal-operasi@example.com"
+	if err := tambahUser(surel, entity.RoleLegal, uuid.MustParse(perusahaan.ID)); err != nil {
+		t.Fatal(err)
+	}
+	orang := masuk(t, surel)
+
+	milikLain := buatPerkara(t, induk)
+	formSendiri := formPerkara(t)
+	formSendiri["company_id"] = perusahaan.ID
+	w = panggil(t, induk, http.MethodPost, perkaraLegal, formSendiri)
+	harapKode(t, w, http.StatusCreated, "induk membuat perkara untuk perusahaan itu")
+	var milikSendiri perkara
+	isiData(t, w, &milikSendiri)
+
+	kronologiBaru := map[string]string{"agenda_date": "2026-10-05", "agenda": "Sidang"}
+	w = panggil(t, induk, http.MethodPost, perkaraLegal+"/"+milikLain.ID+"/chronology", kronologiBaru)
+	harapKode(t, w, http.StatusCreated, "induk menambah kronologi")
+	var kronLain kronologi
+	isiData(t, w, &kronLain)
+
+	t.Run("PerkaraPerusahaanLainDitolak", func(t *testing.T) {
+		dasar := perkaraLegal + "/" + milikLain.ID
+		kasus := []struct {
+			nama, metode, alamat string
+			isi                  any
+		}{
+			{"detail", http.MethodGet, dasar, nil},
+			{"PDF", http.MethodGet, dasar + "/pdf", nil},
+			{"ubah", http.MethodPut, dasar, formPerkara(t)},
+			{"hapus", http.MethodDelete, dasar, nil},
+			{"daftar kronologi", http.MethodGet, dasar + "/chronology", nil},
+			{"tambah kronologi", http.MethodPost, dasar + "/chronology", kronologiBaru},
+			{"ubah kronologi", http.MethodPut, dasar + "/chronology/" + kronLain.ID, kronologiBaru},
+			{"hapus kronologi", http.MethodDelete, dasar + "/chronology/" + kronLain.ID, nil},
+			{"hapus dokumen", http.MethodDelete, dasar + "/document", nil},
+			{"hapus foto", http.MethodDelete, dasar + "/photo", nil},
+			// Kronologi perkara lain tidak bisa dijangkau lewat perkara sendiri.
+			{"ubah kronologi lewat perkara sendiri", http.MethodPut, perkaraLegal + "/" + milikSendiri.ID + "/chronology/" + kronLain.ID, kronologiBaru},
+		}
+		for _, k := range kasus {
+			if kode := panggil(t, orang, k.metode, k.alamat, k.isi).Code; kode < 400 || kode >= 500 {
+				t.Errorf("%s pada perkara perusahaan lain: dapat %d, harap ditolak (4xx)", k.nama, kode)
+			}
+		}
+		file := xlsx(t, []string{"agenda_date", "agenda"}, []string{"2026-11-01", "Disisipkan"})
+		if kode := panggilForm(t, orang, http.MethodPost, dasar+"/chronology/import", nil, berkas{"file", "k.xlsx", file}).Code; kode < 400 || kode >= 500 {
+			t.Errorf("impor kronologi pada perkara perusahaan lain: dapat %d, harap ditolak (4xx)", kode)
+		}
+
+		// Tidak ada yang berubah pada perkara itu.
+		setelah := ambilPerkara(t, induk, perkaraLegal, milikLain.ID)
+		if setelah.CaseName != milikLain.CaseName || len(setelah.Chronologies) != 1 {
+			t.Errorf("perkara perusahaan lain berubah: nama %q, %d kronologi", setelah.CaseName, len(setelah.Chronologies))
+		}
+		if perkaraDiDaftar(t, orang, perkaraLegal, milikLain.ID) {
+			t.Error("perkara perusahaan lain muncul di daftar")
+		}
+	})
+
+	t.Run("PerkaraSendiriBisaDikelola", func(t *testing.T) {
+		dasar := perkaraLegal + "/" + milikSendiri.ID
+		ambilPerkara(t, orang, perkaraLegal, milikSendiri.ID)
+		if !perkaraDiDaftar(t, orang, perkaraLegal, milikSendiri.ID) {
+			t.Error("perkara sendiri tidak muncul di daftar")
+		}
+		formSendiri["case_name"] = "Diubah pemiliknya"
+		harapKode(t, panggil(t, orang, http.MethodPut, dasar, formSendiri), http.StatusOK, "mengubah perkara sendiri")
+		harapKode(t, panggil(t, orang, http.MethodPost, dasar+"/chronology", kronologiBaru), http.StatusCreated, "menambah kronologi perkara sendiri")
+		harapKode(t, panggil(t, orang, http.MethodGet, dasar+"/pdf", nil), http.StatusOK, "PDF perkara sendiri")
+		// Induk tetap menjangkau perkara perusahaan itu.
+		if got := ambilPerkara(t, induk, perkaraLegal, milikSendiri.ID).CaseName; got != "Diubah pemiliknya" {
+			t.Errorf("nama perkara dilihat induk: %q", got)
+		}
+	})
+
+	t.Run("FilePerkara", func(t *testing.T) {
+		butuhMinIO(t)
+		isi := []byte("dokumen perkara perusahaan lain")
+		w := panggilForm(t, induk, http.MethodPost, perkaraLegal+"/"+milikLain.ID+"/upload-document", nil, berkas{"document", "rahasia.pdf", isi})
+		harapKode(t, w, http.StatusOK, "induk mengunggah dokumen")
+		var p perkara
+		isiData(t, w, &p)
+
+		// Unggah ke perkara perusahaan lain ditolak, begitu juga mengambil filenya lewat path.
+		for alamat, kolom := range map[string]string{"/upload-document": "document", "/photo": "photo"} {
+			if kode := panggilForm(t, orang, http.MethodPost, perkaraLegal+"/"+milikLain.ID+alamat, nil, berkas{kolom, "x.png", []byte("x")}).Code; kode < 400 || kode >= 500 {
+				t.Errorf("unggah lewat %s ke perkara perusahaan lain: dapat %d, harap ditolak (4xx)", alamat, kode)
+			}
+		}
+		for _, jalur := range []string{"/download", "/file"} {
+			alamat := perkaraLegal + jalur + "?path=" + url.QueryEscape(p.DocumentLink)
+			if w := panggil(t, orang, http.MethodGet, alamat, nil); w.Code == http.StatusOK {
+				t.Errorf("user perusahaan lain mengambil file perkara lewat %s: %q", jalur, w.Body)
+			}
+			if w := panggil(t, induk, http.MethodGet, alamat, nil); w.Code != http.StatusOK || !bytes.Equal(w.Body.Bytes(), isi) {
+				t.Errorf("induk mengambil file perkara lewat %s: status %d", jalur, w.Code)
+			}
+		}
+
+		// File perkara sendiri tetap bisa diunggah dan diambil.
+		isiSendiri := []byte("dokumen perkara sendiri")
+		w = panggilForm(t, orang, http.MethodPost, perkaraLegal+"/"+milikSendiri.ID+"/upload-document", nil, berkas{"document", "milik.pdf", isiSendiri})
+		harapKode(t, w, http.StatusOK, "mengunggah dokumen perkara sendiri")
+		isiData(t, w, &p)
+		w = panggil(t, orang, http.MethodGet, perkaraLegal+"/download?path="+url.QueryEscape(p.DocumentLink), nil)
+		harapKode(t, w, http.StatusOK, "mengunduh dokumen perkara sendiri")
+		if !bytes.Equal(w.Body.Bytes(), isiSendiri) {
+			t.Errorf("isi dokumen perkara sendiri berbeda: %q", w.Body)
+		}
+		// Lampiran kronologi perkara sendiri, yang disimpan di kolom berbeda.
+		w = panggilForm(t, orang, http.MethodPost, perkaraLegal+"/"+milikSendiri.ID+"/chronology",
+			map[string]string{"agenda_date": "2026-10-06", "agenda": "Bukti"}, berkas{"files", "bukti_1.pdf", isiSendiri})
+		harapKode(t, w, http.StatusCreated, "kronologi dengan lampiran di perkara sendiri")
+		var k kronologi
+		isiData(t, w, &k)
+		harapKode(t, panggil(t, orang, http.MethodGet, perkaraLegal+"/download?path="+url.QueryEscape(k.Documents[0]), nil), http.StatusOK, "mengunduh lampiran kronologi perkara sendiri")
+	})
+}
+
+// Kalau data user tidak bisa dibaca, perkara tidak boleh terbuka seolah-olah ia
+// tidak dibatasi.
+func TestPerkaraUserTidakTerbaca(t *testing.T) {
+	const surel = "tes-perkara-terhapus@example.com"
+	var companyID string
+	dbTes.Raw("SELECT company_id FROM users WHERE email = ?", surelPeran(entity.RoleLegal)).Scan(&companyID)
+	if err := tambahUser(surel, entity.RoleLegal, uuid.MustParse(companyID)); err != nil {
+		t.Fatal(err)
+	}
+	token := masuk(t, surel)
+	harapKode(t, panggil(t, token, http.MethodGet, perkaraLegal, nil), http.StatusOK, "daftar perkara sebelum user dihapus")
+
+	if err := dbTes.Exec("UPDATE users SET deleted_at = now() WHERE email = ?", surel).Error; err != nil {
+		t.Fatal(err)
+	}
+	if kode := panggil(t, token, http.MethodGet, perkaraLegal, nil).Code; kode == http.StatusOK {
+		t.Errorf("daftar perkara tetap terbuka untuk user yang datanya sudah tidak ada (status %d)", kode)
 	}
 }

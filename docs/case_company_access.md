@@ -88,7 +88,8 @@ Perubahan perusahaan tercatat di audit log sebagai perubahan perkara.
 | Perusahaan baru bisa disimpan sebagai non-internal | Ya, lewat tambah, impor, maupun ubah |
 | Perusahaan pemilik perkara mengikuti pilihan di form | Ya |
 | Perusahaan perkara bisa diubah oleh user induk | Ya. User anak usaha tidak bisa memindahkan perkaranya |
-| Detail, PDF, ubah, hapus, dokumen, foto, kronologi dibatasi per perusahaan | Belum |
+| Detail, PDF, ubah, hapus, status, dokumen, foto, kronologi (termasuk impor) dibatasi per perusahaan | Ya |
+| File perkara yang diambil lewat alamat file (unduh dan lihat) dibatasi per perusahaan | Ya |
 | Legal AU bisa membuat perkara dan melampirkan dokumen serta foto | Belum |
 | Anak usaha bertanda non-internal (seed dan database yang sudah ada) | Belum. Semua perusahaan bawaan bertanda internal |
 | Dokumen perkara di Repositori Dokumen dibatasi per perusahaan | Belum. Semua peran melihat semua dokumen |

@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"strings"
 	"time"
 
 	"legal-riu-portal/internal/entity"
@@ -57,6 +58,7 @@ type LegalCaseRepository interface {
 	FindCaseTypeByID(id uuid.UUID) (*entity.CaseType, error)
 	FindCaseCategoryByID(id uuid.UUID) (*entity.CaseCategory, error)
 	FindCompanyByID(id uuid.UUID) (*entity.Company, error)
+	CaseFileBelongsToCompany(filePath string, companyID uuid.UUID) (bool, error)
 }
 
 type legalCaseRepository struct {
@@ -291,6 +293,22 @@ func (r *legalCaseRepository) FindDivisionByID(id uuid.UUID) (*entity.Division, 
 		return nil, err
 	}
 	return &division, nil
+}
+
+// CaseFileBelongsToCompany melaporkan apakah path itu dokumen, foto, atau
+// lampiran kronologi dari perkara milik perusahaan tersebut.
+func (r *legalCaseRepository) CaseFileBelongsToCompany(filePath string, companyID uuid.UUID) (bool, error) {
+	// Lampiran kronologi disimpan sebagai array JSON di satu kolom teks, jadi
+	// dicari sebagai elemen utuh. Karakter pola LIKE di path dinetralkan.
+	polos := strings.NewReplacer("\\", "\\\\", "%", "\\%", "_", "\\_").Replace(filePath)
+	punyaLampiran := r.db.Model(&entity.CaseChronology{}).Select("case_id").Where("documents LIKE ?", "%\""+polos+"\"%")
+
+	var total int64
+	err := r.db.Model(&entity.LegalCase{}).
+		Where("company_id = ?", companyID).
+		Where("document_link = ? OR photo = ? OR id IN (?)", filePath, filePath, punyaLampiran).
+		Count(&total).Error
+	return total > 0, err
 }
 
 func (r *legalCaseRepository) FindCompanyByID(id uuid.UUID) (*entity.Company, error) {
