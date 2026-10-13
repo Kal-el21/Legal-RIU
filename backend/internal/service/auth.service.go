@@ -162,7 +162,7 @@ func (s *authService) LDAPLogin(req dto.LDAPLoginRequest, ipAddress, userAgent *
 		companyID := lookupCompanyID(s.userRepo, email)
 		if companyID == nil {
 			// User dari AD adalah karyawan Indonesia Re walau domain emailnya berbeda.
-			companyID = lookupCompanyID(s.userRepo, "@indonesiare.co.id")
+			companyID = lookupCompanyID(s.userRepo, "@"+entity.ParentCompanyDomain)
 		}
 		temporaryPassword, tokenErr := utils.GenerateSecureToken(32)
 		if tokenErr != nil {

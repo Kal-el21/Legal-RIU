@@ -38,6 +38,28 @@ Satu pengecualian: **ADMIN tidak dibatasi**, di perusahaan mana pun ia
 terdaftar. ADMIN mengelola seluruh sistem, dan admin bawaan yang dibuat saat
 pemasangan bisa saja terdaftar di anak usaha.
 
+### 2.1 Perusahaan user mengikuti perannya
+
+Karena pembatasan mengikuti perusahaan user, perusahaan dua peran legal tidak
+bebas dipilih. Aturan ini diperiksa saat ADMIN membuat atau mengubah user.
+
+| Peran | Perusahaan | Di form user |
+|---|---|---|
+| `LEGAL` | Selalu induk. Pilihan yang dikirim form diabaikan | Kolom Perusahaan tidak ditampilkan |
+| `LEGAL_AU` | Wajib dipilih, dan bukan induk | Induk tidak ada di pilihan |
+| `USER`, `ADMIN` | Dipilih ADMIN; kalau kosong, induk | Semua perusahaan |
+| `EXTERNAL` | Tanpa perusahaan | Kolom Perusahaan tidak ditampilkan |
+
+Saat peran diganti, perusahaannya ikut ditentukan ulang: `LEGAL_AU` yang
+dijadikan `LEGAL` pindah ke induk, dan `LEGAL` yang dijadikan `LEGAL_AU` ditolak
+sampai anak usahanya dipilih. "Bukan induk" ditentukan dari identitas
+perusahaannya, bukan dari centang "Internal".
+
+User yang sudah ada tidak dipindahkan otomatis. `LEGAL` lama yang terdaftar di
+anak usaha baru pindah ke induk setelah ADMIN membuka Edit lalu menyimpannya.
+User yang masuk lewat LDAP dibuat sebagai `USER` di perusahaan yang cocok dengan
+domain emailnya, atau di induk kalau tidak ada yang cocok.
+
 ## 3. Siapa melihat apa
 
 | Perkara milik | Dibuat oleh | Induk | Legal AU ASEI | Legal AU Reasuransi Syariah |
@@ -99,6 +121,7 @@ Perubahan perusahaan tercatat di audit log sebagai perubahan perkara.
 | Anak usaha bertanda non-internal di database yang sudah ada | Tidak otomatis. ADMIN mencabut centangnya lewat menu, lihat bagian 8 |
 | ADMIN tidak dibatasi perusahaannya | Ya |
 | Induk tidak bisa dijadikan non-internal, diganti domainnya, atau dihapus | Ya di backend. Tampilan menu Perusahaan sudah disesuaikan, tetapi belum dicoba di browser |
+| Perusahaan user mengikuti perannya (2.1) | Ya di backend. Form user sudah disesuaikan, tetapi belum dicoba di browser |
 | Dokumen perkara di Repositori Dokumen dibatasi per perusahaan | Belum. Semua peran melihat semua dokumen |
 
 Pembatasan ini baru berlaku nyata untuk sebuah anak usaha setelah centang
@@ -141,3 +164,6 @@ Rujukan kode: penentuan cakupan user ada di `companyScope()` pada
 `TestPerusahaanPemilikPerkara` (perusahaan pemilik). Kuncian induk ada di
 `backend/internal/service/company.service.go`, dengan tes
 `TestPerusahaanIndukDikunci` di `backend/internal/router/master_test.go`.
+Perusahaan user per peran ditentukan `resolveCompanySelection()` di
+`backend/internal/service/helpers.go`, dengan tes `TestPerusahaanUserPerPeran`
+di `backend/internal/router/sesi_test.go`.

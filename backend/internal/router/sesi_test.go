@@ -245,3 +245,113 @@ func TestKelolaUser(t *testing.T) {
 		harapKode(t, cobaLogin(t, surel, sandiReset), http.StatusOK, "login dengan sandi hasil reset")
 	})
 }
+
+// Perusahaan user mengikuti perannya (docs/case_company_access.md): LEGAL selalu
+// terdaftar di induk, LEGAL_AU wajib di anak usaha, USER dan ADMIN mengikuti
+// pilihan admin, EXTERNAL tanpa perusahaan. Kalau LEGAL bisa terdaftar di anak
+// usaha, ia ikut dibatasi ke perkara anak usaha itu; kalau LEGAL_AU bisa
+// terdaftar di induk, ia melihat perkara semua perusahaan.
+func TestPerusahaanUserPerPeran(t *testing.T) {
+	admin := masukPeran(t, entity.RoleAdmin)
+	const alamat = "/api/v1/admin/users"
+	var divisi, induk, asei string
+	dbTes.Raw("SELECT id FROM divisions WHERE deleted_at IS NULL LIMIT 1").Scan(&divisi)
+	dbTes.Raw("SELECT id FROM companies WHERE email_domain = ? AND deleted_at IS NULL", entity.ParentCompanyDomain).Scan(&induk)
+	dbTes.Raw("SELECT id FROM companies WHERE email_domain = ? AND deleted_at IS NULL", "asei.co.id").Scan(&asei)
+	if divisi == "" || induk == "" || asei == "" {
+		t.Fatalf("data awal tidak lengkap: divisi %q, induk %q, ASEI %q", divisi, induk, asei)
+	}
+
+	// tersimpan membaca peran dan perusahaan user langsung dari database.
+	tersimpan := func(id string) (peran, perusahaan string) {
+		t.Helper()
+		var baris struct{ Role, Perusahaan string }
+		dbTes.Raw("SELECT role, COALESCE(company_id::text, '') AS perusahaan FROM users WHERE id = ?", id).Scan(&baris)
+		return baris.Role, baris.Perusahaan
+	}
+	buat := func(tanda, peran, dipilih string) *httptest.ResponseRecorder {
+		t.Helper()
+		data := map[string]string{"full_name": "User Peran", "email": "tes-peran-" + tanda + "@example.com", "password": sandiTes, "position": "Staff", "division": divisi, "role": peran}
+		if dipilih != "" {
+			data["company_id"] = dipilih
+		}
+		return panggil(t, admin, http.MethodPost, alamat, data)
+	}
+
+	kasus := []struct {
+		tanda, peran, dipilih string
+		kode                  int
+		harap                 string // perusahaan yang tersimpan
+	}{
+		{"legal-kosong", "LEGAL", "", http.StatusCreated, induk},
+		{"legal-anak-usaha", "LEGAL", asei, http.StatusCreated, induk},
+		{"au-anak-usaha", "LEGAL_AU", asei, http.StatusCreated, asei},
+		{"au-induk", "LEGAL_AU", induk, http.StatusBadRequest, ""},
+		{"au-kosong", "LEGAL_AU", "", http.StatusBadRequest, ""},
+		{"user-anak-usaha", "USER", asei, http.StatusCreated, asei},
+		{"user-kosong", "USER", "", http.StatusCreated, induk},
+		{"admin-anak-usaha", "ADMIN", asei, http.StatusCreated, asei},
+		{"external", "EXTERNAL", asei, http.StatusCreated, ""},
+	}
+	for _, k := range kasus {
+		w := buat(k.tanda, k.peran, k.dipilih)
+		if w.Code != k.kode {
+			t.Errorf("%s: dapat %d, harap %d; isi %s", k.tanda, w.Code, k.kode, w.Body)
+			continue
+		}
+		if k.kode != http.StatusCreated {
+			continue
+		}
+		var u akun
+		isiData(t, w, &u)
+		if _, got := tersimpan(u.ID); got != k.harap {
+			t.Errorf("%s: terdaftar di perusahaan %q, harap %q", k.tanda, got, k.harap)
+		}
+	}
+
+	// Perusahaan yang diganti lewat Edit harus benar-benar tersimpan.
+	t.Run("PindahPerusahaan", func(t *testing.T) {
+		w := buat("pindah", "USER", induk)
+		harapKode(t, w, http.StatusCreated, "membuat user di induk")
+		var u akun
+		isiData(t, w, &u)
+		w = panggil(t, admin, http.MethodPut, alamat+"/"+u.ID, map[string]string{"full_name": "User Peran", "position": "Staff", "division": divisi, "role": "USER", "company_id": asei})
+		harapKode(t, w, http.StatusOK, "memindahkan user ke anak usaha")
+		if _, got := tersimpan(u.ID); got != asei {
+			t.Errorf("user dipindah ke anak usaha, tetapi tersimpan di %q", got)
+		}
+	})
+
+	t.Run("GantiPeran", func(t *testing.T) {
+		w := buat("ganti", "LEGAL_AU", asei)
+		harapKode(t, w, http.StatusCreated, "membuat Legal AU")
+		var u akun
+		isiData(t, w, &u)
+		ganti := func(peran, dipilih string) int {
+			t.Helper()
+			return panggil(t, admin, http.MethodPut, alamat+"/"+u.ID, map[string]string{"full_name": "User Peran", "position": "Staff", "division": divisi, "role": peran, "company_id": dipilih}).Code
+		}
+		harapTersimpan := func(konteks, peran, perusahaan string) {
+			t.Helper()
+			if p, c := tersimpan(u.ID); p != peran || c != perusahaan {
+				t.Errorf("%s: tersimpan peran %s di %q, harap %s di %q", konteks, p, c, peran, perusahaan)
+			}
+		}
+
+		// Form masih membawa perusahaan lamanya; yang tersimpan tetap induk.
+		if kode := ganti("LEGAL", asei); kode != http.StatusOK {
+			t.Fatalf("Legal AU menjadi LEGAL: dapat %d, harap 200", kode)
+		}
+		harapTersimpan("Legal AU menjadi LEGAL", "LEGAL", induk)
+
+		if kode := ganti("LEGAL_AU", induk); kode != http.StatusBadRequest {
+			t.Errorf("LEGAL menjadi Legal AU tanpa memilih anak usaha: dapat %d, harap 400", kode)
+		}
+		harapTersimpan("setelah ditolak", "LEGAL", induk)
+
+		if kode := ganti("LEGAL_AU", asei); kode != http.StatusOK {
+			t.Errorf("LEGAL menjadi Legal AU di anak usaha: dapat %d, harap 200", kode)
+		}
+		harapTersimpan("LEGAL menjadi Legal AU", "LEGAL_AU", asei)
+	})
+}

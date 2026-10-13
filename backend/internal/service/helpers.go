@@ -87,10 +87,21 @@ func resolveDivisionSelection(userRepo repository.UserRepository, value string) 
 	return division.Name, &divisionID, nil
 }
 
+// resolveCompanySelection menentukan perusahaan user dari perannya. LEGAL adalah
+// legal induk dan LEGAL_AU legal anak usaha, jadi keduanya tidak bebas memilih:
+// kalau tertukar, LEGAL ikut dibatasi ke perkara anak usaha, atau LEGAL_AU
+// melihat perkara semua perusahaan. Aturannya ada di docs/case_company_access.md.
 func resolveCompanySelection(userRepo repository.UserRepository, role string, companyIDStr string) (*uuid.UUID, error) {
 	switch role {
 	case "EXTERNAL":
 		return nil, nil
+	case "LEGAL":
+		// Kiriman form diabaikan, supaya LEGAL_AU yang dijadikan LEGAL ikut pindah.
+		company, err := userRepo.FindCompanyByDomain(entity.ParentCompanyDomain)
+		if err != nil {
+			return nil, errors.New("perusahaan induk tidak ditemukan")
+		}
+		return &company.ID, nil
 	case "LEGAL_AU":
 		if companyIDStr == "" {
 			return nil, errors.New("perusahaan wajib dipilih untuk role LEGAL_AU")
@@ -102,6 +113,9 @@ func resolveCompanySelection(userRepo repository.UserRepository, role string, co
 		company, err := userRepo.FindCompanyByID(companyID)
 		if err != nil {
 			return nil, errors.New("perusahaan tidak ditemukan")
+		}
+		if company.IsParent() {
+			return nil, errors.New("role LEGAL_AU harus terdaftar di anak usaha, bukan di perusahaan induk")
 		}
 		return &company.ID, nil
 	default:
@@ -116,7 +130,7 @@ func resolveCompanySelection(userRepo repository.UserRepository, role string, co
 			}
 			return &company.ID, nil
 		}
-		company, err := userRepo.FindCompanyByDomain("indonesiare.co.id")
+		company, err := userRepo.FindCompanyByDomain(entity.ParentCompanyDomain)
 		if err == nil {
 			return &company.ID, nil
 		}

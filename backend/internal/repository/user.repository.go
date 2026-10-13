@@ -5,6 +5,7 @@ import (
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type UserRepository interface {
@@ -76,8 +77,11 @@ func (r *userRepository) Create(user *entity.User) error {
 	return r.db.Create(user).Error
 }
 
+// Update menyimpan kolom user saja. User dibaca bersama relasinya; kalau relasi
+// ikut disimpan, GORM mengisi lagi company_id dan purpose_type_id dari relasi
+// yang lama, sehingga pindah perusahaan tidak pernah tersimpan.
 func (r *userRepository) Update(user *entity.User) error {
-	return r.db.Omit("DivisionRef").Save(user).Error
+	return r.db.Omit(clause.Associations).Save(user).Error
 }
 
 func (r *userRepository) FindAll(page, limit int, search string) ([]entity.User, int64, error) {
