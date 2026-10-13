@@ -3,14 +3,77 @@ package repository
 import (
 	"errors"
 	"legal-riu-portal/internal/entity"
+	"strings"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
+// DocumentAccess menyatakan dokumen apa saja yang boleh dilihat si pemanggil di
+// repositori. Repositori mengumpulkan file dari modul lain, jadi sebuah dokumen
+// hanya terlihat oleh yang boleh membukanya di modul asalnya. Nilai kosong
+// berarti tidak melihat apa pun.
+type DocumentAccess struct {
+	UserID uuid.UUID
+
+	Cases       bool       // dokumen, foto, dan lampiran kronologi perkara
+	CaseCompany *uuid.UUID // nil: perkara semua perusahaan
+
+	// Jangkauan per jenis dokumen pengajuan: "" (tidak ada), ReachOwn, atau ReachAll.
+	Opinions, Reviews                   string
+	AgreementAttachments, AgreementPDFs string
+	AgreementDOCX                       string
+}
+
+const (
+	ReachOwn = "own" // hanya dari pengajuan miliknya
+	ReachAll = "all"
+)
+
+const pdfMIME = "application/pdf"
+
+// where menyusun syarat SQL untuk dokumen yang terlihat. Dokumen dari sumber
+// yang tidak dikenali di sini tidak cocok dengan syarat mana pun, jadi tidak
+// ditampilkan ke siapa pun.
+func (a DocumentAccess) where() (string, []any) {
+	conds, args := []string{"1 = 0"}, []any{}
+	add := func(sql string, values ...any) {
+		conds = append(conds, "("+sql+")")
+		args = append(args, values...)
+	}
+	// kind memilih jenis dokumennya; owner adalah tabel pengajuan pemiliknya.
+	reach := func(level, kind, owner string) {
+		switch level {
+		case ReachAll:
+			add(kind)
+		case ReachOwn:
+			add(kind+" AND source_id IN (SELECT id::text FROM "+owner+" WHERE user_id = ?)", a.UserID)
+		}
+	}
+
+	switch {
+	case !a.Cases:
+	case a.CaseCompany == nil:
+		add("feature_code = 'case_management'")
+	default:
+		add(`feature_code = 'case_management' AND (
+			(source_type <> 'case_chronologies' AND source_id IN (SELECT id::text FROM legal_cases WHERE company_id = ?))
+			OR (source_type = 'case_chronologies' AND source_id IN (
+				SELECT c.id::text FROM case_chronologies c JOIN legal_cases l ON l.id = c.case_id WHERE l.company_id = ?))
+		)`, a.CaseCompany, a.CaseCompany)
+	}
+	reach(a.Opinions, "feature_code = 'legal_opinion'", "legal_opinions")
+	reach(a.Reviews, "feature_code = 'document_review'", "document_reviews")
+	reach(a.AgreementAttachments, "source_type = 'agreement_attachments'", "agreement_documents")
+	reach(a.AgreementPDFs, "source_type = 'agreement_documents' AND mime_type = '"+pdfMIME+"'", "agreement_documents")
+	reach(a.AgreementDOCX, "source_type = 'agreement_documents' AND mime_type <> '"+pdfMIME+"'", "agreement_documents")
+
+	return "(" + strings.Join(conds, " OR ") + ")", args
+}
+
 type RepositoryDocumentRepository interface {
-	FindAll(featureCode string, search string) ([]entity.RepositoryDocument, error)
-	FindByID(id uuid.UUID) (*entity.RepositoryDocument, error)
+	FindAll(access DocumentAccess, featureCode string, search string) ([]entity.RepositoryDocument, error)
+	FindByID(access DocumentAccess, id uuid.UUID) (*entity.RepositoryDocument, error)
 	BatchUpsert(docs []entity.RepositoryDocument) error
 	MarkInactiveBySource(sourceType string, sourceIDs []string) error
 	UpsertBySource(doc entity.RepositoryDocument) error
@@ -24,9 +87,10 @@ func NewRepositoryDocumentRepository(db *gorm.DB) RepositoryDocumentRepository {
 	return &repositoryDocumentRepository{db: db}
 }
 
-func (r *repositoryDocumentRepository) FindAll(featureCode string, search string) ([]entity.RepositoryDocument, error) {
+func (r *repositoryDocumentRepository) FindAll(access DocumentAccess, featureCode string, search string) ([]entity.RepositoryDocument, error) {
 	var docs []entity.RepositoryDocument
-	query := r.db.Where("is_active = ?", true)
+	visible, args := access.where()
+	query := r.db.Where("is_active = ?", true).Where(visible, args...)
 	if featureCode != "" {
 		query = query.Where("feature_code = ?", featureCode)
 	}
@@ -37,9 +101,10 @@ func (r *repositoryDocumentRepository) FindAll(featureCode string, search string
 	return docs, err
 }
 
-func (r *repositoryDocumentRepository) FindByID(id uuid.UUID) (*entity.RepositoryDocument, error) {
+func (r *repositoryDocumentRepository) FindByID(access DocumentAccess, id uuid.UUID) (*entity.RepositoryDocument, error) {
 	var doc entity.RepositoryDocument
-	err := r.db.First(&doc, "id = ?", id).Error
+	visible, args := access.where()
+	err := r.db.Where(visible, args...).First(&doc, "id = ?", id).Error
 	if err != nil {
 		return nil, err
 	}

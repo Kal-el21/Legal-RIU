@@ -33,7 +33,12 @@ func NewLegalCaseHandler(svc service.LegalCaseService, auditLogSvc service.Audit
 // terikat perusahaan). Kalau data usernya tidak bisa dibaca, permintaan
 // ditolak; tidak dianggap "tidak dibatasi".
 func (h *LegalCaseHandler) companyScope(c *gin.Context) (*uuid.UUID, bool) {
-	user, err := h.userRepo.FindByID(mustParseUUID(middleware.GetUserID(c)))
+	return companyScope(c, h.userRepo)
+}
+
+// Dipakai juga oleh Repositori Dokumen, yang menampilkan dokumen perkara.
+func companyScope(c *gin.Context, userRepo repository.UserRepository) (*uuid.UUID, bool) {
+	user, err := userRepo.FindByID(mustParseUUID(middleware.GetUserID(c)))
 	if err != nil {
 		utils.Forbidden(c, "Data pengguna tidak dapat dibaca")
 		return nil, false

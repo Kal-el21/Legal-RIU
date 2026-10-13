@@ -19,9 +19,9 @@ import (
 )
 
 type RepositoryDocumentService interface {
-	GetAllDocuments(featureCode string, search string) ([]dto.RepositoryDocumentResponse, error)
-	GetDocumentByID(id string) (*dto.RepositoryDocumentResponse, error)
-	DownloadDocument(id string) (*minio.Object, string, error)
+	GetAllDocuments(access repository.DocumentAccess, featureCode string, search string) ([]dto.RepositoryDocumentResponse, error)
+	GetDocumentByID(access repository.DocumentAccess, id string) (*dto.RepositoryDocumentResponse, error)
+	DownloadDocument(access repository.DocumentAccess, id string) (*minio.Object, string, error)
 	BackfillFromExistingData(db *gorm.DB) error
 	SyncCaseDocument(caseID string, filePath string, fileName string, fileSize int64) error
 	SyncCasePhoto(caseID string, filePath string, fileName string, fileSize int64) error
@@ -39,20 +39,20 @@ func NewRepositoryDocumentService(repo repository.RepositoryDocumentRepository, 
 	return &repositoryDocumentService{repo: repo, storage: s}
 }
 
-func (s *repositoryDocumentService) GetAllDocuments(featureCode string, search string) ([]dto.RepositoryDocumentResponse, error) {
-	docs, err := s.repo.FindAll(featureCode, search)
+func (s *repositoryDocumentService) GetAllDocuments(access repository.DocumentAccess, featureCode string, search string) ([]dto.RepositoryDocumentResponse, error) {
+	docs, err := s.repo.FindAll(access, featureCode, search)
 	if err != nil {
 		return nil, err
 	}
 	return toRepositoryDocumentResponses(docs), nil
 }
 
-func (s *repositoryDocumentService) GetDocumentByID(id string) (*dto.RepositoryDocumentResponse, error) {
+func (s *repositoryDocumentService) GetDocumentByID(access repository.DocumentAccess, id string) (*dto.RepositoryDocumentResponse, error) {
 	uid, err := parseUUID(id)
 	if err != nil {
 		return nil, errors.New("ID tidak valid")
 	}
-	doc, err := s.repo.FindByID(uid)
+	doc, err := s.repo.FindByID(access, uid)
 	if err != nil {
 		return nil, errors.New("dokumen tidak ditemukan")
 	}
@@ -77,12 +77,12 @@ func (s *repositoryDocumentService) GetDocumentByID(id string) (*dto.RepositoryD
 	}, nil
 }
 
-func (s *repositoryDocumentService) DownloadDocument(id string) (*minio.Object, string, error) {
+func (s *repositoryDocumentService) DownloadDocument(access repository.DocumentAccess, id string) (*minio.Object, string, error) {
 	uid, err := parseUUID(id)
 	if err != nil {
 		return nil, "", errors.New("ID tidak valid")
 	}
-	doc, err := s.repo.FindByID(uid)
+	doc, err := s.repo.FindByID(access, uid)
 	if err != nil {
 		return nil, "", errors.New("dokumen tidak ditemukan")
 	}

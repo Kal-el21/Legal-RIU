@@ -85,7 +85,7 @@ func New(cfg *config.Config, db *gorm.DB, store *storage.MinIOClient) (*gin.Engi
 	materialHandler := handler.NewLegalMaterialHandler(materialSvc)
 	permissionHandler := handler.NewPermissionHandler(permissionSvc)
 	reportHandler := handler.NewReportHandler(reportSvc)
-	documentRepositoryHandler := handler.NewRepositoryDocumentHandler(documentRepositorySvc)
+	documentRepositoryHandler := handler.NewRepositoryDocumentHandler(documentRepositorySvc, userRepo)
 
 	// ── Gin ──────────────────────────────────────────────────────────────────
 	if cfg.App.Env == "production" {

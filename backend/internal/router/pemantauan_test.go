@@ -9,9 +9,12 @@ package router
 import (
 	"bytes"
 	"net/http"
+	"slices"
 	"testing"
 
 	"legal-riu-portal/internal/entity"
+
+	"github.com/google/uuid"
 )
 
 func ambilAngka(t *testing.T, token, alamat, kolom string) float64 {
@@ -542,14 +545,146 @@ func TestRepositoriDokumen(t *testing.T) {
 		t.Error("dokumen perkara yang sudah dihapus masih ada di repositori")
 	}
 
+	// USER tidak punya akses ke Case Management, jadi dokumen perkara tidak
+	// boleh sampai kepadanya lewat repositori: tidak di daftar, tidak lewat ID.
 	t.Run("USERTidakMelihatDokumenPerkara", func(t *testing.T) {
-		bugDiketahui(t, "repositori dokumen menampilkan semua dokumen ke semua peran: USER, yang tidak punya akses ke Case Management, bisa melihat dan mengunduh dokumen perkara")
 		w := panggilForm(t, legal, http.MethodPost, perkaraLegal+"/"+p.ID+"/upload-document", nil, berkas{"document", "rahasia.pdf", isi})
 		harapKode(t, w, http.StatusOK, "unggah dokumen perkara")
-		user := masukPeran(t, entity.RoleUser)
-		if id := cari(user); id != "" {
-			w := panggil(t, user, http.MethodGet, alamat+"/"+id+"/download", nil)
-			t.Errorf("USER, yang tidak punya akses ke Case Management, melihat dokumen perkara di repositori (unduh: %d)", w.Code)
+		id := cari(legal)
+		if id == "" {
+			t.Fatal("dokumen perkara yang baru diunggah tidak muncul di repositori")
 		}
+		user := masukPeran(t, entity.RoleUser)
+		if cari(user) != "" {
+			t.Error("USER melihat dokumen perkara di daftar repositori")
+		}
+		harapKode(t, panggil(t, user, http.MethodGet, alamat+"/"+id, nil), http.StatusNotFound, "USER membuka detail dokumen perkara")
+		harapKode(t, panggil(t, user, http.MethodGet, alamat+"/"+id+"/download", nil), http.StatusNotFound, "USER mengunduh dokumen perkara")
 	})
+}
+
+// Repositori dokumen mengikuti hak akses sumbernya: sebuah dokumen hanya
+// terlihat oleh yang boleh membukanya di modul asalnya. Baris repositori dibuat
+// langsung di tabelnya supaya tes ini tidak butuh MinIO; unduhan sungguhan
+// diuji TestRepositoriDokumen.
+func TestRepositoriDokumenMengikutiSumber(t *testing.T) {
+	const alamat = "/api/v1/document-repositories"
+	const pdf = "application/pdf"
+	const docx = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+
+	idPerusahaan := func(domain string) string {
+		t.Helper()
+		var id string
+		if err := dbTes.Raw("SELECT id FROM companies WHERE email_domain = ? AND deleted_at IS NULL", domain).Scan(&id).Error; err != nil || id == "" {
+			t.Fatalf("perusahaan %s tidak ada: %v", domain, err)
+		}
+		return id
+	}
+	asei, syariah := idPerusahaan("asei.co.id"), idPerusahaan("resyariah.co.id")
+	pengguna := func(surel string, peran entity.UserRole, perusahaan string) string {
+		t.Helper()
+		if err := tambahUser(surel, peran, uuid.MustParse(perusahaan)); err != nil {
+			t.Fatal(err)
+		}
+		return masuk(t, surel)
+	}
+
+	const (
+		orangLegal    = "LEGAL"
+		orangAdmin    = "ADMIN"
+		orangPemilik  = "USER pemilik pengajuan"
+		orangUserLain = "USER lain"
+		orangAUAsei   = "Legal AU ASEI"
+		orangAUSya    = "Legal AU Reasuransi Syariah"
+		orangExternal = "EXTERNAL"
+	)
+	legal, pemilik := masukPeran(t, entity.RoleLegal), masukPeran(t, entity.RoleUser)
+	token := map[string]string{
+		orangLegal:    legal,
+		orangAdmin:    masukPeran(t, entity.RoleAdmin),
+		orangPemilik:  pemilik,
+		orangUserLain: pengguna("tes-repo-user-lain@example.com", entity.RoleUser, idPerusahaan(entity.ParentCompanyDomain)),
+		orangAUAsei:   pengguna("tes-repo-au-asei@example.com", entity.RoleLegalAU, asei),
+		orangAUSya:    pengguna("tes-repo-au-syariah@example.com", entity.RoleLegalAU, syariah),
+		orangExternal: masukPeran(t, entity.RoleExternal),
+	}
+
+	// Sumber dokumennya: dua perkara anak usaha, dan tiga pengajuan milik satu USER.
+	perkaraUntuk := func(perusahaan string) perkara {
+		t.Helper()
+		form := formPerkara(t)
+		form["company_id"] = perusahaan
+		w := panggil(t, legal, http.MethodPost, perkaraLegal, form)
+		harapKode(t, w, http.StatusCreated, "membuat perkara untuk anak usaha")
+		var p perkara
+		isiData(t, w, &p)
+		return p
+	}
+	perkaraAsei, perkaraSyariah := perkaraUntuk(asei), perkaraUntuk(syariah)
+	harapKode(t, panggil(t, legal, http.MethodPost, perkaraLegal+"/"+perkaraAsei.ID+"/chronology", map[string]string{"agenda_date": "2026-10-05", "agenda": "Sidang"}), http.StatusCreated, "menambah kronologi")
+	var kronologi string
+	dbTes.Raw("SELECT id FROM case_chronologies WHERE case_id = ?", perkaraAsei.ID).Scan(&kronologi)
+	if kronologi == "" {
+		t.Fatal("kronologi yang baru dibuat tidak ditemukan")
+	}
+	opini := semuaModulPengajuan[0].buat(t, pemilik)
+	review := semuaModulPengajuan[1].buat(t, pemilik)
+	pks := buatPerjanjian(t, pemilik, formPerjanjian())
+
+	perkaraAseiDilihat := []string{orangLegal, orangAdmin, orangAUAsei, orangExternal}
+	pengajuanDilihat := []string{orangLegal, orangAdmin, orangPemilik}
+	dokumen := []struct {
+		judul, fitur, jenis, sumber, mime string
+		dilihat                           []string
+		id                                string
+	}{
+		{judul: "uji-repo-perkara-asei.pdf", fitur: "case_management", jenis: "legal_cases", sumber: perkaraAsei.ID, mime: pdf, dilihat: perkaraAseiDilihat},
+		{judul: "uji-repo-foto-asei.png", fitur: "case_management", jenis: "legal_cases_photo", sumber: perkaraAsei.ID, mime: "image/png", dilihat: perkaraAseiDilihat},
+		{judul: "uji-repo-kronologi-asei.pdf", fitur: "case_management", jenis: "case_chronologies", sumber: kronologi, mime: pdf, dilihat: perkaraAseiDilihat},
+		{judul: "uji-repo-perkara-syariah.pdf", fitur: "case_management", jenis: "legal_cases", sumber: perkaraSyariah.ID, mime: pdf, dilihat: []string{orangLegal, orangAdmin, orangAUSya, orangExternal}},
+		{judul: "uji-repo-lampiran-opini.pdf", fitur: "legal_opinion", jenis: "legal_opinion_attachments", sumber: opini.ID, mime: pdf, dilihat: pengajuanDilihat},
+		{judul: "uji-repo-hasil-opini.pdf", fitur: "legal_opinion", jenis: "legal_opinion_results", sumber: opini.ID, mime: pdf, dilihat: pengajuanDilihat},
+		{judul: "uji-repo-lampiran-review.pdf", fitur: "document_review", jenis: "document_review_attachments", sumber: review.ID, mime: pdf, dilihat: pengajuanDilihat},
+		{judul: "uji-repo-lampiran-perjanjian.pdf", fitur: "agreement_document", jenis: "agreement_attachments", sumber: pks.ID, mime: pdf, dilihat: pengajuanDilihat},
+		{judul: "uji-repo-perjanjian-final.pdf", fitur: "agreement_document", jenis: "agreement_documents", sumber: pks.ID, mime: pdf, dilihat: pengajuanDilihat},
+		// DOCX final hanya untuk yang punya agreement_document.download_docx.all.
+		{judul: "uji-repo-perjanjian-final.docx", fitur: "agreement_document", jenis: "agreement_documents", sumber: pks.ID, mime: docx, dilihat: []string{orangLegal, orangAdmin}},
+		// Sumber yang tidak dikenal tidak ditampilkan ke siapa pun.
+		{judul: "uji-repo-fitur-asing.pdf", fitur: "fitur_asing", jenis: "tabel_asing", sumber: uuid.NewString(), mime: pdf},
+	}
+	for i, d := range dokumen {
+		baris := entity.RepositoryDocument{Title: d.judul, FeatureCode: d.fitur, SourceType: d.jenis, SourceID: d.sumber, UploaderType: "requester", FilePath: "uji-repo/" + d.judul, FileName: d.judul, MIMEType: d.mime, IsActive: true}
+		if err := dbTes.Create(&baris).Error; err != nil {
+			t.Fatal(err)
+		}
+		dokumen[i].id = baris.ID.String()
+	}
+	t.Cleanup(func() { dbTes.Exec("DELETE FROM repository_documents WHERE title LIKE 'uji-repo-%'") })
+
+	for nama, tkn := range token {
+		w := panggil(t, tkn, http.MethodGet, alamat+"?search=uji-repo-", nil)
+		harapKode(t, w, http.StatusOK, nama+": daftar repositori")
+		var daftar []struct {
+			ID string `json:"id"`
+		}
+		isiData(t, w, &daftar)
+		diDaftar := make(map[string]bool, len(daftar))
+		for _, b := range daftar {
+			diDaftar[b.ID] = true
+		}
+		for _, d := range dokumen {
+			harap := slices.Contains(d.dilihat, nama)
+			if diDaftar[d.id] != harap {
+				t.Errorf("%s, %s di daftar: dapat %v, harap %v", nama, d.judul, diDaftar[d.id], harap)
+			}
+			if kode := panggil(t, tkn, http.MethodGet, alamat+"/"+d.id, nil).Code; (kode == http.StatusOK) != harap {
+				t.Errorf("%s, detail %s: dapat %d, harap terlihat=%v", nama, d.judul, kode, harap)
+			}
+			if !harap {
+				if kode := panggil(t, tkn, http.MethodGet, alamat+"/"+d.id+"/download", nil).Code; kode != http.StatusNotFound {
+					t.Errorf("%s, unduh %s: dapat %d, harap 404", nama, d.judul, kode)
+				}
+			}
+		}
+	}
 }

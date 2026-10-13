@@ -122,7 +122,7 @@ Perubahan perusahaan tercatat di audit log sebagai perubahan perkara.
 | ADMIN tidak dibatasi perusahaannya | Ya |
 | Induk tidak bisa dijadikan non-internal, diganti domainnya, atau dihapus | Ya di backend. Tampilan menu Perusahaan sudah disesuaikan, tetapi belum dicoba di browser |
 | Perusahaan user mengikuti perannya (2.1) | Ya di backend. Form user sudah disesuaikan, tetapi belum dicoba di browser |
-| Dokumen perkara di Repositori Dokumen dibatasi per perusahaan | Belum. Semua peran melihat semua dokumen |
+| Dokumen perkara di Repositori Dokumen dibatasi per perusahaan | Ya, lihat bagian 9 |
 
 Pembatasan ini baru berlaku nyata untuk sebuah anak usaha setelah centang
 "Internal"-nya kosong. Sejak itu user anak usaha tersebut hanya melihat perkara
@@ -167,3 +167,29 @@ Rujukan kode: penentuan cakupan user ada di `companyScope()` pada
 Perusahaan user per peran ditentukan `resolveCompanySelection()` di
 `backend/internal/service/helpers.go`, dengan tes `TestPerusahaanUserPerPeran`
 di `backend/internal/router/sesi_test.go`.
+
+## 9. Repositori Dokumen
+
+Repositori Dokumen mengumpulkan file dari modul lain, dan semua peran punya izin
+membukanya (`document_repository.view`). Izin itu hanya membuka halamannya. Yang
+tampil di dalamnya mengikuti hak akses di modul asal tiap dokumen, di daftar,
+detail, maupun unduhan:
+
+| Dokumen | Terlihat oleh |
+|---|---|
+| Dokumen, foto, dan lampiran kronologi perkara | Yang punya `case_management.view`, dengan batasan perusahaan yang sama seperti perkaranya (bagian 3) |
+| Lampiran dan hasil Legal Opinion | Pengajunya (`legal_opinion.view.own`), atau yang punya `legal_opinion.view.all` |
+| Lampiran dan hasil Review Document | Pengajunya (`document_review.view.own`), atau yang punya `document_review.view.all` |
+| Lampiran perjanjian | Pengajunya (`agreement_document.download_attachment.own`), atau yang punya `.all` |
+| PDF final perjanjian | Pengajunya (`agreement_document.download_pdf.own`), atau yang punya `.all` |
+| DOCX final perjanjian | Hanya yang punya `agreement_document.download_docx.all` |
+
+Dokumen yang tidak boleh dilihat dijawab "tidak ditemukan". Dokumen dari sumber
+yang tidak dikenali aturan di atas tidak ditampilkan ke siapa pun, jadi modul
+baru yang mengirim file ke repositori harus menambahkan aturannya lebih dulu.
+
+Rujukan kode: `DocumentAccess` di
+`backend/internal/repository/document_repository.repository.go` (saringannya)
+dan `access()` di `backend/internal/handler/document_repository.handler.go`
+(penyusunannya dari permission). Tesnya `TestRepositoriDokumenMengikutiSumber`
+dan `TestRepositoriDokumen` di `backend/internal/router/pemantauan_test.go`.
