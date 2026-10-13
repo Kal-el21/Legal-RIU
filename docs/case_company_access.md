@@ -25,7 +25,7 @@ anak usaha terlihat oleh induk. Anak usaha tidak melihat perkara anak usaha lain
 
 | Istilah | Arti |
 |---|---|
-| Induk | PT Reasuransi Indonesia Utama |
+| Induk | PT Reasuransi Indonesia Utama. Sistem mengenalinya dari domain email `indonesiare.co.id`, yang ditetapkan di kode (`ParentCompanyDomain` di `backend/internal/entity/entity.go`) |
 | Anak usaha | Perusahaan lain dalam grup, mis. PT Asuransi ASEI Indonesia dan PT Reasuransi Syariah Indonesia |
 | Legal AU | Peran `LEGAL_AU`: legal dari anak usaha. "AU" berarti anak usaha |
 | Perusahaan pemilik perkara | Nilai `company_id` pada perkara |
@@ -98,6 +98,7 @@ Perubahan perusahaan tercatat di audit log sebagai perubahan perkara.
 | Anak usaha bertanda non-internal di database baru | Ya. Dari tiga perusahaan bawaan hanya induk yang internal |
 | Anak usaha bertanda non-internal di database yang sudah ada | Tidak otomatis. ADMIN mencabut centangnya lewat menu, lihat bagian 8 |
 | ADMIN tidak dibatasi perusahaannya | Ya |
+| Induk tidak bisa dijadikan non-internal, diganti domainnya, atau dihapus | Ya di backend. Tampilan menu Perusahaan sudah disesuaikan, tetapi belum dicoba di browser |
 | Dokumen perkara di Repositori Dokumen dibatasi per perusahaan | Belum. Semua peran melihat semua dokumen |
 
 Pembatasan ini baru berlaku nyata untuk sebuah anak usaha setelah centang
@@ -115,6 +116,13 @@ Tanda internal diatur ADMIN di menu **Data Master > Perusahaan**. Centang
 "Internal" hanya untuk induk. Mencentangnya pada anak usaha membuat semua user
 anak usaha itu melihat perkara semua perusahaan.
 
+Induk dikunci: baris berlabel "Induk" di menu itu tidak bisa dicabut centang
+"Internal"-nya, tidak bisa diganti domain emailnya, dan tidak bisa dihapus.
+Namanya tetap bisa diubah. Induk tidak bisa dipindahkan ke perusahaan lain
+lewat menu.
+
+Perusahaan baru bawaannya tidak internal.
+
 Perubahan centang berlaku saat itu juga dan tidak berubah sendiri: server yang
 dinyalakan ulang tidak mengembalikannya. Tiga perusahaan bawaan (induk, ASEI,
 Reasuransi Syariah) hanya dibuat otomatis kalau belum ada, dengan hanya induk
@@ -130,4 +138,6 @@ Rujukan kode: penentuan cakupan user ada di `companyScope()` pada
 `findCase()` pada `backend/internal/service/legal_case.service.go`. Tesnya di
 `backend/internal/router/perkara_test.go`: `TestAnakUsahaBawaanDibatasi`
 (aturan utama), `TestOperasiPerkaraPerPerusahaan` (semua operasi), dan
-`TestPerusahaanPemilikPerkara` (perusahaan pemilik).
+`TestPerusahaanPemilikPerkara` (perusahaan pemilik). Kuncian induk ada di
+`backend/internal/service/company.service.go`, dengan tes
+`TestPerusahaanIndukDikunci` di `backend/internal/router/master_test.go`.

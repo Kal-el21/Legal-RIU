@@ -66,6 +66,7 @@ type CompanyResponse struct {
 	Name        string `json:"name"`
 	EmailDomain string `json:"email_domain"`
 	IsInternal  bool   `json:"is_internal"`
+	IsParent    bool   `json:"is_parent"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 }

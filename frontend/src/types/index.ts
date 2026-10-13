@@ -35,6 +35,7 @@ export interface Company {
   name: string
   email_domain: string
   is_internal: boolean
+  is_parent: boolean
   created_at: string
   updated_at: string
 }

@@ -14,7 +14,7 @@ import (
 // perusahaan; user anak usaha hanya perkara perusahaannya sendiri. Aturannya ada
 // di docs/case_company_access.md.
 var DEFAULT_COMPANIES = []entity.Company{
-	{Name: "PT Reasuransi Indonesia Utama", EmailDomain: "indonesiare.co.id", IsInternal: true},
+	{Name: "PT Reasuransi Indonesia Utama", EmailDomain: entity.ParentCompanyDomain, IsInternal: true},
 	{Name: "PT Asuransi ASEI Indonesia", EmailDomain: "asei.co.id", IsInternal: false},
 	{Name: "PT Reasuransi Syariah Indonesia", EmailDomain: "resyariah.co.id", IsInternal: false},
 }
