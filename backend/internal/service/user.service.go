@@ -15,7 +15,7 @@ type UserService interface {
 	GetAll(page, limit int, search string) ([]dto.UserResponse, int64, error)
 	Create(req dto.CreateUserRequest) (*dto.UserResponse, error)
 	Update(id string, req dto.UpdateUserRequest) (*dto.UserResponse, error)
-	Delete(id string) error
+	Delete(id, actorID string) error
 	UpdateStatus(id string, status string) error
 	ResetPassword(id string, req dto.ResetPasswordRequest) error
 }
@@ -171,10 +171,15 @@ func (s *userService) Update(id string, req dto.UpdateUserRequest) (*dto.UserRes
 	return &res, nil
 }
 
-func (s *userService) Delete(id string) error {
+// Delete menghapus user (soft delete). ADMIN tidak bisa menghapus akunnya
+// sendiri, supaya tidak terkunci di luar sistem.
+func (s *userService) Delete(id, actorID string) error {
 	uid, err := parseUUID(id)
 	if err != nil {
 		return errors.New("user tidak valid")
+	}
+	if uid.String() == actorID {
+		return errors.New("akun sendiri tidak dapat dihapus")
 	}
 
 	if err := s.userRepo.Delete(uid); err != nil {

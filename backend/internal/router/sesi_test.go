@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"strings"
 	"testing"
 
 	"legal-riu-portal/internal/entity"
@@ -197,16 +198,44 @@ func TestTokenMengikutiDataUser(t *testing.T) {
 		harapKode(t, panggil(t, token, http.MethodGet, "/api/v1/legal/legal-opinions", nil), http.StatusOK, "token lama di alamat LEGAL")
 	})
 
+	// ADMIN menghapus user lewat Kelola User. Sesi user itu langsung terputus,
+	// termasuk perpanjangan sesinya.
 	t.Run("UserDihapusDitolak", func(t *testing.T) {
 		const surel = "tes-dihapus@example.com"
 		userKhusus(t, surel)
-		token := masuk(t, surel)
-		// Dihapus langsung di database: route hapus user belum terdaftar (lihat
-		// temuan PR 3 tahap 1 di rencana perbaikan).
-		if err := dbTes.Exec("UPDATE users SET deleted_at = now() WHERE email = ?", surel).Error; err != nil {
-			t.Fatal(err)
+		w := cobaLogin(t, surel, sandiTes)
+		harapKode(t, w, http.StatusOK, "login sebelum dihapus")
+		var sesi hasilLogin
+		isiData(t, w, &sesi)
+		id := idUser(surel)
+
+		legal := masukPeran(t, entity.RoleLegal)
+		harapKode(t, panggil(t, legal, http.MethodDelete, "/api/v1/legal/users/"+id, nil), http.StatusNotFound, "LEGAL tidak punya alamat hapus user")
+		harapKode(t, panggil(t, legal, http.MethodDelete, alamat+"/"+id, nil), http.StatusForbidden, "LEGAL memakai alamat ADMIN")
+
+		harapKode(t, panggil(t, admin, http.MethodDelete, alamat+"/"+id, nil), http.StatusOK, "ADMIN menghapus user")
+		w = panggil(t, admin, http.MethodGet, alamat+"?search="+surel+"&limit=100", nil)
+		harapKode(t, w, http.StatusOK, "mencari user yang dihapus")
+		var daftar struct {
+			Items []akun `json:"items"`
 		}
-		harapKode(t, panggil(t, token, http.MethodGet, "/api/v1/auth/me", nil), http.StatusUnauthorized, "memakai token user yang sudah dihapus")
+		isiData(t, w, &daftar)
+		if len(daftar.Items) != 0 {
+			t.Errorf("user yang dihapus masih ada di daftar: %+v", daftar.Items)
+		}
+		harapKode(t, panggil(t, sesi.AccessToken, http.MethodGet, "/api/v1/auth/me", nil), http.StatusUnauthorized, "memakai token user yang sudah dihapus")
+		// Ditolak karena user-nya tidak ada, bukan karena gagal menyimpan sesi.
+		w = panggil(t, "", http.MethodPost, "/api/v1/auth/refresh", map[string]string{"refresh_token": sesi.RefreshToken})
+		harapKode(t, w, http.StatusUnauthorized, "memperpanjang sesi user yang sudah dihapus")
+		if !strings.Contains(w.Body.String(), "akun tidak ditemukan") {
+			t.Errorf("alasan penolakan perpanjangan sesi: %s", w.Body)
+		}
+	})
+
+	// ADMIN tidak bisa menghapus akunnya sendiri, supaya tidak terkunci di luar.
+	t.Run("HapusAkunSendiriDitolak", func(t *testing.T) {
+		harapKode(t, panggil(t, admin, http.MethodDelete, alamat+"/"+idUser(surelPeran(entity.RoleAdmin)), nil), http.StatusBadRequest, "ADMIN menghapus akunnya sendiri")
+		akunSaya(t, admin)
 	})
 }
 

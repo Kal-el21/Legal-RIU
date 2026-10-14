@@ -88,7 +88,7 @@ func (h *UserHandler) Update(c *gin.Context) {
 // DELETE /api/v1/admin/users/:id
 func (h *UserHandler) Delete(c *gin.Context) {
 	id := c.Param("id")
-	if err := h.svc.Delete(id); err != nil {
+	if err := h.svc.Delete(id, middleware.GetUserID(c)); err != nil {
 		utils.BadRequest(c, err.Error(), nil)
 		return
 	}

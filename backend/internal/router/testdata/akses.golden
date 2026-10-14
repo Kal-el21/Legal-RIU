@@ -14,6 +14,7 @@ DELETE /api/v1/admin/legal-cases/cedants/:id: ADMIN
 DELETE /api/v1/admin/materials/:id: ADMIN
 DELETE /api/v1/admin/purpose-types/:id: ADMIN
 DELETE /api/v1/admin/regencies/:id: ADMIN
+DELETE /api/v1/admin/users/:id: ADMIN
 DELETE /api/v1/agreement-documents/:id: USER
 DELETE /api/v1/external/legal-cases/:id: -
 DELETE /api/v1/external/legal-cases/:id/chronology/:chronId: EXTERNAL

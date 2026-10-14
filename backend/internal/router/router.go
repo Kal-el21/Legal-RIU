@@ -298,6 +298,7 @@ func New(cfg *config.Config, db *gorm.DB, store *storage.MinIOClient) (*gin.Engi
 	admin.GET("/users/:id/permissions", requirePermission("user_management.manage_permissions"), permissionHandler.GetUserAccess)
 	admin.PUT("/users/:id/permissions", requirePermission("user_management.manage_permissions"), permissionHandler.UpdateUserAccess)
 	admin.PUT("/users/:id", userHandler.Update)
+	admin.DELETE("/users/:id", requirePermission("user_management.delete"), userHandler.Delete)
 	admin.PATCH("/users/:id/status", userHandler.UpdateStatus)
 	admin.POST("/users/:id/reset-password", userHandler.ResetPassword)
 
