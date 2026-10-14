@@ -44,9 +44,11 @@ export function getLegalCaseRouteBase() {
   const role = useAuthStore.getState().user?.role
   const pathname = typeof window === 'undefined' ? '' : window.location.pathname
   if (role === 'USER' || pathname.startsWith('/dashboard')) return '/legal-cases'
-  if (role === 'LEGAL' || pathname.startsWith('/legal')) return '/legal/legal-cases'
-  if (role === 'EXTERNAL' || pathname.startsWith('/external')) return '/external/legal-cases'
+  // Legal AU diperiksa sebelum LEGAL, dan alamat LEGAL dicocokkan dengan "/legal/":
+  // halaman Legal AU beralamat /legal-au/..., yang juga diawali "/legal".
   if (role === 'LEGAL_AU' || pathname.startsWith('/legal-au')) return '/legal-au/cases'
+  if (role === 'LEGAL' || pathname.startsWith('/legal/')) return '/legal/legal-cases'
+  if (role === 'EXTERNAL' || pathname.startsWith('/external')) return '/external/legal-cases'
   return '/admin/legal-cases'
 }
 
