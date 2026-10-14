@@ -171,6 +171,45 @@ func TestPengaturanAkun(t *testing.T) {
 	})
 }
 
+// Token hanya membawa identitas. Peran dan status dibaca dari database di setiap
+// permintaan, jadi perubahan oleh ADMIN berlaku saat itu juga, tanpa menunggu
+// token kedaluwarsa.
+func TestTokenMengikutiDataUser(t *testing.T) {
+	admin := masukPeran(t, entity.RoleAdmin)
+	const alamat = "/api/v1/admin/users"
+	var divisi string
+	dbTes.Raw("SELECT id FROM divisions WHERE deleted_at IS NULL LIMIT 1").Scan(&divisi)
+	idUser := func(surel string) string {
+		t.Helper()
+		var id string
+		dbTes.Raw("SELECT id FROM users WHERE email = ?", surel).Scan(&id)
+		return id
+	}
+
+	t.Run("PeranBaruLangsungBerlaku", func(t *testing.T) {
+		const surel = "tes-ganti-peran@example.com"
+		userKhusus(t, surel)
+		token := masuk(t, surel)
+		harapKode(t, panggil(t, token, http.MethodGet, "/api/v1/legal-opinions", nil), http.StatusOK, "USER membuka daftar Legal Opinion")
+		w := panggil(t, admin, http.MethodPut, alamat+"/"+idUser(surel), map[string]string{"full_name": "Tes Ganti Peran", "position": "Staff", "division": divisi, "role": "LEGAL"})
+		harapKode(t, w, http.StatusOK, "mengubah peran menjadi LEGAL")
+		harapKode(t, panggil(t, token, http.MethodGet, "/api/v1/legal-opinions", nil), http.StatusForbidden, "token lama di alamat USER setelah menjadi LEGAL")
+		harapKode(t, panggil(t, token, http.MethodGet, "/api/v1/legal/legal-opinions", nil), http.StatusOK, "token lama di alamat LEGAL")
+	})
+
+	t.Run("UserDihapusDitolak", func(t *testing.T) {
+		const surel = "tes-dihapus@example.com"
+		userKhusus(t, surel)
+		token := masuk(t, surel)
+		// Dihapus langsung di database: route hapus user belum terdaftar (lihat
+		// temuan PR 3 tahap 1 di rencana perbaikan).
+		if err := dbTes.Exec("UPDATE users SET deleted_at = now() WHERE email = ?", surel).Error; err != nil {
+			t.Fatal(err)
+		}
+		harapKode(t, panggil(t, token, http.MethodGet, "/api/v1/auth/me", nil), http.StatusUnauthorized, "memakai token user yang sudah dihapus")
+	})
+}
+
 // ADMIN mengelola user: buat, ubah, nonaktifkan, reset sandi.
 func TestKelolaUser(t *testing.T) {
 	admin := masukPeran(t, entity.RoleAdmin)
@@ -229,11 +268,11 @@ func TestKelolaUser(t *testing.T) {
 		harapKode(t, w, http.StatusUnauthorized, "memperpanjang sesi setelah dinonaktifkan")
 
 		t.Run("TokenLamaDitolak", func(t *testing.T) {
-			bugDiketahui(t, "access token user yang sudah dinonaktifkan tetap diterima sampai kedaluwarsa, karena status user tidak diperiksa saat token dipakai")
 			harapKode(t, panggil(t, sesi.AccessToken, http.MethodGet, "/api/v1/auth/me", nil), http.StatusUnauthorized, "memakai token setelah dinonaktifkan")
 		})
 
 		harapKode(t, panggil(t, admin, http.MethodPatch, alamat+"/"+u.ID+"/status", map[string]string{"status": "ACTIVE"}), http.StatusOK, "mengaktifkan lagi")
+		harapKode(t, panggil(t, sesi.AccessToken, http.MethodGet, "/api/v1/auth/me", nil), http.StatusOK, "memakai token lama setelah diaktifkan lagi")
 		harapKode(t, cobaLogin(t, surel, sandiTes), http.StatusOK, "login setelah diaktifkan lagi")
 	})
 
