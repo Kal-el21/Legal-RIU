@@ -239,6 +239,13 @@ func (s *agreementDocumentService) UpdateMeta(id string, req dto.AgreementMetaRe
 	}
 	if req.AgreementNumber != nil && strings.TrimSpace(*req.AgreementNumber) != "" {
 		num := strings.TrimSpace(*req.AgreementNumber)
+		taken, e := s.repo.AgreementNumberTaken(num, d.ID)
+		if e != nil {
+			return nil, errors.New("gagal memeriksa nomor perjanjian")
+		}
+		if taken {
+			return nil, repository.ErrAgreementNumberTaken
+		}
 		d.AgreementNumber = &num
 	}
 	setOptional(data, "tempat_ttd", req.SigningPlace)
@@ -250,7 +257,11 @@ func (s *agreementDocumentService) UpdateMeta(id string, req dto.AgreementMetaRe
 	setOptional(data, "pihak_pertama_email", req.Email)
 	d.FormData, _ = json.Marshal(data)
 	if e = s.repo.Save(d); e != nil {
-		return nil, e
+		// Pesan database tidak diteruskan ke pengguna.
+		if errors.Is(e, repository.ErrAgreementNumberTaken) {
+			return nil, e
+		}
+		return nil, errors.New("gagal menyimpan metadata")
 	}
 	return s.repo.FindByID(d.ID)
 }

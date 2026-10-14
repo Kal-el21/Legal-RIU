@@ -1,18 +1,26 @@
 package repository
 
 import (
+	"errors"
+	"strings"
 
 	"legal-riu-portal/internal/entity"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 )
+
+// ErrAgreementNumberTaken: nomor perjanjian sudah dipakai dokumen lain. Indeks
+// unik di database juga mencakup dokumen yang sudah dihapus.
+var ErrAgreementNumberTaken = errors.New("nomor perjanjian sudah dipakai dokumen lain")
 
 type AgreementDocumentRepository interface {
 	Create(*entity.AgreementDocument) error
 	FindByID(uuid.UUID) (*entity.AgreementDocument, error)
 	FindAll(*uuid.UUID, string, string, string, int, int) ([]entity.AgreementDocument, int64, error)
 	Save(*entity.AgreementDocument) error
+	AgreementNumberTaken(number string, except uuid.UUID) (bool, error)
 	Delete(uuid.UUID) error
 	AddAttachment(*entity.AgreementAttachment) error
 	FindAttachment(uuid.UUID, uuid.UUID) (*entity.AgreementAttachment, error)
@@ -64,8 +72,23 @@ func (r *agreementDocumentRepository) FindAll(owner *uuid.UUID, status, dateFrom
 	err := q.Preload("User").Order("created_at DESC").Offset((page - 1) * limit).Limit(limit).Find(&items).Error
 	return items, total, err
 }
+// Save menerjemahkan penolakan indeks unik nomor perjanjian, yang tetap bisa
+// terjadi kalau dua orang menyimpan nomor yang sama hampir bersamaan.
 func (r *agreementDocumentRepository) Save(v *entity.AgreementDocument) error {
-	return r.db.Save(v).Error
+	err := r.db.Save(v).Error
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23505" && strings.Contains(pgErr.ConstraintName, "agreement_number") {
+		return ErrAgreementNumberTaken
+	}
+	return err
+}
+
+// AgreementNumberTaken memeriksa nomor sebelum disimpan, termasuk milik
+// dokumen yang sudah dihapus, sama seperti indeks unik di database.
+func (r *agreementDocumentRepository) AgreementNumberTaken(number string, except uuid.UUID) (bool, error) {
+	var n int64
+	err := r.db.Unscoped().Model(&entity.AgreementDocument{}).Where("agreement_number = ? AND id <> ?", number, except).Count(&n).Error
+	return n > 0, err
 }
 func (r *agreementDocumentRepository) Delete(id uuid.UUID) error {
 	return r.db.Delete(&entity.AgreementDocument{}, "id = ?", id).Error

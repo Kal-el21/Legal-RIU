@@ -386,16 +386,17 @@ func TestPerjanjianBelumBenar(t *testing.T) {
 	pemilik := masukPeran(t, entity.RoleUser)
 	legal := masukPeran(t, entity.RoleLegal)
 
+	// Nomor yang sudah dipakai ditolak dengan pesan untuk pengguna, bukan pesan
+	// mentah dari database.
 	t.Run("PesanNomorKembarBukanErrorDatabase", func(t *testing.T) {
-		bugDiketahui(t, "nomor perjanjian yang sudah dipakai ditolak dengan pesan mentah dari database (SQLSTATE ...), bukan pesan untuk pengguna")
 		var w *httptest.ResponseRecorder
 		for range 2 {
 			p := buatPerjanjian(t, pemilik, formPerjanjian())
 			w = panggil(t, legal, http.MethodPatch, urlPerjanjian("/legal", "/", p.ID, "/meta"), map[string]string{"agreement_number": "002/PKS/TES/2026"})
 		}
 		harapKode(t, w, http.StatusBadRequest, "nomor perjanjian kembar")
-		if strings.Contains(w.Body.String(), "SQLSTATE") {
-			t.Errorf("pesan error database bocor ke pengguna: %s", w.Body)
+		if strings.Contains(w.Body.String(), "SQLSTATE") || !strings.Contains(w.Body.String(), "sudah dipakai") {
+			t.Errorf("pesan untuk nomor kembar: %s", w.Body)
 		}
 	})
 }
