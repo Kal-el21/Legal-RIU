@@ -33,6 +33,13 @@ func (h *LegalOpinionHandler) GetAll(c *gin.Context) {
 		utils.BadRequest(c, "Query tidak valid", err.Error())
 		return
 	}
+	// Nilai yang tidak masuk akal diganti nilai bawaan; limit dipakai membagi.
+	if query.Page <= 0 {
+		query.Page = 1
+	}
+	if query.Limit <= 0 {
+		query.Limit = 10
+	}
 	userID := middleware.GetUserID(c)
 	role := middleware.RoleWithAllAccess(c, "legal_opinion.view.all")
 	items, total, err := h.svc.GetAll(userID, role, query)

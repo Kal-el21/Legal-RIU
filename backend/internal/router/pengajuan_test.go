@@ -395,11 +395,11 @@ func TestPengajuanBelumBenar(t *testing.T) {
 				harapKode(t, w, http.StatusBadRequest, "membuat pengajuan dengan JSON kosong")
 			})
 
+			// page dan limit yang tidak masuk akal diganti nilai bawaan, bukan
+			// dipakai membagi.
 			t.Run("LimitNolTidakMembuatError", func(t *testing.T) {
-				bugDiketahui(t, "daftar dengan ?limit=0 membuat pembagian dengan nol dan menjawab 500")
-				w := panggil(t, pemilik, http.MethodGet, m.url("", "?limit=0"), nil)
-				if w.Code >= 500 {
-					t.Fatalf("daftar dengan limit=0: dapat %d", w.Code)
+				for _, q := range []string{"?limit=0", "?limit=-5", "?page=0&limit=0"} {
+					harapKode(t, panggil(t, pemilik, http.MethodGet, m.url("", q), nil), http.StatusOK, "daftar dengan "+q)
 				}
 			})
 

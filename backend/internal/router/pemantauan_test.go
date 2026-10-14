@@ -500,6 +500,21 @@ func TestAuditLog(t *testing.T) {
 	harapKode(t, panggil(t, legal, http.MethodGet, "/api/v1/legal/audit-logs", nil), http.StatusOK, "LEGAL membaca audit log")
 }
 
+// Audit log dengan page dan limit yang tidak masuk akal tetap dijawab, dengan
+// nilai bawaan, bukan 500 karena pembagian dengan nol.
+func TestAuditLogLimitTidakWajar(t *testing.T) {
+	admin := masukPeran(t, entity.RoleAdmin)
+	legal := masukPeran(t, entity.RoleLegal)
+	for _, k := range []struct{ token, alamat string }{
+		{admin, "/api/v1/admin/audit-logs"},
+		{legal, "/api/v1/legal/audit-logs"},
+	} {
+		for _, q := range []string{"?limit=0", "?limit=-5", "?limit=abc", "?page=0&limit=0"} {
+			harapKode(t, panggil(t, k.token, http.MethodGet, k.alamat+q, nil), http.StatusOK, k.alamat+q)
+		}
+	}
+}
+
 // Repositori dokumen mengumpulkan file dari modul lain.
 func TestRepositoriDokumen(t *testing.T) {
 	butuhMinIO(t)

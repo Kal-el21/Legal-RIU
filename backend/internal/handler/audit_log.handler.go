@@ -42,6 +42,14 @@ func (h *AuditLogHandler) GetAll(c *gin.Context) {
 	var filters dto.AuditLogFilters
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	// Nilai yang tidak masuk akal (termasuk bukan angka) diganti nilai bawaan;
+	// limit dipakai membagi.
+	if page <= 0 {
+		page = 1
+	}
+	if limit <= 0 {
+		limit = 20
+	}
 	filters.Page = page
 	filters.Limit = limit
 
