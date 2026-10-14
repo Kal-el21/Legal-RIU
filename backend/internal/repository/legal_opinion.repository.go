@@ -20,6 +20,7 @@ type LegalOpinionRepository interface {
 	AddAttachment(att *entity.LegalOpinionAttachment) error
 	GetLatestUploadRound(loID uuid.UUID) (int, error)
 	AddResult(result *entity.LegalOpinionResult) error
+	FindIDByFilePath(path string) (uuid.UUID, error)
 }
 
 type legalOpinionRepository struct {
@@ -111,4 +112,18 @@ func (r *legalOpinionRepository) GetLatestUploadRound(loID uuid.UUID) (int, erro
 
 func (r *legalOpinionRepository) AddResult(result *entity.LegalOpinionResult) error {
 	return r.db.Create(result).Error
+}
+
+// FindIDByFilePath mengembalikan pengajuan pemilik sebuah file, dari lampiran
+// maupun hasil kajiannya. File yang tidak terdaftar di modul ini tidak ditemukan.
+func (r *legalOpinionRepository) FindIDByFilePath(path string) (uuid.UUID, error) {
+	var att entity.LegalOpinionAttachment
+	if err := r.db.Where("file_path = ?", path).First(&att).Error; err == nil {
+		return att.LegalOpinionID, nil
+	}
+	var res entity.LegalOpinionResult
+	if err := r.db.Where("file_path = ?", path).First(&res).Error; err != nil {
+		return uuid.Nil, err
+	}
+	return res.LegalOpinionID, nil
 }

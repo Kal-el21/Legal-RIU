@@ -292,6 +292,55 @@ func TestBerkasPengajuan(t *testing.T) {
 	}
 }
 
+// Unduh lewat path hanya melayani file yang terdaftar sebagai lampiran atau
+// hasil kajian pengajuan modul itu, dan hanya untuk yang boleh melihat
+// pengajuannya. Selain itu dijawab 404, sama seperti file yang tidak ada.
+func TestUnduhBerkasPengajuan(t *testing.T) {
+	butuhMinIO(t)
+	pemilik := masukPeran(t, entity.RoleUser)
+	lain := masuk(t, surelUserLain)
+	legal := masukPeran(t, entity.RoleLegal)
+	admin := masukPeran(t, entity.RoleAdmin)
+	isi := []byte("lampiran untuk diunduh")
+
+	// Satu lampiran per modul, semuanya milik USER yang sama.
+	lampiran := map[string]string{}
+	for _, m := range semuaModulPengajuan {
+		lampiran[m.nama] = m.buat(t, pemilik, berkas{"attachments", "unduh.pdf", isi}).Attachments[0].FilePath
+	}
+	// File perkara: ada di penyimpanan, tetapi bukan milik modul pengajuan.
+	perk := buatPerkara(t, legal)
+	harapKode(t, panggilForm(t, legal, http.MethodPost, perkaraLegal+"/"+perk.ID+"/upload-document", nil, berkas{"document", "putusan.pdf", isi}), http.StatusOK, "unggah dokumen perkara")
+	filePerkara := ambilPerkara(t, legal, perkaraLegal, perk.ID).DocumentLink
+
+	for i, m := range semuaModulPengajuan {
+		modulLain := semuaModulPengajuan[1-i]
+		unduh := func(token, awalan, path string) (int, []byte) {
+			t.Helper()
+			w := panggil(t, token, http.MethodGet, m.url(awalan, "/download?path=", url.QueryEscape(path)), nil)
+			return w.Code, w.Body.Bytes()
+		}
+		t.Run(m.nama, func(t *testing.T) {
+			for _, k := range []struct{ nama, token, awalan string }{{"pemilik", pemilik, ""}, {"LEGAL", legal, "/legal"}, {"ADMIN", admin, "/admin"}} {
+				kode, isiUnduhan := unduh(k.token, k.awalan, lampiran[m.nama])
+				if kode != http.StatusOK || !bytes.Equal(isiUnduhan, isi) {
+					t.Errorf("%s mengunduh lampiran: dapat %d %q", k.nama, kode, isiUnduhan)
+				}
+			}
+			for _, k := range []struct{ nama, token, path string }{
+				{"USER lain, lampiran milik orang", lain, lampiran[m.nama]},
+				{"pemilik, lampiran milik modul " + modulLain.nama, pemilik, lampiran[modulLain.nama]},
+				{"pemilik, file perkara", pemilik, filePerkara},
+				{"pemilik, path yang tidak terdaftar", pemilik, "legal-opinions/attachments/tidak-ada.pdf"},
+			} {
+				if kode, _ := unduh(k.token, "", k.path); kode != http.StatusNotFound {
+					t.Errorf("%s: dapat %d, harap 404", k.nama, kode)
+				}
+			}
+		})
+	}
+}
+
 // Harapan yang benar tetapi belum dipenuhi kode. Tiap subtes dilewati lewat
 // bugDiketahui sampai perbaikannya masuk. Untuk melihat semuanya gagal apa
 // adanya: TES_BUG=1 go test ./internal/router -run TestPengajuanBelumBenar -v
@@ -337,16 +386,6 @@ func TestPengajuanBelumBenar(t *testing.T) {
 				isiData(t, w, &tautan)
 				if !strings.Contains(tautan.URL, namaBucketTes) {
 					t.Errorf("presigned URL tidak menunjuk bucket tes: %s", tautan.URL)
-				}
-			})
-
-			t.Run("UnduhFileMilikOrangLainDitolak", func(t *testing.T) {
-				butuhMinIO(t)
-				bugDiketahui(t, "endpoint download menerima path apa pun, jadi USER lain bisa mengunduh lampiran milik orang kalau tahu path-nya")
-				p := m.buat(t, pemilik, berkas{"attachments", "rahasia.pdf", []byte("rahasia")})
-				w := panggil(t, lain, http.MethodGet, m.url("", "/download?path=", url.QueryEscape(p.Attachments[0].FilePath)), nil)
-				if w.Code == http.StatusOK {
-					t.Fatalf("USER lain berhasil mengunduh lampiran milik orang: %q", w.Body)
 				}
 			})
 

@@ -11,6 +11,11 @@ import (
 	"github.com/google/uuid"
 )
 
+// ErrFileNotFound dipakai unduhan pengajuan: file tidak terdaftar di modulnya,
+// atau pemanggil tidak boleh melihat pengajuan pemiliknya. Keduanya dijawab
+// sama seperti file yang tidak ada.
+var ErrFileNotFound = errors.New("file tidak ditemukan")
+
 func parseUUID(id string) (uuid.UUID, error) {
 	return uuid.Parse(id)
 }

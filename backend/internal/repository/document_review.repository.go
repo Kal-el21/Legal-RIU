@@ -20,6 +20,7 @@ type DocumentReviewRepository interface {
 	AddAttachment(att *entity.DocumentReviewAttachment) error
 	GetLatestUploadRound(drID uuid.UUID) (int, error)
 	AddResult(result *entity.DocumentReviewResult) error
+	FindIDByFilePath(path string) (uuid.UUID, error)
 }
 
 type documentReviewRepository struct {
@@ -111,4 +112,18 @@ func (r *documentReviewRepository) GetLatestUploadRound(drID uuid.UUID) (int, er
 
 func (r *documentReviewRepository) AddResult(result *entity.DocumentReviewResult) error {
 	return r.db.Create(result).Error
+}
+
+// FindIDByFilePath mengembalikan pengajuan pemilik sebuah file, dari lampiran
+// maupun hasil kajiannya. File yang tidak terdaftar di modul ini tidak ditemukan.
+func (r *documentReviewRepository) FindIDByFilePath(path string) (uuid.UUID, error) {
+	var att entity.DocumentReviewAttachment
+	if err := r.db.Where("file_path = ?", path).First(&att).Error; err == nil {
+		return att.DocumentReviewID, nil
+	}
+	var res entity.DocumentReviewResult
+	if err := r.db.Where("file_path = ?", path).First(&res).Error; err != nil {
+		return uuid.Nil, err
+	}
+	return res.DocumentReviewID, nil
 }

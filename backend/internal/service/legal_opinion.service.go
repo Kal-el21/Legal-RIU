@@ -26,7 +26,7 @@ type LegalOpinionService interface {
 	UpdateStatus(id string, req dto.UpdateStatusRequest) error
 	UploadResult(id string, adminID string, req dto.UploadResultRequest, file *multipart.FileHeader) error
 	GetPresignedURL(filePath string) (string, error)
-	DownloadFile(filePath string) (*minio.Object, error)
+	DownloadFile(filePath, userID, role string) (*minio.Object, error)
 	GeneratePDF(id string) ([]byte, error)
 }
 
@@ -249,7 +249,17 @@ func (s *legalOpinionService) GetPresignedURL(filePath string) (string, error) {
 	return s.storage.GetPresignedURL(context.Background(), filePath)
 }
 
-func (s *legalOpinionService) DownloadFile(filePath string) (*minio.Object, error) {
+// DownloadFile hanya melayani file yang terdaftar sebagai lampiran atau hasil
+// kajian pengajuan modul ini, dan hanya untuk yang boleh melihat pengajuannya.
+// Path lain, termasuk file modul lain, dijawab ErrFileNotFound.
+func (s *legalOpinionService) DownloadFile(filePath, userID, role string) (*minio.Object, error) {
+	id, err := s.repo.FindIDByFilePath(filePath)
+	if err != nil {
+		return nil, ErrFileNotFound
+	}
+	if _, err := s.GetByID(id.String(), userID, role); err != nil {
+		return nil, ErrFileNotFound
+	}
 	return s.storage.GetFileObject(context.Background(), filePath)
 }
 

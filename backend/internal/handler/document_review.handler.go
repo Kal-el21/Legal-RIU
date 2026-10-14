@@ -2,6 +2,7 @@ package handler
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"mime/multipart"
 	"strconv"
@@ -197,7 +198,12 @@ func (h *DocumentReviewHandler) Download(c *gin.Context) {
 		return
 	}
 
-	obj, err := h.svc.DownloadFile(filePath)
+	role := middleware.RoleWithAllAccess(c, "document_review.view.all")
+	obj, err := h.svc.DownloadFile(filePath, middleware.GetUserID(c), role)
+	if errors.Is(err, service.ErrFileNotFound) {
+		utils.NotFound(c, "File tidak ditemukan")
+		return
+	}
 	if err != nil {
 		utils.InternalError(c, "Gagal mengambil file")
 		return
