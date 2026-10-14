@@ -244,7 +244,20 @@ type Company struct {
 	Base
 	Name        string `gorm:"size:255;not null;uniqueIndex" json:"name"`
 	EmailDomain string `gorm:"size:255;not null;uniqueIndex" json:"email_domain"`
-	IsInternal  bool   `gorm:"not null;default:true" json:"is_internal"`
+	// Tanpa nilai bawaan di GORM: dengan default:true, nilai false diganti
+	// nilai bawaan itu saat baris dibuat, sehingga perusahaan non-internal
+	// tersimpan sebagai internal.
+	IsInternal bool `gorm:"not null" json:"is_internal"`
+}
+
+// ParentCompanyDomain mengenali perusahaan induk (PT Reasuransi Indonesia
+// Utama). Induk ditetapkan di sini, tidak dipilih lewat menu; pilihan lainnya
+// dicatat di .docs/PARENT_COMPANY_OPTIONS.md.
+const ParentCompanyDomain = "indonesiare.co.id"
+
+// IsParent melaporkan apakah perusahaan ini induk.
+func (c Company) IsParent() bool {
+	return c.EmailDomain == ParentCompanyDomain
 }
 
 type PurposeType struct {

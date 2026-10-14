@@ -35,6 +35,7 @@ export interface Company {
   name: string
   email_domain: string
   is_internal: boolean
+  is_parent: boolean
   created_at: string
   updated_at: string
 }
@@ -99,7 +100,7 @@ export interface User {
   email_notifications: boolean
   two_fa_enabled: boolean
   company_id: string
-  company_detail?: Company
+  company?: Company
   purpose_type_id?: string
   purpose_type_detail?: PurposeType
   created_at: string

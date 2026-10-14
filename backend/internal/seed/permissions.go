@@ -205,6 +205,7 @@ func rolePermissionSeedData(permissionByCode map[string]entity.Permission) map[e
 		"case_management.view",
 		"case_management.create",
 		"case_management.update_status",
+		"case_management.manage_document",
 		"case_management.manage_chronology",
 		"legal_material.view",
 		"legal_material.manage",

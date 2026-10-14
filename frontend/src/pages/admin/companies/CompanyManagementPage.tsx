@@ -56,7 +56,8 @@ export default function CompanyManagementPage() {
   const deleteMutation = useDeleteCompany()
   const importMutation = useImportCompanies()
 
-  const form = useForm<FormData>({ resolver: zodResolver(schema), defaultValues: { name: '', email_domain: '', is_internal: true } })
+  // Bawaannya tidak internal: user perusahaan internal melihat perkara semua perusahaan.
+  const form = useForm<FormData>({ resolver: zodResolver(schema), defaultValues: { name: '', email_domain: '', is_internal: false } })
 
   const openEdit = (company: Company) => {
     setSelected(company)
@@ -64,7 +65,7 @@ export default function CompanyManagementPage() {
     setModal('edit')
   }
 
-  const closeModal = () => { setModal(null); setSelected(null); form.reset({ name: '', email_domain: '', is_internal: true }) }
+  const closeModal = () => { setModal(null); setSelected(null); form.reset({ name: '', email_domain: '', is_internal: false }) }
 
   const onCreateSubmit = async (data: FormData) => {
     await createMutation.mutateAsync(data)
@@ -74,7 +75,9 @@ export default function CompanyManagementPage() {
 
   const onEditSubmit = async (data: FormData) => {
     if (!selected) return
-    await updateMutation.mutateAsync({ id: selected.id, data })
+    // Induk: tanda internal dan domainnya dikunci, server juga menolaknya.
+    const payload = selected.is_parent ? { ...data, email_domain: selected.email_domain, is_internal: true } : data
+    await updateMutation.mutateAsync({ id: selected.id, data: payload })
     closeModal()
   }
 
@@ -128,7 +131,10 @@ export default function CompanyManagementPage() {
             <tbody className="divide-y divide-gray-50">
               {filtered.map((company) => (
                 <tr key={company.id} className="hover:bg-gray-50/50 transition-colors">
-                  <td className="px-6 py-4 text-sm text-gray-900">{company.name}</td>
+                  <td className="px-6 py-4 text-sm text-gray-900">
+                    {company.name}
+                    {company.is_parent && <span className="ml-2 inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700">Induk</span>}
+                  </td>
                   <td className="px-6 py-4 text-sm text-gray-700">{company.email_domain}</td>
                   <td className="px-6 py-4">
                     <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${company.is_internal ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
@@ -140,9 +146,11 @@ export default function CompanyManagementPage() {
                       <button onClick={() => openEdit(company)} title="Edit" className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-700">
                         <Edit className="w-4 h-4" />
                       </button>
-                      <button onClick={() => handleDelete(company)} title="Hapus" className="p-1.5 rounded-lg hover:bg-red-50 transition-colors text-gray-400 hover:text-red-600">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      {!company.is_parent && (
+                        <button onClick={() => handleDelete(company)} title="Hapus" className="p-1.5 rounded-lg hover:bg-red-50 transition-colors text-gray-400 hover:text-red-600">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -183,12 +191,15 @@ export default function CompanyManagementPage() {
               <Input {...form.register('name')} />
             </Field>
             <Field label="Domain Email" error={form.formState.errors.email_domain?.message}>
-              <Input {...form.register('email_domain')} />
+              <Input {...form.register('email_domain')} readOnly={selected.is_parent} className={selected.is_parent ? 'bg-gray-50 text-gray-500' : ''} />
             </Field>
             <div className="flex items-center gap-2">
-              <input type="checkbox" id="is_internal" {...form.register('is_internal')} className="rounded border-gray-300" />
+              {selected.is_parent
+                ? <input type="checkbox" id="is_internal" checked disabled readOnly className="rounded border-gray-300" />
+                : <input type="checkbox" id="is_internal" {...form.register('is_internal')} className="rounded border-gray-300" />}
               <Label htmlFor="is_internal" className="text-sm text-gray-700">Perusahaan Internal</Label>
             </div>
+            {selected.is_parent && <p className="text-xs text-gray-500">Perusahaan induk selalu internal, dan domain emailnya tidak bisa diubah.</p>}
             {updateMutation.isError && <p className="text-xs text-red-500">{(updateMutation.error as Error)?.message}</p>}
             <div className="flex gap-2 pt-2">
               <Button type="button" variant="outline" className="flex-1" onClick={closeModal}>Batal</Button>

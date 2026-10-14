@@ -159,10 +159,10 @@ Tabel ini menunjukkan permission default yang dimiliki setiap role **sebelum ove
 | | Edit | ✅ | ✅ | ❌ | ❌ | ❌ |
 | | Delete | ✅ | ✅ | ❌ | ❌ | ❌ |
 | | Update Status | ✅ | ✅ | ✅ | ❌ | ❌ |
-| | Manage Documents | ✅ | ✅ | ❌ | ❌ | ✅ |
+| | Manage Documents | ✅ | ✅ | ✅ | ❌ | ✅ |
 | | Manage Chronology | ✅ | ✅ | ✅ | ❌ | ✅ |
 | | Manage References | ✅ | ✅ | ❌ | ❌ | ❌ |
-| | Download | ✅ | ✅ | ❌ | ❌ | ❌ |
+| | Download | ✅ | ✅ | ✅ | ❌ | ✅ |
 | | View Regencies | ✅ | ✅ | ✅ | ❌ | ✅ |
 | | View Cedants | ✅ | ✅ | ✅ | ❌ | ✅ |
 | **Legal Opinion** | View Own | ✅ | ❌ | ❌ | ✅ | ❌ |

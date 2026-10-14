@@ -59,7 +59,13 @@ export default function LegalCaseFormDialog({ open, onOpenChange, legalCase }: L
   const isEdit = !!legalCase
   const queryClient = useQueryClient()
   const hasPermission = useAuthStore((state) => state.hasPermission)
+  const user = useAuthStore((state) => state.user)
   const canManageDocument = hasPermission('case_management.manage_document')
+  const canManageReference = hasPermission('case_management.manage_reference')
+  // User dari perusahaan non-internal (anak usaha) hanya membuat perkara untuk
+  // perusahaannya sendiri. Backend memaksakan hal yang sama; di sini pilihannya
+  // dikunci supaya form tidak menawarkan yang akan diabaikan.
+  const lockedCompanyId = user?.company && !user.company.is_internal ? user.company_id : ''
   const { data: cedants = [] } = useCedants({ limit: 200 })
   const { data: regencies = [] } = useRegencies({ limit: 500 })
   const { data: divisions = [] } = useDivisions()
@@ -84,14 +90,14 @@ export default function LegalCaseFormDialog({ open, onOpenChange, legalCase }: L
 
   useEffect(() => {
     if (!open) return
-    reset(legalCase ? valuesFromLegalCase(legalCase) : emptyDefaults())
+    reset(legalCase ? valuesFromLegalCase(legalCase) : { ...emptyDefaults(), company_id: lockedCompanyId })
     setShowCedantForm(false)
     setNewCedantName('')
     setNewCedantDescription('')
     setDocFile(null)
     setPhotoFile(null)
     setUploadError('')
-  }, [legalCase, open, reset])
+  }, [legalCase, open, reset, lockedCompanyId])
 
   const cedantOptions = useMemo(() => cedants.map((cedant) => ({
     value: cedant.id,
@@ -166,7 +172,7 @@ export default function LegalCaseFormDialog({ open, onOpenChange, legalCase }: L
                 name="company_id"
                 control={control}
                 render={({ field }) => (
-                  <Select onValueChange={field.onChange} value={field.value}>
+                  <Select onValueChange={field.onChange} value={field.value} disabled={!!lockedCompanyId}>
                     <SelectTrigger className="w-full"><SelectValue placeholder="Pilih perusahaan" /></SelectTrigger>
                     <SelectContent>
                       {companies.map((item) => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}
@@ -189,14 +195,16 @@ export default function LegalCaseFormDialog({ open, onOpenChange, legalCase }: L
                   />
                 )}
               />
-              <button
-                type="button"
-                onClick={() => setShowCedantForm((current) => !current)}
-                className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-[#C8102E]"
-              >
-                <Plus className="h-3 w-3" />
-                Tambah cedant
-              </button>
+              {canManageReference && (
+                <button
+                  type="button"
+                  onClick={() => setShowCedantForm((current) => !current)}
+                  className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-[#C8102E]"
+                >
+                  <Plus className="h-3 w-3" />
+                  Tambah cedant
+                </button>
+              )}
             </Field>
             <Field label="Lokasi Kabupaten/Kota" error={errors.location_regency_id?.message}>
               <Controller

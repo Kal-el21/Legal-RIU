@@ -24,26 +24,26 @@ import (
 )
 
 type LegalCaseService interface {
-	Create(companyID *uuid.UUID, req dto.CreateLegalCaseRequest) (*dto.LegalCaseResponse, error)
-	GetAll(companyID *uuid.UUID, query dto.LegalCaseListQuery) ([]dto.LegalCaseResponse, int64, error)
-	GetLatest(companyID *uuid.UUID) (*dto.LegalCaseResponse, error)
-	GetByID(companyID *uuid.UUID, id string) (*dto.LegalCaseResponse, error)
-	Update(id string, req dto.UpdateLegalCaseRequest) (*dto.LegalCaseResponse, error)
-	UpdateStatus(id string, status string) error
-	Delete(id string) error
+	Create(scope *uuid.UUID, req dto.CreateLegalCaseRequest) (*dto.LegalCaseResponse, error)
+	GetAll(scope *uuid.UUID, query dto.LegalCaseListQuery) ([]dto.LegalCaseResponse, int64, error)
+	GetLatest(scope *uuid.UUID) (*dto.LegalCaseResponse, error)
+	GetByID(scope *uuid.UUID, id string) (*dto.LegalCaseResponse, error)
+	Update(scope *uuid.UUID, id string, req dto.UpdateLegalCaseRequest) (*dto.LegalCaseResponse, error)
+	UpdateStatus(scope *uuid.UUID, id string, status string) error
+	Delete(scope *uuid.UUID, id string) error
 
-	ListChronologies(caseID string) ([]dto.CaseChronologyResponse, error)
-	CreateChronology(caseID string, req dto.CreateCaseChronologyRequest, files []*multipart.FileHeader) (*dto.CaseChronologyResponse, error)
-	UpdateChronology(caseID string, chronologyID string, req dto.UpdateCaseChronologyRequest, files []*multipart.FileHeader) (*dto.CaseChronologyResponse, error)
-	DeleteChronology(caseID string, chronologyID string) error
-	DownloadFile(filePath string) (*minio.Object, error)
-	UploadDocument(caseID string, file *multipart.FileHeader) (*dto.LegalCaseResponse, error)
-	DeleteDocument(caseID string) (*dto.LegalCaseResponse, error)
-	UploadPhoto(caseID string, file *multipart.FileHeader) (*dto.LegalCaseResponse, error)
-	DeletePhoto(caseID string) (*dto.LegalCaseResponse, error)
-	ImportChronologies(caseID string, file *multipart.FileHeader) (*dto.ImportResult, error)
+	ListChronologies(scope *uuid.UUID, caseID string) ([]dto.CaseChronologyResponse, error)
+	CreateChronology(scope *uuid.UUID, caseID string, req dto.CreateCaseChronologyRequest, files []*multipart.FileHeader) (*dto.CaseChronologyResponse, error)
+	UpdateChronology(scope *uuid.UUID, caseID string, chronologyID string, req dto.UpdateCaseChronologyRequest, files []*multipart.FileHeader) (*dto.CaseChronologyResponse, error)
+	DeleteChronology(scope *uuid.UUID, caseID string, chronologyID string) error
+	DownloadFile(scope *uuid.UUID, filePath string) (*minio.Object, error)
+	UploadDocument(scope *uuid.UUID, caseID string, file *multipart.FileHeader) (*dto.LegalCaseResponse, error)
+	DeleteDocument(scope *uuid.UUID, caseID string) (*dto.LegalCaseResponse, error)
+	UploadPhoto(scope *uuid.UUID, caseID string, file *multipart.FileHeader) (*dto.LegalCaseResponse, error)
+	DeletePhoto(scope *uuid.UUID, caseID string) (*dto.LegalCaseResponse, error)
+	ImportChronologies(scope *uuid.UUID, caseID string, file *multipart.FileHeader) (*dto.ImportResult, error)
 	GenerateChronologyTemplate() (*bytes.Buffer, error)
-	ViewFile(filePath string) (*minio.Object, string, error)
+	ViewFile(scope *uuid.UUID, filePath string) (*minio.Object, string, error)
 
 	ListRegencies(search string, limit int) ([]dto.RegencyResponse, error)
 	CreateRegency(req dto.CreateRegencyRequest) (*dto.RegencyResponse, error)
@@ -58,7 +58,7 @@ type LegalCaseService interface {
 	ImportRegencies(file *multipart.FileHeader) (*dto.ImportResult, error)
 	GenerateRegencyTemplate() (*bytes.Buffer, error)
 
-	GeneratePDF(id string) ([]byte, error)
+	GeneratePDF(scope *uuid.UUID, id string) ([]byte, error)
 }
 
 type legalCaseService struct {
@@ -72,14 +72,37 @@ func NewLegalCaseService(repo repository.LegalCaseRepository, s *storage.MinIOCl
 	return &legalCaseService{repo: repo, storage: s, pdfSvc: NewPDFService(), repoDocSvc: repoDocSvc}
 }
 
-func (s *legalCaseService) Create(companyID *uuid.UUID, req dto.CreateLegalCaseRequest) (*dto.LegalCaseResponse, error) {
+// ownerCompany menentukan perusahaan pemilik perkara. scope adalah perusahaan
+// si pemanggil kalau ia dibatasi (perusahaannya non-internal), nil kalau tidak.
+// User yang dibatasi selalu memakai perusahaannya sendiri; user lain memakai
+// pilihan di form. Aturannya ada di docs/case_company_access.md.
+func (s *legalCaseService) ownerCompany(scope *uuid.UUID, requested string) (*uuid.UUID, error) {
+	if scope != nil {
+		return scope, nil
+	}
+	id, err := parseUUID(requested)
+	if err != nil {
+		return nil, errors.New("perusahaan tidak valid")
+	}
+	if _, err := s.repo.FindCompanyByID(id); err != nil {
+		return nil, errors.New("perusahaan tidak ditemukan")
+	}
+	return &id, nil
+}
+
+func (s *legalCaseService) Create(scope *uuid.UUID, req dto.CreateLegalCaseRequest) (*dto.LegalCaseResponse, error) {
+	owner, err := s.ownerCompany(scope, req.CompanyID)
+	if err != nil {
+		return nil, err
+	}
+
 	seq, err := s.repo.NextTicketSequence("LC")
 	if err != nil {
 		return nil, errors.New("gagal generate ticket number")
 	}
 	ticket := utils.GenerateTicketNumber(utils.PrefixLegalCase, seq)
 
-	legalCase, err := s.buildLegalCase(companyID, req)
+	legalCase, err := s.buildLegalCase(owner, req)
 	if err != nil {
 		return nil, err
 	}
@@ -97,7 +120,7 @@ func (s *legalCaseService) Create(companyID *uuid.UUID, req dto.CreateLegalCaseR
 	return &response, nil
 }
 
-func (s *legalCaseService) GetAll(companyID *uuid.UUID, query dto.LegalCaseListQuery) ([]dto.LegalCaseResponse, int64, error) {
+func (s *legalCaseService) GetAll(scope *uuid.UUID, query dto.LegalCaseListQuery) ([]dto.LegalCaseResponse, int64, error) {
 	dateFrom, err := parseOptionalDate(query.DateFrom)
 	if err != nil {
 		return nil, 0, errors.New("tanggal awal tidak valid")
@@ -112,7 +135,7 @@ func (s *legalCaseService) GetAll(companyID *uuid.UUID, query dto.LegalCaseListQ
 		Status:    query.Status,
 		CaseType:  query.CaseType,
 		Level:     query.Level,
-		CompanyID: companyID,
+		CompanyID: scope,
 		DateFrom:  dateFrom,
 		DateTo:    dateTo,
 		Page:      query.Page,
@@ -132,8 +155,8 @@ func (s *legalCaseService) GetAll(companyID *uuid.UUID, query dto.LegalCaseListQ
 	return responses, total, nil
 }
 
-func (s *legalCaseService) GetLatest(companyID *uuid.UUID) (*dto.LegalCaseResponse, error) {
-	filter := repository.LegalCaseFilter{CompanyID: companyID, Limit: 1}
+func (s *legalCaseService) GetLatest(scope *uuid.UUID) (*dto.LegalCaseResponse, error) {
+	filter := repository.LegalCaseFilter{CompanyID: scope, Limit: 1}
 	items, _, err := s.repo.FindAll(filter)
 	if err != nil || len(items) == 0 {
 		return nil, errors.New("kasus terbaru tidak ditemukan")
@@ -142,33 +165,65 @@ func (s *legalCaseService) GetLatest(companyID *uuid.UUID) (*dto.LegalCaseRespon
 	return &response, nil
 }
 
-func (s *legalCaseService) GetByID(companyID *uuid.UUID, id string) (*dto.LegalCaseResponse, error) {
+// findCase mengambil perkara yang boleh dijangkau si pemanggil. scope adalah
+// perusahaan yang membatasinya, nil kalau ia tidak dibatasi. Perkara milik
+// perusahaan lain dijawab sama seperti perkara yang tidak ada. Semua operasi
+// perkara lewat sini; aturannya ada di docs/case_company_access.md.
+func (s *legalCaseService) findCase(scope *uuid.UUID, id string) (*entity.LegalCase, error) {
 	uid, err := parseUUID(id)
 	if err != nil {
-		return nil, errors.New("ID tidak valid")
+		return nil, errors.New("ID kasus tidak valid")
 	}
-
 	legalCase, err := s.repo.FindByID(uid)
 	if err != nil {
 		return nil, errors.New("kasus hukum tidak ditemukan")
+	}
+	if scope != nil && (legalCase.CompanyID == nil || *legalCase.CompanyID != *scope) {
+		return nil, errors.New("kasus hukum tidak ditemukan")
+	}
+	return legalCase, nil
+}
+
+// fileInScope memastikan file di path itu milik perkara yang boleh dijangkau si
+// pemanggil. User yang tidak dibatasi tidak diperiksa.
+func (s *legalCaseService) fileInScope(scope *uuid.UUID, filePath string) error {
+	if scope == nil {
+		return nil
+	}
+	ok, err := s.repo.CaseFileBelongsToCompany(filePath, *scope)
+	if err != nil || !ok {
+		return errors.New("file tidak ditemukan")
+	}
+	return nil
+}
+
+func (s *legalCaseService) GetByID(scope *uuid.UUID, id string) (*dto.LegalCaseResponse, error) {
+	legalCase, err := s.findCase(scope, id)
+	if err != nil {
+		return nil, err
 	}
 
 	response := toLegalCaseResponse(legalCase, true)
 	return &response, nil
 }
 
-func (s *legalCaseService) Update(id string, req dto.UpdateLegalCaseRequest) (*dto.LegalCaseResponse, error) {
-	uid, err := parseUUID(id)
+func (s *legalCaseService) Update(scope *uuid.UUID, id string, req dto.UpdateLegalCaseRequest) (*dto.LegalCaseResponse, error) {
+	existing, err := s.findCase(scope, id)
 	if err != nil {
-		return nil, errors.New("ID tidak valid")
+		return nil, err
+	}
+	uid := existing.ID
+
+	// Hanya user yang tidak dibatasi yang boleh memindahkan perkara ke
+	// perusahaan lain; untuk user lain perusahaannya tidak berubah.
+	owner := existing.CompanyID
+	if scope == nil {
+		if owner, err = s.ownerCompany(nil, req.CompanyID); err != nil {
+			return nil, err
+		}
 	}
 
-	existing, err := s.repo.FindByID(uid)
-	if err != nil {
-		return nil, errors.New("kasus hukum tidak ditemukan")
-	}
-
-	updated, err := s.buildLegalCase(existing.CompanyID, req)
+	updated, err := s.buildLegalCase(owner, req)
 	if err != nil {
 		return nil, err
 	}
@@ -189,6 +244,7 @@ func (s *legalCaseService) Update(id string, req dto.UpdateLegalCaseRequest) (*d
 	existing.Level = updated.Level
 	existing.AdditionalNotes = updated.AdditionalNotes
 	existing.LocationRegencyID = updated.LocationRegencyID
+	existing.CompanyID = updated.CompanyID
 
 	if err := s.repo.Update(existing); err != nil {
 		return nil, errors.New("gagal mengupdate kasus hukum")
@@ -202,38 +258,35 @@ func (s *legalCaseService) Update(id string, req dto.UpdateLegalCaseRequest) (*d
 	return &response, nil
 }
 
-func (s *legalCaseService) UpdateStatus(id string, status string) error {
-	uid, err := parseUUID(id)
+func (s *legalCaseService) UpdateStatus(scope *uuid.UUID, id string, status string) error {
+	legalCase, err := s.findCase(scope, id)
 	if err != nil {
-		return errors.New("ID tidak valid")
+		return err
 	}
+	uid := legalCase.ID
 
 	now := time.Now()
 	return s.repo.UpdateStatus(uid, status, &now)
 }
 
-func (s *legalCaseService) Delete(id string) error {
-	uid, err := parseUUID(id)
+func (s *legalCaseService) Delete(scope *uuid.UUID, id string) error {
+	legalCase, err := s.findCase(scope, id)
 	if err != nil {
-		return errors.New("ID tidak valid")
+		return err
 	}
-	if _, err := s.repo.FindByID(uid); err != nil {
-		return errors.New("kasus hukum tidak ditemukan")
-	}
+	uid := legalCase.ID
 	if err := s.repo.Delete(uid); err != nil {
 		return errors.New("gagal menghapus kasus hukum")
 	}
 	return nil
 }
 
-func (s *legalCaseService) ListChronologies(caseID string) ([]dto.CaseChronologyResponse, error) {
-	uid, err := parseUUID(caseID)
+func (s *legalCaseService) ListChronologies(scope *uuid.UUID, caseID string) ([]dto.CaseChronologyResponse, error) {
+	legalCase, err := s.findCase(scope, caseID)
 	if err != nil {
-		return nil, errors.New("ID kasus tidak valid")
+		return nil, err
 	}
-	if _, err := s.repo.FindByID(uid); err != nil {
-		return nil, errors.New("kasus hukum tidak ditemukan")
-	}
+	uid := legalCase.ID
 
 	items, err := s.repo.ListChronologies(uid)
 	if err != nil {
@@ -247,14 +300,12 @@ func (s *legalCaseService) ListChronologies(caseID string) ([]dto.CaseChronology
 	return responses, nil
 }
 
-func (s *legalCaseService) CreateChronology(caseID string, req dto.CreateCaseChronologyRequest, files []*multipart.FileHeader) (*dto.CaseChronologyResponse, error) {
-	uid, err := parseUUID(caseID)
+func (s *legalCaseService) CreateChronology(scope *uuid.UUID, caseID string, req dto.CreateCaseChronologyRequest, files []*multipart.FileHeader) (*dto.CaseChronologyResponse, error) {
+	legalCase, err := s.findCase(scope, caseID)
 	if err != nil {
-		return nil, errors.New("ID kasus tidak valid")
+		return nil, err
 	}
-	if _, err := s.repo.FindByID(uid); err != nil {
-		return nil, errors.New("kasus hukum tidak ditemukan")
-	}
+	uid := legalCase.ID
 
 	agendaDate, err := parseRequiredDate(req.AgendaDate)
 	if err != nil {
@@ -293,7 +344,10 @@ func (s *legalCaseService) CreateChronology(caseID string, req dto.CreateCaseChr
 	return &response, nil
 }
 
-func (s *legalCaseService) UpdateChronology(caseID string, chronologyID string, req dto.UpdateCaseChronologyRequest, files []*multipart.FileHeader) (*dto.CaseChronologyResponse, error) {
+func (s *legalCaseService) UpdateChronology(scope *uuid.UUID, caseID string, chronologyID string, req dto.UpdateCaseChronologyRequest, files []*multipart.FileHeader) (*dto.CaseChronologyResponse, error) {
+	if _, err := s.findCase(scope, caseID); err != nil {
+		return nil, err
+	}
 	caseUID, err := parseUUID(caseID)
 	if err != nil {
 		return nil, errors.New("ID kasus tidak valid")
@@ -346,7 +400,10 @@ func (s *legalCaseService) UpdateChronology(caseID string, chronologyID string, 
 	return &response, nil
 }
 
-func (s *legalCaseService) DeleteChronology(caseID string, chronologyID string) error {
+func (s *legalCaseService) DeleteChronology(scope *uuid.UUID, caseID string, chronologyID string) error {
+	if _, err := s.findCase(scope, caseID); err != nil {
+		return err
+	}
 	caseUID, err := parseUUID(caseID)
 	if err != nil {
 		return errors.New("ID kasus tidak valid")
@@ -367,9 +424,12 @@ func (s *legalCaseService) DeleteChronology(caseID string, chronologyID string) 
 	return nil
 }
 
-func (s *legalCaseService) DownloadFile(filePath string) (*minio.Object, error) {
+func (s *legalCaseService) DownloadFile(scope *uuid.UUID, filePath string) (*minio.Object, error) {
 	if !strings.HasPrefix(filePath, "legal-cases/documents/") && !strings.HasPrefix(filePath, "legal-cases/chronologies/") {
 		return nil, errors.New("path file tidak valid")
+	}
+	if err := s.fileInScope(scope, filePath); err != nil {
+		return nil, err
 	}
 	return s.storage.GetFileObject(context.Background(), filePath)
 }
@@ -673,16 +733,12 @@ func (s *legalCaseService) GenerateRegencyTemplate() (*bytes.Buffer, error) {
 	return &buf, nil
 }
 
-func (s *legalCaseService) UploadDocument(caseID string, file *multipart.FileHeader) (*dto.LegalCaseResponse, error) {
-	uid, err := parseUUID(caseID)
+func (s *legalCaseService) UploadDocument(scope *uuid.UUID, caseID string, file *multipart.FileHeader) (*dto.LegalCaseResponse, error) {
+	legalCase, err := s.findCase(scope, caseID)
 	if err != nil {
-		return nil, errors.New("ID kasus tidak valid")
+		return nil, err
 	}
-
-	legalCase, err := s.repo.FindByID(uid)
-	if err != nil {
-		return nil, errors.New("kasus tidak ditemukan")
-	}
+	uid := legalCase.ID
 
 	oldDocumentLink := legalCase.DocumentLink
 
@@ -708,15 +764,10 @@ func (s *legalCaseService) UploadDocument(caseID string, file *multipart.FileHea
 	return &response, nil
 }
 
-func (s *legalCaseService) DeleteDocument(caseID string) (*dto.LegalCaseResponse, error) {
-	uid, err := parseUUID(caseID)
+func (s *legalCaseService) DeleteDocument(scope *uuid.UUID, caseID string) (*dto.LegalCaseResponse, error) {
+	legalCase, err := s.findCase(scope, caseID)
 	if err != nil {
-		return nil, errors.New("ID kasus tidak valid")
-	}
-
-	legalCase, err := s.repo.FindByID(uid)
-	if err != nil {
-		return nil, errors.New("kasus tidak ditemukan")
+		return nil, err
 	}
 
 	if legalCase.DocumentLink == "" {
@@ -738,16 +789,12 @@ func (s *legalCaseService) DeleteDocument(caseID string) (*dto.LegalCaseResponse
 	return &response, nil
 }
 
-func (s *legalCaseService) UploadPhoto(caseID string, file *multipart.FileHeader) (*dto.LegalCaseResponse, error) {
-	uid, err := parseUUID(caseID)
+func (s *legalCaseService) UploadPhoto(scope *uuid.UUID, caseID string, file *multipart.FileHeader) (*dto.LegalCaseResponse, error) {
+	legalCase, err := s.findCase(scope, caseID)
 	if err != nil {
-		return nil, errors.New("ID kasus tidak valid")
+		return nil, err
 	}
-
-	legalCase, err := s.repo.FindByID(uid)
-	if err != nil {
-		return nil, errors.New("kasus tidak ditemukan")
-	}
+	uid := legalCase.ID
 
 	oldPhoto := legalCase.Photo
 
@@ -773,15 +820,10 @@ func (s *legalCaseService) UploadPhoto(caseID string, file *multipart.FileHeader
 	return &response, nil
 }
 
-func (s *legalCaseService) DeletePhoto(caseID string) (*dto.LegalCaseResponse, error) {
-	uid, err := parseUUID(caseID)
+func (s *legalCaseService) DeletePhoto(scope *uuid.UUID, caseID string) (*dto.LegalCaseResponse, error) {
+	legalCase, err := s.findCase(scope, caseID)
 	if err != nil {
-		return nil, errors.New("ID kasus tidak valid")
-	}
-
-	legalCase, err := s.repo.FindByID(uid)
-	if err != nil {
-		return nil, errors.New("kasus tidak ditemukan")
+		return nil, err
 	}
 
 	if legalCase.Photo == "" {
@@ -1017,14 +1059,12 @@ func decodeDocuments(value string) []string {
 	return documents
 }
 
-func (s *legalCaseService) ImportChronologies(caseID string, file *multipart.FileHeader) (*dto.ImportResult, error) {
-	uid, err := parseUUID(caseID)
+func (s *legalCaseService) ImportChronologies(scope *uuid.UUID, caseID string, file *multipart.FileHeader) (*dto.ImportResult, error) {
+	legalCase, err := s.findCase(scope, caseID)
 	if err != nil {
-		return nil, errors.New("ID kasus tidak valid")
+		return nil, err
 	}
-	if _, err := s.repo.FindByID(uid); err != nil {
-		return nil, errors.New("kasus hukum tidak ditemukan")
-	}
+	uid := legalCase.ID
 
 	src, err := file.Open()
 	if err != nil {
@@ -1129,11 +1169,14 @@ func (s *legalCaseService) GenerateChronologyTemplate() (*bytes.Buffer, error) {
 	return &buf, nil
 }
 
-func (s *legalCaseService) ViewFile(filePath string) (*minio.Object, string, error) {
+func (s *legalCaseService) ViewFile(scope *uuid.UUID, filePath string) (*minio.Object, string, error) {
 	if !strings.HasPrefix(filePath, "legal-cases/documents/") &&
 		!strings.HasPrefix(filePath, "legal-cases/chronologies/") &&
 		!strings.HasPrefix(filePath, "legal-cases/photos/") {
 		return nil, "", errors.New("path file tidak valid")
+	}
+	if err := s.fileInScope(scope, filePath); err != nil {
+		return nil, "", err
 	}
 
 	obj, err := s.storage.GetFileObject(context.Background(), filePath)
@@ -1270,15 +1313,10 @@ func FileNameFromPath(filePath string) string {
 	return filepath.Base(filePath)
 }
 
-func (s *legalCaseService) GeneratePDF(id string) ([]byte, error) {
-	uid, err := parseUUID(id)
+func (s *legalCaseService) GeneratePDF(scope *uuid.UUID, id string) ([]byte, error) {
+	lc, err := s.findCase(scope, id)
 	if err != nil {
-		return nil, errors.New("ID tidak valid")
-	}
-
-	lc, err := s.repo.FindByID(uid)
-	if err != nil {
-		return nil, errors.New("kasus hukum tidak ditemukan")
+		return nil, err
 	}
 
 	return s.pdfSvc.GenerateLegalCasePDF(lc)

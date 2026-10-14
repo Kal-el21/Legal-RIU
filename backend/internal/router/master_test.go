@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"legal-riu-portal/internal/entity"
+	"legal-riu-portal/internal/seed"
 
 	"github.com/google/uuid"
 )
@@ -162,11 +163,44 @@ func TestMasterData(t *testing.T) {
 	}
 }
 
-// Perusahaan bisa dijadikan non-internal lewat ubah. Tanda ini menentukan
-// apakah usernya dibatasi ke perkara perusahaannya sendiri.
+// Tanda internal sebuah perusahaan tersimpan sesuai yang diminta, lewat tambah,
+// impor, maupun ubah. Tanda ini menentukan apakah usernya dibatasi ke perkara
+// perusahaannya sendiri.
 func TestPerusahaanNonInternal(t *testing.T) {
 	admin := masukPeran(t, entity.RoleAdmin)
 	const alamat = "/api/v1/admin/companies"
+
+	internal := func(id string) bool {
+		t.Helper()
+		var p struct {
+			IsInternal bool `json:"is_internal"`
+		}
+		w := panggil(t, admin, http.MethodGet, alamat+"/"+id, nil)
+		harapKode(t, w, http.StatusOK, "mengambil perusahaan")
+		isiData(t, w, &p)
+		return p.IsInternal
+	}
+
+	// Dibuat non-internal: tersimpan non-internal, juga setelah dibaca ulang.
+	w0 := panggil(t, admin, http.MethodPost, alamat, map[string]any{"name": "PT Luar Uji", "email_domain": "luar-uji.example", "is_internal": false})
+	harapKode(t, w0, http.StatusCreated, "membuat perusahaan non-internal")
+	var luar struct {
+		ID         string `json:"id"`
+		IsInternal bool   `json:"is_internal"`
+	}
+	isiData(t, w0, &luar)
+	if luar.IsInternal || internal(luar.ID) {
+		t.Error("perusahaan dibuat dengan is_internal=false, tetapi tersimpan sebagai internal")
+	}
+
+	// Perusahaan hasil impor selalu non-internal.
+	w0 = panggilForm(t, admin, http.MethodPost, alamat+"/import", nil, berkas{"file", "perusahaan.csv", []byte("name,email_domain\nPT Impor Luar,impor-luar.example\n")})
+	harapKode(t, w0, http.StatusOK, "impor perusahaan")
+	var idImpor string
+	dbTes.Raw("SELECT id FROM companies WHERE email_domain = ?", "impor-luar.example").Scan(&idImpor)
+	if idImpor == "" || internal(idImpor) {
+		t.Errorf("perusahaan hasil impor tersimpan sebagai internal (id %q)", idImpor)
+	}
 
 	w := panggil(t, admin, http.MethodPost, alamat, map[string]any{"name": "PT Anak Usaha Uji", "email_domain": "anak-uji.example", "is_internal": true})
 	harapKode(t, w, http.StatusCreated, "membuat perusahaan")
@@ -225,4 +259,143 @@ func TestMateriHukum(t *testing.T) {
 
 	harapKode(t, panggil(t, legal, http.MethodDelete, kelola+"/"+m.ID, nil), http.StatusOK, "menghapus materi")
 	harapKode(t, panggil(t, user, http.MethodGet, baca+"/"+m.ID, nil), http.StatusNotFound, "membaca materi yang dihapus")
+}
+
+// Di database baru, dari tiga perusahaan bawaan hanya induk yang internal.
+// Setelah itu tandanya milik ADMIN: seed hanya membuat yang belum ada.
+func TestSeedPerusahaanBawaan(t *testing.T) {
+	harap := map[string]bool{"indonesiare.co.id": true, "asei.co.id": false, "resyariah.co.id": false}
+	cek := func(konteks string) {
+		t.Helper()
+		var baris []struct {
+			EmailDomain string
+			IsInternal  bool
+		}
+		dbTes.Raw("SELECT email_domain, is_internal FROM companies WHERE email_domain IN ? AND deleted_at IS NULL", []string{"indonesiare.co.id", "asei.co.id", "resyariah.co.id"}).Scan(&baris)
+		if len(baris) != len(harap) {
+			t.Fatalf("%s: %d perusahaan bawaan, harap %d", konteks, len(baris), len(harap))
+		}
+		for _, b := range baris {
+			if b.IsInternal != harap[b.EmailDomain] {
+				t.Errorf("%s: %s internal=%v, harap %v", konteks, b.EmailDomain, b.IsInternal, harap[b.EmailDomain])
+			}
+		}
+	}
+	cek("setelah seed di database baru")
+
+	// Tanda internal anak usaha diatur ADMIN lewat menu. Seed berikutnya (server
+	// dinyalakan ulang) tidak boleh mengembalikannya.
+	const diatur = "asei.co.id"
+	if err := dbTes.Exec("UPDATE companies SET is_internal = true WHERE email_domain = ?", diatur).Error; err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { dbTes.Exec("UPDATE companies SET is_internal = false WHERE email_domain = ?", diatur) })
+	for putaran := 1; putaran <= 2; putaran++ {
+		if err := seed.SeedCompanies(dbTes); err != nil {
+			t.Fatalf("seed perusahaan putaran %d: %v", putaran, err)
+		}
+	}
+	harap[diatur] = true
+	cek("setelah seed berikutnya")
+
+	// Perusahaan bawaan yang dihapus admin tidak membuat server gagal start, dan
+	// tidak dibuat lagi.
+	const dihapus = "resyariah.co.id"
+	if err := dbTes.Exec("UPDATE companies SET deleted_at = now() WHERE email_domain = ?", dihapus).Error; err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { dbTes.Exec("UPDATE companies SET deleted_at = NULL WHERE email_domain = ?", dihapus) })
+	if err := seed.SeedCompanies(dbTes); err != nil {
+		t.Fatalf("seed setelah perusahaan bawaan dihapus: %v", err)
+	}
+	var jumlah int64
+	dbTes.Raw("SELECT count(*) FROM companies WHERE email_domain = ?", dihapus).Scan(&jumlah)
+	if jumlah != 1 {
+		t.Errorf("perusahaan bawaan yang dihapus: %d baris, harap tetap 1", jumlah)
+	}
+}
+
+// Induk dikenali dari domain surelnya (entity.ParentCompanyDomain). Tanda
+// internal dan domainnya tidak bisa diubah dan ia tidak bisa dihapus; kalau
+// bisa, user induk kehilangan pandangan ke perkara anak usaha, atau sistem
+// berjalan tanpa induk. Perusahaan lain tetap bebas diatur.
+func TestPerusahaanIndukDikunci(t *testing.T) {
+	admin := masukPeran(t, entity.RoleAdmin)
+	const alamat = "/api/v1/admin/companies"
+
+	type perusahaan struct {
+		ID          string `json:"id"`
+		Name        string `json:"name"`
+		EmailDomain string `json:"email_domain"`
+		IsInternal  bool   `json:"is_internal"`
+		IsParent    bool   `json:"is_parent"`
+	}
+	baca := func(id string) perusahaan {
+		t.Helper()
+		var p perusahaan
+		w := panggil(t, admin, http.MethodGet, alamat+"/"+id, nil)
+		harapKode(t, w, http.StatusOK, "mengambil perusahaan")
+		isiData(t, w, &p)
+		return p
+	}
+	ubah := func(id, nama, domain string, internal bool) int {
+		t.Helper()
+		return panggil(t, admin, http.MethodPut, alamat+"/"+id, map[string]any{"name": nama, "email_domain": domain, "is_internal": internal}).Code
+	}
+
+	var semua, bertandaInduk []perusahaan
+	w := panggil(t, admin, http.MethodGet, alamat, nil)
+	harapKode(t, w, http.StatusOK, "daftar perusahaan")
+	isiData(t, w, &semua)
+	for _, p := range semua {
+		if p.IsParent {
+			bertandaInduk = append(bertandaInduk, p)
+		}
+	}
+	if len(bertandaInduk) != 1 || bertandaInduk[0].EmailDomain != entity.ParentCompanyDomain {
+		t.Fatalf("yang bertanda induk di daftar perusahaan: %+v, harap tepat satu dengan domain %s", bertandaInduk, entity.ParentCompanyDomain)
+	}
+	induk := bertandaInduk[0]
+
+	if kode := ubah(induk.ID, induk.Name, induk.EmailDomain, false); kode != http.StatusBadRequest {
+		t.Errorf("mencabut tanda internal induk: dapat %d, harap 400", kode)
+	}
+	if kode := ubah(induk.ID, induk.Name, "induk-pindah.example", true); kode != http.StatusBadRequest {
+		t.Errorf("mengubah domain induk: dapat %d, harap 400", kode)
+	}
+	if kode := panggil(t, admin, http.MethodDelete, alamat+"/"+induk.ID, nil).Code; kode != http.StatusBadRequest {
+		t.Errorf("menghapus induk: dapat %d, harap 400", kode)
+	}
+	// Yang dikunci hanya tanda internal dan domainnya; nama tetap boleh diubah.
+	if kode := ubah(induk.ID, induk.Name+" (Persero)", induk.EmailDomain, true); kode != http.StatusOK {
+		t.Errorf("mengubah nama induk: dapat %d, harap 200", kode)
+	}
+	if kode := ubah(induk.ID, induk.Name, induk.EmailDomain, true); kode != http.StatusOK {
+		t.Errorf("mengembalikan nama induk: dapat %d, harap 200", kode)
+	}
+	// Dibaca langsung dari database, supaya induk yang terhapus pun terlihat.
+	var kini struct {
+		EmailDomain string
+		IsInternal  bool
+		Dihapus     bool
+	}
+	dbTes.Raw("SELECT email_domain, is_internal, deleted_at IS NOT NULL AS dihapus FROM companies WHERE id = ?", induk.ID).Scan(&kini)
+	if kini.EmailDomain != induk.EmailDomain || !kini.IsInternal || kini.Dihapus {
+		t.Errorf("induk setelah semua percobaan: %+v, harap domain %s, internal, tidak dihapus", kini, induk.EmailDomain)
+	}
+
+	w = panggil(t, admin, http.MethodPost, alamat, map[string]any{"name": "PT Bebas Uji", "email_domain": "bebas-uji.example", "is_internal": true})
+	harapKode(t, w, http.StatusCreated, "membuat perusahaan lain")
+	var lain perusahaan
+	isiData(t, w, &lain)
+	if lain.IsParent {
+		t.Error("perusahaan lain bertanda induk")
+	}
+	if kode := ubah(lain.ID, lain.Name, "bebas-uji-2.example", false); kode != http.StatusOK {
+		t.Errorf("mengubah domain dan tanda internal perusahaan lain: dapat %d, harap 200", kode)
+	}
+	if p := baca(lain.ID); p.IsInternal || p.EmailDomain != "bebas-uji-2.example" {
+		t.Errorf("perusahaan lain setelah diubah: %+v", p)
+	}
+	harapKode(t, panggil(t, admin, http.MethodDelete, alamat+"/"+lain.ID, nil), http.StatusOK, "menghapus perusahaan lain")
 }

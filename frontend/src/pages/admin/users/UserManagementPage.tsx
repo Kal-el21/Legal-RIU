@@ -128,31 +128,32 @@ export default function UserManagementPage() {
   const createRole = createForm.watch('role')
   const editRole = editForm.watch('role')
 
-  const getDefaultCompanyForRole = (role: string) => {
+  const parentCompany = companies.find((c) => c.is_parent)
+  const legalCompanyNote = `Role Legal selalu terdaftar di ${parentCompany?.name ?? 'perusahaan induk'}.`
+
+  // Perusahaan mengikuti peran: LEGAL selalu di induk, LEGAL_AU wajib di anak
+  // usaha, EXTERNAL tanpa perusahaan. Server memeriksa aturan yang sama.
+  const companyForRole = (role: string, current = '') => {
     if (role === 'EXTERNAL') return ''
-    const riu = companies.find((c) => c.email_domain === 'indonesiare.co.id')
-    return riu?.id || companies[0]?.id || ''
+    if (role === 'LEGAL') return parentCompany?.id || ''
+    if (role === 'LEGAL_AU') return current === parentCompany?.id ? '' : current
+    return current || parentCompany?.id || companies[0]?.id || ''
   }
 
+  const companyOptionsFor = (role: string) =>
+    role === 'LEGAL_AU' ? companyOptions.filter((company) => company.value !== parentCompany?.id) : companyOptions
+
   const handleCreateRoleChange = (role: string) => {
-    if (role === 'EXTERNAL') {
-      createForm.setValue('company_id', '')
-    } else if (!createForm.getValues('company_id')) {
-      createForm.setValue('company_id', getDefaultCompanyForRole(role))
-    }
+    createForm.setValue('company_id', companyForRole(role, createForm.getValues('company_id')))
   }
 
   const handleEditRoleChange = (role: string) => {
-    if (role === 'EXTERNAL') {
-      editForm.setValue('company_id', '')
-    } else if (!editForm.getValues('company_id')) {
-      editForm.setValue('company_id', getDefaultCompanyForRole(role))
-    }
+    editForm.setValue('company_id', companyForRole(role, editForm.getValues('company_id')))
   }
 
   const openEdit = (user: User) => {
     setSelected(user)
-    editForm.reset({ full_name: user.full_name, position: user.position, division: user.division_id || user.division, role: user.role, company_id: user.company_id, purpose_type_id: user.purpose_type_id })
+    editForm.reset({ full_name: user.full_name, position: user.position, division: user.division_id || user.division, role: user.role, company_id: companyForRole(user.role, user.company_id), purpose_type_id: user.purpose_type_id })
     setModal('edit')
   }
 
@@ -167,7 +168,7 @@ export default function UserManagementPage() {
     setModal('permissions')
   }
 
-  const closeModal = () => { setModal(null); setSelected(null); createForm.reset({ role: 'USER', company_id: getDefaultCompanyForRole('USER') }) }
+  const closeModal = () => { setModal(null); setSelected(null); createForm.reset({ role: 'USER', company_id: companyForRole('USER') }) }
 
   const onCreateSubmit = async (data: CreateForm) => {
     await createMutation.mutateAsync(data)
@@ -409,7 +410,8 @@ export default function UserManagementPage() {
                   )}
                 />
               </Field>
-              {createRole !== 'EXTERNAL' && (
+              {createRole === 'LEGAL' && <p className="text-xs text-gray-500">{legalCompanyNote}</p>}
+              {createRole !== 'EXTERNAL' && createRole !== 'LEGAL' && (
                 <Field label="Perusahaan" error={createForm.formState.errors.company_id?.message}>
                   <Controller
                     name="company_id"
@@ -418,7 +420,7 @@ export default function UserManagementPage() {
                       <Select onValueChange={field.onChange} value={field.value}>
                         <SelectTrigger><SelectValue placeholder="Pilih perusahaan" /></SelectTrigger>
                         <SelectContent>
-                          {companyOptions.map((company) => <SelectItem key={company.value} value={company.value}>{company.label}</SelectItem>)}
+                          {companyOptionsFor(createRole).map((company) => <SelectItem key={company.value} value={company.value}>{company.label}</SelectItem>)}
                         </SelectContent>
                       </Select>
                     )}
@@ -498,7 +500,8 @@ export default function UserManagementPage() {
                   )}
                 />
               </Field>
-              {editRole !== 'EXTERNAL' && (
+              {editRole === 'LEGAL' && <p className="text-xs text-gray-500">{legalCompanyNote}</p>}
+              {editRole !== 'EXTERNAL' && editRole !== 'LEGAL' && (
                 <Field label="Perusahaan" error={editForm.formState.errors.company_id?.message}>
                   <Controller
                     name="company_id"
@@ -507,7 +510,7 @@ export default function UserManagementPage() {
                       <Select onValueChange={field.onChange} value={field.value}>
                         <SelectTrigger><SelectValue placeholder="Pilih perusahaan" /></SelectTrigger>
                         <SelectContent>
-                          {companyOptions.map((company) => <SelectItem key={company.value} value={company.value}>{company.label}</SelectItem>)}
+                          {companyOptionsFor(editRole).map((company) => <SelectItem key={company.value} value={company.value}>{company.label}</SelectItem>)}
                         </SelectContent>
                       </Select>
                     )}

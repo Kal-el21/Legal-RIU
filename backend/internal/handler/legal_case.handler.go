@@ -28,22 +28,33 @@ func NewLegalCaseHandler(svc service.LegalCaseService, auditLogSvc service.Audit
 	return &LegalCaseHandler{svc: svc, auditLogSvc: auditLogSvc, userRepo: userRepo}
 }
 
-func (h *LegalCaseHandler) getCompanyID(c *gin.Context) *uuid.UUID {
-	userID := middleware.GetUserID(c)
-	user, err := h.userRepo.FindByID(mustParseUUID(userID))
+// companyScope mengembalikan perusahaan yang membatasi si pemanggil, atau nil
+// kalau ia tidak dibatasi (ia ADMIN, perusahaannya internal, atau ia tidak
+// terikat perusahaan). Kalau data usernya tidak bisa dibaca, permintaan
+// ditolak; tidak dianggap "tidak dibatasi".
+func (h *LegalCaseHandler) companyScope(c *gin.Context) (*uuid.UUID, bool) {
+	return companyScope(c, h.userRepo)
+}
+
+// Dipakai juga oleh Repositori Dokumen, yang menampilkan dokumen perkara.
+func companyScope(c *gin.Context, userRepo repository.UserRepository) (*uuid.UUID, bool) {
+	user, err := userRepo.FindByID(mustParseUUID(middleware.GetUserID(c)))
 	if err != nil {
-		return nil
+		utils.Forbidden(c, "Data pengguna tidak dapat dibaca")
+		return nil, false
 	}
-	if user.CompanyID == nil {
-		return nil
+	// ADMIN mengelola seluruh sistem, di perusahaan mana pun ia terdaftar.
+	if user.Role == entity.RoleAdmin || user.CompanyID == nil || user.Company.IsInternal {
+		return nil, true
 	}
-	if user.Company.IsInternal {
-		return nil
-	}
-	return user.CompanyID
+	return user.CompanyID, true
 }
 
 func (h *LegalCaseHandler) GetAll(c *gin.Context) {
+	scope, ok := h.companyScope(c)
+	if !ok {
+		return
+	}
 	var query dto.LegalCaseListQuery
 	if err := c.ShouldBindQuery(&query); err != nil {
 		utils.BadRequest(c, "Query tidak valid", err.Error())
@@ -56,8 +67,7 @@ func (h *LegalCaseHandler) GetAll(c *gin.Context) {
 		query.Limit = 10
 	}
 
-	companyID := h.getCompanyID(c)
-	items, total, err := h.svc.GetAll(companyID, query)
+	items, total, err := h.svc.GetAll(scope, query)
 	if err != nil {
 		utils.BadRequest(c, err.Error(), nil)
 		return
@@ -73,8 +83,11 @@ func (h *LegalCaseHandler) GetAll(c *gin.Context) {
 }
 
 func (h *LegalCaseHandler) GetLatest(c *gin.Context) {
-	companyID := h.getCompanyID(c)
-	legalCase, err := h.svc.GetLatest(companyID)
+	scope, ok := h.companyScope(c)
+	if !ok {
+		return
+	}
+	legalCase, err := h.svc.GetLatest(scope)
 	if err != nil {
 		utils.OK(c, "Success", nil)
 		return
@@ -83,8 +96,11 @@ func (h *LegalCaseHandler) GetLatest(c *gin.Context) {
 }
 
 func (h *LegalCaseHandler) GetByID(c *gin.Context) {
-	companyID := h.getCompanyID(c)
-	legalCase, err := h.svc.GetByID(companyID, c.Param("id"))
+	scope, ok := h.companyScope(c)
+	if !ok {
+		return
+	}
+	legalCase, err := h.svc.GetByID(scope, c.Param("id"))
 	if err != nil {
 		utils.NotFound(c, err.Error())
 		return
@@ -93,23 +109,17 @@ func (h *LegalCaseHandler) GetByID(c *gin.Context) {
 }
 
 func (h *LegalCaseHandler) Create(c *gin.Context) {
+	scope, ok := h.companyScope(c)
+	if !ok {
+		return
+	}
 	var req dto.CreateLegalCaseRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "Validasi gagal", err.Error())
 		return
 	}
 
-	userID := middleware.GetUserID(c)
-	user, err := h.userRepo.FindByID(mustParseUUID(userID))
-	if err != nil {
-		utils.BadRequest(c, "User tidak ditemukan", nil)
-		return
-	}
-	if user.CompanyID != nil && user.Company.IsInternal {
-		req.CompanyID = user.CompanyID.String()
-	}
-
-	legalCase, err := h.svc.Create(user.CompanyID, req)
+	legalCase, err := h.svc.Create(scope, req)
 	if err != nil {
 		utils.BadRequest(c, err.Error(), nil)
 		return
@@ -121,13 +131,17 @@ func (h *LegalCaseHandler) Create(c *gin.Context) {
 }
 
 func (h *LegalCaseHandler) Update(c *gin.Context) {
+	scope, ok := h.companyScope(c)
+	if !ok {
+		return
+	}
 	var req dto.UpdateLegalCaseRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "Validasi gagal", err.Error())
 		return
 	}
 
-	legalCase, err := h.svc.Update(c.Param("id"), req)
+	legalCase, err := h.svc.Update(scope, c.Param("id"), req)
 	if err != nil {
 		utils.BadRequest(c, err.Error(), nil)
 		return
@@ -139,8 +153,12 @@ func (h *LegalCaseHandler) Update(c *gin.Context) {
 }
 
 func (h *LegalCaseHandler) Delete(c *gin.Context) {
+	scope, ok := h.companyScope(c)
+	if !ok {
+		return
+	}
 	id := c.Param("id")
-	if err := h.svc.Delete(id); err != nil {
+	if err := h.svc.Delete(scope, id); err != nil {
 		utils.BadRequest(c, err.Error(), nil)
 		return
 	}
@@ -150,6 +168,10 @@ func (h *LegalCaseHandler) Delete(c *gin.Context) {
 }
 
 func (h *LegalCaseHandler) UploadDocument(c *gin.Context) {
+	scope, ok := h.companyScope(c)
+	if !ok {
+		return
+	}
 	id := c.Param("id")
 
 	file, err := c.FormFile("document")
@@ -158,7 +180,7 @@ func (h *LegalCaseHandler) UploadDocument(c *gin.Context) {
 		return
 	}
 
-	legalCase, err := h.svc.UploadDocument(id, file)
+	legalCase, err := h.svc.UploadDocument(scope, id, file)
 	if err != nil {
 		utils.BadRequest(c, err.Error(), nil)
 		return
@@ -170,6 +192,10 @@ func (h *LegalCaseHandler) UploadDocument(c *gin.Context) {
 }
 
 func (h *LegalCaseHandler) UploadPhoto(c *gin.Context) {
+	scope, ok := h.companyScope(c)
+	if !ok {
+		return
+	}
 	id := c.Param("id")
 
 	file, err := c.FormFile("photo")
@@ -178,7 +204,7 @@ func (h *LegalCaseHandler) UploadPhoto(c *gin.Context) {
 		return
 	}
 
-	legalCase, err := h.svc.UploadPhoto(id, file)
+	legalCase, err := h.svc.UploadPhoto(scope, id, file)
 	if err != nil {
 		utils.BadRequest(c, err.Error(), nil)
 		return
@@ -190,9 +216,13 @@ func (h *LegalCaseHandler) UploadPhoto(c *gin.Context) {
 }
 
 func (h *LegalCaseHandler) DeletePhoto(c *gin.Context) {
+	scope, ok := h.companyScope(c)
+	if !ok {
+		return
+	}
 	id := c.Param("id")
 
-	legalCase, err := h.svc.DeletePhoto(id)
+	legalCase, err := h.svc.DeletePhoto(scope, id)
 	if err != nil {
 		utils.BadRequest(c, err.Error(), nil)
 		return
@@ -204,6 +234,10 @@ func (h *LegalCaseHandler) DeletePhoto(c *gin.Context) {
 }
 
 func (h *LegalCaseHandler) ImportChronologies(c *gin.Context) {
+	scope, ok := h.companyScope(c)
+	if !ok {
+		return
+	}
 	id := c.Param("id")
 
 	file, err := c.FormFile("file")
@@ -212,7 +246,7 @@ func (h *LegalCaseHandler) ImportChronologies(c *gin.Context) {
 		return
 	}
 
-	result, err := h.svc.ImportChronologies(id, file)
+	result, err := h.svc.ImportChronologies(scope, id, file)
 	if err != nil {
 		utils.BadRequest(c, err.Error(), nil)
 		return
@@ -236,13 +270,17 @@ func (h *LegalCaseHandler) DownloadChronologyTemplate(c *gin.Context) {
 }
 
 func (h *LegalCaseHandler) ViewFile(c *gin.Context) {
+	scope, ok := h.companyScope(c)
+	if !ok {
+		return
+	}
 	filePath := c.Query("path")
 	if filePath == "" {
 		utils.BadRequest(c, "Path file diperlukan", nil)
 		return
 	}
 
-	obj, contentType, err := h.svc.ViewFile(filePath)
+	obj, contentType, err := h.svc.ViewFile(scope, filePath)
 	if err != nil {
 		utils.BadRequest(c, err.Error(), nil)
 		return
@@ -255,9 +293,13 @@ func (h *LegalCaseHandler) ViewFile(c *gin.Context) {
 }
 
 func (h *LegalCaseHandler) DeleteDocument(c *gin.Context) {
+	scope, ok := h.companyScope(c)
+	if !ok {
+		return
+	}
 	id := c.Param("id")
 
-	legalCase, err := h.svc.DeleteDocument(id)
+	legalCase, err := h.svc.DeleteDocument(scope, id)
 	if err != nil {
 		utils.BadRequest(c, err.Error(), nil)
 		return
@@ -269,7 +311,11 @@ func (h *LegalCaseHandler) DeleteDocument(c *gin.Context) {
 }
 
 func (h *LegalCaseHandler) ListChronologies(c *gin.Context) {
-	items, err := h.svc.ListChronologies(c.Param("id"))
+	scope, ok := h.companyScope(c)
+	if !ok {
+		return
+	}
+	items, err := h.svc.ListChronologies(scope, c.Param("id"))
 	if err != nil {
 		utils.BadRequest(c, err.Error(), nil)
 		return
@@ -278,12 +324,16 @@ func (h *LegalCaseHandler) ListChronologies(c *gin.Context) {
 }
 
 func (h *LegalCaseHandler) CreateChronology(c *gin.Context) {
+	scope, ok := h.companyScope(c)
+	if !ok {
+		return
+	}
 	req, files, ok := bindChronologyRequest(c)
 	if !ok {
 		return
 	}
 
-	chronology, err := h.svc.CreateChronology(c.Param("id"), req, files)
+	chronology, err := h.svc.CreateChronology(scope, c.Param("id"), req, files)
 	if err != nil {
 		utils.BadRequest(c, err.Error(), nil)
 		return
@@ -295,12 +345,16 @@ func (h *LegalCaseHandler) CreateChronology(c *gin.Context) {
 }
 
 func (h *LegalCaseHandler) UpdateChronology(c *gin.Context) {
+	scope, ok := h.companyScope(c)
+	if !ok {
+		return
+	}
 	req, files, ok := bindChronologyRequest(c)
 	if !ok {
 		return
 	}
 
-	chronology, err := h.svc.UpdateChronology(c.Param("id"), c.Param("chronId"), req, files)
+	chronology, err := h.svc.UpdateChronology(scope, c.Param("id"), c.Param("chronId"), req, files)
 	if err != nil {
 		utils.BadRequest(c, err.Error(), nil)
 		return
@@ -312,7 +366,11 @@ func (h *LegalCaseHandler) UpdateChronology(c *gin.Context) {
 }
 
 func (h *LegalCaseHandler) DeleteChronology(c *gin.Context) {
-	if err := h.svc.DeleteChronology(c.Param("id"), c.Param("chronId")); err != nil {
+	scope, ok := h.companyScope(c)
+	if !ok {
+		return
+	}
+	if err := h.svc.DeleteChronology(scope, c.Param("id"), c.Param("chronId")); err != nil {
 		utils.BadRequest(c, err.Error(), nil)
 		return
 	}
@@ -323,13 +381,17 @@ func (h *LegalCaseHandler) DeleteChronology(c *gin.Context) {
 }
 
 func (h *LegalCaseHandler) Download(c *gin.Context) {
+	scope, ok := h.companyScope(c)
+	if !ok {
+		return
+	}
 	filePath := c.Query("path")
 	if filePath == "" {
 		utils.BadRequest(c, "Path file diperlukan", nil)
 		return
 	}
 
-	obj, err := h.svc.DownloadFile(filePath)
+	obj, err := h.svc.DownloadFile(scope, filePath)
 	if err != nil {
 		utils.BadRequest(c, err.Error(), nil)
 		return
@@ -512,6 +574,10 @@ func (h *LegalCaseHandler) DownloadRegencyTemplate(c *gin.Context) {
 }
 
 func (h *LegalCaseHandler) UpdateStatus(c *gin.Context) {
+	scope, ok := h.companyScope(c)
+	if !ok {
+		return
+	}
 	id := c.Param("id")
 	var body struct {
 		Status string `json:"current_status" binding:"required"`
@@ -521,18 +587,13 @@ func (h *LegalCaseHandler) UpdateStatus(c *gin.Context) {
 		return
 	}
 
-	companyID := h.getCompanyID(c)
-	legalCase, err := h.svc.GetByID(companyID, id)
-	if err != nil {
+	// Perkara yang tidak ada dan perkara perusahaan lain dijawab sama.
+	if _, err := h.svc.GetByID(scope, id); err != nil {
 		utils.NotFound(c, err.Error())
 		return
 	}
-	if companyID != nil && legalCase.CompanyID != companyID.String() {
-		utils.Forbidden(c, "Anda tidak memiliki akses ke kasus ini")
-		return
-	}
 
-	if err := h.svc.UpdateStatus(id, body.Status); err != nil {
+	if err := h.svc.UpdateStatus(scope, id, body.Status); err != nil {
 		utils.BadRequest(c, err.Error(), nil)
 		return
 	}
@@ -582,14 +643,23 @@ func mustParseUUID(value string) uuid.UUID {
 }
 
 func (h *LegalCaseHandler) GeneratePDF(c *gin.Context) {
+	scope, ok := h.companyScope(c)
+	if !ok {
+		return
+	}
 	id := c.Param("id")
-	pdfData, err := h.svc.GeneratePDF(id)
+	// Dicek dulu supaya perkara yang tidak ada atau milik perusahaan lain
+	// dijawab 404, bukan 500.
+	lc, err := h.svc.GetByID(scope, id)
+	if err != nil {
+		utils.NotFound(c, err.Error())
+		return
+	}
+	pdfData, err := h.svc.GeneratePDF(scope, id)
 	if err != nil {
 		utils.InternalError(c, err.Error())
 		return
 	}
-
-	lc, _ := h.svc.GetByID(h.getCompanyID(c), id)
 
 	c.DataFromReader(-1, -1, "application/pdf", bytes.NewReader(pdfData), map[string]string{
 		"Content-Disposition": fmt.Sprintf(`attachment; filename="legal-case-%s.pdf"`, lc.ID),

@@ -21,7 +21,8 @@ DELETE /api/v1/external/legal-cases/:id/document: EXTERNAL
 DELETE /api/v1/external/legal-cases/:id/photo: EXTERNAL
 DELETE /api/v1/external/legal-cases/cedants/:id: -
 DELETE /api/v1/legal-au/cases/:id/chronology/:chronId: LEGAL_AU
-DELETE /api/v1/legal-au/cases/:id/photo: -
+DELETE /api/v1/legal-au/cases/:id/document: LEGAL_AU
+DELETE /api/v1/legal-au/cases/:id/photo: LEGAL_AU
 DELETE /api/v1/legal-au/materials/:id: LEGAL_AU
 DELETE /api/v1/legal-cases/:id: -
 DELETE /api/v1/legal-cases/:id/chronology/:chronId: -
@@ -138,8 +139,11 @@ GET /api/v1/external/legal-cases/regencies/import/template: -
 GET /api/v1/legal-au/cases: LEGAL_AU
 GET /api/v1/legal-au/cases/:id: LEGAL_AU
 GET /api/v1/legal-au/cases/:id/pdf: LEGAL_AU
+GET /api/v1/legal-au/cases/cedants: LEGAL_AU
 GET /api/v1/legal-au/cases/chronology/template: LEGAL_AU
+GET /api/v1/legal-au/cases/download: LEGAL_AU
 GET /api/v1/legal-au/cases/file: LEGAL_AU
+GET /api/v1/legal-au/cases/regencies: LEGAL_AU
 GET /api/v1/legal-au/materials: LEGAL_AU
 GET /api/v1/legal-au/materials/:id: LEGAL_AU
 GET /api/v1/legal-cases: -
@@ -261,9 +265,11 @@ POST /api/v1/external/legal-cases/:id/upload-document: EXTERNAL
 POST /api/v1/external/legal-cases/cedants: -
 POST /api/v1/external/legal-cases/cedants/import: -
 POST /api/v1/external/legal-cases/regencies/import: -
+POST /api/v1/legal-au/cases: LEGAL_AU
 POST /api/v1/legal-au/cases/:id/chronology: LEGAL_AU
 POST /api/v1/legal-au/cases/:id/chronology/import: LEGAL_AU
-POST /api/v1/legal-au/cases/:id/photo: -
+POST /api/v1/legal-au/cases/:id/photo: LEGAL_AU
+POST /api/v1/legal-au/cases/:id/upload-document: LEGAL_AU
 POST /api/v1/legal-au/materials: LEGAL_AU
 POST /api/v1/legal-cases: -
 POST /api/v1/legal-cases/:id/chronology: -

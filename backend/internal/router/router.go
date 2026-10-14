@@ -85,7 +85,7 @@ func New(cfg *config.Config, db *gorm.DB, store *storage.MinIOClient) (*gin.Engi
 	materialHandler := handler.NewLegalMaterialHandler(materialSvc)
 	permissionHandler := handler.NewPermissionHandler(permissionSvc)
 	reportHandler := handler.NewReportHandler(reportSvc)
-	documentRepositoryHandler := handler.NewRepositoryDocumentHandler(documentRepositorySvc)
+	documentRepositoryHandler := handler.NewRepositoryDocumentHandler(documentRepositorySvc, userRepo)
 
 	// ── Gin ──────────────────────────────────────────────────────────────────
 	if cfg.App.Env == "production" {
@@ -363,6 +363,10 @@ func New(cfg *config.Config, db *gorm.DB, store *storage.MinIOClient) (*gin.Engi
 	legalAU.Use(middleware.AuthMiddleware(cfg), middleware.PermissionContextMiddleware(permissionSvc), middleware.RoleMiddleware("LEGAL_AU"), middleware.AuditMiddleware(auditLogSvc), middleware.CSRFProtection())
 
 	legalAU.GET("/cases", requirePermission("case_management.view"), legalCaseHandler.GetAll)
+	legalAU.POST("/cases", requirePermission("case_management.create"), legalCaseHandler.Create)
+	// Daftar pilihan yang dimuat form perkara
+	legalAU.GET("/cases/regencies", requirePermission("case_management.view", "case_management.create"), legalCaseHandler.ListRegencies)
+	legalAU.GET("/cases/cedants", requirePermission("case_management.view", "case_management.create"), legalCaseHandler.ListCedants)
 	legalAU.GET("/cases/:id", requirePermission("case_management.view"), legalCaseHandler.GetByID)
 	legalAU.PATCH("/cases/:id/status", requirePermission("case_management.update_status"), legalCaseHandler.UpdateStatus)
 	legalAU.POST("/cases/:id/chronology", requirePermission("case_management.manage_chronology"), legalCaseHandler.CreateChronology)
@@ -370,6 +374,9 @@ func New(cfg *config.Config, db *gorm.DB, store *storage.MinIOClient) (*gin.Engi
 	legalAU.DELETE("/cases/:id/chronology/:chronId", requirePermission("case_management.manage_chronology"), legalCaseHandler.DeleteChronology)
 	legalAU.POST("/cases/:id/chronology/import", requirePermission("case_management.manage_chronology"), legalCaseHandler.ImportChronologies)
 	legalAU.GET("/cases/chronology/template", requirePermission("case_management.view"), legalCaseHandler.DownloadChronologyTemplate)
+	legalAU.POST("/cases/:id/upload-document", requirePermission("case_management.manage_document"), legalCaseHandler.UploadDocument)
+	legalAU.DELETE("/cases/:id/document", requirePermission("case_management.manage_document"), legalCaseHandler.DeleteDocument)
+	legalAU.GET("/cases/download", requirePermission("case_management.view", "case_management.manage_document"), legalCaseHandler.Download)
 	legalAU.POST("/cases/:id/photo", requirePermission("case_management.manage_document"), legalCaseHandler.UploadPhoto)
 	legalAU.DELETE("/cases/:id/photo", requirePermission("case_management.manage_document"), legalCaseHandler.DeletePhoto)
 	legalAU.GET("/cases/file", requirePermission("case_management.view"), legalCaseHandler.ViewFile)
