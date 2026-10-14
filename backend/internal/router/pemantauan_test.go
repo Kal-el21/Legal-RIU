@@ -416,17 +416,23 @@ func TestLaporan(t *testing.T) {
 	kelompok := map[string][]string{
 		"legal-opinions":   {"company", "legal_type", "status", "division"},
 		"document-reviews": {"company", "document_type", "status", "division"},
-		"legal-cases":      {"company", "status", "level", "location", "pic"},
+		"legal-cases":      {"company", "case_type", "category", "status", "level", "location", "pic"},
 	}
 	for laporan, daftar := range kelompok {
 		for _, k := range daftar {
 			ambil(admin, "/api/v1/admin/reports/"+laporan+"?group_by="+k)
 		}
 	}
+	// Tabel jenis dan kategori kasus punya kolom bernama label, sama dengan nama
+	// kolom bulan di laporan. Pengelompokannya harus tetap per bulan: jumlah
+	// perkaranya sama dengan pengelompokan lain.
 	t.Run("PerkaraPerJenisDanKategori", func(t *testing.T) {
-		bugDiketahui(t, "laporan perkara dengan group_by=case_type atau category gagal dengan error SQL (kolom label milik tabel rujukan bentrok dengan alias label di GROUP BY)")
+		buatPerkara(t, legal)
+		harap := ambil(admin, "/api/v1/admin/reports/legal-cases?group_by=status").jumlah()
 		for _, k := range []string{"case_type", "category"} {
-			ambil(admin, "/api/v1/admin/reports/legal-cases?group_by="+k)
+			if got := ambil(admin, "/api/v1/admin/reports/legal-cases?group_by="+k).jumlah(); got != harap {
+				t.Errorf("laporan perkara per %s: jumlah %v, harap %v seperti per status", k, got, harap)
+			}
 		}
 	})
 
@@ -498,6 +504,21 @@ func TestAuditLog(t *testing.T) {
 
 	// LEGAL membaca audit log lewat alamatnya sendiri; USER tidak punya alamat itu.
 	harapKode(t, panggil(t, legal, http.MethodGet, "/api/v1/legal/audit-logs", nil), http.StatusOK, "LEGAL membaca audit log")
+}
+
+// Audit log dengan page dan limit yang tidak masuk akal tetap dijawab, dengan
+// nilai bawaan, bukan 500 karena pembagian dengan nol.
+func TestAuditLogLimitTidakWajar(t *testing.T) {
+	admin := masukPeran(t, entity.RoleAdmin)
+	legal := masukPeran(t, entity.RoleLegal)
+	for _, k := range []struct{ token, alamat string }{
+		{admin, "/api/v1/admin/audit-logs"},
+		{legal, "/api/v1/legal/audit-logs"},
+	} {
+		for _, q := range []string{"?limit=0", "?limit=-5", "?limit=abc", "?page=0&limit=0"} {
+			harapKode(t, panggil(t, k.token, http.MethodGet, k.alamat+q, nil), http.StatusOK, k.alamat+q)
+		}
+	}
 }
 
 // Repositori dokumen mengumpulkan file dari modul lain.

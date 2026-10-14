@@ -121,7 +121,7 @@ func New(cfg *config.Config, db *gorm.DB, store *storage.MinIOClient) (*gin.Engi
 
 	// ── Protected ─────────────────────────────────────────────────────────────
 	protected := api.Group("")
-	protected.Use(middleware.AuthMiddleware(cfg), middleware.PermissionContextMiddleware(permissionSvc), middleware.AuditMiddleware(auditLogSvc), middleware.CSRFProtection())
+	protected.Use(middleware.AuthMiddleware(cfg, userRepo), middleware.PermissionContextMiddleware(permissionSvc), middleware.AuditMiddleware(auditLogSvc), middleware.CSRFProtection())
 
 	protected.GET("/auth/me", authHandler.Me)
 	protected.GET("/auth/permissions", authHandler.Permissions)
@@ -194,7 +194,7 @@ func New(cfg *config.Config, db *gorm.DB, store *storage.MinIOClient) (*gin.Engi
 
 	// ── Admin only ─────────────────────────────────────────────────────────────
 	admin := api.Group("/admin")
-	admin.Use(middleware.AuthMiddleware(cfg), middleware.PermissionContextMiddleware(permissionSvc), middleware.RoleMiddleware("ADMIN"), middleware.AuditMiddleware(auditLogSvc), middleware.CSRFProtection())
+	admin.Use(middleware.AuthMiddleware(cfg, userRepo), middleware.PermissionContextMiddleware(permissionSvc), middleware.RoleMiddleware("ADMIN"), middleware.AuditMiddleware(auditLogSvc), middleware.CSRFProtection())
 
 	admin.GET("/dashboard/stats", dashHandler.AdminStats)
 	admin.GET("/dashboard/recent", dashHandler.AdminRecent)
@@ -298,6 +298,7 @@ func New(cfg *config.Config, db *gorm.DB, store *storage.MinIOClient) (*gin.Engi
 	admin.GET("/users/:id/permissions", requirePermission("user_management.manage_permissions"), permissionHandler.GetUserAccess)
 	admin.PUT("/users/:id/permissions", requirePermission("user_management.manage_permissions"), permissionHandler.UpdateUserAccess)
 	admin.PUT("/users/:id", userHandler.Update)
+	admin.DELETE("/users/:id", requirePermission("user_management.delete"), userHandler.Delete)
 	admin.PATCH("/users/:id/status", userHandler.UpdateStatus)
 	admin.POST("/users/:id/reset-password", userHandler.ResetPassword)
 
@@ -311,7 +312,7 @@ func New(cfg *config.Config, db *gorm.DB, store *storage.MinIOClient) (*gin.Engi
 
 	// ── Legal ─────────────────────────────────────────────────────────────────
 	legal := api.Group("/legal")
-	legal.Use(middleware.AuthMiddleware(cfg), middleware.PermissionContextMiddleware(permissionSvc), middleware.RoleMiddleware("LEGAL"), middleware.AuditMiddleware(auditLogSvc), middleware.CSRFProtection())
+	legal.Use(middleware.AuthMiddleware(cfg, userRepo), middleware.PermissionContextMiddleware(permissionSvc), middleware.RoleMiddleware("LEGAL"), middleware.AuditMiddleware(auditLogSvc), middleware.CSRFProtection())
 
 	legal.GET("/dashboard/stats", requirePermission("dashboard.legal.view"), dashHandler.LegalStats)
 	legal.GET("/dashboard/recent", requirePermission("dashboard.legal.view"), dashHandler.LegalRecent)
@@ -354,7 +355,7 @@ func New(cfg *config.Config, db *gorm.DB, store *storage.MinIOClient) (*gin.Engi
 
 	// ─── Legal AU ─────────────────────────────────────────────────────────────
 	legalAU := api.Group("/legal-au")
-	legalAU.Use(middleware.AuthMiddleware(cfg), middleware.PermissionContextMiddleware(permissionSvc), middleware.RoleMiddleware("LEGAL_AU"), middleware.AuditMiddleware(auditLogSvc), middleware.CSRFProtection())
+	legalAU.Use(middleware.AuthMiddleware(cfg, userRepo), middleware.PermissionContextMiddleware(permissionSvc), middleware.RoleMiddleware("LEGAL_AU"), middleware.AuditMiddleware(auditLogSvc), middleware.CSRFProtection())
 
 	legalAU.GET("/cases", requirePermission("case_management.view"), legalCaseHandler.GetAll)
 	legalAU.POST("/cases", requirePermission("case_management.create"), legalCaseHandler.Create)
@@ -384,13 +385,13 @@ func New(cfg *config.Config, db *gorm.DB, store *storage.MinIOClient) (*gin.Engi
 
 	// ─── External ─────────────────────────────────────────────────────────────
 	external := api.Group("/external")
-	external.Use(middleware.AuthMiddleware(cfg), middleware.PermissionContextMiddleware(permissionSvc), middleware.RoleMiddleware("EXTERNAL"), middleware.AuditMiddleware(auditLogSvc), middleware.CSRFProtection())
+	external.Use(middleware.AuthMiddleware(cfg, userRepo), middleware.PermissionContextMiddleware(permissionSvc), middleware.RoleMiddleware("EXTERNAL"), middleware.AuditMiddleware(auditLogSvc), middleware.CSRFProtection())
 
 	registerLegalCaseRoutes(external, legalCaseHandler, requirePermission)
 
 	// ── Public materials ──────────────────────────────────────────────────────
 	protectedMaterials := api.Group("")
-	protectedMaterials.Use(middleware.AuthMiddleware(cfg), middleware.PermissionContextMiddleware(permissionSvc))
+	protectedMaterials.Use(middleware.AuthMiddleware(cfg, userRepo), middleware.PermissionContextMiddleware(permissionSvc))
 	protectedMaterials.GET("/materials", requirePermission("legal_material.view", "legal_material.manage"), materialHandler.GetAll)
 	protectedMaterials.GET("/materials/:id", requirePermission("legal_material.view", "legal_material.manage"), materialHandler.GetByID)
 

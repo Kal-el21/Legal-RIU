@@ -239,6 +239,11 @@ func (s *authService) RefreshToken(req dto.RefreshTokenRequest) (*dto.LoginRespo
 		return nil, errors.New("refresh token tidak valid")
 	}
 
+	// User yang sudah dihapus tidak ikut terbaca (soft delete), jadi relasinya kosong.
+	if storedToken.User.ID == uuid.Nil {
+		_ = s.refreshTokenRepo.RevokeAllByUserID(storedToken.UserID)
+		return nil, errors.New("akun tidak ditemukan")
+	}
 	if storedToken.User.Status == entity.UserInactive {
 		_ = s.refreshTokenRepo.RevokeAllByUserID(storedToken.UserID)
 		return nil, errors.New("akun anda tidak aktif, hubungi administrator")

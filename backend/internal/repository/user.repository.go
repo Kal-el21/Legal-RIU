@@ -12,6 +12,7 @@ type UserRepository interface {
 	FindByEmail(email string) (*entity.User, error)
 	EmailDeleted(email string) bool
 	FindByID(id uuid.UUID) (*entity.User, error)
+	FindForAuth(id uuid.UUID) (*entity.User, error)
 	Create(user *entity.User) error
 	Update(user *entity.User) error
 	FindAll(page, limit int, search string) ([]entity.User, int64, error)
@@ -57,6 +58,17 @@ func (r *userRepository) EmailDeleted(email string) bool {
 		Where("LOWER(email) = LOWER(?) AND deleted_at IS NOT NULL", email).
 		Count(&count)
 	return count > 0
+}
+
+// FindForAuth hanya membaca kolom yang dibutuhkan pemeriksaan login, tanpa
+// relasi, karena dipanggil di setiap permintaan.
+func (r *userRepository) FindForAuth(id uuid.UUID) (*entity.User, error) {
+	var user entity.User
+	err := r.db.Select("id", "email", "role", "status").Where("id = ? AND deleted_at IS NULL", id).First(&user).Error
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
 }
 
 func (r *userRepository) FindByID(id uuid.UUID) (*entity.User, error) {
