@@ -2,6 +2,7 @@ package handler
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"mime/multipart"
 	"strconv"
@@ -72,6 +73,10 @@ func (h *LegalOpinionHandler) Create(c *gin.Context) {
 			utils.BadRequest(c, "Gagal memparse request", err.Error())
 			return
 		}
+		if !req.Complete() {
+			utils.BadRequest(c, "Semua field wajib diisi", nil)
+			return
+		}
 		userID := middleware.GetUserID(c)
 		lo, svcErr := h.svc.Create(userID, req, nil)
 		if svcErr != nil {
@@ -98,10 +103,7 @@ func (h *LegalOpinionHandler) Create(c *gin.Context) {
 		Question:          c.PostForm("question"),
 	}
 
-	// Manual validation
-	if req.RequestorName == "" || req.RequestorPosition == "" || req.RequestorDivision == "" ||
-		req.RequestorEmail == "" || req.RequestorPhone == "" || req.LegalType == "" ||
-		req.Title == "" || req.Chronology == "" || req.Question == "" {
+	if !req.Complete() {
 		utils.BadRequest(c, "Semua field wajib diisi", nil)
 		return
 	}
@@ -114,6 +116,10 @@ func (h *LegalOpinionHandler) Create(c *gin.Context) {
 
 	userID := middleware.GetUserID(c)
 	lo, err := h.svc.Create(userID, req, files)
+	if errors.Is(err, service.ErrInvalidFile) {
+		utils.BadRequest(c, err.Error(), nil)
+		return
+	}
 	if err != nil {
 		utils.InternalError(c, err.Error())
 		return
@@ -179,20 +185,6 @@ func (h *LegalOpinionHandler) Resubmit(c *gin.Context) {
 	utils.OK(c, "Pengajuan berhasil diajukan ulang", lo)
 }
 
-// GET /api/v1/legal-opinions/presign?path=xxx
-func (h *LegalOpinionHandler) GetPresignedURL(c *gin.Context) {
-	filePath := c.Query("path")
-	if filePath == "" {
-		utils.BadRequest(c, "Path file diperlukan", nil)
-		return
-	}
-	url, err := h.svc.GetPresignedURL(filePath)
-	if err != nil {
-		utils.InternalError(c, "Gagal membuat URL")
-		return
-	}
-	utils.OK(c, "Success", gin.H{"url": url})
-}
 
 // GET /api/v1/legal-opinions/download?path=xxx
 func (h *LegalOpinionHandler) Download(c *gin.Context) {
@@ -202,7 +194,12 @@ func (h *LegalOpinionHandler) Download(c *gin.Context) {
 		return
 	}
 
-	obj, err := h.svc.DownloadFile(filePath)
+	role := middleware.RoleWithAllAccess(c, "legal_opinion.view.all")
+	obj, err := h.svc.DownloadFile(filePath, middleware.GetUserID(c), role)
+	if errors.Is(err, service.ErrFileNotFound) {
+		utils.NotFound(c, "File tidak ditemukan")
+		return
+	}
 	if err != nil {
 		utils.InternalError(c, "Gagal mengambil file")
 		return

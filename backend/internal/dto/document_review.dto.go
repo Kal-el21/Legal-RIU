@@ -14,6 +14,14 @@ type CreateDocumentReviewRequest struct {
 	AdditionalNote    string `json:"additional_note"`
 }
 
+// Complete memeriksa kolom wajib. Dipakai jalur form maupun JSON, supaya
+// pengajuan kosong tidak bisa tersimpan lewat salah satunya.
+func (r CreateDocumentReviewRequest) Complete() bool {
+	return r.RequestorName != "" && r.RequestorPosition != "" && r.RequestorDivision != "" &&
+		r.RequestorEmail != "" && r.RequestorPhone != "" && r.DocumentName != "" &&
+		r.SecondParty != "" && r.DocumentType != ""
+}
+
 type UpdateDocumentReviewRequest struct {
 	RequestorName     string `json:"requestor_name" binding:"required"`
 	RequestorPosition string `json:"requestor_position" binding:"required"`

@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log"
 	"mime/multipart"
-	"net/url"
 	"path/filepath"
 	"strings"
 	"time"
@@ -21,9 +20,7 @@ import (
 
 type MinIOClient struct {
 	client       *minio.Client
-	publicClient *minio.Client
 	bucket       string
-	expires      time.Duration
 }
 
 const maxUploadSizeBytes = 100 * 1024 * 1024
@@ -66,28 +63,9 @@ func InitMinIO(cfg *config.Config) *MinIOClient {
 		log.Printf("Bucket '%s' created successfully", cfg.MinIO.Bucket)
 	}
 
-	// Create public client for generating presigned URLs
-	var publicClient *minio.Client
-	publicEndpoint := cfg.MinIO.PublicEndpoint
-	if publicEndpoint != "" && publicEndpoint != cfg.MinIO.Endpoint {
-		// endpoint is used as-is (MinIO SDK expects host:port format, no scheme)
-		publicClient, err = minio.New(publicEndpoint, &minio.Options{
-			Creds:  credentials.NewStaticV4(cfg.MinIO.AccessKey, cfg.MinIO.SecretKey, ""),
-			Secure: cfg.MinIO.UseSSL,
-		})
-		if err != nil {
-			log.Printf("Warning: failed to init public MinIO client, falling back to default endpoint: %v", err)
-			publicClient = client
-		}
-	} else {
-		publicClient = client
-	}
-
 	s := &MinIOClient{
 		client:       client,
-		publicClient: publicClient,
 		bucket:       cfg.MinIO.Bucket,
-		expires:      time.Duration(cfg.MinIO.PresignExpiresMinutes) * time.Minute,
 	}
 
 	Storage = s
@@ -97,7 +75,7 @@ func InitMinIO(cfg *config.Config) *MinIOClient {
 
 // UploadFile uploads a file to MinIO and returns the stored path
 func (m *MinIOClient) UploadFile(ctx context.Context, folder string, fileHeader *multipart.FileHeader, customName ...string) (string, string, error) {
-	if err := validateUpload(fileHeader); err != nil {
+	if err := ValidateUpload(fileHeader); err != nil {
 		return "", "", err
 	}
 
@@ -156,7 +134,9 @@ func sanitizeFilename(name string) string {
 	return sanitized
 }
 
-func validateUpload(fileHeader *multipart.FileHeader) error {
+// ValidateUpload memeriksa ukuran dan tipe file tanpa mengunggahnya, supaya
+// pemanggil bisa menolak semua file lebih dulu sebelum menyimpan apa pun.
+func ValidateUpload(fileHeader *multipart.FileHeader) error {
 	if fileHeader == nil {
 		return errors.New("file tidak ditemukan")
 	}
@@ -173,21 +153,6 @@ func validateUpload(fileHeader *multipart.FileHeader) error {
 	}
 
 	return nil
-}
-
-// GetPresignedURL generates a temporary pre-signed URL for file access
-func (m *MinIOClient) GetPresignedURL(ctx context.Context, objectPath string) (string, error) {
-	reqParams := make(url.Values)
-	client := m.client
-	if m.publicClient != nil {
-		client = m.publicClient
-	}
-	presignedURL, err := client.PresignedGetObject(ctx, m.bucket, objectPath, m.expires, reqParams)
-	if err != nil {
-		return "", fmt.Errorf("failed to generate presigned URL: %w", err)
-	}
-
-	return presignedURL.String(), nil
 }
 
 // DeleteFile removes a file from MinIO

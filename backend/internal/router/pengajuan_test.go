@@ -7,6 +7,7 @@ package router
 import (
 	"bytes"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
@@ -292,6 +293,93 @@ func TestBerkasPengajuan(t *testing.T) {
 	}
 }
 
+// Unduh lewat path hanya melayani file yang terdaftar sebagai lampiran atau
+// hasil kajian pengajuan modul itu, dan hanya untuk yang boleh melihat
+// pengajuannya. Selain itu dijawab 404, sama seperti file yang tidak ada.
+func TestUnduhBerkasPengajuan(t *testing.T) {
+	butuhMinIO(t)
+	pemilik := masukPeran(t, entity.RoleUser)
+	lain := masuk(t, surelUserLain)
+	legal := masukPeran(t, entity.RoleLegal)
+	admin := masukPeran(t, entity.RoleAdmin)
+	isi := []byte("lampiran untuk diunduh")
+
+	// Satu lampiran per modul, semuanya milik USER yang sama.
+	lampiran := map[string]string{}
+	for _, m := range semuaModulPengajuan {
+		lampiran[m.nama] = m.buat(t, pemilik, berkas{"attachments", "unduh.pdf", isi}).Attachments[0].FilePath
+	}
+	// File perkara: ada di penyimpanan, tetapi bukan milik modul pengajuan.
+	perk := buatPerkara(t, legal)
+	harapKode(t, panggilForm(t, legal, http.MethodPost, perkaraLegal+"/"+perk.ID+"/upload-document", nil, berkas{"document", "putusan.pdf", isi}), http.StatusOK, "unggah dokumen perkara")
+	filePerkara := ambilPerkara(t, legal, perkaraLegal, perk.ID).DocumentLink
+
+	for i, m := range semuaModulPengajuan {
+		modulLain := semuaModulPengajuan[1-i]
+		unduh := func(token, awalan, path string) (int, []byte) {
+			t.Helper()
+			w := panggil(t, token, http.MethodGet, m.url(awalan, "/download?path=", url.QueryEscape(path)), nil)
+			return w.Code, w.Body.Bytes()
+		}
+		t.Run(m.nama, func(t *testing.T) {
+			for _, k := range []struct{ nama, token, awalan string }{{"pemilik", pemilik, ""}, {"LEGAL", legal, "/legal"}, {"ADMIN", admin, "/admin"}} {
+				kode, isiUnduhan := unduh(k.token, k.awalan, lampiran[m.nama])
+				if kode != http.StatusOK || !bytes.Equal(isiUnduhan, isi) {
+					t.Errorf("%s mengunduh lampiran: dapat %d %q", k.nama, kode, isiUnduhan)
+				}
+			}
+			for _, k := range []struct{ nama, token, path string }{
+				{"USER lain, lampiran milik orang", lain, lampiran[m.nama]},
+				{"pemilik, lampiran milik modul " + modulLain.nama, pemilik, lampiran[modulLain.nama]},
+				{"pemilik, file perkara", pemilik, filePerkara},
+				{"pemilik, path yang tidak terdaftar", pemilik, "legal-opinions/attachments/tidak-ada.pdf"},
+			} {
+				if kode, _ := unduh(k.token, "", k.path); kode != http.StatusNotFound {
+					t.Errorf("%s: dapat %d, harap 404", k.nama, kode)
+				}
+			}
+		})
+	}
+}
+
+// Lampiran diperiksa sebelum ada yang disimpan. Satu file yang ditolak dijawab
+// 400 dengan alasannya, tanpa meninggalkan pengajuan baru maupun lampiran
+// separuh jadi, saat membuat maupun saat mengajukan ulang.
+func TestLampiranDitolak(t *testing.T) {
+	butuhMinIO(t)
+	pemilik := masukPeran(t, entity.RoleUser)
+	legal := masukPeran(t, entity.RoleLegal)
+	// File sah dikirim lebih dulu, supaya terlihat kalau ada yang telanjur disimpan.
+	sah, ditolak := berkas{"attachments", "sah.pdf", []byte("isi")}, berkas{"attachments", "program.exe", []byte("x")}
+	harapAlasan := func(t *testing.T, w *httptest.ResponseRecorder, konteks string) {
+		t.Helper()
+		harapKode(t, w, http.StatusBadRequest, konteks)
+		if !strings.Contains(w.Body.String(), "tipe file tidak diizinkan") {
+			t.Errorf("%s: alasan penolakan tidak disebut: %s", konteks, w.Body)
+		}
+	}
+
+	for _, m := range semuaModulPengajuan {
+		t.Run(m.nama, func(t *testing.T) {
+			var sebelum, sesudah int64
+			dbTes.Table(m.tabel).Count(&sebelum)
+			harapAlasan(t, panggilForm(t, pemilik, http.MethodPost, m.url(""), m.kolom, sah, ditolak), "membuat pengajuan dengan lampiran .exe")
+			dbTes.Table(m.tabel).Count(&sesudah)
+			if sesudah != sebelum {
+				t.Errorf("pengajuan tetap tersimpan walau lampirannya ditolak (%d -> %d baris)", sebelum, sesudah)
+			}
+
+			p := m.buat(t, pemilik, sah)
+			m.ubahStatus(t, legal, "/legal", p.ID, "UNDER_REVIEW", "", http.StatusOK)
+			m.ubahStatus(t, legal, "/legal", p.ID, "NEED_REVISION", "perbaiki", http.StatusOK)
+			harapAlasan(t, panggilForm(t, pemilik, http.MethodPost, m.url("", "/", p.ID, "/resubmit"), nil, sah, ditolak), "ajukan ulang dengan lampiran .exe")
+			if q := m.ambil(t, pemilik, "", p.ID); q.Status != "NEED_REVISION" || len(q.Attachments) != 1 {
+				t.Errorf("setelah ajukan ulang ditolak: status %q, %d lampiran; harap NEED_REVISION dan 1 lampiran", q.Status, len(q.Attachments))
+			}
+		})
+	}
+}
+
 // Harapan yang benar tetapi belum dipenuhi kode. Tiap subtes dilewati lewat
 // bugDiketahui sampai perbaikannya masuk. Untuk melihat semuanya gagal apa
 // adanya: TES_BUG=1 go test ./internal/router -run TestPengajuanBelumBenar -v
@@ -301,8 +389,8 @@ func TestPengajuanBelumBenar(t *testing.T) {
 
 	for _, m := range semuaModulPengajuan {
 		t.Run(m.nama, func(t *testing.T) {
+			// Jalur JSON memakai pemeriksaan kolom wajib yang sama dengan jalur form.
 			t.Run("BuatLewatJSONKosongDitolak", func(t *testing.T) {
-				bugDiketahui(t, "POST dengan JSON melewati pemeriksaan kolom wajib, jadi pengajuan kosong tersimpan (201)")
 				w := panggil(t, pemilik, http.MethodPost, m.url(""), map[string]string{})
 				harapKode(t, w, http.StatusBadRequest, "membuat pengajuan dengan JSON kosong")
 			})
@@ -325,45 +413,7 @@ func TestPengajuanBelumBenar(t *testing.T) {
 				harapKode(t, w, http.StatusNotFound, "USER lain meminta PDF")
 			})
 
-			t.Run("PresignedURLBisaDibuat", func(t *testing.T) {
-				butuhMinIO(t)
-				bugDiketahui(t, "presigned URL gagal dibuat (500) saat alamat publik MinIO tidak terjangkau dari backend, yaitu keadaan di Docker; lulus kalau tes dijalankan di luar container")
-				p := m.buat(t, pemilik, berkas{"attachments", "lampiran.pdf", []byte("isi")})
-				w := panggil(t, pemilik, http.MethodGet, m.url("", "/presign?path=", url.QueryEscape(p.Attachments[0].FilePath)), nil)
-				harapKode(t, w, http.StatusOK, "membuat presigned URL")
-				var tautan struct {
-					URL string `json:"url"`
-				}
-				isiData(t, w, &tautan)
-				if !strings.Contains(tautan.URL, namaBucketTes) {
-					t.Errorf("presigned URL tidak menunjuk bucket tes: %s", tautan.URL)
-				}
-			})
 
-			t.Run("UnduhFileMilikOrangLainDitolak", func(t *testing.T) {
-				butuhMinIO(t)
-				bugDiketahui(t, "endpoint download menerima path apa pun, jadi USER lain bisa mengunduh lampiran milik orang kalau tahu path-nya")
-				p := m.buat(t, pemilik, berkas{"attachments", "rahasia.pdf", []byte("rahasia")})
-				w := panggil(t, lain, http.MethodGet, m.url("", "/download?path=", url.QueryEscape(p.Attachments[0].FilePath)), nil)
-				if w.Code == http.StatusOK {
-					t.Fatalf("USER lain berhasil mengunduh lampiran milik orang: %q", w.Body)
-				}
-			})
-
-			t.Run("LampiranDitolakTidakMeninggalkanPengajuan", func(t *testing.T) {
-				butuhMinIO(t)
-				bugDiketahui(t, "lampiran yang ditolak (mis. .exe) menjawab 500 dan pengajuannya tetap tersimpan tanpa lampiran")
-				var sebelum, sesudah int64
-				dbTes.Table(m.tabel).Count(&sebelum)
-				w := panggilForm(t, pemilik, http.MethodPost, m.url(""), m.kolom, berkas{"attachments", "program.exe", []byte("x")})
-				if w.Code == http.StatusCreated {
-					t.Fatalf("lampiran .exe diterima")
-				}
-				dbTes.Table(m.tabel).Count(&sesudah)
-				if sesudah != sebelum {
-					t.Errorf("pengajuan tetap tersimpan walau lampirannya ditolak (%d -> %d baris)", sebelum, sesudah)
-				}
-			})
 		})
 	}
 }

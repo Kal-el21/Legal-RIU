@@ -25,8 +25,7 @@ type DocumentReviewService interface {
 	Resubmit(id string, userID string, files []*multipart.FileHeader) (*entity.DocumentReview, error)
 	UpdateStatus(id string, req dto.UpdateStatusRequest) error
 	UploadResult(id string, adminID string, req dto.UploadResultRequest, file *multipart.FileHeader) error
-	GetPresignedURL(filePath string) (string, error)
-	DownloadFile(filePath string) (*minio.Object, error)
+	DownloadFile(filePath, userID, role string) (*minio.Object, error)
 
 	GeneratePDF(id string) ([]byte, error)
 }
@@ -45,6 +44,10 @@ func (s *documentReviewService) Create(userID string, req dto.CreateDocumentRevi
 	uid, err := parseUUID(userID)
 	if err != nil {
 		return nil, errors.New("user tidak valid")
+	}
+
+	if err := validateFiles(files); err != nil {
+		return nil, err
 	}
 
 	seq, err := s.repo.NextTicketSequence("RD")
@@ -76,6 +79,10 @@ func (s *documentReviewService) Create(userID string, req dto.CreateDocumentRevi
 
 	if len(files) > 0 {
 		if err := s.uploadAttachments(dr.ID, files, 1); err != nil {
+			// Unggahan gagal di tengah (bukan karena file ditolak): pengajuan yang
+			// baru dibuat dibatalkan, supaya user tidak mendapat pengajuan ganda
+			// saat mengulang.
+			_ = s.repo.Delete(dr.ID)
 			return nil, err
 		}
 	}
@@ -164,6 +171,9 @@ func (s *documentReviewService) Resubmit(id string, userID string, files []*mult
 		return nil, errors.New("pengajuan hanya dapat diajukan ulang dari status NEED_REVISION atau REJECTED")
 	}
 
+	if err := validateFiles(files); err != nil {
+		return nil, err
+	}
 	if len(files) > 0 {
 		round, _ := s.repo.GetLatestUploadRound(dr.ID)
 		if err := s.uploadAttachments(dr.ID, files, round+1); err != nil {
@@ -240,11 +250,17 @@ func (s *documentReviewService) UploadResult(id string, adminID string, req dto.
 	return nil
 }
 
-func (s *documentReviewService) GetPresignedURL(filePath string) (string, error) {
-	return s.storage.GetPresignedURL(context.Background(), filePath)
-}
-
-func (s *documentReviewService) DownloadFile(filePath string) (*minio.Object, error) {
+// DownloadFile hanya melayani file yang terdaftar sebagai lampiran atau hasil
+// kajian pengajuan modul ini, dan hanya untuk yang boleh melihat pengajuannya.
+// Path lain, termasuk file modul lain, dijawab ErrFileNotFound.
+func (s *documentReviewService) DownloadFile(filePath, userID, role string) (*minio.Object, error) {
+	id, err := s.repo.FindIDByFilePath(filePath)
+	if err != nil {
+		return nil, ErrFileNotFound
+	}
+	if _, err := s.GetByID(id.String(), userID, role); err != nil {
+		return nil, ErrFileNotFound
+	}
 	return s.storage.GetFileObject(context.Background(), filePath)
 }
 

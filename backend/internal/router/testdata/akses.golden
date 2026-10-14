@@ -85,7 +85,6 @@ GET /api/v1/admin/legal-opinions: ADMIN
 GET /api/v1/admin/legal-opinions/:id: ADMIN
 GET /api/v1/admin/legal-opinions/:id/pdf: ADMIN
 GET /api/v1/admin/legal-opinions/download: ADMIN
-GET /api/v1/admin/legal-opinions/presign: ADMIN
 GET /api/v1/admin/materials: ADMIN
 GET /api/v1/admin/materials/:id: ADMIN
 GET /api/v1/admin/materials/import/template: ADMIN
@@ -102,7 +101,6 @@ GET /api/v1/admin/review-documents: ADMIN
 GET /api/v1/admin/review-documents/:id: ADMIN
 GET /api/v1/admin/review-documents/:id/pdf: ADMIN
 GET /api/v1/admin/review-documents/download: ADMIN
-GET /api/v1/admin/review-documents/presign: ADMIN
 GET /api/v1/admin/users: ADMIN
 GET /api/v1/admin/users/:id/permissions: ADMIN
 GET /api/v1/agreement-document-types: ADMIN LEGAL USER
@@ -162,7 +160,6 @@ GET /api/v1/legal-opinions: USER
 GET /api/v1/legal-opinions/:id: USER
 GET /api/v1/legal-opinions/:id/pdf: USER
 GET /api/v1/legal-opinions/download: USER
-GET /api/v1/legal-opinions/presign: USER
 GET /api/v1/legal/agreement-documents: LEGAL
 GET /api/v1/legal/agreement-documents/:id: LEGAL
 GET /api/v1/legal/agreement-documents/:id/attachments/:attachmentId: LEGAL
@@ -193,7 +190,6 @@ GET /api/v1/legal/legal-opinions: LEGAL
 GET /api/v1/legal/legal-opinions/:id: LEGAL
 GET /api/v1/legal/legal-opinions/:id/pdf: LEGAL
 GET /api/v1/legal/legal-opinions/download: LEGAL
-GET /api/v1/legal/legal-opinions/presign: LEGAL
 GET /api/v1/legal/materials: LEGAL
 GET /api/v1/legal/materials/:id: LEGAL
 GET /api/v1/legal/reports/document-reviews: LEGAL
@@ -203,14 +199,12 @@ GET /api/v1/legal/review-documents: LEGAL
 GET /api/v1/legal/review-documents/:id: LEGAL
 GET /api/v1/legal/review-documents/:id/pdf: LEGAL
 GET /api/v1/legal/review-documents/download: LEGAL
-GET /api/v1/legal/review-documents/presign: LEGAL
 GET /api/v1/materials: ADMIN LEGAL LEGAL_AU USER
 GET /api/v1/materials/:id: ADMIN LEGAL LEGAL_AU USER
 GET /api/v1/notifications: ADMIN LEGAL USER
 GET /api/v1/review-documents: USER
 GET /api/v1/review-documents/:id: USER
 GET /api/v1/review-documents/download: USER
-GET /api/v1/review-documents/presign: USER
 PATCH /api/v1/admin/agreement-documents/:id/meta: ADMIN
 PATCH /api/v1/admin/agreement-documents/:id/status: ADMIN
 PATCH /api/v1/admin/legal-opinions/:id/status: ADMIN

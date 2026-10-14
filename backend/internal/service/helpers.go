@@ -2,14 +2,37 @@ package service
 
 import (
 	"errors"
+	"fmt"
+	"mime/multipart"
 	"strings"
 
 	"legal-riu-portal/internal/dto"
 	"legal-riu-portal/internal/entity"
 	"legal-riu-portal/internal/repository"
+	"legal-riu-portal/internal/storage"
 
 	"github.com/google/uuid"
 )
+
+// ErrInvalidFile menandai lampiran yang ditolak (tipe atau ukurannya). Handler
+// menjawabnya 400 dengan alasannya.
+var ErrInvalidFile = errors.New("lampiran ditolak")
+
+// validateFiles memeriksa semua lampiran sebelum ada yang disimpan, supaya satu
+// file yang ditolak tidak meninggalkan pengajuan kosong atau lampiran separuh jadi.
+func validateFiles(files []*multipart.FileHeader) error {
+	for _, file := range files {
+		if err := storage.ValidateUpload(file); err != nil {
+			return fmt.Errorf("%w: %s (%s)", ErrInvalidFile, err.Error(), file.Filename)
+		}
+	}
+	return nil
+}
+
+// ErrFileNotFound dipakai unduhan pengajuan: file tidak terdaftar di modulnya,
+// atau pemanggil tidak boleh melihat pengajuan pemiliknya. Keduanya dijawab
+// sama seperti file yang tidak ada.
+var ErrFileNotFound = errors.New("file tidak ditemukan")
 
 func parseUUID(id string) (uuid.UUID, error) {
 	return uuid.Parse(id)
