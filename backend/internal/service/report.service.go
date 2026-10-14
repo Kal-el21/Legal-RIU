@@ -72,7 +72,10 @@ func (s *reportService) GetLegalCaseReport(filter dto.ReportFilter) (*dto.Report
 		query = query.Select("TO_CHAR(legal_cases.case_date, 'YYYY-MM') as label, COUNT(*) as count, COALESCE(divisions.name, 'Tidak Diketahui') as series_name")
 	}
 
-	query = query.Group("label, series_name").Order("label ASC")
+	// Dikelompokkan dengan ekspresi bulannya, bukan alias "label": tabel jenis
+	// dan kategori kasus punya kolom bernama label, dan di GROUP BY Postgres
+	// mendahulukan kolom tabel daripada alias.
+	query = query.Group("TO_CHAR(legal_cases.case_date, 'YYYY-MM'), series_name").Order("label ASC")
 
 	var rows []reportAggRow
 	if err := query.Scan(&rows).Error; err != nil {

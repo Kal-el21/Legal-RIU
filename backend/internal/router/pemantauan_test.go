@@ -416,17 +416,23 @@ func TestLaporan(t *testing.T) {
 	kelompok := map[string][]string{
 		"legal-opinions":   {"company", "legal_type", "status", "division"},
 		"document-reviews": {"company", "document_type", "status", "division"},
-		"legal-cases":      {"company", "status", "level", "location", "pic"},
+		"legal-cases":      {"company", "case_type", "category", "status", "level", "location", "pic"},
 	}
 	for laporan, daftar := range kelompok {
 		for _, k := range daftar {
 			ambil(admin, "/api/v1/admin/reports/"+laporan+"?group_by="+k)
 		}
 	}
+	// Tabel jenis dan kategori kasus punya kolom bernama label, sama dengan nama
+	// kolom bulan di laporan. Pengelompokannya harus tetap per bulan: jumlah
+	// perkaranya sama dengan pengelompokan lain.
 	t.Run("PerkaraPerJenisDanKategori", func(t *testing.T) {
-		bugDiketahui(t, "laporan perkara dengan group_by=case_type atau category gagal dengan error SQL (kolom label milik tabel rujukan bentrok dengan alias label di GROUP BY)")
+		buatPerkara(t, legal)
+		harap := ambil(admin, "/api/v1/admin/reports/legal-cases?group_by=status").jumlah()
 		for _, k := range []string{"case_type", "category"} {
-			ambil(admin, "/api/v1/admin/reports/legal-cases?group_by="+k)
+			if got := ambil(admin, "/api/v1/admin/reports/legal-cases?group_by="+k).jumlah(); got != harap {
+				t.Errorf("laporan perkara per %s: jumlah %v, harap %v seperti per status", k, got, harap)
+			}
 		}
 	})
 
