@@ -72,8 +72,6 @@ Setiap fitur memiliki kumpulan aksi default. Admin dapat memberikan/mencabut aks
 | `legal_opinion.upload_result.all` | Upload Result | Mengunggah hasil kajian |
 | `legal_opinion.download.all` | Download | Mengunduh dokumen atau PDF |
 | `legal_opinion.generate_pdf.all` | Generate PDF | Menghasilkan PDF hasil kajian |
-| `legal_opinion.presign.own` | Presign Upload Own | Mendapatkan URL upload attachment milik sendiri |
-| `legal_opinion.presign.all` | Presign Upload All | Mendapatkan URL upload attachment (semua) |
 
 ### 2.4 Document Review
 | Action Code | Label | Keterangan |
@@ -87,8 +85,6 @@ Setiap fitur memiliki kumpulan aksi default. Admin dapat memberikan/mencabut aks
 | `document_review.update_status.all` | Update Status | Mengubah status (review/approve/reject) |
 | `document_review.upload_result.all` | Upload Result | Mengunggah hasil review |
 | `document_review.download.all` | Download | Mengunduh dokumen review |
-| `document_review.presign.own` | Presign Upload Own | Mendapatkan URL upload attachment milik sendiri |
-| `document_review.presign.all` | Presign Upload All | Mendapatkan URL upload attachment (semua) |
 
 ### 2.5 User Management
 | Action Code | Label | Keterangan |
@@ -175,8 +171,6 @@ Tabel ini menunjukkan permission default yang dimiliki setiap role **sebelum ove
 | | Upload Result | ✅ | ✅ | ❌ | ❌ | ❌ |
 | | Download | ✅ | ✅ | ❌ | ❌ | ❌ |
 | | Generate PDF | ✅ | ✅ | ❌ | ❌ | ❌ |
-| | Presign Own | ✅ | ❌ | ❌ | ✅ | ❌ |
-| | Presign All | ✅ | ✅ | ❌ | ❌ | ❌ |
 | **Document Review** | View Own | ✅ | ❌ | ❌ | ✅ | ❌ |
 | | View All | ✅ | ✅ | ❌ | ❌ | ❌ |
 | | Create Own | ✅ | ❌ | ❌ | ✅ | ❌ |
@@ -186,8 +180,6 @@ Tabel ini menunjukkan permission default yang dimiliki setiap role **sebelum ove
 | | Update Status | ✅ | ✅ | ❌ | ❌ | ❌ |
 | | Upload Result | ✅ | ✅ | ❌ | ❌ | ❌ |
 | | Download | ✅ | ✅ | ❌ | ❌ | ❌ |
-| | Presign Own | ✅ | ❌ | ❌ | ✅ | ❌ |
-| | Presign All | ✅ | ✅ | ❌ | ❌ | ❌ |
 | **User Management** | View Users | ✅ | ❌ | ❌ | ❌ | ❌ |
 | | Create User | ✅ | ❌ | ❌ | ❌ | ❌ |
 | | Edit User | ✅ | ❌ | ❌ | ❌ | ❌ |
@@ -335,8 +327,6 @@ Bagian ini menjelaskan status implementasi permission untuk setiap fitur, termas
 | Upload Result | ✅ | `legal_opinion.upload_result.all` |
 | Download | ✅ | `legal_opinion.download.all` |
 | Generate PDF | ✅ | `legal_opinion.generate_pdf.all` |
-| Presign Own | ✅ | `legal_opinion.presign.own` |
-| Presign All | ✅ | `legal_opinion.presign.all` |
 | **Kekurangan / Belum Ada** | | |
 | `legal_opinion.approve` | ⚠️ | Belum ada permission khusus approve. Saat ini menggunakan `update_status.all` yang juga digunakan untuk reject. |
 | `legal_opinion.reject` | ⚠️ | Sama seperti approve, belum terpisah. |
@@ -356,8 +346,6 @@ Bagian ini menjelaskan status implementasi permission untuk setiap fitur, termas
 | Update Status | ✅ | `document_review.update_status.all` |
 | Upload Result | ✅ | `document_review.upload_result.all` |
 | Download | ✅ | `document_review.download.all` |
-| Presign Own | ✅ | `document_review.presign.own` |
-| Presign All | ✅ | `document_review.presign.all` |
 | **Kekurangan / Belum Ada** | | |
 | `document_review.approve` | ⚠️ | Belum ada permission khusus approve. Saat ini menggunakan `update_status.all`. |
 | `document_review.reject` | ⚠️ | Belum terpisah. |

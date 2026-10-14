@@ -25,7 +25,6 @@ type DocumentReviewService interface {
 	Resubmit(id string, userID string, files []*multipart.FileHeader) (*entity.DocumentReview, error)
 	UpdateStatus(id string, req dto.UpdateStatusRequest) error
 	UploadResult(id string, adminID string, req dto.UploadResultRequest, file *multipart.FileHeader) error
-	GetPresignedURL(filePath string) (string, error)
 	DownloadFile(filePath, userID, role string) (*minio.Object, error)
 
 	GeneratePDF(id string) ([]byte, error)
@@ -249,10 +248,6 @@ func (s *documentReviewService) UploadResult(id string, adminID string, req dto.
 	}
 
 	return nil
-}
-
-func (s *documentReviewService) GetPresignedURL(filePath string) (string, error) {
-	return s.storage.GetPresignedURL(context.Background(), filePath)
 }
 
 // DownloadFile hanya melayani file yang terdaftar sebagai lampiran atau hasil

@@ -185,20 +185,6 @@ func (h *LegalOpinionHandler) Resubmit(c *gin.Context) {
 	utils.OK(c, "Pengajuan berhasil diajukan ulang", lo)
 }
 
-// GET /api/v1/legal-opinions/presign?path=xxx
-func (h *LegalOpinionHandler) GetPresignedURL(c *gin.Context) {
-	filePath := c.Query("path")
-	if filePath == "" {
-		utils.BadRequest(c, "Path file diperlukan", nil)
-		return
-	}
-	url, err := h.svc.GetPresignedURL(filePath)
-	if err != nil {
-		utils.InternalError(c, "Gagal membuat URL")
-		return
-	}
-	utils.OK(c, "Success", gin.H{"url": url})
-}
 
 // GET /api/v1/legal-opinions/download?path=xxx
 func (h *LegalOpinionHandler) Download(c *gin.Context) {

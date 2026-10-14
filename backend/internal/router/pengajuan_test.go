@@ -413,20 +413,6 @@ func TestPengajuanBelumBenar(t *testing.T) {
 				harapKode(t, w, http.StatusNotFound, "USER lain meminta PDF")
 			})
 
-			t.Run("PresignedURLBisaDibuat", func(t *testing.T) {
-				butuhMinIO(t)
-				bugDiketahui(t, "presigned URL gagal dibuat (500) saat alamat publik MinIO tidak terjangkau dari backend, yaitu keadaan di Docker; lulus kalau tes dijalankan di luar container")
-				p := m.buat(t, pemilik, berkas{"attachments", "lampiran.pdf", []byte("isi")})
-				w := panggil(t, pemilik, http.MethodGet, m.url("", "/presign?path=", url.QueryEscape(p.Attachments[0].FilePath)), nil)
-				harapKode(t, w, http.StatusOK, "membuat presigned URL")
-				var tautan struct {
-					URL string `json:"url"`
-				}
-				isiData(t, w, &tautan)
-				if !strings.Contains(tautan.URL, namaBucketTes) {
-					t.Errorf("presigned URL tidak menunjuk bucket tes: %s", tautan.URL)
-				}
-			})
 
 		})
 	}

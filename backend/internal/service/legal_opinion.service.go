@@ -25,7 +25,6 @@ type LegalOpinionService interface {
 	Resubmit(id string, userID string, files []*multipart.FileHeader) (*entity.LegalOpinion, error)
 	UpdateStatus(id string, req dto.UpdateStatusRequest) error
 	UploadResult(id string, adminID string, req dto.UploadResultRequest, file *multipart.FileHeader) error
-	GetPresignedURL(filePath string) (string, error)
 	DownloadFile(filePath, userID, role string) (*minio.Object, error)
 	GeneratePDF(id string) ([]byte, error)
 }
@@ -254,10 +253,6 @@ func (s *legalOpinionService) UploadResult(id string, adminID string, req dto.Up
 	}
 
 	return nil
-}
-
-func (s *legalOpinionService) GetPresignedURL(filePath string) (string, error) {
-	return s.storage.GetPresignedURL(context.Background(), filePath)
 }
 
 // DownloadFile hanya melayani file yang terdaftar sebagai lampiran atau hasil

@@ -162,8 +162,7 @@ func New(cfg *config.Config, db *gorm.DB, store *storage.MinIOClient) (*gin.Engi
 	userOnly.GET("/dashboard/stats", requirePermission("dashboard.user.view"), dashHandler.UserStats)
 	userOnly.GET("/dashboard/recent", requirePermission("dashboard.user.view"), dashHandler.UserRecent)
 
-	// Legal opinions — presign
-	userOnly.GET("/legal-opinions/presign", requirePermission("legal_opinion.view.own", "legal_opinion.view.all"), loHandler.GetPresignedURL)
+	// Legal opinions
 	userOnly.GET("/legal-opinions/download", requirePermission("legal_opinion.download.all", "legal_opinion.view.own", "legal_opinion.view.all"), loHandler.Download)
 	userOnly.GET("/legal-opinions/:id/pdf", requirePermission("legal_opinion.download.all", "legal_opinion.view.own", "legal_opinion.view.all"), loHandler.GeneratePDF)
 	userOnly.GET("/legal-opinions", requirePermission("legal_opinion.view.own", "legal_opinion.view.all"), loHandler.GetAll)
@@ -174,7 +173,6 @@ func New(cfg *config.Config, db *gorm.DB, store *storage.MinIOClient) (*gin.Engi
 	userOnly.POST("/legal-opinions/:id/resubmit", requirePermission("legal_opinion.resubmit.own"), loHandler.Resubmit)
 
 	// Review documents
-	userOnly.GET("/review-documents/presign", requirePermission("document_review.view.own", "document_review.view.all"), drHandler.GetPresignedURL)
 	userOnly.GET("/review-documents/download", requirePermission("document_review.download.all", "document_review.view.own", "document_review.view.all"), drHandler.Download)
 	userOnly.GET("/review-documents", requirePermission("document_review.view.own", "document_review.view.all"), drHandler.GetAll)
 	userOnly.POST("/review-documents", requirePermission("document_review.create.own"), drHandler.Create)
@@ -201,11 +199,9 @@ func New(cfg *config.Config, db *gorm.DB, store *storage.MinIOClient) (*gin.Engi
 	admin.GET("/dashboard/stats", dashHandler.AdminStats)
 	admin.GET("/dashboard/recent", dashHandler.AdminRecent)
 
-	admin.GET("/legal-opinions/presign", loHandler.GetPresignedURL)
 	admin.GET("/legal-opinions/download", loHandler.Download)
 	admin.GET("/legal-opinions", loHandler.GetAll)
 	admin.GET("/legal-opinions/:id", loHandler.GetByID)
-	admin.GET("/review-documents/presign", drHandler.GetPresignedURL)
 	admin.GET("/review-documents/download", drHandler.Download)
 	admin.GET("/review-documents", drHandler.GetAll)
 	admin.GET("/review-documents/:id", drHandler.GetByID)
@@ -320,14 +316,12 @@ func New(cfg *config.Config, db *gorm.DB, store *storage.MinIOClient) (*gin.Engi
 	legal.GET("/dashboard/stats", requirePermission("dashboard.legal.view"), dashHandler.LegalStats)
 	legal.GET("/dashboard/recent", requirePermission("dashboard.legal.view"), dashHandler.LegalRecent)
 
-	legal.GET("/legal-opinions/presign", requirePermission("legal_opinion.view.all"), loHandler.GetPresignedURL)
 	legal.GET("/legal-opinions/download", requirePermission("legal_opinion.download.all", "legal_opinion.view.all"), loHandler.Download)
 	legal.GET("/legal-opinions", requirePermission("legal_opinion.view.all"), loHandler.GetAll)
 	legal.GET("/legal-opinions/:id", requirePermission("legal_opinion.view.all"), loHandler.GetByID)
 	legal.PATCH("/legal-opinions/:id/status", requirePermission("legal_opinion.update_status.all"), loHandler.AdminUpdateStatus)
 	legal.POST("/legal-opinions/:id/result", requirePermission("legal_opinion.upload_result.all"), loHandler.AdminUploadResult)
 	legal.GET("/legal-opinions/:id/pdf", requirePermission("legal_opinion.download.all", "legal_opinion.view.all"), loHandler.GeneratePDF)
-	legal.GET("/review-documents/presign", requirePermission("document_review.view.all"), drHandler.GetPresignedURL)
 	legal.GET("/review-documents/download", requirePermission("document_review.download.all", "document_review.view.all"), drHandler.Download)
 	legal.GET("/review-documents", requirePermission("document_review.view.all"), drHandler.GetAll)
 	legal.GET("/review-documents/:id", requirePermission("document_review.view.all"), drHandler.GetByID)

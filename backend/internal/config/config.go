@@ -62,8 +62,6 @@ type MinIOConfig struct {
 	SecretKey             string
 	Bucket                string
 	UseSSL                bool
-	PresignExpiresMinutes int
-	PublicEndpoint        string
 }
 
 type SecurityConfig struct {
@@ -84,7 +82,6 @@ func Load() *Config {
 	minioSSL, _ := strconv.ParseBool(getEnv("MINIO_USE_SSL", "false"))
 	ldapSSL, _ := strconv.ParseBool(getEnv("LDAP_USE_SSL", "false"))
 	ldapInsecureSkipVerify, _ := strconv.ParseBool(getEnv("LDAP_INSECURE_SKIP_VERIFY", "false"))
-	presignExpires, _ := strconv.Atoi(getEnv("MINIO_PRESIGN_EXPIRES_MINUTES", "15"))
 	loginRateLimit, _ := strconv.Atoi(getEnv("LOGIN_RATE_LIMIT", "5"))
 	loginRateWindow, _ := strconv.Atoi(getEnv("LOGIN_RATE_WINDOW_MINUTES", "15"))
 
@@ -129,8 +126,6 @@ func Load() *Config {
 			SecretKey:             getEnv("MINIO_SECRET_KEY", "minioadmin"),
 			Bucket:                getEnv("MINIO_BUCKET", "legal-riu"),
 			UseSSL:                minioSSL,
-			PresignExpiresMinutes: presignExpires,
-			PublicEndpoint:        getEnv("MINIO_PUBLIC_ENDPOINT", getEnv("MINIO_ENDPOINT", "localhost:9000")),
 		},
 		Security: SecurityConfig{
 			AllowedOrigins: splitCSV(getEnv(

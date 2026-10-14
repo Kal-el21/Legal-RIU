@@ -71,10 +71,6 @@ export const legalOpinionService = {
     return res.data.data!
   },
 
-  getPresignedURL: async (path: string) => {
-    const res = await api.get<ApiResponse<{ url: string }>>(`${getLegalOpinionEndpoint()}/presign`, { params: { path } })
-    return res.data.data!.url
-  },
 
   downloadFile: async (path: string): Promise<{ blob: Blob; filename: string }> => {
     const res = await api.get(`${getLegalOpinionEndpoint()}/download`, {
