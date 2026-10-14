@@ -73,6 +73,10 @@ func (h *LegalOpinionHandler) Create(c *gin.Context) {
 			utils.BadRequest(c, "Gagal memparse request", err.Error())
 			return
 		}
+		if !req.Complete() {
+			utils.BadRequest(c, "Semua field wajib diisi", nil)
+			return
+		}
 		userID := middleware.GetUserID(c)
 		lo, svcErr := h.svc.Create(userID, req, nil)
 		if svcErr != nil {
@@ -99,10 +103,7 @@ func (h *LegalOpinionHandler) Create(c *gin.Context) {
 		Question:          c.PostForm("question"),
 	}
 
-	// Manual validation
-	if req.RequestorName == "" || req.RequestorPosition == "" || req.RequestorDivision == "" ||
-		req.RequestorEmail == "" || req.RequestorPhone == "" || req.LegalType == "" ||
-		req.Title == "" || req.Chronology == "" || req.Question == "" {
+	if !req.Complete() {
 		utils.BadRequest(c, "Semua field wajib diisi", nil)
 		return
 	}

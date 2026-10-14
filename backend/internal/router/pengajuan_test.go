@@ -350,8 +350,8 @@ func TestPengajuanBelumBenar(t *testing.T) {
 
 	for _, m := range semuaModulPengajuan {
 		t.Run(m.nama, func(t *testing.T) {
+			// Jalur JSON memakai pemeriksaan kolom wajib yang sama dengan jalur form.
 			t.Run("BuatLewatJSONKosongDitolak", func(t *testing.T) {
-				bugDiketahui(t, "POST dengan JSON melewati pemeriksaan kolom wajib, jadi pengajuan kosong tersimpan (201)")
 				w := panggil(t, pemilik, http.MethodPost, m.url(""), map[string]string{})
 				harapKode(t, w, http.StatusBadRequest, "membuat pengajuan dengan JSON kosong")
 			})

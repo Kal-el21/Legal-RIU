@@ -70,6 +70,10 @@ func (h *DocumentReviewHandler) Create(c *gin.Context) {
 			utils.BadRequest(c, "Gagal memparse request", err.Error())
 			return
 		}
+		if !req.Complete() {
+			utils.BadRequest(c, "Semua field wajib diisi", nil)
+			return
+		}
 		userID := middleware.GetUserID(c)
 		dr, svcErr := h.svc.Create(userID, req, nil)
 		if svcErr != nil {
@@ -96,9 +100,7 @@ func (h *DocumentReviewHandler) Create(c *gin.Context) {
 		AdditionalNote:    c.PostForm("additional_note"),
 	}
 
-	if req.RequestorName == "" || req.RequestorPosition == "" || req.RequestorDivision == "" ||
-		req.RequestorEmail == "" || req.RequestorPhone == "" || req.DocumentName == "" ||
-		req.SecondParty == "" || req.DocumentType == "" {
+	if !req.Complete() {
 		utils.BadRequest(c, "Semua field wajib diisi", nil)
 		return
 	}

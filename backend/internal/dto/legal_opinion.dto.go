@@ -14,6 +14,14 @@ type CreateLegalOpinionRequest struct {
 	Question          string `json:"question"`
 }
 
+// Complete memeriksa kolom wajib. Dipakai jalur form maupun JSON, supaya
+// pengajuan kosong tidak bisa tersimpan lewat salah satunya.
+func (r CreateLegalOpinionRequest) Complete() bool {
+	return r.RequestorName != "" && r.RequestorPosition != "" && r.RequestorDivision != "" &&
+		r.RequestorEmail != "" && r.RequestorPhone != "" && r.LegalType != "" &&
+		r.Title != "" && r.Chronology != "" && r.Question != ""
+}
+
 type UpdateLegalOpinionRequest struct {
 	RequestorName     string `json:"requestor_name" binding:"required"`
 	RequestorPosition string `json:"requestor_position" binding:"required"`
