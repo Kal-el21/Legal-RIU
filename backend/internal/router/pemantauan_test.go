@@ -629,7 +629,14 @@ func TestRepositoriDokumenMengikutiSumber(t *testing.T) {
 	}
 	opini := semuaModulPengajuan[0].buat(t, pemilik)
 	review := semuaModulPengajuan[1].buat(t, pemilik)
-	pks := buatPerjanjian(t, pemilik, formPerjanjian())
+	// Perjanjian dibuat langsung di database: lewat API butuh template aktif,
+	// dan template disimpan di MinIO.
+	var idPemilik string
+	dbTes.Raw("SELECT id FROM users WHERE email = ?", surelPeran(entity.RoleUser)).Scan(&idPemilik)
+	pks := entity.AgreementDocument{TicketNumber: "UJI-REPO-" + uuid.NewString(), UserID: uuid.MustParse(idPemilik), DocumentTypeCode: "PKS", FormData: []byte("{}")}
+	if err := dbTes.Create(&pks).Error; err != nil {
+		t.Fatal(err)
+	}
 
 	perkaraAseiDilihat := []string{orangLegal, orangAdmin, orangAUAsei, orangExternal}
 	pengajuanDilihat := []string{orangLegal, orangAdmin, orangPemilik}
@@ -645,10 +652,10 @@ func TestRepositoriDokumenMengikutiSumber(t *testing.T) {
 		{judul: "uji-repo-lampiran-opini.pdf", fitur: "legal_opinion", jenis: "legal_opinion_attachments", sumber: opini.ID, mime: pdf, dilihat: pengajuanDilihat},
 		{judul: "uji-repo-hasil-opini.pdf", fitur: "legal_opinion", jenis: "legal_opinion_results", sumber: opini.ID, mime: pdf, dilihat: pengajuanDilihat},
 		{judul: "uji-repo-lampiran-review.pdf", fitur: "document_review", jenis: "document_review_attachments", sumber: review.ID, mime: pdf, dilihat: pengajuanDilihat},
-		{judul: "uji-repo-lampiran-perjanjian.pdf", fitur: "agreement_document", jenis: "agreement_attachments", sumber: pks.ID, mime: pdf, dilihat: pengajuanDilihat},
-		{judul: "uji-repo-perjanjian-final.pdf", fitur: "agreement_document", jenis: "agreement_documents", sumber: pks.ID, mime: pdf, dilihat: pengajuanDilihat},
+		{judul: "uji-repo-lampiran-perjanjian.pdf", fitur: "agreement_document", jenis: "agreement_attachments", sumber: pks.ID.String(), mime: pdf, dilihat: pengajuanDilihat},
+		{judul: "uji-repo-perjanjian-final.pdf", fitur: "agreement_document", jenis: "agreement_documents", sumber: pks.ID.String(), mime: pdf, dilihat: pengajuanDilihat},
 		// DOCX final hanya untuk yang punya agreement_document.download_docx.all.
-		{judul: "uji-repo-perjanjian-final.docx", fitur: "agreement_document", jenis: "agreement_documents", sumber: pks.ID, mime: docx, dilihat: []string{orangLegal, orangAdmin}},
+		{judul: "uji-repo-perjanjian-final.docx", fitur: "agreement_document", jenis: "agreement_documents", sumber: pks.ID.String(), mime: docx, dilihat: []string{orangLegal, orangAdmin}},
 		// Sumber yang tidak dikenal tidak ditampilkan ke siapa pun.
 		{judul: "uji-repo-fitur-asing.pdf", fitur: "fitur_asing", jenis: "tabel_asing", sumber: uuid.NewString(), mime: pdf},
 	}
