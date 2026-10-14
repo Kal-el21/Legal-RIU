@@ -259,13 +259,18 @@ func (h *LegalOpinionHandler) AdminUploadResult(c *gin.Context) {
 // GET /api/v1/legal-opinions/:id/pdf
 func (h *LegalOpinionHandler) GeneratePDF(c *gin.Context) {
 	id := c.Param("id")
+	// Diperiksa dulu dengan aturan yang sama seperti membuka detail, supaya
+	// pengajuan yang tidak ada atau milik orang lain dijawab 404, bukan 500.
+	lo, err := h.svc.GetByID(id, middleware.GetUserID(c), middleware.RoleWithAllAccess(c, "legal_opinion.view.all"))
+	if err != nil {
+		utils.NotFound(c, err.Error())
+		return
+	}
 	pdfData, err := h.svc.GeneratePDF(id)
 	if err != nil {
 		utils.InternalError(c, err.Error())
 		return
 	}
-
-	lo, _ := h.svc.GetByID(id, middleware.GetUserID(c), middleware.RoleWithAllAccess(c, "legal_opinion.view.all"))
 
 	c.DataFromReader(-1, -1, "application/pdf", bytes.NewReader(pdfData), map[string]string{
 		"Content-Disposition": fmt.Sprintf(`attachment; filename="legal-opinion-%s.pdf"`, lo.TicketNumber),

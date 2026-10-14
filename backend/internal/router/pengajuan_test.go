@@ -386,6 +386,7 @@ func TestLampiranDitolak(t *testing.T) {
 func TestPengajuanBelumBenar(t *testing.T) {
 	pemilik := masukPeran(t, entity.RoleUser)
 	lain := masuk(t, surelUserLain)
+	legal := masukPeran(t, entity.RoleLegal)
 
 	for _, m := range semuaModulPengajuan {
 		t.Run(m.nama, func(t *testing.T) {
@@ -407,10 +408,15 @@ func TestPengajuanBelumBenar(t *testing.T) {
 				if !m.pdfPemilik {
 					t.Skip("modul ini tidak punya route PDF untuk USER")
 				}
-				bugDiketahui(t, "PDF pengajuan milik orang lain menjawab 500 (panic), seharusnya 404")
 				p := m.buat(t, pemilik)
 				w := panggil(t, lain, http.MethodGet, m.url("", "/", p.ID, "/pdf"), nil)
 				harapKode(t, w, http.StatusNotFound, "USER lain meminta PDF")
+				harapKode(t, panggil(t, pemilik, http.MethodGet, m.url("", "/", p.ID, "/pdf"), nil), http.StatusOK, "pemilik meminta PDF")
+			})
+
+			t.Run("PDFUntukIDTidakAdaDitolak", func(t *testing.T) {
+				const tidakAda = "00000000-0000-0000-0000-000000000000"
+				harapKode(t, panggil(t, legal, http.MethodGet, m.url("/legal", "/", tidakAda, "/pdf"), nil), http.StatusNotFound, "LEGAL meminta PDF yang tidak ada")
 			})
 
 
