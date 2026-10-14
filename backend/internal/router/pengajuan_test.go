@@ -7,6 +7,7 @@ package router
 import (
 	"bytes"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
@@ -341,6 +342,44 @@ func TestUnduhBerkasPengajuan(t *testing.T) {
 	}
 }
 
+// Lampiran diperiksa sebelum ada yang disimpan. Satu file yang ditolak dijawab
+// 400 dengan alasannya, tanpa meninggalkan pengajuan baru maupun lampiran
+// separuh jadi, saat membuat maupun saat mengajukan ulang.
+func TestLampiranDitolak(t *testing.T) {
+	butuhMinIO(t)
+	pemilik := masukPeran(t, entity.RoleUser)
+	legal := masukPeran(t, entity.RoleLegal)
+	// File sah dikirim lebih dulu, supaya terlihat kalau ada yang telanjur disimpan.
+	sah, ditolak := berkas{"attachments", "sah.pdf", []byte("isi")}, berkas{"attachments", "program.exe", []byte("x")}
+	harapAlasan := func(t *testing.T, w *httptest.ResponseRecorder, konteks string) {
+		t.Helper()
+		harapKode(t, w, http.StatusBadRequest, konteks)
+		if !strings.Contains(w.Body.String(), "tipe file tidak diizinkan") {
+			t.Errorf("%s: alasan penolakan tidak disebut: %s", konteks, w.Body)
+		}
+	}
+
+	for _, m := range semuaModulPengajuan {
+		t.Run(m.nama, func(t *testing.T) {
+			var sebelum, sesudah int64
+			dbTes.Table(m.tabel).Count(&sebelum)
+			harapAlasan(t, panggilForm(t, pemilik, http.MethodPost, m.url(""), m.kolom, sah, ditolak), "membuat pengajuan dengan lampiran .exe")
+			dbTes.Table(m.tabel).Count(&sesudah)
+			if sesudah != sebelum {
+				t.Errorf("pengajuan tetap tersimpan walau lampirannya ditolak (%d -> %d baris)", sebelum, sesudah)
+			}
+
+			p := m.buat(t, pemilik, sah)
+			m.ubahStatus(t, legal, "/legal", p.ID, "UNDER_REVIEW", "", http.StatusOK)
+			m.ubahStatus(t, legal, "/legal", p.ID, "NEED_REVISION", "perbaiki", http.StatusOK)
+			harapAlasan(t, panggilForm(t, pemilik, http.MethodPost, m.url("", "/", p.ID, "/resubmit"), nil, sah, ditolak), "ajukan ulang dengan lampiran .exe")
+			if q := m.ambil(t, pemilik, "", p.ID); q.Status != "NEED_REVISION" || len(q.Attachments) != 1 {
+				t.Errorf("setelah ajukan ulang ditolak: status %q, %d lampiran; harap NEED_REVISION dan 1 lampiran", q.Status, len(q.Attachments))
+			}
+		})
+	}
+}
+
 // Harapan yang benar tetapi belum dipenuhi kode. Tiap subtes dilewati lewat
 // bugDiketahui sampai perbaikannya masuk. Untuk melihat semuanya gagal apa
 // adanya: TES_BUG=1 go test ./internal/router -run TestPengajuanBelumBenar -v
@@ -389,20 +428,6 @@ func TestPengajuanBelumBenar(t *testing.T) {
 				}
 			})
 
-			t.Run("LampiranDitolakTidakMeninggalkanPengajuan", func(t *testing.T) {
-				butuhMinIO(t)
-				bugDiketahui(t, "lampiran yang ditolak (mis. .exe) menjawab 500 dan pengajuannya tetap tersimpan tanpa lampiran")
-				var sebelum, sesudah int64
-				dbTes.Table(m.tabel).Count(&sebelum)
-				w := panggilForm(t, pemilik, http.MethodPost, m.url(""), m.kolom, berkas{"attachments", "program.exe", []byte("x")})
-				if w.Code == http.StatusCreated {
-					t.Fatalf("lampiran .exe diterima")
-				}
-				dbTes.Table(m.tabel).Count(&sesudah)
-				if sesudah != sebelum {
-					t.Errorf("pengajuan tetap tersimpan walau lampirannya ditolak (%d -> %d baris)", sebelum, sesudah)
-				}
-			})
 		})
 	}
 }

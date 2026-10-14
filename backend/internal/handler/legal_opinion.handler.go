@@ -116,6 +116,10 @@ func (h *LegalOpinionHandler) Create(c *gin.Context) {
 
 	userID := middleware.GetUserID(c)
 	lo, err := h.svc.Create(userID, req, files)
+	if errors.Is(err, service.ErrInvalidFile) {
+		utils.BadRequest(c, err.Error(), nil)
+		return
+	}
 	if err != nil {
 		utils.InternalError(c, err.Error())
 		return

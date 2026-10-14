@@ -47,6 +47,10 @@ func (s *documentReviewService) Create(userID string, req dto.CreateDocumentRevi
 		return nil, errors.New("user tidak valid")
 	}
 
+	if err := validateFiles(files); err != nil {
+		return nil, err
+	}
+
 	seq, err := s.repo.NextTicketSequence("RD")
 	if err != nil {
 		return nil, errors.New("gagal generate ticket number")
@@ -76,6 +80,10 @@ func (s *documentReviewService) Create(userID string, req dto.CreateDocumentRevi
 
 	if len(files) > 0 {
 		if err := s.uploadAttachments(dr.ID, files, 1); err != nil {
+			// Unggahan gagal di tengah (bukan karena file ditolak): pengajuan yang
+			// baru dibuat dibatalkan, supaya user tidak mendapat pengajuan ganda
+			// saat mengulang.
+			_ = s.repo.Delete(dr.ID)
 			return nil, err
 		}
 	}
@@ -164,6 +172,9 @@ func (s *documentReviewService) Resubmit(id string, userID string, files []*mult
 		return nil, errors.New("pengajuan hanya dapat diajukan ulang dari status NEED_REVISION atau REJECTED")
 	}
 
+	if err := validateFiles(files); err != nil {
+		return nil, err
+	}
 	if len(files) > 0 {
 		round, _ := s.repo.GetLatestUploadRound(dr.ID)
 		if err := s.uploadAttachments(dr.ID, files, round+1); err != nil {

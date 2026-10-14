@@ -47,6 +47,10 @@ func (s *legalOpinionService) Create(userID string, req dto.CreateLegalOpinionRe
 	}
 
 	// Generate ticket number
+	if err := validateFiles(files); err != nil {
+		return nil, err
+	}
+
 	seq, err := s.repo.NextTicketSequence("LO")
 	if err != nil {
 		return nil, errors.New("gagal generate ticket number")
@@ -76,6 +80,10 @@ func (s *legalOpinionService) Create(userID string, req dto.CreateLegalOpinionRe
 	// Upload attachments
 	if len(files) > 0 {
 		if err := s.uploadAttachments(lo.ID, files, 1); err != nil {
+			// Unggahan gagal di tengah (bukan karena file ditolak): pengajuan yang
+			// baru dibuat dibatalkan, supaya user tidak mendapat pengajuan ganda
+			// saat mengulang.
+			_ = s.repo.Delete(lo.ID)
 			return nil, err
 		}
 	}
@@ -168,6 +176,9 @@ func (s *legalOpinionService) Resubmit(id string, userID string, files []*multip
 	}
 
 	// Upload new attachments as next round (append — file lama tetap)
+	if err := validateFiles(files); err != nil {
+		return nil, err
+	}
 	if len(files) > 0 {
 		round, _ := s.repo.GetLatestUploadRound(lo.ID)
 		if err := s.uploadAttachments(lo.ID, files, round+1); err != nil {

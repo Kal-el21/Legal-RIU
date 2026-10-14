@@ -97,7 +97,7 @@ func InitMinIO(cfg *config.Config) *MinIOClient {
 
 // UploadFile uploads a file to MinIO and returns the stored path
 func (m *MinIOClient) UploadFile(ctx context.Context, folder string, fileHeader *multipart.FileHeader, customName ...string) (string, string, error) {
-	if err := validateUpload(fileHeader); err != nil {
+	if err := ValidateUpload(fileHeader); err != nil {
 		return "", "", err
 	}
 
@@ -156,7 +156,9 @@ func sanitizeFilename(name string) string {
 	return sanitized
 }
 
-func validateUpload(fileHeader *multipart.FileHeader) error {
+// ValidateUpload memeriksa ukuran dan tipe file tanpa mengunggahnya, supaya
+// pemanggil bisa menolak semua file lebih dulu sebelum menyimpan apa pun.
+func ValidateUpload(fileHeader *multipart.FileHeader) error {
 	if fileHeader == nil {
 		return errors.New("file tidak ditemukan")
 	}
