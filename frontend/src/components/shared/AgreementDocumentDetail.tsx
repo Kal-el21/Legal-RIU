@@ -12,6 +12,14 @@ import type { SubmissionStatus } from '@/types'
 
 interface Props { apiBase?: string; approver?: boolean }
 
+// Label selama diproses dan pesan setelah berhasil, per aksi status.
+const statusActions: Record<string, { busy: string; done: string }> = {
+  UNDER_REVIEW: { busy: 'Memproses...', done: 'Pemeriksaan dimulai' },
+  NEED_REVISION: { busy: 'Memproses...', done: 'Pengajuan dikembalikan untuk revisi' },
+  REJECTED: { busy: 'Memproses...', done: 'Pengajuan ditolak' },
+  COMPLETED: { busy: 'Menyetujui... (menyiapkan PDF)', done: 'Perjanjian disetujui' },
+}
+
 const approverFieldLabels: Record<string, string> = {
   agreement_number: 'Nomor Perjanjian',
   signing_place: 'Tempat Penandatanganan',
@@ -61,6 +69,8 @@ export default function AgreementDocumentDetail({ apiBase = '', approver = false
   const [note, setNote] = useState('')
   const [meta, setMeta] = useState<Record<string, string>>({})
   const [error, setError] = useState('')
+  const [processing, setProcessing] = useState<string | null>(null)
+  const [notice, setNotice] = useState('')
   const [previewUrl, setPreviewUrl] = useState('')
   const [previewError, setPreviewError] = useState('')
   const [previewRevision, setPreviewRevision] = useState(0)
@@ -160,17 +170,28 @@ export default function AgreementDocumentDetail({ apiBase = '', approver = false
     }
   }, [apiBase, id])
 
+  // Satu aksi pada satu waktu: persetujuan butuh beberapa detik untuk menyiapkan
+  // PDF, dan tanpa kunci tombol yang ditekan dua kali mengirim dua persetujuan.
   const changeStatus = async (status: string) => {
-    if (!id) return
+    if (!id || processing) return
+    setProcessing(status)
+    setNotice('')
+    setError('')
     try {
       if (status === 'COMPLETED') await agreementService.meta(apiBase, id, meta)
       await agreementService.status(apiBase, id, status, note)
       await load()
       setPreviewRevision((value) => value + 1)
+      setNotice(statusActions[status]?.done ?? 'Status berhasil diubah')
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Gagal memproses pengajuan')
+    } finally {
+      setProcessing(null)
     }
   }
+
+  const statusButtonLabel = (status: string, label: string) =>
+    processing === status ? statusActions[status]?.busy ?? 'Memproses...' : label
 
   if (error && !document) return <div className="p-6 text-red-600">{error}</div>
   if (!document) return <div className="p-12 text-center text-gray-400">Memuat data...</div>
@@ -236,11 +257,12 @@ export default function AgreementDocumentDetail({ apiBase = '', approver = false
             </div>
           </div>
           <div className="flex gap-2 flex-wrap mt-4">
-            <Button variant="outline" onClick={() => void changeStatus('UNDER_REVIEW')}>Mulai Pemeriksaan</Button>
-            <Button variant="outline" onClick={() => void changeStatus('NEED_REVISION')}>Kembalikan</Button>
-            <Button variant="outline" onClick={() => void changeStatus('REJECTED')}>Tolak</Button>
-            <Button className="text-white transition hover:brightness-95" style={{ background: '#C8102E' }} onClick={() => void changeStatus('COMPLETED')}>Setujui</Button>
+            <Button variant="outline" disabled={!!processing} onClick={() => void changeStatus('UNDER_REVIEW')}>{statusButtonLabel('UNDER_REVIEW', 'Mulai Pemeriksaan')}</Button>
+            <Button variant="outline" disabled={!!processing} onClick={() => void changeStatus('NEED_REVISION')}>{statusButtonLabel('NEED_REVISION', 'Kembalikan')}</Button>
+            <Button variant="outline" disabled={!!processing} onClick={() => void changeStatus('REJECTED')}>{statusButtonLabel('REJECTED', 'Tolak')}</Button>
+            <Button className="text-white transition hover:brightness-95" style={{ background: '#C8102E' }} disabled={!!processing} onClick={() => void changeStatus('COMPLETED')}>{statusButtonLabel('COMPLETED', 'Setujui')}</Button>
           </div>
+          {notice && <p className="mt-3 text-sm text-green-600">{notice}</p>}
         </div>}
         {previewError && <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">Preview PDF gagal dimuat: {previewError}</div>}
         {!previewError && previewLoading && <div className="h-[650px] rounded-2xl border border-gray-100 bg-gray-50 flex items-center justify-center text-sm text-gray-500">Menyiapkan preview PDF...</div>}

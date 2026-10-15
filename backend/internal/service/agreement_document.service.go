@@ -354,7 +354,9 @@ func (s *agreementDocumentService) approve(ctx context.Context, d *entity.Agreem
 	if e != nil {
 		return nil, e
 	}
-	base := "agreement-documents/" + d.ID.String() + "/final/agreement"
+	// Path unik per percobaan: kalau dua persetujuan berjalan bersamaan, yang kalah
+	// hanya menghapus filenya sendiri, bukan file milik persetujuan yang berhasil.
+	base := "agreement-documents/" + d.ID.String() + "/final/agreement-" + uuid.NewString()[:8]
 	if e = s.storage.UploadBytes(ctx, base+".docx", docx, "application/vnd.openxmlformats-officedocument.wordprocessingml.document"); e != nil {
 		return nil, e
 	}
