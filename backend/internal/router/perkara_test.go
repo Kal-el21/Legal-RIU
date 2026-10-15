@@ -458,7 +458,48 @@ func TestBerkasPerkara(t *testing.T) {
 	// Alamat file di luar folder perkara ditolak.
 	for _, jalur := range []string{"/download", "/file"} {
 		w := panggil(t, legal, http.MethodGet, perkaraLegal+jalur+"?path="+url.QueryEscape("legal-opinions/attachments/milik-orang.pdf"), nil)
-		harapKode(t, w, http.StatusBadRequest, "mengambil file di luar folder perkara lewat "+jalur)
+		harapKode(t, w, http.StatusNotFound, "mengambil file di luar folder perkara lewat "+jalur)
+	}
+}
+
+// File perkara hanya dilayani kalau path-nya tercatat di sebuah perkara, untuk
+// semua pengguna. Sebelumnya pengguna yang tidak dibatasi perusahaan (induk,
+// ADMIN, EXTERNAL) hanya diperiksa awalan foldernya, sehingga path berisi "../"
+// lolos dan hanya tertahan karena MinIO tidak menerjemahkannya.
+func TestFilePerkaraHarusTerdaftar(t *testing.T) {
+	butuhMinIO(t)
+	legal := masukPeran(t, entity.RoleLegal)
+	isi := []byte("dokumen perkara terdaftar")
+	p := buatPerkara(t, legal)
+	w := panggilForm(t, legal, http.MethodPost, perkaraLegal+"/"+p.ID+"/upload-document", nil, berkas{"document", "putusan.pdf", isi})
+	harapKode(t, w, http.StatusOK, "mengunggah dokumen perkara")
+	isiData(t, w, &p)
+	lampiranLO := semuaModulPengajuan[0].buat(t, masukPeran(t, entity.RoleUser), berkas{"attachments", "rahasia.pdf", []byte("rahasia")}).Attachments[0].FilePath
+
+	for _, k := range []struct{ nama, token, alamat string }{
+		{"LEGAL", legal, perkaraLegal},
+		{"ADMIN", masukPeran(t, entity.RoleAdmin), perkaraAdmin},
+		{"EXTERNAL", masukPeran(t, entity.RoleExternal), perkaraExternal},
+	} {
+		for _, jalur := range []string{"/download", "/file"} {
+			ambil := func(path string) (int, []byte) {
+				t.Helper()
+				w := panggil(t, k.token, http.MethodGet, k.alamat+jalur+"?path="+url.QueryEscape(path), nil)
+				return w.Code, w.Body.Bytes()
+			}
+			if kode, got := ambil(p.DocumentLink); kode != http.StatusOK || !bytes.Equal(got, isi) {
+				t.Errorf("%s %s dokumen perkara yang sah: dapat %d %q", k.nama, jalur, kode, got)
+			}
+			for _, path := range []string{
+				"legal-cases/documents/../../" + lampiranLO,
+				"legal-cases/documents/tidak-terdaftar.pdf",
+				lampiranLO,
+			} {
+				if kode, _ := ambil(path); kode != http.StatusNotFound {
+					t.Errorf("%s %s %q: dapat %d, harap 404", k.nama, jalur, path, kode)
+				}
+			}
+		}
 	}
 }
 
