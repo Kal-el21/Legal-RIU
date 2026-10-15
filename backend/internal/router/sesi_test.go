@@ -194,7 +194,14 @@ func TestTokenMengikutiDataUser(t *testing.T) {
 		harapKode(t, panggil(t, token, http.MethodGet, "/api/v1/legal-opinions", nil), http.StatusOK, "USER membuka daftar Legal Opinion")
 		w := panggil(t, admin, http.MethodPut, alamat+"/"+idUser(surel), map[string]string{"full_name": "Tes Ganti Peran", "position": "Staff", "division": divisi, "role": "LEGAL"})
 		harapKode(t, w, http.StatusOK, "mengubah peran menjadi LEGAL")
-		harapKode(t, panggil(t, token, http.MethodGet, "/api/v1/legal-opinions", nil), http.StatusForbidden, "token lama di alamat USER setelah menjadi LEGAL")
+		w = panggil(t, token, http.MethodGet, "/api/v1/legal-opinions", nil)
+		harapKode(t, w, http.StatusForbidden, "token lama di alamat USER setelah menjadi LEGAL")
+		// Frontend (services/api.ts) mengenali pesan ini untuk membaca ulang peran
+		// dan memindahkan user ke halaman peran barunya. Kalau pesannya diubah,
+		// ubah juga di sana.
+		if !strings.Contains(w.Body.String(), "Anda tidak memiliki akses ke halaman ini") {
+			t.Errorf("pesan 403 pemeriksaan peran berubah: %s", w.Body)
+		}
 		harapKode(t, panggil(t, token, http.MethodGet, "/api/v1/legal/legal-opinions", nil), http.StatusOK, "token lama di alamat LEGAL")
 	})
 
