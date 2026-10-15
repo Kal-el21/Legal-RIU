@@ -15,6 +15,7 @@ import (
 	"net/http/httptest"
 	"os/exec"
 	"strings"
+	"sync"
 	"testing"
 
 	"legal-riu-portal/internal/entity"
@@ -376,6 +377,54 @@ func TestPersetujuanPerjanjian(t *testing.T) {
 	harapKode(t, w, http.StatusOK, "LEGAL mengunduh DOCX akhir")
 	if !bytes.HasPrefix(w.Body.Bytes(), []byte("PK")) {
 		t.Error("file akhir bukan DOCX")
+	}
+}
+
+// Dua persetujuan yang hampir bersamaan (mis. tombol Setujui ditekan dua kali
+// selagi PDF disiapkan) hanya boleh menghasilkan satu persetujuan, dan file
+// final milik persetujuan itu harus tetap utuh. Sebelumnya permintaan yang kalah
+// menghapus file di path yang sama, sehingga perjanjian COMPLETED tanpa file.
+func TestPersetujuanGandaTidakMenghapusFile(t *testing.T) {
+	butuhMinIO(t)
+	butuhLibreOffice(t)
+	pemilik := masukPeran(t, entity.RoleUser)
+	legal := masukPeran(t, entity.RoleLegal)
+
+	p := buatPerjanjian(t, pemilik, formPerjanjian())
+	statusPerjanjian(t, legal, p.ID, "UNDER_REVIEW", "", http.StatusOK)
+	w := panggil(t, legal, http.MethodPatch, urlPerjanjian("/legal", "/", p.ID, "/meta"), map[string]string{"signing_date": "2026-10-11"})
+	harapKode(t, w, http.StatusOK, "mengisi tanggal tanda tangan")
+
+	kode := make([]int, 2)
+	var wg sync.WaitGroup
+	for i := range kode {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			kode[i] = panggil(t, legal, http.MethodPatch, urlPerjanjian("/legal", "/", p.ID, "/status"), map[string]string{"status": "COMPLETED"}).Code
+		}()
+	}
+	wg.Wait()
+	berhasil := 0
+	for _, k := range kode {
+		if k == http.StatusOK {
+			berhasil++
+		}
+	}
+	if berhasil != 1 {
+		t.Errorf("dua persetujuan bersamaan: kode %v, harap tepat satu 200", kode)
+	}
+	if s := ambilPerjanjian(t, pemilik, "", p.ID).Status; s != "COMPLETED" {
+		t.Fatalf("status setelah dua persetujuan: %s", s)
+	}
+
+	w = panggil(t, pemilik, http.MethodGet, urlPerjanjian("", "/", p.ID, "/pdf"), nil)
+	if w.Code != http.StatusOK || !bytes.HasPrefix(w.Body.Bytes(), []byte("%PDF")) {
+		t.Errorf("PDF akhir setelah dua persetujuan: %d (%d byte)", w.Code, w.Body.Len())
+	}
+	w = panggil(t, legal, http.MethodGet, urlPerjanjian("/legal", "/", p.ID, "/docx"), nil)
+	if w.Code != http.StatusOK || !bytes.HasPrefix(w.Body.Bytes(), []byte("PK")) {
+		t.Errorf("DOCX akhir setelah dua persetujuan: %d (%d byte)", w.Code, w.Body.Len())
 	}
 }
 

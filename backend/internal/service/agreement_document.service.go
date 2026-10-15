@@ -354,7 +354,9 @@ func (s *agreementDocumentService) approve(ctx context.Context, d *entity.Agreem
 	if e != nil {
 		return nil, e
 	}
-	base := "agreement-documents/" + d.ID.String() + "/final/agreement"
+	// Path unik per percobaan: kalau dua persetujuan berjalan bersamaan, yang kalah
+	// hanya menghapus filenya sendiri, bukan file milik persetujuan yang berhasil.
+	base := "agreement-documents/" + d.ID.String() + "/final/agreement-" + uuid.NewString()[:8]
 	if e = s.storage.UploadBytes(ctx, base+".docx", docx, "application/vnd.openxmlformats-officedocument.wordprocessingml.document"); e != nil {
 		return nil, e
 	}
@@ -425,6 +427,9 @@ func (s *agreementDocumentService) GetGeneratedFile(id, userID string, all bool,
 		path, ext = d.GeneratedDOCXPath, ".docx"
 	}
 	obj, e := s.storage.GetFileObject(context.Background(), path)
+	if errors.Is(e, ErrFileNotFound) {
+		return nil, "", e
+	}
 	if e != nil {
 		return nil, "", errors.New("dokumen final tidak tersedia")
 	}

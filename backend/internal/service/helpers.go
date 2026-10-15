@@ -29,10 +29,11 @@ func validateFiles(files []*multipart.FileHeader) error {
 	return nil
 }
 
-// ErrFileNotFound dipakai unduhan pengajuan: file tidak terdaftar di modulnya,
-// atau pemanggil tidak boleh melihat pengajuan pemiliknya. Keduanya dijawab
-// sama seperti file yang tidak ada.
-var ErrFileNotFound = errors.New("file tidak ditemukan")
+// ErrFileNotFound dijawab 404 oleh alamat unduh: file tidak terdaftar di
+// modulnya, pemanggil tidak boleh melihat pemiliknya, atau file tercatat tetapi
+// tidak ada di penyimpanan. Nilainya sama dengan storage.ErrNotFound supaya
+// ketiganya tertangkap oleh satu pemeriksaan errors.Is.
+var ErrFileNotFound = storage.ErrNotFound
 
 func parseUUID(id string) (uuid.UUID, error) {
 	return uuid.Parse(id)

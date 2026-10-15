@@ -9,6 +9,7 @@ package router
 import (
 	"bytes"
 	"net/http"
+	"net/url"
 	"slices"
 	"testing"
 
@@ -517,6 +518,60 @@ func TestAuditLogLimitTidakWajar(t *testing.T) {
 	} {
 		for _, q := range []string{"?limit=0", "?limit=-5", "?limit=abc", "?page=0&limit=0"} {
 			harapKode(t, panggil(t, k.token, http.MethodGet, k.alamat+q, nil), http.StatusOK, k.alamat+q)
+		}
+	}
+}
+
+// File yang tercatat di database tetapi tidak ada di penyimpanan dijawab 404.
+// MinIO baru melapor "tidak ada" saat isi file dibaca; sebelumnya jawaban 200
+// sudah telanjur terkirim dan browser menyimpan file 0 KB.
+func TestUnduhFileYangHilang(t *testing.T) {
+	butuhMinIO(t)
+	legal := masukPeran(t, entity.RoleLegal)
+	admin := masukPeran(t, entity.RoleAdmin)
+	pemilik := masukPeran(t, entity.RoleUser)
+	hilang := func(folder string) string { return folder + "/hilang-" + uuid.NewString() + ".pdf" }
+
+	// Perkara: dokumen terdaftar, filenya tidak ada.
+	p := buatPerkara(t, legal)
+	pathPerkara := hilang("legal-cases/documents")
+	dbTes.Exec("UPDATE legal_cases SET document_link = ? WHERE id = ?", pathPerkara, p.ID)
+
+	// Legal Opinion: lampiran terdaftar, filenya tidak ada.
+	opini := semuaModulPengajuan[0].buat(t, pemilik, berkas{"attachments", "ada.pdf", []byte("isi")})
+	pathOpini := hilang("legal-opinions/attachments")
+	dbTes.Exec("UPDATE legal_opinion_attachments SET file_path = ? WHERE legal_opinion_id = ?", pathOpini, opini.ID)
+
+	// Repositori: dokumen perkara yang filenya tidak ada.
+	repo := entity.RepositoryDocument{Title: "hilang.pdf", FeatureCode: "case_management", SourceType: "legal_cases", SourceID: p.ID, FilePath: pathPerkara, FileName: "hilang.pdf", MIMEType: "application/pdf", IsActive: true}
+	if err := dbTes.Create(&repo).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	// Perjanjian selesai, file final dan lampirannya tidak ada.
+	var idPemilik string
+	dbTes.Raw("SELECT id FROM users WHERE email = ?", surelPeran(entity.RoleUser)).Scan(&idPemilik)
+	pks := entity.AgreementDocument{TicketNumber: "UJI-HILANG-" + uuid.NewString(), UserID: uuid.MustParse(idPemilik), DocumentTypeCode: "PKS", FormData: []byte("{}"), Status: entity.StatusCompleted,
+		GeneratedPDFPath: hilang("agreement-documents/final"), GeneratedDOCXPath: hilang("agreement-documents/final"), GeneratedFileName: "perjanjian-hilang"}
+	if err := dbTes.Create(&pks).Error; err != nil {
+		t.Fatal(err)
+	}
+	lampiran := entity.AgreementAttachment{ID: uuid.New(), AgreementDocumentID: pks.ID, FileName: "hilang.pdf", FilePath: hilang("agreement-documents/attachments"), UploadRound: 1, UploadedBy: pks.UserID}
+	if err := dbTes.Create(&lampiran).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	for _, k := range []struct{ nama, token, alamat string }{
+		{"file perkara (unduh)", legal, perkaraLegal + "/download?path=" + url.QueryEscape(pathPerkara)},
+		{"file perkara (lihat)", legal, perkaraLegal + "/file?path=" + url.QueryEscape(pathPerkara)},
+		{"lampiran Legal Opinion", pemilik, semuaModulPengajuan[0].url("", "/download?path=", url.QueryEscape(pathOpini))},
+		{"Repositori Dokumen", legal, "/api/v1/document-repositories/" + repo.ID.String() + "/download"},
+		{"PDF final perjanjian", admin, "/api/v1/admin/agreement-documents/" + pks.ID.String() + "/pdf"},
+		{"DOCX final perjanjian", admin, "/api/v1/admin/agreement-documents/" + pks.ID.String() + "/docx"},
+		{"lampiran perjanjian", admin, "/api/v1/admin/agreement-documents/" + pks.ID.String() + "/attachments/" + lampiran.ID.String()},
+	} {
+		if w := panggil(t, k.token, http.MethodGet, k.alamat, nil); w.Code != http.StatusNotFound {
+			t.Errorf("%s yang filenya hilang: dapat %d (%d byte), harap 404", k.nama, w.Code, w.Body.Len())
 		}
 	}
 }

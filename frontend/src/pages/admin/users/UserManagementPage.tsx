@@ -326,8 +326,8 @@ export default function UserManagementPage() {
                         </button>
                       )}
                       {canUpdateStatus && (
-                        <button onClick={() => toggleStatus(user)} title={user.status === 'ACTIVE' ? 'Nonaktifkan' : 'Aktifkan'}
-                          className={`p-1.5 rounded-lg hover:bg-gray-100 transition-colors ${
+                        <button onClick={() => toggleStatus(user)} disabled={statusMutation.isPending} title={user.status === 'ACTIVE' ? 'Nonaktifkan' : 'Aktifkan'}
+                          className={`p-1.5 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-40 ${
                             user.status === 'ACTIVE' ? 'text-green-500 hover:text-green-700' : 'text-gray-400 hover:text-gray-600'
                           }`}>
                           {user.status === 'ACTIVE' ? <ToggleRight className="w-4 h-4" /> : <ToggleLeft className="w-4 h-4" />}

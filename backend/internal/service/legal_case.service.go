@@ -187,12 +187,11 @@ func (s *legalCaseService) findCase(scope *uuid.UUID, id string) (*entity.LegalC
 // fileInScope memastikan file di path itu milik perkara yang boleh dijangkau si
 // pemanggil. User yang tidak dibatasi tidak diperiksa.
 func (s *legalCaseService) fileInScope(scope *uuid.UUID, filePath string) error {
-	if scope == nil {
-		return nil
-	}
-	ok, err := s.repo.CaseFileBelongsToCompany(filePath, *scope)
+	// Berlaku untuk semua pengguna, termasuk yang tidak dibatasi perusahaan:
+	// tanpa ini path seperti "legal-cases/documents/../../..." lolos pemeriksaan awalan.
+	ok, err := s.repo.CaseFileRegistered(filePath, scope)
 	if err != nil || !ok {
-		return errors.New("file tidak ditemukan")
+		return ErrFileNotFound
 	}
 	return nil
 }
@@ -426,7 +425,7 @@ func (s *legalCaseService) DeleteChronology(scope *uuid.UUID, caseID string, chr
 
 func (s *legalCaseService) DownloadFile(scope *uuid.UUID, filePath string) (*minio.Object, error) {
 	if !strings.HasPrefix(filePath, "legal-cases/documents/") && !strings.HasPrefix(filePath, "legal-cases/chronologies/") {
-		return nil, errors.New("path file tidak valid")
+		return nil, ErrFileNotFound
 	}
 	if err := s.fileInScope(scope, filePath); err != nil {
 		return nil, err
@@ -1173,7 +1172,7 @@ func (s *legalCaseService) ViewFile(scope *uuid.UUID, filePath string) (*minio.O
 	if !strings.HasPrefix(filePath, "legal-cases/documents/") &&
 		!strings.HasPrefix(filePath, "legal-cases/chronologies/") &&
 		!strings.HasPrefix(filePath, "legal-cases/photos/") {
-		return nil, "", errors.New("path file tidak valid")
+		return nil, "", ErrFileNotFound
 	}
 	if err := s.fileInScope(scope, filePath); err != nil {
 		return nil, "", err

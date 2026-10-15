@@ -2,6 +2,7 @@ package handler
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"mime/multipart"
 	"path/filepath"
@@ -281,8 +282,12 @@ func (h *LegalCaseHandler) ViewFile(c *gin.Context) {
 	}
 
 	obj, contentType, err := h.svc.ViewFile(scope, filePath)
+	if errors.Is(err, service.ErrFileNotFound) {
+		utils.NotFound(c, "File tidak ditemukan")
+		return
+	}
 	if err != nil {
-		utils.BadRequest(c, err.Error(), nil)
+		utils.InternalError(c, "Gagal mengambil file")
 		return
 	}
 	defer obj.Close()
@@ -392,8 +397,12 @@ func (h *LegalCaseHandler) Download(c *gin.Context) {
 	}
 
 	obj, err := h.svc.DownloadFile(scope, filePath)
+	if errors.Is(err, service.ErrFileNotFound) {
+		utils.NotFound(c, "File tidak ditemukan")
+		return
+	}
 	if err != nil {
-		utils.BadRequest(c, err.Error(), nil)
+		utils.InternalError(c, "Gagal mengambil file")
 		return
 	}
 	defer obj.Close()

@@ -167,8 +167,25 @@ func (m *MinIOClient) DeleteFile(ctx context.Context, objectPath string) error {
 }
 
 // GetFileObject retrieves a file object from MinIO for proxy download
+// ErrNotFound: objek tidak ada di penyimpanan.
+var ErrNotFound = errors.New("file tidak ditemukan")
+
+// GetFileObject membuka sebuah objek untuk dikirim. GetObject MinIO baru melapor
+// "tidak ada" saat isinya dibaca, padahal saat itu jawaban 200 sudah terkirim dan
+// pengguna mendapat file 0 KB; karena itu keberadaannya diperiksa dulu.
 func (m *MinIOClient) GetFileObject(ctx context.Context, objectPath string) (*minio.Object, error) {
-	return m.client.GetObject(ctx, m.bucket, objectPath, minio.GetObjectOptions{})
+	obj, err := m.client.GetObject(ctx, m.bucket, objectPath, minio.GetObjectOptions{})
+	if err != nil {
+		return nil, err
+	}
+	if _, err := obj.Stat(); err != nil {
+		obj.Close()
+		if minio.ToErrorResponse(err).Code == "NoSuchKey" {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return obj, nil
 }
 
 // GetFileContentType returns the stored content type of an object (from MinIO metadata).
