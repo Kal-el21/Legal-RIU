@@ -1,4 +1,4 @@
-import { Scale, LayoutDashboard, FileText, FileSearch, Users, ScrollText, Building2, Target, Briefcase, MapPin, UserCog, FolderOpen, BarChart3, Files, Handshake, BookOpen, FileType, LayoutTemplate } from 'lucide-react'
+import { Scale, LayoutDashboard, FileText, FileSearch, Users, ScrollText, Building2, Target, Briefcase, MapPin, UserCog, FolderOpen, BarChart3, Files, Handshake, BookOpen, FileType, LayoutTemplate, Network } from 'lucide-react'
 import PanelLayout, { type MenuItem, type MenuGroup } from '@/layouts/PanelLayout'
 
 const NAV: (MenuItem | MenuGroup)[] = [
@@ -9,12 +9,12 @@ const NAV: (MenuItem | MenuGroup)[] = [
   { label: 'Dokumen Perjanjian', href: '/admin/agreement-documents', icon: Handshake, permissions: ['agreement_document.view.all'] },
   { label: 'Dokumen Repository', href: '/admin/repository-documents', icon: Files, permissions: ['document_repository.view'] },
   { label: 'Manajemen Kasus', href: '/admin/legal-cases', icon: Scale, permissions: ['case_management.view'] },
-  { label: 'Manajemen Pengguna', href: '/admin/users', icon: Users, permissions: ['user_management.view'] },
   { label: 'Audit Log', href: '/admin/audit-logs', icon: ScrollText, permissions: ['audit_log.view'] },
   {
     label: 'Data Master',
     icon: FolderOpen,
     children: [
+      { label: 'Manajemen Pengguna', href: '/admin/users', icon: Users, permissions: ['user_management.view'] },
       { label: 'Perusahaan', href: '/admin/companies', icon: Building2, permissions: ['master_data.manage'] },
       { label: 'Tujuan Pembuatan', href: '/admin/purpose-types', icon: Target, permissions: ['master_data.manage'] },
       { label: 'Jenis Dokumen', href: '/admin/document-types', icon: FileType, permissions: ['master_data.manage'] },
@@ -22,7 +22,7 @@ const NAV: (MenuItem | MenuGroup)[] = [
       { label: 'Kategori', href: '/admin/case-categories', icon: FolderOpen, permissions: ['master_data.manage'] },
       { label: 'Kabupaten/Kota', href: '/admin/regencies', icon: MapPin, permissions: ['master_data.manage'] },
       { label: 'Cedant', href: '/admin/cedants', icon: UserCog, permissions: ['master_data.manage'] },
-      { label: 'Divisi', href: '/admin/divisions', icon: Users, permissions: ['master_data.manage'] },
+      { label: 'Divisi', href: '/admin/divisions', icon: Network, permissions: ['master_data.manage'] },
       { label: 'Pihak Pertama', href: '/admin/agreement-company-master', icon: Building2, permissions: ['agreement_company_master.view.all'] },
       { label: 'Template Perjanjian', href: '/admin/agreement-templates', icon: LayoutTemplate, permissions: ['agreement_template.view.all'] },
     ],
