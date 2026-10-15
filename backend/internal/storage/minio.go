@@ -36,6 +36,8 @@ var allowedUploadExtensions = map[string]bool{
 	".jpg":  true,
 	".jpeg": true,
 	".png":  true,
+	// Form foto perkara menawarkan webp; tanpa ini fotonya lolos form lalu ditolak saat disimpan.
+	".webp": true,
 }
 
 var Storage *MinIOClient

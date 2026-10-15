@@ -436,6 +436,12 @@ func TestBerkasPerkara(t *testing.T) {
 		t.Errorf("alamat foto setelah dihapus: %q", got)
 	}
 
+	// Form perkara menawarkan foto jpg, png, dan webp; ketiganya harus diterima.
+	for _, nama := range []string{"sidang.jpg", "sidang.webp"} {
+		harapKode(t, panggilForm(t, legal, http.MethodPost, alamat+"/photo", nil, berkas{"photo", nama, isiFoto}), http.StatusOK, "unggah foto "+nama)
+	}
+	harapKode(t, panggil(t, legal, http.MethodDelete, alamat+"/photo", nil), http.StatusOK, "hapus foto")
+
 	// Kronologi dengan lampiran.
 	w = panggilForm(t, legal, http.MethodPost, alamat+"/chronology",
 		map[string]string{"agenda_date": "2026-10-05", "agenda": "Sidang bukti"}, berkas{"files", "bukti.pdf", isiLampiran})
