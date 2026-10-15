@@ -237,9 +237,6 @@ export default function AdminLegalCaseDetailPage() {
                 )}
               </Field>
 
-              {createChronology.isSuccess && (
-                <p className="rounded-lg bg-green-50 px-3 py-2 text-xs text-green-700">Kronologi berhasil ditambahkan.</p>
-              )}
 
               <Button type="submit" disabled={!agendaDate || !agenda.trim() || createChronology.isPending} className="w-full text-white" style={{ background: '#C8102E' }}>
                 <Plus className="h-4 w-4" />

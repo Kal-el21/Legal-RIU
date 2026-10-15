@@ -2,7 +2,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useMutation } from '@tanstack/react-query'
-import { User, KeyRound, CheckCircle } from 'lucide-react'
+import { User, KeyRound } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -38,6 +38,7 @@ export default function ProfilePage() {
   })
 
   const mutation = useMutation({
+    meta: { success: 'Password berhasil diubah' },
     mutationFn: (data: { current_password: string; new_password: string }) =>
       authService.changePassword(data),
     onSuccess: () => reset(),
@@ -95,12 +96,6 @@ export default function ProfilePage() {
           <h2 className="text-base font-semibold" style={{ color: '#0B2545' }}>Ganti Password</h2>
         </div>
 
-        {mutation.isSuccess && (
-          <div className="flex items-center gap-2 p-3 rounded-xl bg-green-50 border border-green-200 mb-5">
-            <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
-            <p className="text-sm text-green-700">Password berhasil diubah!</p>
-          </div>
-        )}
 
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">

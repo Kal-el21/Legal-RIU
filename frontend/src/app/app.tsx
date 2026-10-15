@@ -10,15 +10,19 @@ import type { ApiResponse, User } from '@/types'
 
 declare module '@tanstack/react-query' {
   interface Register {
+    // success: pesan notifikasi saat aksi berhasil; tanpa pesan, tidak ada notifikasi.
     // errorToast: false untuk aksi yang kegagalannya sudah ditampilkan sendiri (mis. login).
-    mutationMeta: { errorToast?: boolean }
+    mutationMeta: { success?: string; errorToast?: boolean }
   }
 }
 
 const queryClient = new QueryClient({
-  // Semua aksi yang gagal diberitahukan dari satu tempat. Pesannya berasal dari server,
+  // Hasil semua aksi diberitahukan dari satu tempat. Pesan gagal berasal dari server,
   // yang dipindahkan ke error.message oleh services/api.ts.
   mutationCache: new MutationCache({
+    onSuccess: (_data, _variables, _context, mutation) => {
+      if (mutation.meta?.success) toast.success(mutation.meta.success)
+    },
     onError: (error, _variables, _context, mutation) => {
       if (mutation.meta?.errorToast === false) return
       // Sesi habis: services/api.ts sudah mengarahkan ke halaman login.

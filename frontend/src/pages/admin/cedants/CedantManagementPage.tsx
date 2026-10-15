@@ -57,10 +57,12 @@ export default function CedantManagementPage() {
   const queryClient = useQueryClient()
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['legal-cases', 'cedants'] })
   const updateMutation = useMutation({
+    meta: { success: 'Cedant berhasil disimpan' },
     mutationFn: ({ id, data }: { id: string; data: FormData }) => api.put(`/admin/cedants/${id}`, data),
     onSuccess: refresh,
   })
   const deleteMutation = useMutation({
+    meta: { success: 'Cedant berhasil dihapus' },
     mutationFn: (id: string) => api.delete(`/admin/cedants/${id}`),
     onSuccess: refresh,
   })

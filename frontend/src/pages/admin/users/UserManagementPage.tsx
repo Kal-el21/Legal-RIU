@@ -547,9 +547,6 @@ export default function UserManagementPage() {
             <Field label="Konfirmasi Password" error={resetForm.formState.errors.confirm_password?.message}>
               <Input {...resetForm.register('confirm_password')} type="password" placeholder="Ulangi password" />
             </Field>
-            {resetMutation.isSuccess && (
-              <p className="text-xs text-green-600">Password berhasil direset!</p>
-            )}
             <div className="flex gap-2 pt-2">
               <Button type="button" variant="outline" className="flex-1" onClick={closeModal}>Batal</Button>
               <Button type="submit" disabled={resetMutation.isPending} className="flex-1 text-white" style={{ background: '#C8102E' }}>

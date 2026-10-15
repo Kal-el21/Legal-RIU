@@ -57,14 +57,17 @@ export default function RegencyManagementPage() {
   const queryClient = useQueryClient()
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['legal-cases', 'regencies'] })
   const createMutation = useMutation({
+    meta: { success: 'Kabupaten/kota berhasil ditambahkan' },
     mutationFn: (data: FormData) => api.post('/admin/regencies', data),
     onSuccess: refresh,
   })
   const updateMutation = useMutation({
+    meta: { success: 'Kabupaten/kota berhasil disimpan' },
     mutationFn: ({ id, data }: { id: string; data: FormData }) => api.put(`/admin/regencies/${id}`, data),
     onSuccess: refresh,
   })
   const deleteMutation = useMutation({
+    meta: { success: 'Kabupaten/kota berhasil dihapus' },
     mutationFn: (id: string) => api.delete(`/admin/regencies/${id}`),
     onSuccess: refresh,
   })

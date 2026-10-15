@@ -16,6 +16,7 @@ export function useDocumentTypes() {
 export function useCreateDocumentType() {
   const qc = useQueryClient()
   return useMutation({
+    meta: { success: 'Jenis dokumen berhasil ditambahkan' },
     mutationFn: (data: { name: string; label: string }) => documentTypeService.create(data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: KEYS.all })
@@ -26,6 +27,7 @@ export function useCreateDocumentType() {
 export function useUpdateDocumentType() {
   const qc = useQueryClient()
   return useMutation({
+    meta: { success: 'Jenis dokumen berhasil disimpan' },
     mutationFn: ({ id, data }: { id: string; data: { name: string; label: string; is_active?: boolean } }) => documentTypeService.update(id, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: KEYS.all })
@@ -36,6 +38,7 @@ export function useUpdateDocumentType() {
 export function useDeleteDocumentType() {
   const qc = useQueryClient()
   return useMutation({
+    meta: { success: 'Jenis dokumen berhasil dihapus' },
     mutationFn: (id: string) => documentTypeService.delete(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: KEYS.all })
