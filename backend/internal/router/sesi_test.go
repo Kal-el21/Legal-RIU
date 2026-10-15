@@ -194,7 +194,14 @@ func TestTokenMengikutiDataUser(t *testing.T) {
 		harapKode(t, panggil(t, token, http.MethodGet, "/api/v1/legal-opinions", nil), http.StatusOK, "USER membuka daftar Legal Opinion")
 		w := panggil(t, admin, http.MethodPut, alamat+"/"+idUser(surel), map[string]string{"full_name": "Tes Ganti Peran", "position": "Staff", "division": divisi, "role": "LEGAL"})
 		harapKode(t, w, http.StatusOK, "mengubah peran menjadi LEGAL")
-		harapKode(t, panggil(t, token, http.MethodGet, "/api/v1/legal-opinions", nil), http.StatusForbidden, "token lama di alamat USER setelah menjadi LEGAL")
+		w = panggil(t, token, http.MethodGet, "/api/v1/legal-opinions", nil)
+		harapKode(t, w, http.StatusForbidden, "token lama di alamat USER setelah menjadi LEGAL")
+		// Frontend (services/api.ts) mengenali pesan ini untuk membaca ulang peran
+		// dan memindahkan user ke halaman peran barunya. Kalau pesannya diubah,
+		// ubah juga di sana.
+		if !strings.Contains(w.Body.String(), "Anda tidak memiliki akses ke halaman ini") {
+			t.Errorf("pesan 403 pemeriksaan peran berubah: %s", w.Body)
+		}
 		harapKode(t, panggil(t, token, http.MethodGet, "/api/v1/legal/legal-opinions", nil), http.StatusOK, "token lama di alamat LEGAL")
 	})
 
@@ -256,7 +263,11 @@ func TestKelolaUser(t *testing.T) {
 	isiData(t, w, &u)
 
 	t.Run("Validasi", func(t *testing.T) {
-		harapKode(t, panggil(t, admin, http.MethodPost, alamat, baru()), http.StatusBadRequest, "surel kembar")
+		w := panggil(t, admin, http.MethodPost, alamat, baru())
+		harapKode(t, w, http.StatusBadRequest, "surel kembar")
+		if !strings.Contains(w.Body.String(), "email sudah terdaftar") {
+			t.Errorf("alasan penolakan email kembar: %s", w.Body)
+		}
 		kasus := map[string]func(map[string]string){
 			"peran tidak dikenal":       func(m map[string]string) { m["email"], m["role"] = "lain-1@example.com", "DEWA" },
 			"sandi terlalu pendek":      func(m map[string]string) { m["email"], m["password"] = "lain-2@example.com", "pendek" },
@@ -267,6 +278,23 @@ func TestKelolaUser(t *testing.T) {
 			data := baru()
 			rusak(data)
 			harapKode(t, panggil(t, admin, http.MethodPost, alamat, data), http.StatusBadRequest, nama)
+		}
+	})
+
+	// User dihapus dengan soft delete, jadi email-nya tetap terpakai. Penolakannya
+	// harus menyebut penyebabnya, bukan sekadar "gagal membuat user".
+	t.Run("EmailAkunTerhapus", func(t *testing.T) {
+		data := baru()
+		data["email"] = "tes-email-terhapus@example.com"
+		w := panggil(t, admin, http.MethodPost, alamat, data)
+		harapKode(t, w, http.StatusCreated, "membuat user")
+		var lama akun
+		isiData(t, w, &lama)
+		harapKode(t, panggil(t, admin, http.MethodDelete, alamat+"/"+lama.ID, nil), http.StatusOK, "menghapus user")
+		w = panggil(t, admin, http.MethodPost, alamat, data)
+		harapKode(t, w, http.StatusBadRequest, "membuat user dengan email milik akun terhapus")
+		if !strings.Contains(w.Body.String(), "milik akun yang sudah dihapus") {
+			t.Errorf("alasan penolakan email milik akun terhapus: %s", w.Body)
 		}
 	})
 

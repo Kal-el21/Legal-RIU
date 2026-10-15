@@ -3,8 +3,9 @@ import axios, {
   type AxiosError,
   type InternalAxiosRequestConfig,
 } from 'axios'
+import { getRoleHome } from '@/routes/role-home'
 import { useAuthStore } from '@/store/auth.store'
-import type { ApiResponse, AuthResponse } from '@/types'
+import type { ApiResponse, AuthResponse, User } from '@/types'
 
 const api = axios.create({
   baseURL: '/api/v1',
@@ -34,6 +35,37 @@ function refreshSession() {
       })
   }
   return refreshPromise
+}
+
+// Pesan 403 dari pemeriksaan peran di backend (RoleMiddleware di
+// backend/internal/middleware/auth.middleware.go).
+const ROLE_FORBIDDEN_MESSAGE = 'Anda tidak memiliki akses ke halaman ini'
+
+let roleCheckPromise: Promise<void> | null = null
+
+// Peran user bisa diganti admin saat ia sedang login. Backend langsung menolak
+// alamat peran lamanya, sedangkan peran yang tersimpan di browser baru
+// diperbarui saat halaman dimuat ulang. Peran dibaca ulang, dan kalau memang
+// berubah, user dipindah ke halaman awal peran barunya dengan muat ulang penuh
+// supaya menu dan izinnya ikut diperbarui.
+function syncRoleAfterForbidden() {
+  if (!roleCheckPromise) {
+    roleCheckPromise = axios
+      .get<ApiResponse<User>>('/api/v1/auth/me')
+      .then((res) => {
+        const role = res.data.data?.role
+        if (role && role !== useAuthStore.getState().user?.role) {
+          window.location.href = getRoleHome(role)
+        }
+      })
+      .catch(() => {
+        // Sesi yang tidak sah ditangani penanganan 401 di bawah.
+      })
+      .finally(() => {
+        roleCheckPromise = null
+      })
+  }
+  return roleCheckPromise
 }
 
 type HeaderBag = { get?: (name: string) => unknown } | Record<string, unknown>
@@ -143,6 +175,10 @@ api.interceptors.response.use(
           // Fall through to reject with original error message.
         }
       }
+    }
+
+    if (error.response?.status === 403 && responseData?.message === ROLE_FORBIDDEN_MESSAGE) {
+      await syncRoleAfterForbidden()
     }
 
     if (responseData?.message) {
