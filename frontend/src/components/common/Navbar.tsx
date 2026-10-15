@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { ChevronDown, Menu, X, Scale, LayoutDashboard, LogOut } from 'lucide-react'
+import { ChevronDown, Menu, X, LayoutDashboard, LogOut } from 'lucide-react'
 import { useAuthStore } from '@/store/auth.store'
 import { useLogout } from '@/hooks/useAuth'
 import { getRoleHome } from '@/routes/role-home'
@@ -36,11 +36,9 @@ export default function Navbar() {
 
           {/* Logo */}
           <Link to="/" className="flex items-center gap-2.5 flex-shrink-0">
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: '#C8102E' }}>
-              <Scale className="w-4 h-4 text-white" />
-            </div>
+            <img src="/alea-mark.png" alt="" className="w-8 h-8 object-contain" />
             <div>
-              <span className="font-bold text-sm" style={{ color: '#0B2545' }}>Legal RIU</span>
+              <span className="font-bold text-sm" style={{ color: '#0B2545' }}>ALEA</span>
               <p className="text-xs text-gray-400 leading-none">Indonesia Re</p>
             </div>
           </Link>

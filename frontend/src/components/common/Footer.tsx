@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { Scale, ExternalLink } from 'lucide-react'
+import { ExternalLink } from 'lucide-react'
 
 export default function Footer() {
   return (
@@ -8,11 +8,9 @@ export default function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
           <div>
             <div className="flex items-center gap-2.5 mb-4">
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: '#C8102E' }}>
-                <Scale className="w-4 h-4 text-white" />
-              </div>
+              <img src="/alea-mark.png" alt="" className="w-8 h-8 flex-shrink-0 rounded-lg bg-white object-contain p-0.5" />
               <div>
-                <span className="font-bold text-sm text-white">Legal RIU</span>
+                <span className="font-bold text-sm text-white">ALEA</span>
                 <p className="text-xs text-white/40 leading-none">Indonesia Re</p>
               </div>
             </div>
@@ -48,8 +46,8 @@ export default function Footer() {
           </div>
         </div>
         <div className="mt-10 pt-6 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <p className="text-xs text-white/30">© 2025 Legal RIU — Indonesia Re. All rights reserved.</p>
-          <p className="text-xs text-white/20">Powered by Legal RIU</p>
+          <p className="text-xs text-white/30">© {new Date().getFullYear()} ALEA — Indonesia Re. All rights reserved.</p>
+          <p className="text-xs text-white/20">Automated Legal Ecosystem &amp; Advisory</p>
         </div>
       </div>
     </footer>

@@ -22,7 +22,7 @@ const SERVICES = [
   {
     icon: MessageSquare,
     title: 'Konsultasi Legal',
-    desc: 'Konsultasi secara langsung dan tidak langsung kepada team Legal RIU.',
+    desc: 'Konsultasi secara langsung dan tidak langsung kepada tim Legal Indonesia Re.',
     href: '#',
     available: false,
     accent: '#64748b',
@@ -53,10 +53,10 @@ export default function HomePage() {
         <div className="relative max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-24">
           <div className="max-w-2xl">
             <p className="text-xs font-semibold uppercase tracking-widest mb-4" style={{ color: '#C8102E' }}>
-              Legal RIU
+              Automated Legal Ecosystem &amp; Advisory
             </p>
             <h1 className="text-4xl lg:text-6xl font-bold text-white leading-tight mb-6">
-              Selamat datang di Portal Legal RIU
+              Selamat datang di ALEA
             </h1>
             <p className="text-lg text-white/60 leading-relaxed mb-10 max-w-xl">
               Silakan masuk untuk melanjutkan ke portal internal Indonesia Re.
@@ -118,7 +118,7 @@ export default function HomePage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-14">
             <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: '#C8102E' }}>Layanan Kami</p>
-            <h2 className="text-3xl font-bold" style={{ color: '#0B2545' }}>Pelayanan Legal RIU</h2>
+            <h2 className="text-3xl font-bold" style={{ color: '#0B2545' }}>Pelayanan Legal Indonesia Re</h2>
             <div className="w-12 h-1 rounded-full mx-auto mt-4" style={{ background: '#C8102E' }} />
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

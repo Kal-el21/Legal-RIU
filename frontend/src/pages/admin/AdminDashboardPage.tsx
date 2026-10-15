@@ -39,7 +39,7 @@ export default function AdminDashboardPage() {
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold" style={{ color: '#0B2545' }}>Dashboard Admin</h1>
-        <p className="text-sm text-gray-500 mt-0.5">Overview seluruh aktivitas Legal RIU Portal</p>
+        <p className="text-sm text-gray-500 mt-0.5">Overview seluruh aktivitas ALEA</p>
       </div>
 
       {/* Stats */}

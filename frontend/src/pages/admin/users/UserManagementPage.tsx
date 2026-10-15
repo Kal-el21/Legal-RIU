@@ -217,7 +217,7 @@ export default function UserManagementPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold" style={{ color: '#0B2545' }}>Manajemen Pengguna</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Kelola akun pengguna Legal RIU Portal</p>
+          <p className="text-sm text-gray-500 mt-0.5">Kelola akun pengguna ALEA</p>
         </div>
         {canCreate && (
           <Button onClick={() => setModal('create')} className="flex items-center gap-2 text-white" style={{ background: '#C8102E' }}>
