@@ -3,6 +3,7 @@ package handler
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"github.com/gin-gonic/gin"
@@ -156,6 +157,10 @@ func (h *AgreementDocumentHandler) DownloadDOCX(c *gin.Context) { h.downloadGene
 func (h *AgreementDocumentHandler) downloadGenerated(c *gin.Context, kind string) {
 	all := middleware.RoleWithAllAccess(c, "agreement_document.download_"+kind+".all") != "USER"
 	o, n, e := h.svc.GetGeneratedFile(c.Param("id"), middleware.GetUserID(c), all, kind)
+	if errors.Is(e, service.ErrFileNotFound) {
+		utils.NotFound(c, "File tidak ditemukan")
+		return
+	}
 	if e != nil {
 		utils.BadRequest(c, e.Error(), nil)
 		return

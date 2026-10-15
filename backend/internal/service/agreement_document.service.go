@@ -425,6 +425,9 @@ func (s *agreementDocumentService) GetGeneratedFile(id, userID string, all bool,
 		path, ext = d.GeneratedDOCXPath, ".docx"
 	}
 	obj, e := s.storage.GetFileObject(context.Background(), path)
+	if errors.Is(e, ErrFileNotFound) {
+		return nil, "", e
+	}
 	if e != nil {
 		return nil, "", errors.New("dokumen final tidak tersedia")
 	}
