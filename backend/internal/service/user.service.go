@@ -42,6 +42,15 @@ func (s *userService) GetAll(page, limit int, search string) ([]dto.UserResponse
 }
 
 func (s *userService) Create(req dto.CreateUserRequest) (*dto.UserResponse, error) {
+	// Diperiksa dulu supaya penolakan menyebut penyebabnya. User dihapus dengan
+	// soft delete, jadi email-nya tetap terpakai oleh indeks unik di database.
+	if _, err := s.userRepo.FindByEmail(req.Email); err == nil {
+		return nil, errors.New("email sudah terdaftar")
+	}
+	if s.userRepo.EmailDeleted(req.Email) {
+		return nil, errors.New("email ini milik akun yang sudah dihapus")
+	}
+
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
 		return nil, errors.New("gagal membuat user")
