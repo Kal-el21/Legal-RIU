@@ -55,9 +55,9 @@ export default function SharedReviewDocumentDetailPage({
   return (
     <div className="p-6 max-w-4xl mx-auto">
       <div className="flex items-start gap-3 mb-8">
-        <button onClick={() => onBack ? onBack() : navigate(-1)} className="p-2 rounded-lg hover:bg-gray-100 mt-0.5">
+        <Button variant="outline" size="icon" onClick={() => onBack ? onBack() : navigate(-1)} aria-label="Kembali" title="Kembali" className="mt-0.5">
           <ArrowLeft className="w-5 h-5 text-gray-600" />
-        </button>
+        </Button>
         <div className="flex-1">
           <div className="flex items-center gap-3 flex-wrap">
             <span className="text-xs font-mono font-medium bg-gray-100 text-gray-600 px-2 py-1 rounded">
@@ -126,10 +126,9 @@ export default function SharedReviewDocumentDetailPage({
                       <p className="text-sm text-gray-700 truncate">{att.file_name}</p>
                       <p className="text-xs text-gray-400">{formatFileSize(att.file_size)} · Round {att.upload_round} · Diupload {formatDateTime(att.created_at)}</p>
                     </div>
-                    <button onClick={() => handleDownload(att.file_path)}
-                      className="p-1.5 rounded-lg hover:bg-gray-200 text-gray-400 hover:text-gray-600">
+                    <Button variant="outline" size="icon-sm" onClick={() => handleDownload(att.file_path)} aria-label="Unduh" title="Unduh">
                       <Download className="w-4 h-4" />
-                    </button>
+                    </Button>
                   </div>
                 ))}
               </div>
@@ -147,10 +146,9 @@ export default function SharedReviewDocumentDetailPage({
                       <p className="text-xs text-gray-500 mt-0.5">Diupload oleh {res.uploader?.full_name} · {formatDateTime(res.created_at)}</p>
                       {res.notes && <p className="text-xs text-gray-500 mt-0.5 italic">{res.notes}</p>}
                     </div>
-                    <button onClick={() => handleDownload(res.file_path)}
-                      className="p-1.5 rounded-lg hover:bg-green-200 text-green-500">
+                    <Button variant="outline" size="icon-sm" onClick={() => handleDownload(res.file_path)} aria-label="Unduh hasil" title="Unduh hasil" className="text-green-600 hover:bg-green-50 hover:text-green-700">
                       <Download className="w-4 h-4" />
-                    </button>
+                    </Button>
                   </div>
                 ))}
               </div>

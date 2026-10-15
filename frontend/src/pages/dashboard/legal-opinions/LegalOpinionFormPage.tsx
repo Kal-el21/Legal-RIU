@@ -123,9 +123,9 @@ export default function LegalOpinionFormPage() {
     <div className="p-6 max-w-3xl mx-auto">
       {/* Header */}
       <div className="flex items-center gap-3 mb-8">
-        <button onClick={() => navigate(-1)} className="p-2 rounded-lg hover:bg-gray-100 transition-colors">
+        <Button variant="outline" size="icon" onClick={() => navigate(-1)} aria-label="Kembali" title="Kembali">
           <ArrowLeft className="w-5 h-5 text-gray-600" />
-        </button>
+        </Button>
         <div>
           <h1 className="text-2xl font-bold" style={{ color: '#0B2545' }}>
             {isEdit ? 'Edit Legal Opinion' : 'Buat Legal Opinion'}
@@ -232,9 +232,9 @@ export default function LegalOpinionFormPage() {
                     <FileText className="w-4 h-4 text-gray-400 flex-shrink-0" />
                     <span className="text-sm text-gray-700 flex-1 truncate">{f.name}</span>
                     <span className="text-xs text-gray-400">{formatFileSize(f.size)}</span>
-                    <button type="button" onClick={() => removeFile(i)} className="text-gray-400 hover:text-red-500 transition-colors">
+                    <Button variant="outline" size="icon-xs" type="button" onClick={() => removeFile(i)} aria-label="Hapus file" title="Hapus file" className="text-red-600 hover:bg-red-50 hover:text-red-700">
                       <X className="w-4 h-4" />
-                    </button>
+                    </Button>
                   </div>
                 ))}
               </div>

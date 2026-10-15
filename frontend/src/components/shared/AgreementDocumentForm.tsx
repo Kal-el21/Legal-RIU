@@ -124,9 +124,9 @@ export default function AgreementDocumentForm() {
   }
 
    return <div className="p-6 max-w-4xl mx-auto">
-      <button onClick={() => navigate(-1)} className="p-2 rounded-lg hover:bg-gray-100 mt-0.5 mb-2" title="Kembali">
+      <Button variant="outline" size="icon" onClick={() => navigate(-1)} title="Kembali" aria-label="Kembali" className="mt-0.5 mb-2">
         <ArrowLeft className="w-5 h-5 text-gray-600" />
-      </button>
+      </Button>
        {id && (
         <div className="flex items-center gap-3 mb-4">
           <span className="text-xs font-mono font-medium bg-gray-100 text-gray-600 px-2 py-1 rounded">
@@ -158,9 +158,9 @@ export default function AgreementDocumentForm() {
             {files.map((file, index) => (
               <li key={`${file.name}-${index}`} className="flex items-center justify-between gap-3 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-sm">
                 <span className="truncate text-gray-800">{file.name}</span>
-                <button type="button" onClick={() => setFiles((prev) => prev.filter((_, i) => i !== index))} className="shrink-0 text-gray-400 hover:text-red-600" title="Hapus lampiran">
+                <Button variant="outline" size="xs" type="button" onClick={() => setFiles((prev) => prev.filter((_, i) => i !== index))} title="Hapus lampiran" aria-label="Hapus lampiran" className="shrink-0 text-red-600 hover:bg-red-50 hover:text-red-700">
                   Hapus
-                </button>
+                </Button>
               </li>
             ))}
           </ul>

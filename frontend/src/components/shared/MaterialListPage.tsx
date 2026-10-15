@@ -26,9 +26,9 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <h2 className="text-base font-semibold" style={{ color: '#0B2545' }}>{title}</h2>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
+          <Button variant="ghost" size="icon-sm" onClick={onClose} aria-label="Tutup" title="Tutup">
             <X className="w-4 h-4 text-gray-500" />
-          </button>
+          </Button>
         </div>
         <div className="px-6 py-5">{children}</div>
       </div>
@@ -159,19 +159,19 @@ export default function SharedMaterialListPage({
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-1 justify-end">
                       {showEditButton && canManageMaterials && (
-                        <button onClick={() => { openEdit(item); navigate(getNavigateToDetail(item.id)) }} title="Edit" className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-700">
+                        <Button variant="outline" size="icon-sm" onClick={() => { openEdit(item); navigate(getNavigateToDetail(item.id)) }} title="Edit" aria-label="Edit">
                           <Edit className="w-4 h-4" />
-                        </button>
+                        </Button>
                       )}
                       {!showEditButton && (
-                        <button onClick={() => navigate(getNavigateToDetail(item.id))} title="Lihat Detail" className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-700">
+                        <Button variant="outline" size="icon-sm" onClick={() => navigate(getNavigateToDetail(item.id))} title="Lihat Detail" aria-label="Lihat Detail">
                           <Edit className="w-4 h-4" />
-                        </button>
+                        </Button>
                       )}
                       {canManageMaterials && (
-                        <button onClick={() => handleDelete(item)} title="Hapus" className="p-1.5 rounded-lg hover:bg-red-50 transition-colors text-gray-400 hover:text-red-600">
+                        <Button variant="outline" size="icon-sm" onClick={() => handleDelete(item)} title="Hapus" aria-label="Hapus" className="text-red-600 hover:bg-red-50 hover:text-red-700">
                           <Trash2 className="w-4 h-4" />
-                        </button>
+                        </Button>
                       )}
                     </div>
                   </td>

@@ -197,9 +197,9 @@ export default function AgreementDocumentDetail({ apiBase = '', approver = false
   if (!document) return <div className="p-12 text-center text-gray-400">Memuat data...</div>
 
   return <div className="p-6 max-w-6xl mx-auto">
-    <button onClick={() => navigate(-1)} className="p-2 rounded-lg hover:bg-gray-100 mt-0.5 mb-2" title="Kembali">
+    <Button variant="outline" size="icon" onClick={() => navigate(-1)} title="Kembali" aria-label="Kembali" className="mt-0.5 mb-2">
       <ArrowLeft className="w-5 h-5 text-gray-600" />
-    </button>
+    </Button>
     <div className="flex items-start gap-3">
       <div className="flex-1">
         <div className="flex items-center gap-3 flex-wrap">

@@ -3,6 +3,7 @@ import { ArrowLeft } from 'lucide-react'
 import { formatDateTime } from '@/lib/utils'
 import { useMaterial } from '@/hooks/useMaterial'
 import RichTextViewer from '@/components/common/RichTextViewer'
+import { Button } from '@/components/ui/button'
 
 export default function LegalMaterialDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -16,9 +17,9 @@ export default function LegalMaterialDetailPage() {
   return (
     <div className="p-6 max-w-4xl mx-auto">
       <div className="flex items-start gap-3 mb-6">
-        <button onClick={() => navigate(-1)} className="p-2 rounded-lg hover:bg-gray-100 mt-0.5">
+        <Button variant="outline" size="icon" onClick={() => navigate(-1)} aria-label="Kembali" title="Kembali" className="mt-0.5">
           <ArrowLeft className="w-5 h-5 text-gray-600" />
-        </button>
+        </Button>
         <div className="flex-1">
           <h1 className="text-2xl font-bold" style={{ color: '#0B2545' }}>{material.title}</h1>
           {material.excerpt && (

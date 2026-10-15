@@ -73,9 +73,9 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <h2 className="text-base font-semibold" style={{ color: '#0B2545' }}>{title}</h2>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
+          <Button variant="ghost" size="icon-sm" onClick={onClose} aria-label="Tutup" title="Tutup">
             <X className="w-4 h-4 text-gray-500" />
-          </button>
+          </Button>
         </div>
         <div className="px-6 py-5">{children}</div>
       </div>
@@ -308,36 +308,30 @@ export default function UserManagementPage() {
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-1 justify-end">
                       {canManagePermissions && (
-                        <button onClick={() => openPermissions(user)} title="Permission"
-                          className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-700">
+                        <Button variant="outline" size="icon-sm" onClick={() => openPermissions(user)} title="Permission" aria-label="Permission">
                           <Shield className="w-4 h-4" />
-                        </button>
+                        </Button>
                       )}
                       {canUpdateUser && (
-                        <button onClick={() => openEdit(user)} title="Edit"
-                          className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-700">
+                        <Button variant="outline" size="icon-sm" onClick={() => openEdit(user)} title="Edit" aria-label="Edit">
                           <Edit className="w-4 h-4" />
-                        </button>
+                        </Button>
                       )}
                       {canResetPassword && (
-                        <button onClick={() => openReset(user)} title="Reset Password"
-                          className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-700">
+                        <Button variant="outline" size="icon-sm" onClick={() => openReset(user)} title="Reset Password" aria-label="Reset Password">
                           <KeyRound className="w-4 h-4" />
-                        </button>
+                        </Button>
                       )}
                       {canUpdateStatus && (
-                        <button onClick={() => toggleStatus(user)} disabled={statusMutation.isPending} title={user.status === 'ACTIVE' ? 'Nonaktifkan' : 'Aktifkan'}
-                          className={`p-1.5 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-40 ${
-                            user.status === 'ACTIVE' ? 'text-green-500 hover:text-green-700' : 'text-gray-400 hover:text-gray-600'
-                          }`}>
+                        <Button variant="outline" size="icon-sm" onClick={() => toggleStatus(user)} disabled={statusMutation.isPending} title={user.status === 'ACTIVE' ? 'Nonaktifkan' : 'Aktifkan'}
+                          aria-label={user.status === 'ACTIVE' ? 'Nonaktifkan' : 'Aktifkan'} className={user.status === 'ACTIVE' ? 'text-green-600 hover:bg-green-50 hover:text-green-700' : undefined}>
                           {user.status === 'ACTIVE' ? <ToggleRight className="w-4 h-4" /> : <ToggleLeft className="w-4 h-4" />}
-                        </button>
+                        </Button>
                       )}
                       {canDelete && (
-                        <button onClick={() => handleDelete(user)} title="Hapus"
-                          className="p-1.5 rounded-lg hover:bg-red-50 transition-colors text-gray-400 hover:text-red-600">
+                        <Button variant="outline" size="icon-sm" onClick={() => handleDelete(user)} title="Hapus" aria-label="Hapus" className="text-red-600 hover:bg-red-50 hover:text-red-700">
                           <Trash2 className="w-4 h-4" />
-                        </button>
+                        </Button>
                       )}
                     </div>
                   </td>
