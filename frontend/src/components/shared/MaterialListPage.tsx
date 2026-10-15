@@ -195,7 +195,6 @@ export default function SharedMaterialListPage({
               <RichTextEditor value={form.watch('content') || ''} onChange={(v) => form.setValue('content', v)} />
               <input type="hidden" {...form.register('content')} />
             </Field>
-            {createMutation.isError && <p className="text-xs text-red-500">{(createMutation.error as Error)?.message}</p>}
             <div className="flex gap-2 pt-2">
               <Button type="button" variant="outline" className="flex-1" onClick={closeModal}>Batal</Button>
               <Button type="submit" disabled={createMutation.isPending} className="flex-1 text-white" style={{ background: '#C8102E' }}>
@@ -219,7 +218,6 @@ export default function SharedMaterialListPage({
               <RichTextEditor value={form.watch('content') || ''} onChange={(v) => form.setValue('content', v)} />
               <input type="hidden" {...form.register('content')} />
             </Field>
-            {updateMutation.isError && <p className="text-xs text-red-500">{(updateMutation.error as Error)?.message}</p>}
             <div className="flex gap-2 pt-2">
               <Button type="button" variant="outline" className="flex-1" onClick={closeModal}>Batal</Button>
               <Button type="submit" disabled={updateMutation.isPending} className="flex-1 text-white" style={{ background: '#0B2545' }}>

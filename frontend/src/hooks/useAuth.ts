@@ -9,6 +9,8 @@ export function useLogin() {
   const setAuth = useAuthStore((s) => s.setAuth)
 
   return useMutation({
+    // Login gagal sudah ditampilkan di form login, tidak perlu notifikasi lagi.
+    meta: { errorToast: false },
     // Isian ber-"@" adalah email akun lokal; selain itu username akun kantor (LDAP).
     mutationFn: (data: LoginRequest) =>
       data.email.includes('@')

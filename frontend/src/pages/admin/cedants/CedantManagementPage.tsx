@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
 import { Plus, Search, Edit, Trash2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -53,6 +54,16 @@ export default function CedantManagementPage() {
   const { data, isLoading } = useCedants({ limit: 200 })
   const createMutation = useCreateCedant()
   const importMutation = useImportCedants()
+  const queryClient = useQueryClient()
+  const refresh = () => queryClient.invalidateQueries({ queryKey: ['legal-cases', 'cedants'] })
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: FormData }) => api.put(`/admin/cedants/${id}`, data),
+    onSuccess: refresh,
+  })
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/admin/cedants/${id}`),
+    onSuccess: refresh,
+  })
 
   const form = useForm<FormData>({ resolver: zodResolver(schema), defaultValues: { name: '', description: '' } })
 
@@ -64,23 +75,17 @@ export default function CedantManagementPage() {
 
   const closeModal = () => { setModal(null); setSelected(null); form.reset({ name: '', description: '' }) }
 
-  const onCreateSubmit = async (data: FormData) => {
-    await createMutation.mutateAsync(data)
-    form.reset()
-    closeModal()
-  }
+  // Kegagalan ditampilkan sebagai notifikasi oleh QueryClient (app.tsx); modal tetap terbuka.
+  const onCreateSubmit = (data: FormData) => createMutation.mutate(data, { onSuccess: closeModal })
 
-  const onEditSubmit = async (data: FormData) => {
+  const onEditSubmit = (data: FormData) => {
     if (!selected) return
-    await api.put(`/admin/cedants/${selected.id}`, data)
-    closeModal()
-    window.location.reload()
+    updateMutation.mutate({ id: selected.id, data }, { onSuccess: closeModal })
   }
 
-  const handleDelete = async (item: Cedant) => {
+  const handleDelete = (item: Cedant) => {
     if (!confirm(`Hapus ${item.name}?`)) return
-    await api.delete(`/admin/cedants/${item.id}`)
-    window.location.reload()
+    deleteMutation.mutate(item.id)
   }
 
   const filtered = data?.filter((c) => c.name.toLowerCase().includes(search.toLowerCase())) ?? data ?? []
@@ -153,7 +158,6 @@ export default function CedantManagementPage() {
             <Field label="Deskripsi" error={form.formState.errors.description?.message}>
               <Input {...form.register('description')} placeholder="Deskripsi (opsional)" />
             </Field>
-            {createMutation.isError && <p className="text-xs text-red-500">{(createMutation.error as Error)?.message}</p>}
             <div className="flex gap-2 pt-2">
               <Button type="button" variant="outline" className="flex-1" onClick={closeModal}>Batal</Button>
               <Button type="submit" disabled={createMutation.isPending} className="flex-1 text-white" style={{ background: '#C8102E' }}>
@@ -175,8 +179,8 @@ export default function CedantManagementPage() {
             </Field>
             <div className="flex gap-2 pt-2">
               <Button type="button" variant="outline" className="flex-1" onClick={closeModal}>Batal</Button>
-              <Button type="submit" className="flex-1 text-white" style={{ background: '#0B2545' }}>
-                Simpan
+              <Button type="submit" disabled={updateMutation.isPending} className="flex-1 text-white" style={{ background: '#0B2545' }}>
+                {updateMutation.isPending ? 'Menyimpan...' : 'Simpan'}
               </Button>
             </div>
           </form>

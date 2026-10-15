@@ -173,7 +173,6 @@ export default function CompanyManagementPage() {
               <input type="checkbox" id="is_internal" {...form.register('is_internal')} className="rounded border-gray-300" />
               <Label htmlFor="is_internal" className="text-sm text-gray-700">Perusahaan Internal</Label>
             </div>
-            {createMutation.isError && <p className="text-xs text-red-500">{(createMutation.error as Error)?.message}</p>}
             <div className="flex gap-2 pt-2">
               <Button type="button" variant="outline" className="flex-1" onClick={closeModal}>Batal</Button>
               <Button type="submit" disabled={createMutation.isPending} className="flex-1 text-white" style={{ background: '#C8102E' }}>
@@ -200,7 +199,6 @@ export default function CompanyManagementPage() {
               <Label htmlFor="is_internal" className="text-sm text-gray-700">Perusahaan Internal</Label>
             </div>
             {selected.is_parent && <p className="text-xs text-gray-500">Perusahaan induk selalu internal, dan domain emailnya tidak bisa diubah.</p>}
-            {updateMutation.isError && <p className="text-xs text-red-500">{(updateMutation.error as Error)?.message}</p>}
             <div className="flex gap-2 pt-2">
               <Button type="button" variant="outline" className="flex-1" onClick={closeModal}>Batal</Button>
               <Button type="submit" disabled={updateMutation.isPending} className="flex-1 text-white" style={{ background: '#0B2545' }}>

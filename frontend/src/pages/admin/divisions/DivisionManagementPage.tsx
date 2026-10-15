@@ -10,7 +10,7 @@ import { useDivisions, useImportDivisions } from '@/hooks/useLegalCase'
 import { legalCaseService } from '@/services/legal-case.service'
 import ImportCard from '@/components/common/ImportCard'
 import api from '@/services/api'
-import { useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import type { Division } from '@/types'
 
 const schema = z.object({
@@ -54,6 +54,19 @@ export default function DivisionManagementPage() {
   const { data: divisionsData, isLoading } = useDivisions()
   const importMutation = useImportDivisions()
   const queryClient = useQueryClient()
+  const refresh = () => queryClient.invalidateQueries({ queryKey: ['legal-cases', 'divisions'] })
+  const createMutation = useMutation({
+    mutationFn: (data: FormData) => api.post('/divisions', data),
+    onSuccess: refresh,
+  })
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: FormData }) => api.put(`/divisions/${id}`, data),
+    onSuccess: refresh,
+  })
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/divisions/${id}`),
+    onSuccess: refresh,
+  })
 
   const form = useForm<FormData>({ resolver: zodResolver(schema), defaultValues: { name: '', description: '' } })
 
@@ -65,24 +78,17 @@ export default function DivisionManagementPage() {
 
   const closeModal = () => { setModal(null); setSelected(null); form.reset({ name: '', description: '' }) }
 
-  const onCreateSubmit = async (data: FormData) => {
-    await api.post('/divisions', data)
-    form.reset()
-    closeModal()
-    window.location.reload()
-  }
+  // Kegagalan ditampilkan sebagai notifikasi oleh QueryClient (app.tsx); modal tetap terbuka.
+  const onCreateSubmit = (data: FormData) => createMutation.mutate(data, { onSuccess: closeModal })
 
-  const onEditSubmit = async (data: FormData) => {
+  const onEditSubmit = (data: FormData) => {
     if (!selected) return
-    await api.put(`/divisions/${selected.id}`, data)
-    closeModal()
-    window.location.reload()
+    updateMutation.mutate({ id: selected.id, data }, { onSuccess: closeModal })
   }
 
-  const handleDelete = async (item: Division) => {
+  const handleDelete = (item: Division) => {
     if (!confirm(`Hapus ${item.name}?`)) return
-    await api.delete(`/divisions/${item.id}`)
-    queryClient.invalidateQueries({ queryKey: ['legal-cases', 'divisions'] })
+    deleteMutation.mutate(item.id)
   }
 
   const filtered = (divisionsData ?? []).filter((d) => d.name.toLowerCase().includes(search.toLowerCase()))
@@ -157,8 +163,8 @@ export default function DivisionManagementPage() {
             </Field>
             <div className="flex gap-2 pt-2">
               <Button type="button" variant="outline" className="flex-1" onClick={closeModal}>Batal</Button>
-              <Button type="submit" className="flex-1 text-white" style={{ background: '#C8102E' }}>
-                Buat
+              <Button type="submit" disabled={createMutation.isPending} className="flex-1 text-white" style={{ background: '#C8102E' }}>
+                {createMutation.isPending ? 'Menyimpan...' : 'Buat'}
               </Button>
             </div>
           </form>
@@ -176,8 +182,8 @@ export default function DivisionManagementPage() {
             </Field>
             <div className="flex gap-2 pt-2">
               <Button type="button" variant="outline" className="flex-1" onClick={closeModal}>Batal</Button>
-              <Button type="submit" className="flex-1 text-white" style={{ background: '#0B2545' }}>
-                Simpan
+              <Button type="submit" disabled={updateMutation.isPending} className="flex-1 text-white" style={{ background: '#0B2545' }}>
+                {updateMutation.isPending ? 'Menyimpan...' : 'Simpan'}
               </Button>
             </div>
           </form>

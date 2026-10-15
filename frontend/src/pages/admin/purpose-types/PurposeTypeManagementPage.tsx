@@ -163,7 +163,6 @@ export default function PurposeTypeManagementPage() {
               <input type="checkbox" id="is_active" {...form.register('is_active')} className="rounded border-gray-300" />
               <Label htmlFor="is_active" className="text-sm text-gray-700">Aktif</Label>
             </div>
-            {createMutation.isError && <p className="text-xs text-red-500">{(createMutation.error as Error)?.message}</p>}
             <div className="flex gap-2 pt-2">
               <Button type="button" variant="outline" className="flex-1" onClick={closeModal}>Batal</Button>
               <Button type="submit" disabled={createMutation.isPending} className="flex-1 text-white" style={{ background: '#C8102E' }}>
@@ -187,7 +186,6 @@ export default function PurposeTypeManagementPage() {
               <input type="checkbox" id="is_active" {...form.register('is_active')} className="rounded border-gray-300" />
               <Label htmlFor="is_active" className="text-sm text-gray-700">Aktif</Label>
             </div>
-            {updateMutation.isError && <p className="text-xs text-red-500">{(updateMutation.error as Error)?.message}</p>}
             <div className="flex gap-2 pt-2">
               <Button type="button" variant="outline" className="flex-1" onClick={closeModal}>Batal</Button>
               <Button type="submit" disabled={updateMutation.isPending} className="flex-1 text-white" style={{ background: '#0B2545' }}>

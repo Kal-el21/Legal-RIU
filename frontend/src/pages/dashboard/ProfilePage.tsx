@@ -102,11 +102,6 @@ export default function ProfilePage() {
           </div>
         )}
 
-        {mutation.isError && (
-          <div className="p-3 rounded-xl bg-red-50 border border-red-200 mb-5">
-            <p className="text-sm text-red-600">{(mutation.error as Error)?.message ?? 'Gagal mengubah password'}</p>
-          </div>
-        )}
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <Field label="Password Saat Ini" error={errors.current_password?.message}>

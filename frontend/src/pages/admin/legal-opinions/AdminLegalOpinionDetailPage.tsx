@@ -95,7 +95,6 @@ export default function AdminLegalOpinionDetailPage() {
                   className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
                 />
               </div>
-              {updateStatus.isError && <p className="text-xs text-red-500">{(updateStatus.error as Error)?.message}</p>}
               {updateStatus.isSuccess && <p className="text-xs text-green-600">Status berhasil diubah!</p>}
               <button
                 onClick={handleStatusUpdate}

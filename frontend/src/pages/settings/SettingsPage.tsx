@@ -64,14 +64,6 @@ function SuccessAlert({ message }: { message: string }) {
   )
 }
 
-function ErrorAlert({ message }: { message: string }) {
-  return (
-    <div className="p-3 rounded-xl bg-red-50 border border-red-200">
-      <p className="text-sm text-red-600">{message}</p>
-    </div>
-  )
-}
-
 // ── Profile Tab ───────────────────────────────────────────────────────────────
 
 function ProfileTab() {
@@ -143,7 +135,6 @@ function ProfileTab() {
         </div>
 
         {mutation.isSuccess && <SuccessAlert message="Profil berhasil diperbarui!" />}
-        {mutation.isError && <ErrorAlert message={(mutation.error as Error)?.message ?? 'Gagal memperbarui profil'} />}
 
         <Button type="submit" disabled={mutation.isPending} className="text-white" style={{ background: '#C8102E' }}>
           {mutation.isPending ? 'Menyimpan...' : 'Simpan Perubahan'}
@@ -293,7 +284,6 @@ function SecurityTab() {
           </Field>
 
           {pwMutation.isSuccess && <SuccessAlert message="Password berhasil diubah!" />}
-          {pwMutation.isError && <ErrorAlert message={(pwMutation.error as Error)?.message ?? 'Gagal mengubah password'} />}
 
           <Button type="submit" disabled={pwMutation.isPending} className="text-white" style={{ background: '#C8102E' }}>
             {pwMutation.isPending ? 'Menyimpan...' : 'Ubah Password'}
@@ -341,7 +331,6 @@ function SecurityTab() {
               <Field label="Password" error={twoFAForm.formState.errors.password?.message}>
                 <Input {...twoFAForm.register('password')} type="password" placeholder="Masukkan password Anda" />
               </Field>
-              {twoFAMutation.isError && <ErrorAlert message={(twoFAMutation.error as Error)?.message ?? 'Gagal'} />}
               {twoFAMutation.isSuccess && <SuccessAlert message={`2FA berhasil ${pendingTwoFA ? 'diaktifkan' : 'dinonaktifkan'}!`} />}
               <div className="flex gap-2">
                 <Button type="button" variant="outline" size="sm" onClick={() => setShowTwoFAConfirm(false)}>Batal</Button>
@@ -496,7 +485,6 @@ function AdminNotificationSettingsTab() {
       )}
 
       {updateMutation.isSuccess && <SuccessAlert message="Konfigurasi notifikasi berhasil diperbarui!" />}
-      {updateMutation.isError && <ErrorAlert message={(updateMutation.error as Error)?.message ?? 'Gagal memperbarui'} />}
     </div>
   )
 }

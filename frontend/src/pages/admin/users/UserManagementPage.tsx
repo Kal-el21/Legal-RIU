@@ -437,11 +437,6 @@ export default function UserManagementPage() {
                   />
                 </Field>
               )}
-              {createMutation.isError && createMutation.error && (
-               <p className="text-xs text-red-500">
-                 {createMutation.error.message}
-               </p>
-             )}
             <div className="flex gap-2 pt-2">
               <Button type="button" variant="outline" className="flex-1" onClick={closeModal}>Batal</Button>
               <Button type="submit" disabled={createMutation.isPending} className="flex-1 text-white" style={{ background: '#C8102E' }}>
@@ -527,9 +522,6 @@ export default function UserManagementPage() {
                   />
                 </Field>
               )}
-              {updateMutation.isError && (
-               <p className="text-xs text-red-500">{(updateMutation.error as Error)?.message}</p>
-             )}
             <div className="flex gap-2 pt-2">
               <Button type="button" variant="outline" className="flex-1" onClick={closeModal}>Batal</Button>
               <Button type="submit" disabled={updateMutation.isPending} className="flex-1 text-white" style={{ background: '#0B2545' }}>
@@ -555,9 +547,6 @@ export default function UserManagementPage() {
             <Field label="Konfirmasi Password" error={resetForm.formState.errors.confirm_password?.message}>
               <Input {...resetForm.register('confirm_password')} type="password" placeholder="Ulangi password" />
             </Field>
-            {resetMutation.isError && (
-              <p className="text-xs text-red-500">{(resetMutation.error as Error)?.message}</p>
-            )}
             {resetMutation.isSuccess && (
               <p className="text-xs text-green-600">Password berhasil direset!</p>
             )}

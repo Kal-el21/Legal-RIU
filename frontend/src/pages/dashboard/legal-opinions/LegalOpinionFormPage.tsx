@@ -243,13 +243,6 @@ export default function LegalOpinionFormPage() {
         )}
 
         {/* Error */}
-        {(createMutation.isError || updateMutation.isError) && (
-          <div className="p-4 rounded-xl bg-red-50 border border-red-200">
-            <p className="text-sm text-red-600">
-              {((createMutation.error || updateMutation.error) as Error)?.message ?? 'Terjadi kesalahan'}
-            </p>
-          </div>
-        )}
 
         {/* Submit */}
         <div className="flex gap-3 justify-end">
