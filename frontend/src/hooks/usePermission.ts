@@ -26,6 +26,7 @@ export function useUserPermissions(userID?: string) {
 export function useUpdateUserPermissions(userID?: string) {
   const qc = useQueryClient()
   return useMutation({
+    meta: { success: 'Permission user berhasil disimpan' },
     mutationFn: (overrides: { code: string; effect: PermissionEffect }[]) =>
       permissionService.updateUserAccess(userID!, overrides),
     onSuccess: () => {

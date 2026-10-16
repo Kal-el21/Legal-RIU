@@ -25,6 +25,7 @@ export function useLegalOpinion(id: string) {
 export function useCreateLegalOpinion() {
   const qc = useQueryClient()
   return useMutation({
+    meta: { success: 'Legal opinion berhasil diajukan' },
     mutationFn: (data: CreateLegalOpinionData) => legalOpinionService.create(data),
     onSuccess: () => qc.invalidateQueries({ queryKey: KEYS.all }),
   })
@@ -33,6 +34,7 @@ export function useCreateLegalOpinion() {
 export function useUpdateLegalOpinion() {
   const qc = useQueryClient()
   return useMutation({
+    meta: { success: 'Legal opinion berhasil disimpan' },
     mutationFn: ({ id, data }: { id: string; data: Omit<CreateLegalOpinionData, 'attachments'> }) =>
       legalOpinionService.update(id, data),
     onSuccess: (_, { id }) => {
@@ -45,6 +47,7 @@ export function useUpdateLegalOpinion() {
 export function useDeleteLegalOpinion() {
   const qc = useQueryClient()
   return useMutation({
+    meta: { success: 'Legal opinion berhasil dihapus' },
     mutationFn: (id: string) => legalOpinionService.delete(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: KEYS.all }),
   })
@@ -53,6 +56,7 @@ export function useDeleteLegalOpinion() {
 export function useResubmitLegalOpinion() {
   const qc = useQueryClient()
   return useMutation({
+    meta: { success: 'Legal opinion berhasil diajukan ulang' },
     mutationFn: ({ id, files }: { id: string; files?: File[] }) =>
       legalOpinionService.resubmit(id, files),
     onSuccess: (_, { id }) => {
@@ -65,6 +69,7 @@ export function useResubmitLegalOpinion() {
 export function useAdminUpdateStatus() {
   const qc = useQueryClient()
   return useMutation({
+    meta: { success: 'Status berhasil diubah' },
     mutationFn: ({ id, status, admin_note }: { id: string; status: string; admin_note?: string }) =>
       legalOpinionService.adminUpdateStatus(id, { status, admin_note }),
     onSuccess: (_, { id }) => {
@@ -77,6 +82,7 @@ export function useAdminUpdateStatus() {
 export function useLegalUpdateStatus() {
   const qc = useQueryClient()
   return useMutation({
+    meta: { success: 'Status berhasil diubah' },
     mutationFn: ({ id, status, admin_note }: { id: string; status: string; admin_note?: string }) =>
       legalOpinionService.legalUpdateStatus(id, { status, admin_note }),
     onSuccess: (_, { id }) => {

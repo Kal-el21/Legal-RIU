@@ -46,6 +46,12 @@
   html {
     @apply font-sans;
   }
+
+  /* Tailwind 4 tidak lagi memberi kursor tangan pada tombol. */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]) {
+    cursor: pointer;
+  }
 }
 
 @layer utilities {

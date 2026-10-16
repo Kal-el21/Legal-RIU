@@ -214,14 +214,14 @@ export default function AdminLegalCaseListPage() {
                         <Eye className="h-4 w-4" />
                       </Link>
                       {canUpdate && (
-                        <button onClick={() => handleEdit(item)} className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700" title="Edit">
+                        <Button variant="outline" size="icon-sm" onClick={() => handleEdit(item)} title="Edit" aria-label="Edit">
                           <Edit className="h-4 w-4" />
-                        </button>
+                        </Button>
                       )}
                       {canDelete && (
-                        <button onClick={() => handleDelete(item.id)} className="rounded-lg p-2 text-gray-400 hover:bg-red-50 hover:text-red-600" title="Delete">
+                        <Button variant="outline" size="icon-sm" onClick={() => handleDelete(item.id)} title="Delete" aria-label="Delete" className="text-red-600 hover:bg-red-50 hover:text-red-700">
                           <Trash2 className="h-4 w-4" />
-                        </button>
+                        </Button>
                       )}
                     </div>
                   </td>

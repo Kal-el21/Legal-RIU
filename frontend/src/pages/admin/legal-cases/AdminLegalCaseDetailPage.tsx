@@ -118,9 +118,9 @@ export default function AdminLegalCaseDetailPage() {
       <div className="p-6 max-w-6xl mx-auto">
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-start gap-3">
-          <button onClick={() => navigate(caseRouteBase)} className="mt-0.5 rounded-lg p-2 hover:bg-gray-100" title="Kembali">
+          <Button variant="outline" size="icon" onClick={() => navigate(caseRouteBase)} title="Kembali" aria-label="Kembali" className="mt-0.5">
             <ArrowLeft className="h-5 w-5 text-gray-600" />
-          </button>
+          </Button>
           <div>
             <p className="text-xs font-medium text-gray-400">Kasus Hukum</p>
             <h1 className="mt-1 text-2xl font-bold" style={{ color: '#0B2545' }}>{legalCase.case_name}</h1>
@@ -228,21 +228,15 @@ export default function AdminLegalCaseDetailPage() {
                         <FileText className="h-4 w-4 shrink-0 text-gray-400" />
                         <span className="min-w-0 flex-1 truncate text-xs text-gray-600">{file.name}</span>
                         <span className="text-xs text-gray-400">{formatFileSize(file.size)}</span>
-                        <button type="button" onClick={() => setFiles((current) => current.filter((_, i) => i !== index))} className="text-gray-400 hover:text-red-600">
+                        <Button variant="outline" size="icon-xs" type="button" onClick={() => setFiles((current) => current.filter((_, i) => i !== index))} aria-label="Hapus file" title="Hapus file" className="text-red-600 hover:bg-red-50 hover:text-red-700">
                           <Trash2 className="h-3.5 w-3.5" />
-                        </button>
+                        </Button>
                       </div>
                     ))}
                   </div>
                 )}
               </Field>
 
-              {createChronology.isError && (
-                <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{(createChronology.error as Error)?.message}</p>
-              )}
-              {createChronology.isSuccess && (
-                <p className="rounded-lg bg-green-50 px-3 py-2 text-xs text-green-700">Kronologi berhasil ditambahkan.</p>
-              )}
 
               <Button type="submit" disabled={!agendaDate || !agenda.trim() || createChronology.isPending} className="w-full text-white" style={{ background: '#C8102E' }}>
                 <Plus className="h-4 w-4" />
@@ -336,9 +330,9 @@ function ChronologyRow({ chronology, canDelete, onDownload, onDelete }: {
       </td>
       <td className="px-4 py-3 text-right">
         {canDelete && (
-          <button onClick={() => onDelete(chronology.id)} className="rounded-lg p-2 text-gray-400 hover:bg-red-50 hover:text-red-600" title="Hapus kronologi">
+          <Button variant="outline" size="icon-sm" onClick={() => onDelete(chronology.id)} title="Hapus kronologi" aria-label="Hapus kronologi" className="text-red-600 hover:bg-red-50 hover:text-red-700">
             <Trash2 className="h-4 w-4" />
-          </button>
+          </Button>
         )}
       </td>
     </tr>

@@ -25,9 +25,9 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <h2 className="text-base font-semibold" style={{ color: '#0B2545' }}>{title}</h2>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
+          <Button variant="ghost" size="icon-sm" onClick={onClose} aria-label="Tutup" title="Tutup">
             <X className="w-4 h-4 text-gray-500" />
-          </button>
+          </Button>
         </div>
         <div className="px-6 py-5">{children}</div>
       </div>
@@ -143,13 +143,13 @@ export default function CompanyManagementPage() {
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-1 justify-end">
-                      <button onClick={() => openEdit(company)} title="Edit" className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-700">
+                      <Button variant="outline" size="icon-sm" onClick={() => openEdit(company)} title="Edit" aria-label="Edit">
                         <Edit className="w-4 h-4" />
-                      </button>
+                      </Button>
                       {!company.is_parent && (
-                        <button onClick={() => handleDelete(company)} title="Hapus" className="p-1.5 rounded-lg hover:bg-red-50 transition-colors text-gray-400 hover:text-red-600">
+                        <Button variant="outline" size="icon-sm" onClick={() => handleDelete(company)} title="Hapus" aria-label="Hapus" className="text-red-600 hover:bg-red-50 hover:text-red-700">
                           <Trash2 className="w-4 h-4" />
-                        </button>
+                        </Button>
                       )}
                     </div>
                   </td>
@@ -173,7 +173,6 @@ export default function CompanyManagementPage() {
               <input type="checkbox" id="is_internal" {...form.register('is_internal')} className="rounded border-gray-300" />
               <Label htmlFor="is_internal" className="text-sm text-gray-700">Perusahaan Internal</Label>
             </div>
-            {createMutation.isError && <p className="text-xs text-red-500">{(createMutation.error as Error)?.message}</p>}
             <div className="flex gap-2 pt-2">
               <Button type="button" variant="outline" className="flex-1" onClick={closeModal}>Batal</Button>
               <Button type="submit" disabled={createMutation.isPending} className="flex-1 text-white" style={{ background: '#C8102E' }}>
@@ -200,7 +199,6 @@ export default function CompanyManagementPage() {
               <Label htmlFor="is_internal" className="text-sm text-gray-700">Perusahaan Internal</Label>
             </div>
             {selected.is_parent && <p className="text-xs text-gray-500">Perusahaan induk selalu internal, dan domain emailnya tidak bisa diubah.</p>}
-            {updateMutation.isError && <p className="text-xs text-red-500">{(updateMutation.error as Error)?.message}</p>}
             <div className="flex gap-2 pt-2">
               <Button type="button" variant="outline" className="flex-1" onClick={closeModal}>Batal</Button>
               <Button type="submit" disabled={updateMutation.isPending} className="flex-1 text-white" style={{ background: '#0B2545' }}>

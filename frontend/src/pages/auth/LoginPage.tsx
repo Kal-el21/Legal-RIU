@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Eye, EyeOff, Scale } from 'lucide-react'
+import { Eye, EyeOff } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -47,10 +47,8 @@ export default function LoginPage() {
 
         <div className="relative">
           <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
-              <Scale className="w-5 h-5 text-white" />
-            </div>
-            <span className="text-white font-semibold text-lg">Legal RIU</span>
+            <img src="/alea-mark.png" alt="" className="w-10 h-10 rounded-xl bg-white object-contain p-1" />
+            <span className="text-white font-semibold text-lg">ALEA</span>
           </div>
           <p className="text-white/60 text-sm">Indonesia Re</p>
         </div>
@@ -87,16 +85,11 @@ export default function LoginPage() {
       <div className="flex-1 flex items-center justify-center p-6 bg-white">
         <div className="w-full max-w-sm">
           {/* Mobile logo */}
-          <div className="flex items-center gap-2 mb-8 lg:hidden">
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: '#C8102E' }}>
-              <Scale className="w-4 h-4 text-white" />
-            </div>
-            <span className="font-semibold text-gray-900">Legal RIU</span>
-          </div>
+          <img src="/alea-logo.png" alt="ALEA" className="h-24 mb-8 lg:hidden" />
 
           <div className="mb-8">
             <h2 className="text-2xl font-bold text-gray-900">Selamat Datang</h2>
-            <p className="text-gray-500 text-sm mt-1">Masuk ke akun Legal RIU Anda</p>
+            <p className="text-gray-500 text-sm mt-1">Masuk ke akun ALEA Anda</p>
           </div>
 
           {/* Error alert */}
@@ -163,7 +156,7 @@ export default function LoginPage() {
           </form>
 
           <p className="text-center text-xs text-gray-400 mt-8">
-            Belum punya akun? Hubungi administrator Legal RIU.
+            Belum punya akun? Hubungi administrator ALEA.
           </p>
         </div>
       </div>

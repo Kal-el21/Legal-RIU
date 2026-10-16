@@ -10,7 +10,7 @@ import { useDivisions, useImportDivisions } from '@/hooks/useLegalCase'
 import { legalCaseService } from '@/services/legal-case.service'
 import ImportCard from '@/components/common/ImportCard'
 import api from '@/services/api'
-import { useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import type { Division } from '@/types'
 
 const schema = z.object({
@@ -26,9 +26,9 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <h2 className="text-base font-semibold" style={{ color: '#0B2545' }}>{title}</h2>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
+          <Button variant="ghost" size="icon-sm" onClick={onClose} aria-label="Tutup" title="Tutup">
             <X className="w-4 h-4 text-gray-500" />
-          </button>
+          </Button>
         </div>
         <div className="px-6 py-5">{children}</div>
       </div>
@@ -54,6 +54,22 @@ export default function DivisionManagementPage() {
   const { data: divisionsData, isLoading } = useDivisions()
   const importMutation = useImportDivisions()
   const queryClient = useQueryClient()
+  const refresh = () => queryClient.invalidateQueries({ queryKey: ['legal-cases', 'divisions'] })
+  const createMutation = useMutation({
+    meta: { success: 'Divisi berhasil ditambahkan' },
+    mutationFn: (data: FormData) => api.post('/divisions', data),
+    onSuccess: refresh,
+  })
+  const updateMutation = useMutation({
+    meta: { success: 'Divisi berhasil disimpan' },
+    mutationFn: ({ id, data }: { id: string; data: FormData }) => api.put(`/divisions/${id}`, data),
+    onSuccess: refresh,
+  })
+  const deleteMutation = useMutation({
+    meta: { success: 'Divisi berhasil dihapus' },
+    mutationFn: (id: string) => api.delete(`/divisions/${id}`),
+    onSuccess: refresh,
+  })
 
   const form = useForm<FormData>({ resolver: zodResolver(schema), defaultValues: { name: '', description: '' } })
 
@@ -65,24 +81,17 @@ export default function DivisionManagementPage() {
 
   const closeModal = () => { setModal(null); setSelected(null); form.reset({ name: '', description: '' }) }
 
-  const onCreateSubmit = async (data: FormData) => {
-    await api.post('/divisions', data)
-    form.reset()
-    closeModal()
-    window.location.reload()
-  }
+  // Kegagalan ditampilkan sebagai notifikasi oleh QueryClient (app.tsx); modal tetap terbuka.
+  const onCreateSubmit = (data: FormData) => createMutation.mutate(data, { onSuccess: closeModal })
 
-  const onEditSubmit = async (data: FormData) => {
+  const onEditSubmit = (data: FormData) => {
     if (!selected) return
-    await api.put(`/divisions/${selected.id}`, data)
-    closeModal()
-    window.location.reload()
+    updateMutation.mutate({ id: selected.id, data }, { onSuccess: closeModal })
   }
 
-  const handleDelete = async (item: Division) => {
+  const handleDelete = (item: Division) => {
     if (!confirm(`Hapus ${item.name}?`)) return
-    await api.delete(`/divisions/${item.id}`)
-    queryClient.invalidateQueries({ queryKey: ['legal-cases', 'divisions'] })
+    deleteMutation.mutate(item.id)
   }
 
   const filtered = (divisionsData ?? []).filter((d) => d.name.toLowerCase().includes(search.toLowerCase()))
@@ -131,12 +140,12 @@ export default function DivisionManagementPage() {
                   <td className="px-6 py-4 text-sm text-gray-700">{item.description}</td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-1 justify-end">
-                      <button onClick={() => openEdit(item)} title="Edit" className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-700">
+                      <Button variant="outline" size="icon-sm" onClick={() => openEdit(item)} title="Edit" aria-label="Edit">
                         <Edit className="w-4 h-4" />
-                      </button>
-                      <button onClick={() => handleDelete(item)} title="Hapus" className="p-1.5 rounded-lg hover:bg-red-50 transition-colors text-gray-400 hover:text-red-600">
+                      </Button>
+                      <Button variant="outline" size="icon-sm" onClick={() => handleDelete(item)} title="Hapus" aria-label="Hapus" className="text-red-600 hover:bg-red-50 hover:text-red-700">
                         <Trash2 className="w-4 h-4" />
-                      </button>
+                      </Button>
                     </div>
                   </td>
                 </tr>
@@ -157,8 +166,8 @@ export default function DivisionManagementPage() {
             </Field>
             <div className="flex gap-2 pt-2">
               <Button type="button" variant="outline" className="flex-1" onClick={closeModal}>Batal</Button>
-              <Button type="submit" className="flex-1 text-white" style={{ background: '#C8102E' }}>
-                Buat
+              <Button type="submit" disabled={createMutation.isPending} className="flex-1 text-white" style={{ background: '#C8102E' }}>
+                {createMutation.isPending ? 'Menyimpan...' : 'Buat'}
               </Button>
             </div>
           </form>
@@ -176,8 +185,8 @@ export default function DivisionManagementPage() {
             </Field>
             <div className="flex gap-2 pt-2">
               <Button type="button" variant="outline" className="flex-1" onClick={closeModal}>Batal</Button>
-              <Button type="submit" className="flex-1 text-white" style={{ background: '#0B2545' }}>
-                Simpan
+              <Button type="submit" disabled={updateMutation.isPending} className="flex-1 text-white" style={{ background: '#0B2545' }}>
+                {updateMutation.isPending ? 'Menyimpan...' : 'Simpan'}
               </Button>
             </div>
           </form>

@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation } from 'react-router-dom'
-import { Scale, Menu, Home, ChevronRight, PanelLeftClose, PanelLeftOpen, type LucideIcon } from 'lucide-react'
+import { Menu, Home, ChevronRight, PanelLeftClose, PanelLeftOpen, type LucideIcon } from 'lucide-react'
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import { cn } from '@/lib/utils'
 import SidebarUserButton from '@/components/common/SidebarUserButton'
@@ -102,12 +102,10 @@ export default function PanelLayout({ panelLabel, settingsPath, nav }: PanelLayo
       )} style={{ background: '#0B2545' }}>
         <div className={cn('h-16 flex items-center border-b border-white/10 overflow-hidden', sidebarCollapsed ? 'px-4' : 'px-5')}>
           <Link to="/" className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: '#C8102E' }}>
-              <Scale className="w-4 h-4 text-white" />
-            </div>
+            <img src="/alea-mark.png" alt="" className="w-8 h-8 flex-shrink-0 rounded-lg bg-white object-contain p-0.5" />
             {!sidebarCollapsed && (
               <div className="whitespace-nowrap">
-                <p className="font-bold text-sm text-white">Legal RIU</p>
+                <p className="font-bold text-sm text-white">ALEA</p>
                 <p className="text-xs text-white/60 leading-none">{panelLabel}</p>
               </div>
             )}

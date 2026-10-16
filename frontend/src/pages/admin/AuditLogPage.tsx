@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils'
 import type { AuditLog, AuditAction } from '@/types'
 import { useAuthStore } from '@/store/auth.store'
 import { getRoleHome } from '@/routes/role-home'
+import { Button } from '@/components/ui/button'
 
 const ACTION_COLORS: Record<AuditAction, { bg: string; text: string }> = {
   STATUS_CHANGE: { bg: '#FEF3C7', text: '#92400E' },
@@ -101,9 +102,9 @@ export default function AuditLogPage() {
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold" style={{ color: '#0B2545' }}>Filter Pencarian</h3>
             {hasActiveFilters && (
-              <button onClick={clearFilters} className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700">
+              <Button variant="outline" size="xs" onClick={clearFilters} className="text-red-600 hover:bg-red-50 hover:text-red-700">
                 <X className="w-3 h-3" /> Hapus filter
-              </button>
+              </Button>
             )}
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

@@ -39,6 +39,7 @@ export default function LegalLegalOpinionDetailPage() {
   const [fileError, setFileError] = useState('')
 
   const uploadResultMutation = useMutation({
+    meta: { success: 'File hasil berhasil diunggah. Status otomatis menjadi Selesai' },
     mutationFn: ({ file, notes }: { file: File; notes: string }) =>
       legalOpinionService.legalUploadResult(id!, file, notes),
     onSuccess: () => {
@@ -95,8 +96,6 @@ export default function LegalLegalOpinionDetailPage() {
                 className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
               />
             </div>
-            {updateStatus.isError && <p className="text-xs text-red-500">{(updateStatus.error as Error)?.message}</p>}
-            {updateStatus.isSuccess && <p className="text-xs text-green-600">Status berhasil diubah!</p>}
             <button
               onClick={handleStatusUpdate}
               disabled={!newStatus || updateStatus.isPending}
@@ -131,9 +130,6 @@ export default function LegalLegalOpinionDetailPage() {
                 className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
               />
             </div>
-            {uploadResultMutation.isSuccess && (
-              <p className="text-xs text-green-600">File berhasil diupload! Status otomatis diubah ke COMPLETED.</p>
-            )}
             <button
               onClick={handleUploadResult}
               disabled={!resultFile || uploadResultMutation.isPending}

@@ -13,7 +13,6 @@ export default function ImportCard({ title, onImport, onDownloadTemplate }: Impo
   const [downloadingTemplate, setDownloadingTemplate] = useState(false)
   const [importing, setImporting] = useState(false)
   const [result, setResult] = useState<{ imported: number; skipped: number; errors: { row: number; field: string; reason: string }[] } | null>(null)
-  const [error, setError] = useState<string | null>(null)
 
   const handleDownloadTemplate = async () => {
     try {
@@ -33,14 +32,13 @@ export default function ImportCard({ title, onImport, onDownloadTemplate }: Impo
   const handleImport = async () => {
     if (!importFile) return
     setImporting(true)
-    setError(null)
     setResult(null)
     try {
       const res = await onImport(importFile)
       setResult(res)
       setImportFile(null)
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Gagal mengimpor')
+    } catch {
+      // Kegagalan impor ditampilkan sebagai notifikasi oleh QueryClient (app.tsx).
     } finally {
       setImporting(false)
     }
@@ -71,11 +69,6 @@ export default function ImportCard({ title, onImport, onDownloadTemplate }: Impo
           {importing ? 'Mengimpor...' : 'Import'}
         </Button>
       </div>
-      {error && (
-        <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">
-          {error}
-        </p>
-      )}
       {result && (
         <p className="mt-2 rounded-lg bg-green-50 px-3 py-2 text-xs text-green-700">
           Impor selesai: {result.imported} berhasil, {result.skipped} dilewati.

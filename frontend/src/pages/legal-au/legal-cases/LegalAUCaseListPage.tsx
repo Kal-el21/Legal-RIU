@@ -77,9 +77,9 @@ export default function LegalAUCaseListPage() {
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-1 justify-end">
                       <Link to={`/legal-au/cases/${item.id}`}>
-                        <button title="Lihat" className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-700">
+                        <Button variant="outline" size="icon-sm" title="Lihat" aria-label="Lihat">
                           <Eye className="w-4 h-4" />
-                        </button>
+                        </Button>
                       </Link>
                     </div>
                   </td>

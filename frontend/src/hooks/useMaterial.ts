@@ -25,6 +25,7 @@ export function useMaterial(id: string) {
 export function useCreateMaterial() {
   const qc = useQueryClient()
   return useMutation({
+    meta: { success: 'Materi legal berhasil ditambahkan' },
     mutationFn: (data: MaterialFormData) => materialService.create(data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: KEYS.all })
@@ -35,6 +36,7 @@ export function useCreateMaterial() {
 export function useUpdateMaterial() {
   const qc = useQueryClient()
   return useMutation({
+    meta: { success: 'Materi legal berhasil disimpan' },
     mutationFn: ({ id, data }: { id: string; data: MaterialFormData }) => materialService.update(id, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: KEYS.all })
@@ -45,6 +47,7 @@ export function useUpdateMaterial() {
 export function useDeleteMaterial() {
   const qc = useQueryClient()
   return useMutation({
+    meta: { success: 'Materi legal berhasil dihapus' },
     mutationFn: (id: string) => materialService.delete(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: KEYS.all })

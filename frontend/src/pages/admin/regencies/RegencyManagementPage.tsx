@@ -10,7 +10,7 @@ import { useRegencies, useImportRegencies } from '@/hooks/useLegalCase'
 import { legalCaseService } from '@/services/legal-case.service'
 import ImportCard from '@/components/common/ImportCard'
 import api from '@/services/api'
-import { useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import type { Regency } from '@/types'
 
 const schema = z.object({
@@ -27,9 +27,9 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <h2 className="text-base font-semibold" style={{ color: '#0B2545' }}>{title}</h2>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
+          <Button variant="ghost" size="icon-sm" onClick={onClose} aria-label="Tutup" title="Tutup">
             <X className="w-4 h-4 text-gray-500" />
-          </button>
+          </Button>
         </div>
         <div className="px-6 py-5">{children}</div>
       </div>
@@ -51,64 +51,50 @@ export default function RegencyManagementPage() {
   const [search, setSearch] = useState('')
   const [modal, setModal] = useState<'create' | 'edit' | null>(null)
   const [selected, setSelected] = useState<Regency | null>(null)
-  const [error, setError] = useState('')
 
   const { data: regenciesData, isLoading } = useRegencies({ limit: 500 })
   const importMutation = useImportRegencies()
   const queryClient = useQueryClient()
+  const refresh = () => queryClient.invalidateQueries({ queryKey: ['legal-cases', 'regencies'] })
+  const createMutation = useMutation({
+    meta: { success: 'Kabupaten/kota berhasil ditambahkan' },
+    mutationFn: (data: FormData) => api.post('/admin/regencies', data),
+    onSuccess: refresh,
+  })
+  const updateMutation = useMutation({
+    meta: { success: 'Kabupaten/kota berhasil disimpan' },
+    mutationFn: ({ id, data }: { id: string; data: FormData }) => api.put(`/admin/regencies/${id}`, data),
+    onSuccess: refresh,
+  })
+  const deleteMutation = useMutation({
+    meta: { success: 'Kabupaten/kota berhasil dihapus' },
+    mutationFn: (id: string) => api.delete(`/admin/regencies/${id}`),
+    onSuccess: refresh,
+  })
 
   const form = useForm<FormData>({ resolver: zodResolver(schema), defaultValues: { name: '', province: '', type: 'kabupaten' } })
 
   const openEdit = (item: Regency) => {
     setSelected(item)
-    setError('')
     form.reset({ name: item.name, province: item.province, type: item.type })
     setModal('edit')
   }
 
-  const openCreate = () => { setError(''); setModal('create') }
+  const openCreate = () => setModal('create')
 
-  const closeModal = () => { setModal(null); setSelected(null); setError(''); form.reset({ name: '', province: '', type: 'kabupaten' }) }
+  const closeModal = () => { setModal(null); setSelected(null); form.reset({ name: '', province: '', type: 'kabupaten' }) }
 
-  const messageOf = (reason: unknown, fallback: string) =>
-    reason instanceof Error && reason.message ? reason.message : fallback
+  // Kegagalan ditampilkan sebagai notifikasi oleh QueryClient (app.tsx); modal tetap terbuka.
+  const onCreateSubmit = (data: FormData) => createMutation.mutate(data, { onSuccess: closeModal })
 
-  const onCreateSubmit = async (data: FormData) => {
-    setError('')
-    try {
-      await api.post('/admin/regencies', data)
-    } catch (reason) {
-      setError(messageOf(reason, 'Gagal membuat kabupaten/kota'))
-      return
-    }
-    form.reset()
-    closeModal()
-    window.location.reload()
-  }
-
-  const onEditSubmit = async (data: FormData) => {
+  const onEditSubmit = (data: FormData) => {
     if (!selected) return
-    setError('')
-    try {
-      await api.put(`/admin/regencies/${selected.id}`, data)
-    } catch (reason) {
-      setError(messageOf(reason, 'Gagal mengupdate kabupaten/kota'))
-      return
-    }
-    closeModal()
-    window.location.reload()
+    updateMutation.mutate({ id: selected.id, data }, { onSuccess: closeModal })
   }
 
-  const handleDelete = async (item: Regency) => {
+  const handleDelete = (item: Regency) => {
     if (!confirm(`Hapus ${item.name}?`)) return
-    setError('')
-    try {
-      await api.delete(`/admin/regencies/${item.id}`)
-    } catch (reason) {
-      setError(messageOf(reason, 'Gagal menghapus kabupaten/kota'))
-      return
-    }
-    queryClient.invalidateQueries({ queryKey: ['legal-cases', 'regencies'] })
+    deleteMutation.mutate(item.id)
   }
 
   const filtered = (regenciesData ?? []).filter((r) => r.name.toLowerCase().includes(search.toLowerCase()) || r.province.toLowerCase().includes(search.toLowerCase()))
@@ -124,10 +110,6 @@ export default function RegencyManagementPage() {
           <Plus className="w-4 h-4" /> Tambah
         </Button>
       </div>
-
-      {error && !modal && (
-        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
-      )}
 
       <div className="relative mb-6 max-w-xs">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -163,12 +145,12 @@ export default function RegencyManagementPage() {
                   <td className="px-6 py-4 text-sm text-gray-700">{item.type}</td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-1 justify-end">
-                      <button onClick={() => openEdit(item)} title="Edit" className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-700">
+                      <Button variant="outline" size="icon-sm" onClick={() => openEdit(item)} title="Edit" aria-label="Edit">
                         <Edit className="w-4 h-4" />
-                      </button>
-                      <button onClick={() => handleDelete(item)} title="Hapus" className="p-1.5 rounded-lg hover:bg-red-50 transition-colors text-gray-400 hover:text-red-600">
+                      </Button>
+                      <Button variant="outline" size="icon-sm" onClick={() => handleDelete(item)} title="Hapus" aria-label="Hapus" className="text-red-600 hover:bg-red-50 hover:text-red-700">
                         <Trash2 className="w-4 h-4" />
-                      </button>
+                      </Button>
                     </div>
                   </td>
                 </tr>
@@ -181,7 +163,6 @@ export default function RegencyManagementPage() {
       {modal === 'create' && (
         <Modal title="Tambah Kabupaten/Kota" onClose={closeModal}>
           <form onSubmit={form.handleSubmit(onCreateSubmit)} className="space-y-4">
-            {error && <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
             <Field label="Nama" error={form.formState.errors.name?.message}>
               <Input {...form.register('name')} placeholder="Nama kabupaten/kota" />
             </Field>
@@ -193,8 +174,8 @@ export default function RegencyManagementPage() {
             </Field>
             <div className="flex gap-2 pt-2">
               <Button type="button" variant="outline" className="flex-1" onClick={closeModal}>Batal</Button>
-              <Button type="submit" className="flex-1 text-white" style={{ background: '#C8102E' }}>
-                Buat
+              <Button type="submit" disabled={createMutation.isPending} className="flex-1 text-white" style={{ background: '#C8102E' }}>
+                {createMutation.isPending ? 'Menyimpan...' : 'Buat'}
               </Button>
             </div>
           </form>
@@ -204,7 +185,6 @@ export default function RegencyManagementPage() {
       {modal === 'edit' && selected && (
         <Modal title={`Edit — ${selected.name}`} onClose={closeModal}>
           <form onSubmit={form.handleSubmit(onEditSubmit)} className="space-y-4">
-            {error && <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
             <Field label="Nama" error={form.formState.errors.name?.message}>
               <Input {...form.register('name')} />
             </Field>
@@ -216,8 +196,8 @@ export default function RegencyManagementPage() {
             </Field>
             <div className="flex gap-2 pt-2">
               <Button type="button" variant="outline" className="flex-1" onClick={closeModal}>Batal</Button>
-              <Button type="submit" className="flex-1 text-white" style={{ background: '#0B2545' }}>
-                Simpan
+              <Button type="submit" disabled={updateMutation.isPending} className="flex-1 text-white" style={{ background: '#0B2545' }}>
+                {updateMutation.isPending ? 'Menyimpan...' : 'Simpan'}
               </Button>
             </div>
           </form>

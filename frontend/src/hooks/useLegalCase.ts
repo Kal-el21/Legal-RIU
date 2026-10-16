@@ -40,6 +40,7 @@ export function useLegalCase(id: string) {
 export function useCreateLegalCase() {
   const qc = useQueryClient()
   return useMutation({
+    meta: { success: 'Perkara berhasil dibuat' },
     mutationFn: (data: LegalCaseFormData) => legalCaseService.create(data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: KEYS.all })
@@ -50,6 +51,7 @@ export function useCreateLegalCase() {
 export function useUpdateLegalCase() {
   const qc = useQueryClient()
   return useMutation({
+    meta: { success: 'Perkara berhasil disimpan' },
     mutationFn: ({ id, data }: { id: string; data: LegalCaseFormData }) => legalCaseService.update(id, data),
     onSuccess: (_, { id }) => {
       qc.invalidateQueries({ queryKey: KEYS.detail(id) })
@@ -61,6 +63,7 @@ export function useUpdateLegalCase() {
 export function useDeleteLegalCase() {
   const qc = useQueryClient()
   return useMutation({
+    meta: { success: 'Perkara berhasil dihapus' },
     mutationFn: (id: string) => legalCaseService.delete(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: KEYS.all })
@@ -71,6 +74,7 @@ export function useDeleteLegalCase() {
 export function useCreateCaseChronology(caseID: string) {
   const qc = useQueryClient()
   return useMutation({
+    meta: { success: 'Kronologi berhasil ditambahkan' },
     mutationFn: (data: ChronologyFormData) => legalCaseService.createChronology(caseID, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: KEYS.detail(caseID) })
@@ -82,6 +86,7 @@ export function useCreateCaseChronology(caseID: string) {
 export function useDeleteCaseChronology(caseID: string) {
   const qc = useQueryClient()
   return useMutation({
+    meta: { success: 'Kronologi berhasil dihapus' },
     mutationFn: (chronologyID: string) => legalCaseService.deleteChronology(caseID, chronologyID),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: KEYS.detail(caseID) })
@@ -207,6 +212,7 @@ export function useCedants(params?: { search?: string; limit?: number }) {
 export function useCreateCedant() {
   const qc = useQueryClient()
   return useMutation({
+    meta: { success: 'Cedant berhasil ditambahkan' },
     mutationFn: (data: { name: string; description?: string }) => legalCaseService.createCedant(data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: KEYS.all })
@@ -252,6 +258,7 @@ export function usePurposeTypes() {
 export function useCreateCompany() {
   const qc = useQueryClient()
   return useMutation({
+    meta: { success: 'Perusahaan berhasil ditambahkan' },
     mutationFn: (data: { name: string; email_domain: string; is_internal: boolean }) => legalCaseService.createCompany(data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: KEYS.companies() })
@@ -262,6 +269,7 @@ export function useCreateCompany() {
 export function useUpdateCompany() {
   const qc = useQueryClient()
   return useMutation({
+    meta: { success: 'Perusahaan berhasil disimpan' },
     mutationFn: ({ id, data }: { id: string; data: { name: string; email_domain: string; is_internal: boolean } }) => legalCaseService.updateCompany(id, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: KEYS.companies() })
@@ -272,6 +280,7 @@ export function useUpdateCompany() {
 export function useDeleteCompany() {
   const qc = useQueryClient()
   return useMutation({
+    meta: { success: 'Perusahaan berhasil dihapus' },
     mutationFn: (id: string) => legalCaseService.deleteCompany(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: KEYS.companies() })
@@ -282,6 +291,7 @@ export function useDeleteCompany() {
 export function useCreatePurposeType() {
   const qc = useQueryClient()
   return useMutation({
+    meta: { success: 'Tujuan pembuatan berhasil ditambahkan' },
     mutationFn: (data: { name: string; description?: string; is_active?: boolean }) => legalCaseService.createPurposeType(data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: KEYS.purposeTypes() })
@@ -292,6 +302,7 @@ export function useCreatePurposeType() {
 export function useUpdatePurposeType() {
   const qc = useQueryClient()
   return useMutation({
+    meta: { success: 'Tujuan pembuatan berhasil disimpan' },
     mutationFn: ({ id, data }: { id: string; data: { name: string; description?: string; is_active?: boolean } }) => legalCaseService.updatePurposeType(id, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: KEYS.purposeTypes() })
@@ -302,6 +313,7 @@ export function useUpdatePurposeType() {
 export function useDeletePurposeType() {
   const qc = useQueryClient()
   return useMutation({
+    meta: { success: 'Tujuan pembuatan berhasil dihapus' },
     mutationFn: (id: string) => legalCaseService.deletePurposeType(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: KEYS.purposeTypes() })
@@ -312,6 +324,7 @@ export function useDeletePurposeType() {
 export function useCreateCaseType() {
   const qc = useQueryClient()
   return useMutation({
+    meta: { success: 'Jenis kasus berhasil ditambahkan' },
     mutationFn: (data: { code: string; label: string; is_active?: boolean }) => legalCaseService.createCaseType(data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: KEYS.caseTypes() })
@@ -322,6 +335,7 @@ export function useCreateCaseType() {
 export function useUpdateCaseType() {
   const qc = useQueryClient()
   return useMutation({
+    meta: { success: 'Jenis kasus berhasil disimpan' },
     mutationFn: ({ id, data }: { id: string; data: { code: string; label: string; is_active?: boolean } }) => legalCaseService.updateCaseType(id, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: KEYS.caseTypes() })
@@ -332,6 +346,7 @@ export function useUpdateCaseType() {
 export function useDeleteCaseType() {
   const qc = useQueryClient()
   return useMutation({
+    meta: { success: 'Jenis kasus berhasil dihapus' },
     mutationFn: (id: string) => legalCaseService.deleteCaseType(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: KEYS.caseTypes() })
@@ -342,6 +357,7 @@ export function useDeleteCaseType() {
 export function useCreateCaseCategory() {
   const qc = useQueryClient()
   return useMutation({
+    meta: { success: 'Kategori berhasil ditambahkan' },
     mutationFn: (data: { code: string; label: string; is_active?: boolean }) => legalCaseService.createCaseCategory(data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: KEYS.caseCategories() })
@@ -352,6 +368,7 @@ export function useCreateCaseCategory() {
 export function useUpdateCaseCategory() {
   const qc = useQueryClient()
   return useMutation({
+    meta: { success: 'Kategori berhasil disimpan' },
     mutationFn: ({ id, data }: { id: string; data: { code: string; label: string; is_active?: boolean } }) => legalCaseService.updateCaseCategory(id, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: KEYS.caseCategories() })
@@ -362,6 +379,7 @@ export function useUpdateCaseCategory() {
 export function useDeleteCaseCategory() {
   const qc = useQueryClient()
   return useMutation({
+    meta: { success: 'Kategori berhasil dihapus' },
     mutationFn: (id: string) => legalCaseService.deleteCaseCategory(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: KEYS.caseCategories() })

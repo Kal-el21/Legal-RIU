@@ -16,6 +16,7 @@ export function useUsers(params?: { page?: number; limit?: number; search?: stri
 export function useCreateUser() {
   const qc = useQueryClient()
   return useMutation({
+    meta: { success: 'User berhasil ditambahkan' },
     mutationFn: (data: CreateUserData) => userService.create(data),
     onSuccess: () => qc.invalidateQueries({ queryKey: KEYS.all }),
   })
@@ -24,6 +25,7 @@ export function useCreateUser() {
 export function useUpdateUser() {
   const qc = useQueryClient()
   return useMutation({
+    meta: { success: 'User berhasil disimpan' },
     mutationFn: ({ id, data }: { id: string; data: UpdateUserData }) => userService.update(id, data),
     onSuccess: () => qc.invalidateQueries({ queryKey: KEYS.all }),
   })
@@ -32,6 +34,7 @@ export function useUpdateUser() {
 export function useUpdateUserStatus() {
   const qc = useQueryClient()
   return useMutation({
+    meta: { success: 'Status user berhasil diubah' },
     mutationFn: ({ id, status }: { id: string; status: 'ACTIVE' | 'INACTIVE' }) =>
       userService.updateStatus(id, status),
     onSuccess: () => qc.invalidateQueries({ queryKey: KEYS.all }),
@@ -41,6 +44,7 @@ export function useUpdateUserStatus() {
 export function useDeleteUser() {
   const qc = useQueryClient()
   return useMutation({
+    meta: { success: 'User berhasil dihapus' },
     mutationFn: (id: string) => userService.delete(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: KEYS.all }),
   })
@@ -48,6 +52,7 @@ export function useDeleteUser() {
 
 export function useResetPassword() {
   return useMutation({
+    meta: { success: 'Password berhasil direset' },
     mutationFn: ({ id, password }: { id: string; password: string }) =>
       userService.resetPassword(id, password),
   })

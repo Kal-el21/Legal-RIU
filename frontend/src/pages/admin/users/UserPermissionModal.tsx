@@ -81,9 +81,9 @@ export default function UserPermissionModal({ user, onClose }: UserPermissionMod
             </h2>
             <p className="text-xs text-gray-500">{user.role} / {user.email}</p>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
+          <Button variant="ghost" size="icon-sm" onClick={onClose} aria-label="Tutup" title="Tutup">
             <X className="w-4 h-4 text-gray-500" />
-          </button>
+          </Button>
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 py-5">

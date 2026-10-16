@@ -34,7 +34,7 @@ export default function ChronologyImportCard({ caseId }: ChronologyImportCardPro
       await importChronology.mutateAsync(importFile)
       setImportFile(null)
     } catch {
-      // Error rendered from mutation state.
+      // Kegagalan impor ditampilkan sebagai notifikasi oleh QueryClient (app.tsx).
     }
   }
 
@@ -63,11 +63,6 @@ export default function ChronologyImportCard({ caseId }: ChronologyImportCardPro
           {importChronology.isPending ? 'Mengimpor...' : 'Import'}
         </Button>
       </div>
-      {importChronology.isError && (
-        <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">
-          {(importChronology.error as Error)?.message ?? 'Gagal mengimpor'}
-        </p>
-      )}
       {importChronology.isSuccess && importChronology.data && (
         <p className="mt-2 rounded-lg bg-green-50 px-3 py-2 text-xs text-green-700">
           Impor selesai: {importChronology.data.imported} berhasil, {importChronology.data.skipped} dilewati.

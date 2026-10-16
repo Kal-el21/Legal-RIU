@@ -25,6 +25,7 @@ export function useDocumentReview(id: string) {
 export function useCreateDocumentReview() {
   const qc = useQueryClient()
   return useMutation({
+    meta: { success: 'Review dokumen berhasil diajukan' },
     mutationFn: (data: CreateDocumentReviewData) => documentReviewService.create(data),
     onSuccess: () => qc.invalidateQueries({ queryKey: KEYS.all }),
   })
@@ -33,6 +34,7 @@ export function useCreateDocumentReview() {
 export function useUpdateDocumentReview() {
   const qc = useQueryClient()
   return useMutation({
+    meta: { success: 'Review dokumen berhasil disimpan' },
     mutationFn: ({ id, data }: { id: string; data: Omit<CreateDocumentReviewData, 'attachments'> }) =>
       documentReviewService.update(id, data),
     onSuccess: (_, { id }) => {
@@ -45,6 +47,7 @@ export function useUpdateDocumentReview() {
 export function useDeleteDocumentReview() {
   const qc = useQueryClient()
   return useMutation({
+    meta: { success: 'Review dokumen berhasil dihapus' },
     mutationFn: (id: string) => documentReviewService.delete(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: KEYS.all }),
   })
@@ -53,6 +56,7 @@ export function useDeleteDocumentReview() {
 export function useResubmitDocumentReview() {
   const qc = useQueryClient()
   return useMutation({
+    meta: { success: 'Review dokumen berhasil diajukan ulang' },
     mutationFn: ({ id, files }: { id: string; files?: File[] }) =>
       documentReviewService.resubmit(id, files),
     onSuccess: (_, { id }) => {
@@ -65,6 +69,7 @@ export function useResubmitDocumentReview() {
 export function useAdminUpdateDocumentReviewStatus() {
   const qc = useQueryClient()
   return useMutation({
+    meta: { success: 'Status berhasil diubah' },
     mutationFn: ({ id, status, admin_note }: { id: string; status: string; admin_note?: string }) =>
       documentReviewService.adminUpdateStatus(id, { status, admin_note }),
     onSuccess: (_, { id }) => {
@@ -77,6 +82,7 @@ export function useAdminUpdateDocumentReviewStatus() {
 export function useLegalUpdateDocumentReviewStatus() {
   const qc = useQueryClient()
   return useMutation({
+    meta: { success: 'Status berhasil diubah' },
     mutationFn: ({ id, status, admin_note }: { id: string; status: string; admin_note?: string }) =>
       documentReviewService.legalUpdateStatus(id, { status, admin_note }),
     onSuccess: (_, { id }) => {

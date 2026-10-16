@@ -3,7 +3,8 @@ import { Controller, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { User, Bell, Shield, CheckCircle, Eye, EyeOff, Lock, Mail, ToggleLeft, ToggleRight, Settings, AlertTriangle } from 'lucide-react'
+import { toast } from 'sonner'
+import { User, Bell, Shield, Eye, EyeOff, Lock, Mail, ToggleLeft, ToggleRight, Settings, AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -55,23 +56,6 @@ function Field({ label, error, hint, children }: {
   )
 }
 
-function SuccessAlert({ message }: { message: string }) {
-  return (
-    <div className="flex items-center gap-2 p-3 rounded-xl bg-green-50 border border-green-200">
-      <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
-      <p className="text-sm text-green-700">{message}</p>
-    </div>
-  )
-}
-
-function ErrorAlert({ message }: { message: string }) {
-  return (
-    <div className="p-3 rounded-xl bg-red-50 border border-red-200">
-      <p className="text-sm text-red-600">{message}</p>
-    </div>
-  )
-}
-
 // ── Profile Tab ───────────────────────────────────────────────────────────────
 
 function ProfileTab() {
@@ -89,6 +73,7 @@ function ProfileTab() {
   const divisionOptions = divisions.map((division) => ({ value: division.id, label: division.name }))
 
   const mutation = useMutation({
+    meta: { success: 'Profil berhasil diperbarui' },
     mutationFn: (data: ProfileForm) => settingsService.updateProfile(data),
     onSuccess: (updated) => { if (updated) updateUser(updated) },
   })
@@ -142,8 +127,6 @@ function ProfileTab() {
           </Field>
         </div>
 
-        {mutation.isSuccess && <SuccessAlert message="Profil berhasil diperbarui!" />}
-        {mutation.isError && <ErrorAlert message={(mutation.error as Error)?.message ?? 'Gagal memperbarui profil'} />}
 
         <Button type="submit" disabled={mutation.isPending} className="text-white" style={{ background: '#C8102E' }}>
           {mutation.isPending ? 'Menyimpan...' : 'Simpan Perubahan'}
@@ -160,6 +143,7 @@ function NotificationTab() {
   const [emailEnabled, setEmailEnabled] = useState<boolean>(user?.email_notifications ?? true)
 
   const mutation = useMutation({
+    meta: { success: 'Preferensi notifikasi disimpan' },
     mutationFn: (val: boolean) => settingsService.updateNotifications(val),
     onSuccess: (_, val) => {
       setEmailEnabled(val)
@@ -211,7 +195,6 @@ function NotificationTab() {
         </p>
       </div>
 
-      {mutation.isSuccess && <SuccessAlert message="Preferensi notifikasi disimpan!" />}
     </div>
   )
 }
@@ -230,6 +213,7 @@ function SecurityTab() {
   const twoFAForm = useForm<TwoFAForm>({ resolver: zodResolver(twoFASchema) })
 
   const pwMutation = useMutation({
+    meta: { success: 'Password berhasil diubah' },
     mutationFn: (data: PasswordForm) =>
       authService.changePassword({ current_password: data.current_password, new_password: data.new_password }),
     onSuccess: () => pwForm.reset(),
@@ -245,6 +229,7 @@ function SecurityTab() {
       twoFAForm.reset()
       setPendingTwoFA(null)
       updateUser({ ...user!, two_fa_enabled: newVal })
+      toast.success(`2FA berhasil ${newVal ? 'diaktifkan' : 'dinonaktifkan'}`)
     },
   })
 
@@ -292,8 +277,6 @@ function SecurityTab() {
             <Input {...pwForm.register('confirm_password')} type="password" placeholder="••••••••" />
           </Field>
 
-          {pwMutation.isSuccess && <SuccessAlert message="Password berhasil diubah!" />}
-          {pwMutation.isError && <ErrorAlert message={(pwMutation.error as Error)?.message ?? 'Gagal mengubah password'} />}
 
           <Button type="submit" disabled={pwMutation.isPending} className="text-white" style={{ background: '#C8102E' }}>
             {pwMutation.isPending ? 'Menyimpan...' : 'Ubah Password'}
@@ -341,8 +324,6 @@ function SecurityTab() {
               <Field label="Password" error={twoFAForm.formState.errors.password?.message}>
                 <Input {...twoFAForm.register('password')} type="password" placeholder="Masukkan password Anda" />
               </Field>
-              {twoFAMutation.isError && <ErrorAlert message={(twoFAMutation.error as Error)?.message ?? 'Gagal'} />}
-              {twoFAMutation.isSuccess && <SuccessAlert message={`2FA berhasil ${pendingTwoFA ? 'diaktifkan' : 'dinonaktifkan'}!`} />}
               <div className="flex gap-2">
                 <Button type="button" variant="outline" size="sm" onClick={() => setShowTwoFAConfirm(false)}>Batal</Button>
                 <Button type="submit" size="sm" disabled={twoFAMutation.isPending}
@@ -386,6 +367,7 @@ function AdminNotificationSettingsTab() {
   })
 
   const updateMutation = useMutation({
+    meta: { success: 'Konfigurasi notifikasi berhasil diperbarui' },
     mutationFn: ({ id, days_threshold, is_active }: { id: string; days_threshold: number; is_active?: boolean }) =>
       notificationSettingService.update(id, { days_threshold, is_active }),
     onSuccess: () => {
@@ -495,8 +477,6 @@ function AdminNotificationSettingsTab() {
         </div>
       )}
 
-      {updateMutation.isSuccess && <SuccessAlert message="Konfigurasi notifikasi berhasil diperbarui!" />}
-      {updateMutation.isError && <ErrorAlert message={(updateMutation.error as Error)?.message ?? 'Gagal memperbarui'} />}
     </div>
   )
 }

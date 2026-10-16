@@ -134,12 +134,15 @@ export default function ReviewDocumentFormPage() {
   return (
     <div className="p-6 max-w-3xl mx-auto">
       <div className="flex items-center gap-3 mb-8">
-        <button
+        <Button
+          variant="outline"
+          size="icon"
           onClick={() => navigate(-1)}
-          className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+          aria-label="Kembali"
+          title="Kembali"
         >
           <ArrowLeft className="w-5 h-5 text-gray-600" />
-        </button>
+        </Button>
         <div>
           <h1 className="text-2xl font-bold" style={{ color: "#0B2545" }}>
             {isEdit ? "Edit Review Dokumen" : "Buat Review Dokumen"}
@@ -354,13 +357,17 @@ export default function ReviewDocumentFormPage() {
                     <span className="text-xs text-gray-400">
                       {formatFileSize(f.size)}
                     </span>
-                    <button
+                    <Button
+                      variant="outline"
+                      size="icon-xs"
                       type="button"
                       onClick={() => removeFile(i)}
-                      className="text-gray-400 hover:text-red-500 transition-colors"
+                      aria-label="Hapus file"
+                      title="Hapus file"
+                      className="text-red-600 hover:bg-red-50 hover:text-red-700"
                     >
                       <X className="w-4 h-4" />
-                    </button>
+                    </Button>
                   </div>
                 ))}
               </div>
@@ -368,14 +375,6 @@ export default function ReviewDocumentFormPage() {
           </section>
         )}
 
-        {(createMutation.isError || updateMutation.isError) && (
-          <div className="p-4 rounded-xl bg-red-50 border border-red-200">
-            <p className="text-sm text-red-600">
-              {((createMutation.error || updateMutation.error) as Error)
-                ?.message ?? "Terjadi kesalahan"}
-            </p>
-          </div>
-        )}
 
         <div className="flex gap-3 justify-end">
           <Button type="button" variant="outline" onClick={() => navigate(-1)}>
