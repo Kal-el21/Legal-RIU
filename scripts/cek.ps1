@@ -15,7 +15,9 @@ function Langkah($nama, $folder, [scriptblock]$perintah) {
 }
 
 Langkah 'Backend: go vet'  'backend'  { go vet ./... }
-Langkah 'Backend: go test' 'backend'  { go test ./... }
+# -count=1: hasil tes yang tersimpan tidak memperhatikan perubahan di frontend/src
+# (TestAlamatFrontendAda) maupun isi database, jadi tes selalu dijalankan ulang.
+Langkah 'Backend: go test' 'backend'  { go test -count=1 ./... }
 Langkah 'Frontend: tsc'    'frontend' { npx tsc --noEmit }
 Langkah 'Frontend: lint'   'frontend' { npm run lint }
 Langkah 'Frontend: build'  'frontend' { npm run build }
