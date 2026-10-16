@@ -80,7 +80,6 @@ type pengecualian struct {
 }
 
 var pengecualianAlamat = []pengecualian{
-	{"*", "/materials*", "*", "tambah, ubah, dan hapus Materi Legal memanggil /materials; backend memisah per peran", true},
 
 	// Fitur yang menunya hanya tampil kalau peran itu diberi izin tambahan
 	// (override). Ditunda bersama fitur anak usaha.
@@ -89,6 +88,7 @@ var pengecualianAlamat = []pengecualian{
 	{"*", "/external/legal-opinions*", "EXTERNAL", "Legal Opinion External belum punya alamat di backend", false},
 	{"*", "/external/review-documents*", "EXTERNAL", "Review Dokumen External belum punya alamat di backend", false},
 	{"GET", "/admin/audit-logs", "USER EXTERNAL", "Audit Log USER dan EXTERNAL belum punya alamat sendiri", false},
+	{"*", "/admin/materials*", "USER EXTERNAL", "USER dan EXTERNAL belum punya alamat tulis Materi Legal", false},
 	{"GET", "/reports/*", "USER EXTERNAL", "Laporan USER dan EXTERNAL belum punya alamat di backend", false},
 	{"GET", "/case-types", "USER", "form perkara USER (hanya lewat override) memuat rujukan yang tidak menerima USER", false},
 	{"GET", "/case-categories", "USER", "form perkara USER (hanya lewat override) memuat rujukan yang tidak menerima USER", false},
@@ -187,6 +187,16 @@ var awalanPerPeran = map[string]func(peran, halaman string) []string{
 			return []string{"/external/legal-cases"}
 		}
 		return []string{"/admin/legal-cases"}
+	},
+	// material.service.ts getMaterialEndpoint
+	"getMaterialEndpoint()": func(r, p string) []string {
+		switch {
+		case r == "LEGAL_AU" || strings.HasPrefix(p, "/legal-au"):
+			return []string{"/legal-au/materials"}
+		case r == "LEGAL" || strings.HasPrefix(p, "/legal/"):
+			return []string{"/legal/materials"}
+		}
+		return []string{"/admin/materials"}
 	},
 	// legal-opinion.service.tsx getLegalOpinionEndpoint
 	"getLegalOpinionEndpoint()": func(r, p string) []string { return []string{pilihPengajuan(r, p, "legal-opinions")} },
