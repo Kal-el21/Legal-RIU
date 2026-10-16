@@ -57,17 +57,17 @@ export default function DivisionManagementPage() {
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['legal-cases', 'divisions'] })
   const createMutation = useMutation({
     meta: { success: 'Divisi berhasil ditambahkan' },
-    mutationFn: (data: FormData) => api.post('/divisions', data),
+    mutationFn: (data: FormData) => api.post('/admin/divisions', data),
     onSuccess: refresh,
   })
   const updateMutation = useMutation({
     meta: { success: 'Divisi berhasil disimpan' },
-    mutationFn: ({ id, data }: { id: string; data: FormData }) => api.put(`/divisions/${id}`, data),
+    mutationFn: ({ id, data }: { id: string; data: FormData }) => api.put(`/admin/divisions/${id}`, data),
     onSuccess: refresh,
   })
   const deleteMutation = useMutation({
     meta: { success: 'Divisi berhasil dihapus' },
-    mutationFn: (id: string) => api.delete(`/divisions/${id}`),
+    mutationFn: (id: string) => api.delete(`/admin/divisions/${id}`),
     onSuccess: refresh,
   })
 

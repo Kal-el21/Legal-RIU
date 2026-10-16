@@ -2,6 +2,7 @@ import api from './api'
 import { useAuthStore } from '@/store/auth.store'
 import type { ApiResponse, ReportChartResponse, ReportFeature } from '@/types'
 
+// Salinannya ada di backend/internal/router/alamat_frontend_test.go (awalanPerPeran); ubah keduanya.
 function getReportEndpoint(feature: ReportFeature): string {
   const role = useAuthStore.getState().user?.role
   const pathname = typeof window === 'undefined' ? '' : window.location.pathname

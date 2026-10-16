@@ -1,10 +1,22 @@
 import api from './api'
+import { useAuthStore } from '@/store/auth.store'
 import type { ApiResponse, LegalMaterial, PaginatedData, ImportResult } from '@/types'
 
 export interface MaterialFormData {
   title: string
   excerpt?: string
   content: string
+}
+
+// Membaca materi lewat /materials (semua peran); menulis lewat alamat per peran.
+// Salinannya ada di backend/internal/router/alamat_frontend_test.go (awalanPerPeran); ubah keduanya.
+function getMaterialEndpoint() {
+  const role = useAuthStore.getState().user?.role
+  const pathname = typeof window === 'undefined' ? '' : window.location.pathname
+  // Legal AU diperiksa sebelum LEGAL: halaman Legal AU beralamat /legal-au/..., yang juga diawali "/legal".
+  if (role === 'LEGAL_AU' || pathname.startsWith('/legal-au')) return '/legal-au/materials'
+  if (role === 'LEGAL' || pathname.startsWith('/legal/')) return '/legal/materials'
+  return '/admin/materials'
 }
 
 export const materialService = {
@@ -19,17 +31,17 @@ export const materialService = {
   },
 
   create: async (data: MaterialFormData) => {
-    const res = await api.post<ApiResponse<LegalMaterial>>('/materials', data)
+    const res = await api.post<ApiResponse<LegalMaterial>>(getMaterialEndpoint(), data)
     return res.data.data!
   },
 
   update: async (id: string, data: MaterialFormData) => {
-    const res = await api.put<ApiResponse<LegalMaterial>>(`/materials/${id}`, data)
+    const res = await api.put<ApiResponse<LegalMaterial>>(`${getMaterialEndpoint()}/${id}`, data)
     return res.data.data!
   },
 
   delete: async (id: string) => {
-    await api.delete(`/materials/${id}`)
+    await api.delete(`${getMaterialEndpoint()}/${id}`)
   },
 
   importExcel: async (file: File) => {

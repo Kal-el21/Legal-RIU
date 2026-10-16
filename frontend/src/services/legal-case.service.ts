@@ -40,6 +40,7 @@ export interface ChronologyFormData {
   files?: File[]
 }
 
+// Salinannya ada di backend/internal/router/alamat_frontend_test.go (awalanPerPeran); ubah keduanya.
 export function getLegalCaseRouteBase() {
   const role = useAuthStore.getState().user?.role
   const pathname = typeof window === 'undefined' ? '' : window.location.pathname
@@ -52,6 +53,7 @@ export function getLegalCaseRouteBase() {
   return '/admin/legal-cases'
 }
 
+// Salinannya ada di backend/internal/router/alamat_frontend_test.go (awalanPerPeran); ubah keduanya.
 function getReferenceRouteBase(resource: 'companies' | 'case-types' | 'case-categories' | 'purpose-types') {
   const role = useAuthStore.getState().user?.role
   const pathname = typeof window === 'undefined' ? '' : window.location.pathname
