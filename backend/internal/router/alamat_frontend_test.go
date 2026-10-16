@@ -80,7 +80,6 @@ type pengecualian struct {
 }
 
 var pengecualianAlamat = []pengecualian{
-	{"*", "/divisions*", "*", "tambah, ubah, dan hapus Divisi memanggil /divisions; backend di /admin/divisions", true},
 	{"*", "/materials*", "*", "tambah, ubah, dan hapus Materi Legal memanggil /materials; backend memisah per peran", true},
 
 	// Fitur yang menunya hanya tampil kalau peran itu diberi izin tambahan
