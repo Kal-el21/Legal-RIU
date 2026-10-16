@@ -17,6 +17,7 @@ export interface CreateDocumentReviewData {
   attachments?: File[]
 }
 
+// Salinannya ada di backend/internal/router/alamat_frontend_test.go (awalanPerPeran); ubah keduanya.
 function getDocumentReviewEndpoint() {
   const role = useAuthStore.getState().user?.role
   const pathname = typeof window === 'undefined' ? '' : window.location.pathname
