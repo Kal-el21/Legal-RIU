@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os/exec"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -718,4 +719,42 @@ func TestTemplateLamaDitolak(t *testing.T) {
 	p := buatPerjanjian(t, user, formPerjanjian())
 	eksekusi(t, "UPDATE agreement_documents SET template_id = ? WHERE id = ?", lama, p.ID)
 	harapKode(t, panggil(t, user, http.MethodGet, urlPerjanjian("", "/", p.ID, "/preview"), nil), http.StatusBadRequest, "pratinjau pengajuan di template lama")
+}
+
+var halamanPDFRE = regexp.MustCompile(`/Type\s*/Page[^s]`)
+
+// Watermark DRAFT dipasang di header, bukan di isi dokumen, jadi pratinjau dan
+// dokumen final berpisah halaman di titik yang sama.
+func TestWatermarkTampilDiPDF(t *testing.T) {
+	butuhMinIO(t)
+	butuhLibreOffice(t)
+	pemilik := masukPeran(t, entity.RoleUser)
+	legal := masukPeran(t, entity.RoleLegal)
+
+	form := formPerjanjian()
+	form["pihak_kedua_alamat"] = strings.Repeat("Jl. Contoh Panjang Nomor 123 Blok A, Kawasan Industri, ", 11)
+	var poin []string
+	for i := 0; i < 12; i++ {
+		poin = append(poin, "Pelaksanaan pekerjaan tahap lanjutan sesuai jadwal yang disepakati PARA PIHAK")
+	}
+	form["ruang_lingkup"] = strings.Join(poin, "\n")
+	p := buatPerjanjian(t, pemilik, form)
+	statusPerjanjian(t, legal, p.ID, "UNDER_REVIEW", "", http.StatusOK)
+	harapKode(t, panggil(t, legal, http.MethodPatch, urlPerjanjian("/legal", "/", p.ID, "/meta"), map[string]string{"signing_date": "2026-10-11"}), http.StatusOK, "mengisi tanggal tanda tangan")
+
+	w := panggil(t, pemilik, http.MethodGet, urlPerjanjian("", "/", p.ID, "/preview"), nil)
+	harapKode(t, w, http.StatusOK, "pratinjau")
+	pratinjau := len(halamanPDFRE.FindAll(w.Body.Bytes(), -1))
+
+	statusPerjanjian(t, legal, p.ID, "COMPLETED", "", http.StatusOK)
+	w = panggil(t, pemilik, http.MethodGet, urlPerjanjian("", "/", p.ID, "/pdf"), nil)
+	harapKode(t, w, http.StatusOK, "PDF final")
+	final := len(halamanPDFRE.FindAll(w.Body.Bytes(), -1))
+
+	if pratinjau < 20 {
+		t.Fatalf("pratinjau hanya %d halaman; penghitung halaman PDF kemungkinan rusak", pratinjau)
+	}
+	if pratinjau != final {
+		t.Errorf("pratinjau %d halaman, final %d halaman; penanda draft menggeser isi", pratinjau, final)
+	}
 }
