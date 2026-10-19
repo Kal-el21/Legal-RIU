@@ -360,6 +360,7 @@ const (
 	ActionDelete           AuditAction = "DELETE"
 	ActionFileDelete       AuditAction = "FILE_DELETE"
 	ActionPermissionUpdate AuditAction = "PERMISSION_UPDATE"
+	ActionParentChange     AuditAction = "PARENT_CHANGE"
 )
 
 type AuditLog struct {

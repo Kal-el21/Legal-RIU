@@ -71,6 +71,27 @@ type CompanyResponse struct {
 	UpdatedAt   time.Time `json:"updated_at"`
 }
 
+type ParentChangeUser struct {
+	ID       string `json:"id"`
+	FullName string `json:"full_name"`
+	Email    string `json:"email"`
+}
+
+// ParentChangePreviewResponse adalah dampak "Jadikan induk" untuk dialog
+// konfirmasi. Selama BlockingUsers tidak kosong, pergantian ditolak.
+type ParentChangePreviewResponse struct {
+	CurrentParent *CompanyResponse   `json:"current_parent"`
+	Target        CompanyResponse    `json:"target"`
+	LegalToMove   int64              `json:"legal_to_move"`
+	BlockingUsers []ParentChangeUser `json:"blocking_users"`
+}
+
+type ParentChangeResponse struct {
+	PreviousParent *CompanyResponse `json:"previous_parent"`
+	Parent         CompanyResponse  `json:"parent"`
+	MovedLegalIDs  []string         `json:"moved_legal_ids"`
+}
+
 type PurposeTypeResponse struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`

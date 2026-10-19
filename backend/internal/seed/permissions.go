@@ -129,6 +129,7 @@ func permissionSeedData() []entity.Permission {
 		perm("audit_log.view", "audit_log", "view", "all", "Audit Log - Lihat", "Melihat audit log"),
 		perm("master_data.view", "master_data", "view", "all", "Master Data - Lihat", "Melihat master data"),
 		perm("master_data.manage", "master_data", "manage", "all", "Master Data - Kelola", "Mengelola master data"),
+		perm("company.set_parent.all", "company", "set_parent", "all", "Perusahaan - Ganti Induk", "Menjadikan perusahaan lain sebagai induk dan memindah semua LEGAL ke sana"),
 		perm("notification_setting.manage", "notification_setting", "manage", "all", "Notifikasi - Kelola", "Mengelola pengaturan notifikasi"),
 		perm("legal_material.view", "legal_material", "view", "all", "Materi Legal - Lihat", "Melihat materi legal"),
 		perm("legal_material.manage", "legal_material", "manage", "all", "Materi Legal - Kelola", "Mengelola materi legal"),

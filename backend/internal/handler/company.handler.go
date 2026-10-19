@@ -1,6 +1,9 @@
 package handler
 
 import (
+	"fmt"
+	"strings"
+
 	"legal-riu-portal/internal/dto"
 	"legal-riu-portal/internal/entity"
 	"legal-riu-portal/internal/middleware"
@@ -103,6 +106,33 @@ func (h *CompanyHandler) Delete(c *gin.Context) {
 	middleware.SetAuditContext(c, entity.ActionDelete, "company", id)
 	c.Set("audit_description", "Company deleted")
 	utils.OK(c, "Perusahaan berhasil dihapus", nil)
+}
+
+func (h *CompanyHandler) PreviewMakeParent(c *gin.Context) {
+	resp, err := h.svc.PreviewMakeParent(c.Param("id"))
+	if err != nil {
+		utils.NotFound(c, err.Error())
+		return
+	}
+	utils.OK(c, "Success", resp)
+}
+
+func (h *CompanyHandler) MakeParent(c *gin.Context) {
+	resp, err := h.svc.MakeParent(c.Param("id"))
+	if err != nil {
+		utils.BadRequest(c, err.Error(), nil)
+		return
+	}
+	// Dicatat supaya pergantian bisa ditelusuri dan LEGAL yang janggal bisa
+	// dibetulkan manual: induk lama, induk baru, dan ID tiap LEGAL yang dipindah.
+	previousID, previousName := "-", "-"
+	if resp.PreviousParent != nil {
+		previousID, previousName = resp.PreviousParent.ID, resp.PreviousParent.Name
+	}
+	desc := fmt.Sprintf("Perusahaan induk diganti dari %s ke %s. LEGAL dipindah (%d): %s",
+		previousName, resp.Parent.Name, len(resp.MovedLegalIDs), strings.Join(resp.MovedLegalIDs, ", "))
+	middleware.SetAuditContextWithValues(c, entity.ActionParentChange, "company", resp.Parent.ID, &previousID, &resp.Parent.ID, &desc)
+	utils.OK(c, "Perusahaan induk berhasil diganti", resp)
 }
 
 func (h *CompanyHandler) ImportCompanies(c *gin.Context) {

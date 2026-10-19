@@ -221,6 +221,8 @@ func New(cfg *config.Config, db *gorm.DB, store *storage.MinIOClient) (*gin.Engi
 	admin.POST("/companies", companyHandler.Create)
 	admin.PUT("/companies/:id", companyHandler.Update)
 	admin.DELETE("/companies/:id", companyHandler.Delete)
+	admin.GET("/companies/:id/make-parent/preview", requirePermission("company.set_parent.all"), companyHandler.PreviewMakeParent)
+	admin.POST("/companies/:id/make-parent", requirePermission("company.set_parent.all"), companyHandler.MakeParent)
 	admin.POST("/companies/import", requirePermission("master_data.view"), companyHandler.ImportCompanies)
 	admin.GET("/companies/import/template", requirePermission("master_data.view"), companyHandler.DownloadCompanyTemplate)
 
