@@ -46,20 +46,6 @@ func TestPKSTemplateGeneration(t *testing.T) {
 	}
 }
 
-func TestPKSLegacyDocumentTypeAliases(t *testing.T) {
-	r, err := NewAgreementRegistry()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	for _, code := range []string{"PKS", " pks ", "", "PERJANJIAN KERJA SAMA", "PERJANJIAN_KERJA_SAMA", "lain-lain", "LAIN LAIN", "OTHER"} {
-		definition, ok := r.Get(code)
-		if !ok || definition.Code != "PKS" || len(definition.Template) == 0 {
-			t.Fatalf("kode lama %q tidak menghasilkan template PKS", code)
-		}
-	}
-}
-
 // Isian masuk ke tempatnya di template PKS bawaan: nomor, surat rujukan, termin,
 // rekening dan alamat dengan tab rata, serta poin ruang lingkup.
 func TestPKSFieldPlacement(t *testing.T) {

@@ -42,15 +42,18 @@ type AgreementDocumentService interface {
 type agreementDocumentService struct {
 	repo      repository.AgreementDocumentRepository
 	storage   *storage.MinIOClient
-	registry  *AgreementRegistry
 	templates AgreementTemplateService
 	generator *AgreementGenerator
 	converter DOCXConverter
 }
 
-func NewAgreementDocumentService(r repository.AgreementDocumentRepository, s *storage.MinIOClient, registry *AgreementRegistry, templates AgreementTemplateService) AgreementDocumentService {
-	return &agreementDocumentService{r, s, registry, templates, NewAgreementGenerator(), DOCXConverter{}}
+func NewAgreementDocumentService(r repository.AgreementDocumentRepository, s *storage.MinIOClient, templates AgreementTemplateService) AgreementDocumentService {
+	return &agreementDocumentService{r, s, templates, NewAgreementGenerator(), DOCXConverter{}}
 }
+
+// ErrTemplateUsang: form dikirim dengan versi template yang sudah bukan versi
+// aktif jenis dokumennya. Dijawab 409 supaya frontend memuat field versi baru.
+var ErrTemplateUsang = errors.New("Template sudah diperbarui Admin. Periksa kembali isian Anda.")
 
 // templateFor selalu mengutamakan versi yang terkunci di dokumen. Pengajuan yang
 // sedang mengantre review karena itu tidak ikut berubah ketika admin
@@ -59,41 +62,51 @@ func (s *agreementDocumentService) templateFor(ctx context.Context, d *entity.Ag
 	if d.TemplateID != nil {
 		return s.templates.TemplateByID(ctx, *d.TemplateID)
 	}
-	return s.templates.ActiveTemplate(ctx, s.canonicalCode(d.DocumentTypeCode))
+	return s.templates.ActiveTemplate(ctx, strings.ToUpper(strings.TrimSpace(d.DocumentTypeCode)))
 }
 
-func (s *agreementDocumentService) canonicalCode(code string) string {
-	if def, ok := s.registry.Get(code); ok {
-		return def.Code
+// sectionsFor membaca definisi field dari versi template yang dikunci dokumen.
+func (s *agreementDocumentService) sectionsFor(d *entity.AgreementDocument) ([]AgreementSectionDefinition, error) {
+	if d.TemplateID == nil {
+		return nil, errors.New("pengajuan tidak terhubung ke versi template")
 	}
-	return strings.ToUpper(strings.TrimSpace(code))
+	tpl, e := s.templates.Get(d.TemplateID.String())
+	if e != nil {
+		return nil, e
+	}
+	return templateSections(tpl)
 }
 
+// ListTypes hanya memuat jenis yang punya template aktif, karena hanya jenis
+// itu yang bisa diajukan.
 func (s *agreementDocumentService) ListTypes() []dto.AgreementTypeResponse {
-	defs := s.registry.List()
-	out := make([]dto.AgreementTypeResponse, 0, len(defs))
-	for _, d := range defs {
-		out = append(out, dto.AgreementTypeResponse{Code: d.Code, Name: d.Name})
+	types, _ := s.templates.ActiveTypes()
+	out := make([]dto.AgreementTypeResponse, 0, len(types))
+	for _, t := range types {
+		if _, _, e := s.templates.ActiveType(t.Code); e == nil {
+			out = append(out, dto.AgreementTypeResponse{Code: t.Code, Name: t.Name})
+		}
 	}
 	return out
 }
+
+// GetType mengembalikan form jenis dokumen dari versi template aktif. Versi itu
+// (template_id) dikirim balik saat pengajuan dibuat.
 func (s *agreementDocumentService) GetType(code string) (*dto.AgreementTypeResponse, error) {
-	d, ok := s.registry.Get(code)
-	if !ok {
+	typ, tpl, e := s.templates.ActiveType(code)
+	if e != nil {
 		return nil, errors.New("tipe dokumen tidak ditemukan")
 	}
-	return &dto.AgreementTypeResponse{Code: d.Code, Name: d.Name, Schema: d.RawSchema}, nil
-}
-
-func (s *agreementDocumentService) definitionFor(code string) (AgreementTypeDefinition, error) {
-	def, ok := s.registry.Get(code)
-	if !ok {
-		return AgreementTypeDefinition{}, fmt.Errorf("tipe dokumen %q tidak terdaftar", strings.TrimSpace(code))
+	sections, e := templateSections(tpl)
+	if e != nil {
+		return nil, e
 	}
-	if len(def.Template) == 0 {
-		return AgreementTypeDefinition{}, fmt.Errorf("template untuk tipe dokumen %q tidak tersedia", def.Code)
+	sections[0].Fields = append(sections[0].Fields, isianSistemPengaju...)
+	schema, e := json.Marshal(map[string]interface{}{"code": typ.Code, "name": typ.Name, "template_id": tpl.ID, "template_version": tpl.Version, "sections": sections})
+	if e != nil {
+		return nil, e
 	}
-	return def, nil
+	return &dto.AgreementTypeResponse{Code: typ.Code, Name: typ.Name, Schema: schema}, nil
 }
 
 func (s *agreementDocumentService) Create(userID string, req dto.CreateAgreementDocumentRequest, files []*multipart.FileHeader) (*entity.AgreementDocument, error) {
@@ -101,11 +114,21 @@ func (s *agreementDocumentService) Create(userID string, req dto.CreateAgreement
 	if e != nil {
 		return nil, errors.New("user tidak valid")
 	}
-	def, ok := s.registry.Get(req.DocumentTypeCode)
-	if !ok {
-		return nil, errors.New("tipe dokumen tidak valid")
+	typ, tpl, e := s.templates.ActiveType(req.DocumentTypeCode)
+	if e != nil {
+		return nil, e
 	}
-	if e = validateAgreementForm(def, req.FormData); e != nil {
+	if strings.TrimSpace(req.TemplateID) == "" {
+		return nil, errors.New("versi template wajib disertakan; muat ulang halaman pengajuan")
+	}
+	if req.TemplateID != tpl.ID.String() {
+		return nil, ErrTemplateUsang
+	}
+	sections, e := templateSections(tpl)
+	if e != nil {
+		return nil, e
+	}
+	if e = validateAgreementForm(sections, req.FormData); e != nil {
 		return nil, e
 	}
 	raw, e := json.Marshal(req.FormData)
@@ -116,11 +139,7 @@ func (s *agreementDocumentService) Create(userID string, req dto.CreateAgreement
 	if e != nil {
 		return nil, e
 	}
-	tpl, _, e := s.templates.ActiveTemplate(context.Background(), def.Code)
-	if e != nil {
-		return nil, e
-	}
-	doc := &entity.AgreementDocument{TicketNumber: utils.GenerateTicketNumber("PK", seq), UserID: uid, DocumentTypeCode: def.Code, FormData: raw, AgreementNumber: nil, Status: entity.StatusSubmitted, TemplateID: &tpl.ID, TemplateChecksum: tpl.Checksum}
+	doc := &entity.AgreementDocument{TicketNumber: utils.GenerateTicketNumber("PK", seq), UserID: uid, DocumentTypeCode: typ.Code, FormData: raw, AgreementNumber: nil, Status: entity.StatusSubmitted, TemplateID: &tpl.ID, TemplateChecksum: tpl.Checksum}
 	if e = s.repo.Create(doc); e != nil {
 		return nil, errors.New("gagal membuat pengajuan")
 	}
@@ -163,11 +182,11 @@ func (s *agreementDocumentService) Update(id, userID string, req dto.UpdateAgree
 	if d.Status != entity.StatusSubmitted && d.Status != entity.StatusNeedRevision {
 		return nil, errors.New("pengajuan tidak dapat diubah pada status ini")
 	}
-	def, e := s.definitionFor(d.DocumentTypeCode)
+	sections, e := s.sectionsFor(d)
 	if e != nil {
 		return nil, e
 	}
-	if e = validateAgreementForm(def, req.FormData); e != nil {
+	if e = validateAgreementForm(sections, req.FormData); e != nil {
 		return nil, e
 	}
 	d.FormData, _ = json.Marshal(req.FormData)
@@ -322,7 +341,7 @@ func (s *agreementDocumentService) approve(ctx context.Context, d *entity.Agreem
 	if d.Status != entity.StatusUnderReview {
 		return nil, errors.New("pengajuan belum dalam review")
 	}
-	def, e := s.definitionFor(d.DocumentTypeCode)
+	sections, e := s.sectionsFor(d)
 	if e != nil {
 		return nil, e
 	}
@@ -330,8 +349,9 @@ func (s *agreementDocumentService) approve(ctx context.Context, d *entity.Agreem
 	if e != nil {
 		return nil, e
 	}
-	if e = validateAgreementForm(def, data); e != nil {
-		return nil, e
+	// Isian pengajuan hanya bisa diubah pengaju, jadi approver diarahkan ke revisi.
+	if e = validateAgreementForm(sections, data); e != nil {
+		return nil, fmt.Errorf("%w. Kembalikan pengajuan ke pengaju untuk direvisi", e)
 	}
 	master, e := s.repo.GetActiveMaster()
 	if e != nil {

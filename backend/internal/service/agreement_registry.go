@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"legal-riu-portal/internal/assets"
+	"legal-riu-portal/internal/entity"
 )
 
 type AgreementFieldDefinition struct {
@@ -28,11 +29,10 @@ type AgreementTypeSchema struct {
 	Sections []AgreementSectionDefinition `json:"sections"`
 }
 type AgreementTypeDefinition struct {
-	Code      string
-	Name      string
-	Template  []byte
-	Schema    AgreementTypeSchema
-	RawSchema json.RawMessage
+	Code     string
+	Name     string
+	Template []byte
+	Schema   AgreementTypeSchema
 }
 type AgreementRegistry struct {
 	types map[string]AgreementTypeDefinition
@@ -58,48 +58,61 @@ func NewAgreementRegistry() (*AgreementRegistry, error) {
 	if schema.Code == "" || len(schema.Sections) == 0 {
 		return nil, errors.New("schema PKS tidak valid")
 	}
-	d := AgreementTypeDefinition{Code: strings.ToUpper(schema.Code), Name: schema.Name, Template: template, Schema: schema, RawSchema: raw}
+	d := AgreementTypeDefinition{Code: strings.ToUpper(schema.Code), Name: schema.Name, Template: template, Schema: schema}
 	return &AgreementRegistry{types: map[string]AgreementTypeDefinition{d.Code: d}}, nil
 }
-func (r *AgreementRegistry) List() []AgreementTypeDefinition {
-	out := make([]AgreementTypeDefinition, 0, len(r.types))
-	for _, v := range r.types {
-		v.Template = nil
-		v.RawSchema = nil
-		out = append(out, v)
-	}
-	return out
-}
 func (r *AgreementRegistry) Get(code string) (AgreementTypeDefinition, bool) {
-	normalized := strings.ToUpper(strings.TrimSpace(code))
-	switch normalized {
-	case "", "PERJANJIAN KERJA SAMA", "PERJANJIAN_KERJA_SAMA", "LAIN-LAIN", "LAIN LAIN", "OTHER":
-		// Kompatibilitas untuk pengajuan PKS lama yang dibuat sebelum kode tipe
-		// dokumen dinormalisasi. Hapus alias ini setelah data lama dimigrasikan.
-		normalized = "PKS"
-	}
-	v, ok := r.types[normalized]
+	// Kode jenis lama ("PERJANJIAN KERJA SAMA", "LAIN-LAIN", dst.) sudah
+	// dipindah ke PKS oleh BackfillAgreementDocumentDocumentTypeCode.
+	v, ok := r.types[strings.ToUpper(strings.TrimSpace(code))]
 	return v, ok
 }
-func validateAgreementForm(def AgreementTypeDefinition, data map[string]interface{}) error {
-	for _, s := range def.Schema.Sections {
+
+// isianSistemPengaju selalu ada di form setiap jenis dokumen dan tidak dikelola
+// Admin. Tempat penandatanganan diusulkan pengaju, boleh diganti approver, dan
+// kalau kosong memakai tempat bawaan master Pihak Pertama (partyOneSnapshot).
+var isianSistemPengaju = []AgreementFieldDefinition{
+	{Name: "tempat_ttd", Label: "Usulan Tempat Penandatanganan", Type: "text"},
+}
+
+// templateSections membaca definisi field yang disimpan di versi template.
+func templateSections(tpl *entity.AgreementTemplate) ([]AgreementSectionDefinition, error) {
+	var sections []AgreementSectionDefinition
+	if len(tpl.Fields) == 0 || json.Unmarshal(tpl.Fields, &sections) != nil || len(sections) == 0 {
+		return nil, fmt.Errorf("definisi field template %s belum tersedia", tpl.Name)
+	}
+	return sections, nil
+}
+
+func validateAgreementForm(sections []AgreementSectionDefinition, data map[string]interface{}) error {
+	ada := map[string]bool{}
+	for _, s := range sections {
 		for _, f := range s.Fields {
+			ada[f.Name] = true
 			if f.Required && strings.TrimSpace(valueString(data[f.Name])) == "" {
 				return errors.New(f.Label + " wajib diisi")
 			}
 		}
 	}
-	start, end := valueString(data["jangka_waktu_mulai"]), valueString(data["jangka_waktu_selesai"])
-	if start != "" && end != "" && end < start {
-		return errors.New("tanggal selesai tidak boleh sebelum tanggal mulai")
+	// Aturan di bawah terikat pada field tertentu, jadi hanya berlaku untuk jenis
+	// yang punya field itu (PKS). Aturan termin diganti aturan grup di PR 10.
+	if ada["jangka_waktu_mulai"] && ada["jangka_waktu_selesai"] {
+		start, end := valueString(data["jangka_waktu_mulai"]), valueString(data["jangka_waktu_selesai"])
+		if start != "" && end != "" && end < start {
+			return errors.New("tanggal selesai tidak boleh sebelum tanggal mulai")
+		}
 	}
-	p1, p2 := valueFloat(data["termin_1_persen"]), valueFloat(data["termin_2_persen"])
-	if p1 < 0 || p2 < 0 || p1 > 100 || p2 > 100 || p1+p2 != 100 {
-		return errors.New("jumlah persentase termin harus 100")
+	if ada["termin_1_persen"] && ada["termin_2_persen"] {
+		p1, p2 := valueFloat(data["termin_1_persen"]), valueFloat(data["termin_2_persen"])
+		if p1 < 0 || p2 < 0 || p1 > 100 || p2 > 100 || p1+p2 != 100 {
+			return errors.New("jumlah persentase termin harus 100")
+		}
 	}
-	c, t1, t2 := valueInt64(data["nilai_kontrak"]), valueInt64(data["termin_1_nilai"]), valueInt64(data["termin_2_nilai"])
-	if c < 0 || t1 < 0 || t2 < 0 || t1+t2 != c {
-		return errors.New("jumlah nilai termin harus sama dengan nilai kontrak")
+	if ada["nilai_kontrak"] && ada["termin_1_nilai"] && ada["termin_2_nilai"] {
+		c, t1, t2 := valueInt64(data["nilai_kontrak"]), valueInt64(data["termin_1_nilai"]), valueInt64(data["termin_2_nilai"])
+		if c < 0 || t1 < 0 || t2 < 0 || t1+t2 != c {
+			return errors.New("jumlah nilai termin harus sama dengan nilai kontrak")
+		}
 	}
 	return nil
 }

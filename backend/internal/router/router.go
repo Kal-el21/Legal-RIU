@@ -50,7 +50,7 @@ func New(cfg *config.Config, db *gorm.DB, store *storage.MinIOClient) (*gin.Engi
 		return nil, fmt.Errorf("agreement registry failed: %w", err)
 	}
 	agreementTemplateSvc := service.NewAgreementTemplateService(agreementTemplateRepo, store, agreementRegistry)
-	agreementSvc := service.NewAgreementDocumentService(agreementRepo, store, agreementRegistry, agreementTemplateSvc)
+	agreementSvc := service.NewAgreementDocumentService(agreementRepo, store, agreementTemplateSvc)
 	notificationSettingSvc := service.NewNotificationSettingService(notificationSettingRepo, dashRepo)
 	dashSvc := service.NewDashboardService(dashRepo)
 	auditLogSvc := service.NewAuditLogService(auditLogRepo)

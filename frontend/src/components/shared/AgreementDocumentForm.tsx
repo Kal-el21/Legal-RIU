@@ -9,26 +9,6 @@ import { Textarea } from '@/components/ui/textarea'
 import StatusBadge from '@/components/common/StatusBadge'
 import type { SubmissionStatus } from '@/types'
 
-const REQUIRED_FIELDS = new Set([
-  'pihak_kedua_nama',
-  'pihak_kedua_bidang',
-  'pihak_kedua_alamat',
-  'pihak_kedua_pejabat',
-  'pihak_kedua_jabatan',
-  'jenis_pekerjaan',
-  'ruang_lingkup',
-  'jangka_waktu_mulai',
-  'jangka_waktu_selesai',
-  'nilai_kontrak',
-  'termin_1_persen',
-  'termin_1_nilai',
-  'termin_2_persen',
-  'termin_2_nilai',
-  'bank',
-  'nomor_rekening',
-  'atas_nama',
-])
-
 function parseNum(v: unknown): number | null {
   if (v === undefined || v === null) return null
   const s = String(v).trim()
@@ -96,8 +76,8 @@ export default function AgreementDocumentForm() {
     if (Math.abs(nilai1 + nilai2 - kontrak) > 0.5) return 'Jumlah nilai termin harus sama dengan nilai kontrak'
     if (derivedForm.jangka_waktu_selesai && derivedForm.jangka_waktu_mulai && derivedForm.jangka_waktu_selesai < derivedForm.jangka_waktu_mulai) return 'Tanggal selesai tidak boleh sebelum tanggal mulai'
 
-    for (const key of REQUIRED_FIELDS) {
-      if (!derivedForm[key]?.trim()) return `${labelOf(key)} wajib diisi`
+    for (const field of schema?.sections.flatMap((s) => s.fields) ?? []) {
+      if (field.required && !derivedForm[field.name]?.trim()) return `${field.label} wajib diisi`
     }
     return undefined
   }
@@ -114,7 +94,7 @@ export default function AgreementDocumentForm() {
         await agreementService.update(id, derivedForm)
         if (currentStatus === 'NEED_REVISION') await agreementService.resubmit(id, files)
       } else {
-        await agreementService.create({ document_type_code: 'PKS', form_data: derivedForm }, files)
+        await agreementService.create({ document_type_code: 'PKS', template_id: schema?.template_id, form_data: derivedForm }, files)
       }
       setFiles([])
       navigate('/dashboard/agreement-documents')
@@ -145,7 +125,7 @@ export default function AgreementDocumentForm() {
               <Label className="mb-1.5 text-gray-700">{field.label}{field.required && ' *'}</Label>
               {field.type === 'textarea'
                 ? <Textarea required={field.required} placeholder={field.name === 'ruang_lingkup' ? 'Tulis satu poin ruang lingkup per baris' : undefined} value={form[field.name] || ''} onChange={(e) => setForm({ ...form, [field.name]: e.target.value })} />
-                : <Input readOnly={field.name === 'termin_2_persen' || field.name === 'termin_2_nilai'} required={field.required} type={field.type === 'money' || field.type === 'decimal' ? 'number' : field.type} value={form[field.name] || ''} onChange={(e) => setForm({ ...form, [field.name]: e.target.value })} />}
+                : <Input readOnly={field.name === 'termin_2_persen' || field.name === 'termin_2_nilai'} required={field.required} type={field.type === 'money' || field.type === 'percent' ? 'number' : field.type} value={form[field.name] || ''} onChange={(e) => setForm({ ...form, [field.name]: e.target.value })} />}
             </div>
           ))}
        </div>

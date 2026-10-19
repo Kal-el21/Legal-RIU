@@ -50,6 +50,10 @@ func (h *AgreementDocumentHandler) Create(c *gin.Context) {
 		return
 	}
 	v, e := h.svc.Create(middleware.GetUserID(c), req, files)
+	if errors.Is(e, service.ErrTemplateUsang) {
+		c.JSON(http.StatusConflict, utils.Response{Success: false, Message: e.Error()})
+		return
+	}
 	if e != nil {
 		utils.BadRequest(c, e.Error(), nil)
 		return

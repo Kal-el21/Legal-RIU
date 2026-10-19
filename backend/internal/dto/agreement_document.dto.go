@@ -4,6 +4,7 @@ import "encoding/json"
 
 type CreateAgreementDocumentRequest struct {
 	DocumentTypeCode string                 `json:"document_type_code" binding:"required"`
+	TemplateID       string                 `json:"template_id"` // versi template form, dari skema jenis dokumen
 	FormData         map[string]interface{} `json:"form_data" binding:"required"`
 }
 

@@ -40,6 +40,8 @@ type AgreementTemplateService interface {
 	// Dipakai service dokumen untuk mengunci dan memuat versi template.
 	ActiveTemplate(context.Context, string) (*entity.AgreementTemplate, []byte, error)
 	TemplateByID(context.Context, uuid.UUID) (*entity.AgreementTemplate, []byte, error)
+	ActiveTypes() ([]entity.AgreementType, error)
+	ActiveType(string) (*entity.AgreementType, *entity.AgreementTemplate, error)
 }
 
 type agreementTemplateService struct {
@@ -153,6 +155,11 @@ func (s *agreementTemplateService) Upload(ctx context.Context, uploaderID string
 		EffectiveDate: parseEffectiveDate(req.EffectiveDate),
 		UploadedBy:    &uid,
 	}
+	// Field belum bisa diubah lewat unggahan (PR 9 tahap 9.4), jadi versi baru
+	// memakai field versi aktif.
+	if aktif, err := s.repo.FindActive(code); err == nil {
+		tpl.Fields = aktif.Fields
+	}
 	tpl.ID = id
 	if e = s.repo.Create(tpl); e != nil {
 		s.storage.DeleteFile(ctx, base+".docx")
@@ -235,6 +242,28 @@ func (s *agreementTemplateService) ActiveTemplate(ctx context.Context, code stri
 		return nil, nil, e
 	}
 	return tpl, data, nil
+}
+
+func (s *agreementTemplateService) ActiveTypes() ([]entity.AgreementType, error) {
+	return s.repo.FindTypes()
+}
+
+// ActiveType mengembalikan jenis dokumen aktif beserta versi template aktifnya,
+// tanpa memuat file DOCX.
+func (s *agreementTemplateService) ActiveType(code string) (*entity.AgreementType, *entity.AgreementTemplate, error) {
+	normalized := strings.ToUpper(strings.TrimSpace(code))
+	typ, e := s.repo.FindType(normalized)
+	if e != nil {
+		return nil, nil, errors.New("tipe dokumen tidak valid")
+	}
+	tpl, e := s.repo.FindActive(normalized)
+	if e != nil {
+		return nil, nil, fmt.Errorf("belum ada template aktif untuk tipe dokumen %q", normalized)
+	}
+	if tpl.IsLegacy {
+		return nil, nil, ErrTemplateLama
+	}
+	return typ, tpl, nil
 }
 
 func (s *agreementTemplateService) TemplateByID(ctx context.Context, id uuid.UUID) (*entity.AgreementTemplate, []byte, error) {

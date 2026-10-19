@@ -18,6 +18,8 @@ type AgreementTemplateRepository interface {
 	NextVersion(string) (int, error)
 	Activate(uuid.UUID, string, uuid.UUID) error
 	Delete(uuid.UUID) error
+	FindTypes() ([]entity.AgreementType, error)
+	FindType(string) (*entity.AgreementType, error)
 }
 
 type agreementTemplateRepository struct{ db *gorm.DB }
@@ -87,4 +89,17 @@ func (r *agreementTemplateRepository) Activate(id uuid.UUID, code string, activa
 
 func (r *agreementTemplateRepository) Delete(id uuid.UUID) error {
 	return r.db.Delete(&entity.AgreementTemplate{}, "id = ?", id).Error
+}
+
+// FindTypes mengembalikan jenis dokumen yang aktif.
+func (r *agreementTemplateRepository) FindTypes() ([]entity.AgreementType, error) {
+	var items []entity.AgreementType
+	err := r.db.Where("is_active = ?", true).Order("name").Find(&items).Error
+	return items, err
+}
+
+func (r *agreementTemplateRepository) FindType(code string) (*entity.AgreementType, error) {
+	var v entity.AgreementType
+	err := r.db.Where("code = ? AND is_active = ?", code, true).First(&v).Error
+	return &v, err
 }
