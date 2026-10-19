@@ -41,14 +41,11 @@ func TestPlaceholderCatalogTerdokumentasi(t *testing.T) {
 // Template bawaan lama ditambal lewat pencocokan teks paragraf. Penambalan itu
 // hanya boleh jalan ketika Legacy diaktifkan, agar template baru hasil unggahan
 // tim legal tidak ikut diubah diam-diam.
+// Terhadap template lama; dihapus bersama kode lama di PR 8 tahap 8.4.
 func TestLegacyPatchingHanyaSaatLegacyAktif(t *testing.T) {
-	registry, err := NewAgreementRegistry()
-	if err != nil {
-		t.Fatal(err)
-	}
-	definition, _ := registry.Get("PKS")
+	template := templatePKSLama(t)
 
-	patched, _, err := NewAgreementGenerator().Generate(definition.Template, sampleAgreementValues(), GenerateOptions{Legacy: true})
+	patched, _, err := NewAgreementGenerator().Generate(template, sampleAgreementValues(), GenerateOptions{Legacy: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,7 +53,7 @@ func TestLegacyPatchingHanyaSaatLegacyAktif(t *testing.T) {
 		t.Fatal("mode legacy seharusnya mengisi nilai ke template bawaan")
 	}
 
-	untouched, _, err := NewAgreementGenerator().Generate(definition.Template, sampleAgreementValues(), GenerateOptions{})
+	untouched, _, err := NewAgreementGenerator().Generate(template, sampleAgreementValues(), GenerateOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

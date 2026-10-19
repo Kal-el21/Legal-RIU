@@ -60,12 +60,10 @@ func TestPKSLegacyDocumentTypeAliases(t *testing.T) {
 	}
 }
 
+// Menguji pengisian lama berbasis pencocokan kalimat, terhadap template lama.
+// Dihapus bersama kodenya di PR 8 tahap 8.4.
 func TestPKSLegacyFieldPlacement(t *testing.T) {
-	r, err := NewAgreementRegistry()
-	if err != nil {
-		t.Fatal(err)
-	}
-	definition, _ := r.Get("PKS")
+	template := templatePKSLama(t)
 	values := map[string]string{}
 	for _, key := range []string{"NOMOR_PIHAK_PERTAMA", "NOMOR_PIHAK_KEDUA", "HARI_TTD", "TANGGAL_TTD", "BULAN_TTD", "TAHUN_TTD", "TANGGAL_TTD_LENGKAP", "TEMPAT_TTD", "PIHAK_PERTAMA_PEJABAT", "PIHAK_PERTAMA_JABATAN", "PIHAK_KEDUA_NAMA", "PIHAK_KEDUA_ALAMAT", "PIHAK_KEDUA_PEJABAT", "PIHAK_KEDUA_JABATAN", "PIHAK_KEDUA_BIDANG", "JENIS_PEKERJAAN", "SURAT_PENAWARAN_NOMOR", "SURAT_PENAWARAN_PERIHAL", "SURAT_PENAWARAN_TANGGAL", "SURAT_PENUNJUKAN_NOMOR", "SURAT_PENUNJUKAN_PERIHAL", "SURAT_PENUNJUKAN_TANGGAL", "RUANG_LINGKUP", "JANGKA_WAKTU_MULAI", "JANGKA_WAKTU_SELESAI", "NILAI_KONTRAK", "NILAI_KONTRAK_TERBILANG", "TERMIN_1_PERSEN", "TERMIN_1_PERSEN_TERBILANG", "TERMIN_1_NILAI", "TERMIN_1_NILAI_TERBILANG", "TERMIN_2_PERSEN", "TERMIN_2_PERSEN_TERBILANG", "TERMIN_2_NILAI", "TERMIN_2_NILAI_TERBILANG", "BANK", "NOMOR_REKENING", "ATAS_NAMA", "DAFTAR_LAMPIRAN", "PIHAK_PERTAMA_ALAMAT", "PIHAK_PERTAMA_TELEPON", "PIHAK_PERTAMA_EMAIL", "PIHAK_PERTAMA_PIC", "PIHAK_KEDUA_TELEPON", "PIHAK_KEDUA_EMAIL", "PIHAK_KEDUA_PIC"} {
 		values[key] = "TEST-" + key
@@ -85,7 +83,7 @@ func TestPKSLegacyFieldPlacement(t *testing.T) {
 	values["TERMIN_2_NILAI"] = "Rp 10.000.000"
 	values["TERMIN_2_NILAI_TERBILANG"] = "sepuluh juta"
 
-	out, _, err := NewAgreementGenerator().Generate(definition.Template, values, GenerateOptions{Draft: true, Legacy: true})
+	out, _, err := NewAgreementGenerator().Generate(template, values, GenerateOptions{Draft: true, Legacy: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -200,13 +198,16 @@ func assertKeyValueTabs(t *testing.T, paragraphs, texts []string, expected strin
 	t.Fatalf("rincian %q tidak ditemukan", expected)
 }
 
-// bugDiketahui melewati tes untuk bug yang belum diperbaiki; jalankan dengan
-// TES_BUG=1 untuk melihatnya merah. Sama dengan helper di paket router.
-func bugDiketahui(t testing.TB, ringkas string) {
+// templatePKSLama adalah template PKS sebelum PR 8: tanpa placeholder, diisi
+// lewat pencocokan kalimat (prepareLegacyPKS). Dipakai tes jalur lama dan
+// pembanding isi sampai kode lama dihapus di PR 8 tahap 8.4.
+func templatePKSLama(t *testing.T) []byte {
 	t.Helper()
-	if os.Getenv("TES_BUG") == "" {
-		t.Skip("BUG DIKETAHUI: " + ringkas)
+	data, err := os.ReadFile("testdata/pks-template-lama.docx")
+	if err != nil {
+		t.Fatal(err)
 	}
+	return data
 }
 
 var (
@@ -220,7 +221,6 @@ var (
 // ikut terdorong saat isian di atasnya panjang, sehingga muncul ruang atau
 // halaman kosong.
 func TestTemplatePKSBawaan(t *testing.T) {
-	bugDiketahui(t, "template PKS bawaan memakai deretan Enter kosong dan belum berisi placeholder (PR 8 tahap 8.2)")
 	registry, err := NewAgreementRegistry()
 	if err != nil {
 		t.Fatal(err)
@@ -241,6 +241,24 @@ func TestTemplatePKSBawaan(t *testing.T) {
 	for _, p := range placeholders {
 		if !known[p] {
 			t.Errorf("placeholder %s tidak dikenal generator", p)
+		}
+	}
+
+	// Watermark DRAFT di header tercetak di setiap halaman, termasuk dokumen
+	// final. Penanda draft ditambahkan sistem hanya untuk pratinjau.
+	z, err := zip.NewReader(bytes.NewReader(definition.Template), int64(len(definition.Template)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range z.File {
+		if !strings.HasPrefix(f.Name, "word/header") {
+			continue
+		}
+		rc, _ := f.Open()
+		data, _ := io.ReadAll(rc)
+		rc.Close()
+		if strings.Contains(string(data), "WaterMark") {
+			t.Errorf("%s berisi watermark; template bawaan tidak boleh membawa tanda DRAFT", f.Name)
 		}
 	}
 
@@ -288,7 +306,6 @@ func TestTemplatePKSBawaan(t *testing.T) {
 
 // Isian yang panjang harus tampil utuh di dokumen, tanpa placeholder yang tersisa.
 func TestIsianPanjangTerisiSemua(t *testing.T) {
-	bugDiketahui(t, "template PKS bawaan belum berisi placeholder, isian tidak masuk tanpa mode lama (PR 8 tahap 8.2)")
 	registry, err := NewAgreementRegistry()
 	if err != nil {
 		t.Fatal(err)
@@ -330,5 +347,51 @@ func TestIsianPanjangTerisiSemua(t *testing.T) {
 	}
 	if left := placeholderRE.FindAllString(xmlText, -1); len(left) > 0 {
 		t.Errorf("placeholder tersisa: %v", left)
+	}
+}
+
+// Template baru dibuat dari template lama: placeholder ditaruh di tempat yang
+// sama dengan pengisian lama. Untuk data yang sama, teks setiap paragraf yang
+// berisi kata harus identik; yang boleh berbeda hanya paragraf kosong (deretan
+// Enter yang diganti pemisah halaman). Menjaga supaya tidak ada pasal yang
+// bergeser atau hilang sebelum pengajuan dipindah ke template baru (tahap 8.3).
+func TestIsiSamaDenganTemplateLama(t *testing.T) {
+	registry, err := NewAgreementRegistry()
+	if err != nil {
+		t.Fatal(err)
+	}
+	definition, _ := registry.Get("PKS")
+
+	values := sampleAgreementValues()
+	// Template lama menulis alamat ini langsung di pembukaan; template baru
+	// mengambilnya dari master Pihak Pertama.
+	values["PIHAK_PERTAMA_ALAMAT"] = "Jalan Salemba Raya Nomor 30, Jakarta Pusat"
+
+	isi := func(template []byte, legacy bool) []string {
+		t.Helper()
+		out, _, err := NewAgreementGenerator().Generate(template, values, GenerateOptions{Legacy: legacy})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var texts []string
+		for _, paragraph := range wordParagraphRE.FindAllString(generatedDocumentXML(t, out), -1) {
+			if text := strings.TrimSpace(paragraphText(paragraph)); text != "" {
+				texts = append(texts, text)
+			}
+		}
+		return texts
+	}
+	lama, baru := isi(templatePKSLama(t), true), isi(definition.Template, false)
+
+	for i := 0; i < len(lama) && i < len(baru); i++ {
+		if lama[i] != baru[i] {
+			t.Fatalf("paragraf ke-%d berbeda:\nlama: %q\nbaru: %q", i+1, lama[i], baru[i])
+		}
+	}
+	if len(lama) != len(baru) {
+		t.Fatalf("jumlah paragraf berisi berbeda: lama %d, baru %d", len(lama), len(baru))
+	}
+	if len(lama) < 300 {
+		t.Fatalf("hanya %d paragraf berisi; pembacaan dokumen kemungkinan rusak", len(lama))
 	}
 }
