@@ -241,6 +241,8 @@ export default function AgreementTemplatePage({ apiBase = '/admin' }: Props) {
                     <span className={`inline-block text-xs px-2 py-0.5 rounded-full border ${statusStyle[item.status]}`}>
                       {statusLabel[item.status]}
                     </span>
+                    {/* Template format lama (tanpa placeholder) tidak bisa dipratinjau atau diaktifkan lagi. */}
+                    {item.is_legacy && <p className="text-xs text-gray-500 mt-1">Format lama, hanya bisa diunduh</p>}
                   </td>
                   <td className="px-6 py-4 text-gray-600">{formatDate(item.effective_date)}</td>
                   <td className="px-6 py-4 text-gray-600">
@@ -249,15 +251,17 @@ export default function AgreementTemplatePage({ apiBase = '/admin' }: Props) {
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center justify-end gap-2">
-                      <a
-                        href={agreementTemplateService.fileUrl(apiBase, item.id, 'preview')}
-                        target="_blank"
-                        rel="noreferrer"
-                        title="Pratinjau PDF"
-                        className="p-2 rounded-lg text-gray-500 hover:bg-gray-50 hover:text-gray-700"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </a>
+                      {!item.is_legacy && (
+                        <a
+                          href={agreementTemplateService.fileUrl(apiBase, item.id, 'preview')}
+                          target="_blank"
+                          rel="noreferrer"
+                          title="Pratinjau PDF"
+                          className="p-2 rounded-lg text-gray-500 hover:bg-gray-50 hover:text-gray-700"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </a>
+                      )}
                       <a
                         href={agreementTemplateService.fileUrl(apiBase, item.id, 'download')}
                         title="Unduh .docx"
@@ -265,7 +269,7 @@ export default function AgreementTemplatePage({ apiBase = '/admin' }: Props) {
                       >
                         <Download className="w-4 h-4" />
                       </a>
-                      {item.status !== 'ACTIVE' && (
+                      {item.status !== 'ACTIVE' && !item.is_legacy && (
                         <Button
                           onClick={() => void activate(item)}
                           disabled={activatingId === item.id}

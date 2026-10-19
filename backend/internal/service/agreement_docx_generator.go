@@ -32,15 +32,43 @@ var scopePrefixRE = regexp.MustCompile(`^\s*(?:(?:[-*•])|(?:\d+|[A-Za-z])[.)])
 // penomoran a/b/c-nya harus berasal dari numbered list Word pada paragraf itu.
 const scopeListPlaceholder = "{{RUANG_LINGKUP_LIST}}"
 
-// GenerateOptions mengatur perlakuan khusus saat dokumen dibentuk.
+// GenerateOptions mengatur perlakuan khusus saat dokumen dibentuk. Template
+// diisi hanya lewat placeholder {{...}}; template lama tanpa placeholder ditolak
+// sebelum sampai sini (ErrTemplateLama).
 //
-// Legacy hanya boleh diaktifkan untuk template bawaan lama yang belum memakai
-// placeholder sama sekali. Penambalan berbasis pencocokan teks paragraf di
-// prepareLegacyPKS akan merusak template baru yang disusun ulang tim legal.
+// Draft untuk pratinjau: setiap halaman diberi watermark DRAFT lewat header, dan
+// sorotan (highlight) dari template dibiarkan sebagai penanda kerja. Tanpa Draft
+// (dokumen final), sorotan dibuang. Isi dokumen di luar sorotan sama persis,
+// sehingga pratinjau dan final berpisah halaman di titik yang sama.
 type GenerateOptions struct {
-	Draft  bool
-	Legacy bool
+	Draft bool
 }
+
+// watermarkDraft adalah watermark Word "DRAFT" dari template asli tim legal
+// (VML PowerPlusWaterMarkObject), yang terbukti dirender LibreOffice. Dua %d
+// membuat id bentuknya unik per header.
+const watermarkDraft = `<w:r><w:rPr><w:rFonts w:eastAsia="Arial"/><w:color w:val="000000"/></w:rPr><w:pict><v:shapetype id="_x0000_t136" coordsize="21600,21600" o:spt="136" adj="10800" path="m@7,l@8,m@5,21600l@6,21600e"><v:formulas><v:f eqn="sum #0 0 10800"/><v:f eqn="prod #0 2 1"/><v:f eqn="sum 21600 0 @1"/><v:f eqn="sum 0 0 @2"/><v:f eqn="sum 21600 0 @3"/><v:f eqn="if @0 @3 0"/><v:f eqn="if @0 21600 @1"/><v:f eqn="if @0 0 @2"/><v:f eqn="if @0 @4 21600"/><v:f eqn="mid @5 @6"/><v:f eqn="mid @8 @5"/><v:f eqn="mid @7 @8"/><v:f eqn="mid @6 @7"/><v:f eqn="sum @6 0 @5"/></v:formulas><v:path textpathok="t" o:connecttype="custom" o:connectlocs="@9,0;@10,10800;@11,21600;@12,10800" o:connectangles="270,180,90,0"/><v:textpath on="t" fitshape="t"/><v:handles><v:h position="#0,bottomRight" xrange="6629,14971"/></v:handles><o:lock v:ext="edit" text="t" shapetype="t"/></v:shapetype><v:shape id="PowerPlusWaterMarkObject%d" o:spid="_x0000_s%d" type="#_x0000_t136" style="position:absolute;margin-left:0;margin-top:0;width:412.4pt;height:247.45pt;rotation:315;z-index:-251658752;visibility:visible;mso-position-horizontal:center;mso-position-horizontal-relative:margin;mso-position-vertical:center;mso-position-vertical-relative:margin" fillcolor="silver" stroked="f"><v:fill opacity=".5"/><v:textpath style="font-family:&quot;Calibri&quot;;font-size:1pt" string="DRAFT"/><w10:wrap anchorx="margin" anchory="margin"/></v:shape></w:pict></w:r>`
+
+// Namespace yang dibutuhkan watermarkDraft di akar header.
+var vmlNamespaces = []string{
+	`xmlns:v="urn:schemas-microsoft-com:vml"`,
+	`xmlns:o="urn:schemas-microsoft-com:office:office"`,
+	`xmlns:w10="urn:schemas-microsoft-com:office:word"`,
+}
+
+// Header pengganti untuk section tanpa header (mis. template unggahan Admin),
+// supaya watermark tetap muncul di setiap halaman pratinjau.
+const (
+	headerDraftPart = "word/header-alea-draft.xml"
+	headerDraftRel  = "rIdAleaDraft"
+)
+
+var (
+	highlightRE        = regexp.MustCompile(`<w:highlight\b[^>]*/>`)
+	sectPrRE           = regexp.MustCompile(`(?s)<w:sectPr\b[^>]*?(?:/>|>.*?</w:sectPr>)`)
+	defaultHeaderRefRE = regexp.MustCompile(`<w:headerReference\b[^>]*w:type="default"`)
+	firstHeaderRefRE   = regexp.MustCompile(`<w:headerReference\b[^>]*w:type="first"`)
+)
 
 func (g *AgreementGenerator) Generate(template []byte, values map[string]string, opt GenerateOptions) ([]byte, string, error) {
 	if len(template) == 0 {
@@ -50,6 +78,28 @@ func (g *AgreementGenerator) Generate(template []byte, values map[string]string,
 	if err != nil {
 		return nil, "", errors.New("template bukan DOCX yang valid")
 	}
+	// Section tanpa header dibuatkan header untuk watermark. Relasi dan tipe isinya
+	// ditulis sebelum document.xml di dalam zip, jadi kebutuhannya dicek dulu.
+	headerBaru := false
+	if opt.Draft {
+		for _, f := range r.File {
+			if f.Name != "word/document.xml" {
+				continue
+			}
+			src, e := f.Open()
+			if e != nil {
+				return nil, "", e
+			}
+			doc, e := io.ReadAll(src)
+			src.Close()
+			if e != nil {
+				return nil, "", e
+			}
+			headerBaru = lengkapiHeaderDraft(string(doc)) != string(doc)
+		}
+	}
+	nomorHeader := 0
+
 	var out bytes.Buffer
 	w := zip.NewWriter(&out)
 	for _, f := range r.File {
@@ -75,9 +125,6 @@ func (g *AgreementGenerator) Generate(template []byte, values map[string]string,
 		}
 		if strings.HasPrefix(f.Name, "word/") && strings.HasSuffix(f.Name, ".xml") {
 			text := string(data)
-			if opt.Legacy && f.Name == "word/document.xml" && !strings.Contains(text, "{{NOMOR_PIHAK_PERTAMA}}") {
-				text = prepareLegacyPKS(text)
-			}
 			if f.Name == "word/document.xml" {
 				text = expandScopeParagraphs(text, values["RUANG_LINGKUP"])
 			}
@@ -90,12 +137,38 @@ func (g *AgreementGenerator) Generate(template []byte, values map[string]string,
 					text = next
 				}
 			}
-			if opt.Draft && f.Name == "word/document.xml" {
-				text = strings.Replace(text, "<w:body>", `<w:body><w:p><w:r><w:rPr><w:b/><w:color w:val="C8102E"/></w:rPr><w:t>DRAFT - PREVIEW</w:t></w:r></w:p>`, 1)
+			if opt.Draft && strings.HasPrefix(f.Name, "word/header") {
+				nomorHeader++
+				text = pasangWatermark(text, nomorHeader)
+			}
+			if headerBaru && f.Name == "word/document.xml" {
+				text = lengkapiHeaderDraft(text)
+			}
+			if !opt.Draft {
+				text = highlightRE.ReplaceAllString(text, "")
 			}
 			data = []byte(text)
 		}
+		if headerBaru {
+			switch f.Name {
+			case "[Content_Types].xml":
+				data = []byte(strings.Replace(string(data), "</Types>", `<Override PartName="/`+headerDraftPart+`" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/></Types>`, 1))
+			case "word/_rels/document.xml.rels":
+				data = []byte(strings.Replace(string(data), "</Relationships>", `<Relationship Id="`+headerDraftRel+`" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="`+strings.TrimPrefix(headerDraftPart, "word/")+`"/></Relationships>`, 1))
+			}
+		}
 		if _, e = dst.Write(data); e != nil {
+			return nil, "", e
+		}
+	}
+	if headerBaru {
+		dst, e := w.CreateHeader(&zip.FileHeader{Name: headerDraftPart, Method: zip.Deflate})
+		if e != nil {
+			return nil, "", e
+		}
+		header := `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"></w:hdr>`
+		nomorHeader++
+		if _, e = dst.Write([]byte(pasangWatermark(header, nomorHeader))); e != nil {
 			return nil, "", e
 		}
 	}
@@ -110,50 +183,55 @@ func (g *AgreementGenerator) Generate(template []byte, values map[string]string,
 	return result, hex.EncodeToString(sum[:]), nil
 }
 
-func prepareLegacyPKS(text string) string {
-	// Marker garis bawah pada template lama identik. Pemetaan harus dibatasi
-	// per paragraf agar nilai dari field lain tidak tertukar.
-	text = replaceExactParagraph(text, "____________", "{{PIHAK_KEDUA_NAMA}}")
-	text = replaceExactParagraph(text, "____________", "{{JENIS_PEKERJAAN}}")
-	text = replaceInParagraph(text, "***/RM.01.01/", "***/RM.01.01/**/IndonesiaRe/**/2026", "{{NOMOR_PIHAK_PERTAMA}}")
-	text = insertIntoNextEmptyParagraph(text, "NOMOR PIHAK KEDUA", "{{NOMOR_PIHAK_KEDUA}}")
+// pasangWatermark menaruh watermark DRAFT di paragraf pertama header dan
+// melengkapi namespace VML di akarnya.
+func pasangWatermark(header string, nomor int) string {
+	akar := strings.Index(header, "<w:hdr")
+	if akar < 0 {
+		return header
+	}
+	tutup := akar + strings.Index(header[akar:], ">")
+	tag := strings.TrimSuffix(header[akar:tutup], "/")
+	kosong := strings.HasSuffix(header[akar:tutup], "/")
+	for _, ns := range vmlNamespaces {
+		if !strings.Contains(tag, ns[:strings.Index(ns, "=")+1]) {
+			tag += " " + ns
+		}
+	}
+	run := fmt.Sprintf(watermarkDraft, nomor, 2048+nomor)
+	sisa := header[tutup+1:]
+	switch {
+	case kosong:
+		sisa = "<w:p>" + run + "</w:p></w:hdr>" + sisa
+	case strings.Contains(sisa, "</w:p>"):
+		sisa = strings.Replace(sisa, "</w:p>", run+"</w:p>", 1)
+	default:
+		sisa = strings.Replace(sisa, "</w:hdr>", "<w:p>"+run+"</w:p></w:hdr>", 1)
+	}
+	return header[:akar] + tag + ">" + sisa
+}
 
-	text = replaceInParagraph(text, "Pada hari ini,", "Pada hari ini, [*], tanggal [*] bulan [*] tahun [*] (dd/mm/yyyy) bertempat di [*]", "Pada hari ini, {{HARI_TTD}}, tanggal {{TANGGAL_TTD}} bulan {{BULAN_TTD}} tahun {{TAHUN_TTD}} ({{TANGGAL_TTD_LENGKAP}}) bertempat di {{TEMPAT_TTD}}")
-	text = replaceInParagraph(text, "PT REASURANSI INDONESIA UTAMA (PERSERO), suatu", "diwakili oleh ____________, selaku ____________", "diwakili oleh {{PIHAK_PERTAMA_PEJABAT}}, selaku {{PIHAK_PERTAMA_JABATAN}}")
-	text = replaceExactParagraph(text, "____________, _________, selanjutnya disebut “PIHAK KEDUA”.", "{{PIHAK_KEDUA_NAMA}}, beralamat di {{PIHAK_KEDUA_ALAMAT}}, dalam hal ini diwakili oleh {{PIHAK_KEDUA_PEJABAT}} selaku {{PIHAK_KEDUA_JABATAN}}, selanjutnya disebut “PIHAK KEDUA”.")
-	text = replaceInParagraph(text, "bergerak di bidang", "bergerak di bidang ____________", "bergerak di bidang {{PIHAK_KEDUA_BIDANG}}")
-	text = replaceInParagraph(text, "mengenai pengadaan", "pengadaan _____________", "pengadaan {{JENIS_PEKERJAAN}}")
-	text = replaceInParagraph(text, "Surat Penawaran No.", "Surat Penawaran No. ____________ perihal ____________ pada tanggal ____________", "Surat Penawaran No. {{SURAT_PENAWARAN_NOMOR}} perihal {{SURAT_PENAWARAN_PERIHAL}} pada tanggal {{SURAT_PENAWARAN_TANGGAL}}")
-	text = replaceInParagraph(text, "Surat Penunjukan No.", "Surat Penunjukan No. ____________ perihal ____________ pada tanggal ____________", "Surat Penunjukan No. {{SURAT_PENUNJUKAN_NOMOR}} perihal {{SURAT_PENUNJUKAN_PERIHAL}} pada tanggal {{SURAT_PENUNJUKAN_TANGGAL}}")
-	text = replaceInParagraph(text, "Perjanjian Kerja Sama antara", "dengan _____ tentang ____________", "dengan {{PIHAK_KEDUA_NAMA}} tentang {{JENIS_PEKERJAAN}}")
-
-	text = replaceExactParagraph(text, "____________", "{{PIHAK_KEDUA_NAMA}}")
-	text = replaceInParagraph(text, "Nama: ____________", "Nama: ____________", "Nama: {{PIHAK_KEDUA_PEJABAT}}")
-	text = replaceInParagraph(text, "Jabatan: ____________", "Jabatan: ____________", "Jabatan: {{PIHAK_KEDUA_JABATAN}}")
-	text = replaceInParagraph(text, "Nama: ____________", "Nama: ____________", "Nama: {{PIHAK_PERTAMA_PEJABAT}}")
-	text = replaceInParagraph(text, "Jabatan: ____________", "Jabatan: ____________", "Jabatan: {{PIHAK_PERTAMA_JABATAN}}")
-
-	text = replaceInParagraph(text, "Pekerjaan yang akan diserahkan", "Pekerjaan yang akan diserahkan kepada PIHAK KEDUA, yaitu ______.", "Pekerjaan yang akan diserahkan kepada PIHAK KEDUA, yaitu {{JENIS_PEKERJAAN}}.")
-	text = insertIntoNextEmptyParagraph(text, "Ruang lingkup Pekerjaan yang diserahkan kepada PIHAK KEDUA, yaitu:", "{{RUANG_LINGKUP_LIST}}")
-	text = replaceInParagraph(text, "Jangka waktu pelaksanaan", "berlaku sejak tanggal _____ sampai dengan tanggal _______", "berlaku sejak tanggal {{JANGKA_WAKTU_MULAI}} sampai dengan tanggal {{JANGKA_WAKTU_SELESAI}}")
-	text = replaceInParagraph(text, "biaya pelaksanaan Ruang Lingkup", "sebesar Rp. _____ (____________ rupiah)", "sebesar {{NILAI_KONTRAK}} ({{NILAI_KONTRAK_TERBILANG}} rupiah)")
-	text = replaceInParagraph(text, "Termin pertama:", "sebesar **% (*** persen) dari Nilai Kontrak atau sebesar  Rp _______ ( _______ rupiah)", "sebesar {{TERMIN_1_PERSEN}}% ({{TERMIN_1_PERSEN_TERBILANG}} persen) dari Nilai Kontrak atau sebesar {{TERMIN_1_NILAI}} ({{TERMIN_1_NILAI_TERBILANG}} rupiah)")
-	text = replaceInParagraph(text, "Termin kedua:", "sebesar **% (*** persen) dari Nilai Kontrak atau sebesar Rp. ______ (_______ rupiah)", "sebesar {{TERMIN_2_PERSEN}}% ({{TERMIN_2_PERSEN_TERBILANG}} persen) dari Nilai Kontrak atau sebesar {{TERMIN_2_NILAI}} ({{TERMIN_2_NILAI_TERBILANG}} rupiah)")
-
-	text = formatKeyValueParagraph(text, "Bank:", "Bank", "{{BANK}}", 2880, 3060)
-	text = formatKeyValueParagraph(text, "Nomor Rekening:", "Nomor Rekening", "{{NOMOR_REKENING}}", 2880, 3060)
-	text = formatKeyValueParagraph(text, "Atas Nama:", "Atas Nama", "{{ATAS_NAMA}}", 2880, 3060)
-	text = formatKeyValueParagraph(text, "Alamat: Jl. Salemba Raya No. 30 Kenari Selatan, Jakarta Pusat", "Alamat", "{{PIHAK_PERTAMA_ALAMAT}}", 1800, 1980)
-	text = formatKeyValueParagraph(text, "Telepon: 021 3920101", "Telepon", "{{PIHAK_PERTAMA_TELEPON}}", 1800, 1980)
-	text = formatKeyValueParagraph(text, "e-mail:", "E-mail", "{{PIHAK_PERTAMA_EMAIL}}", 1800, 1980)
-	text = formatKeyValueParagraph(text, "PIC:", "PIC", "{{PIHAK_PERTAMA_PIC}}", 1800, 1980)
-	text = replaceExactParagraph(text, "________________________", "{{PIHAK_KEDUA_NAMA}}")
-	text = formatKeyValueParagraph(text, "Alamat:", "Alamat", "{{PIHAK_KEDUA_ALAMAT}}", 1800, 1980)
-	text = formatKeyValueParagraph(text, "Telepon:", "Telepon", "{{PIHAK_KEDUA_TELEPON}}", 1800, 1980)
-	text = formatKeyValueParagraph(text, "e-mail:", "E-mail", "{{PIHAK_KEDUA_EMAIL}}", 1800, 1980)
-	text = formatKeyValueParagraph(text, "PIC:", "PIC", "{{PIHAK_KEDUA_PIC}}", 1800, 1980)
-	text = insertIntoNextEmptyParagraph(text, "LAMPIRAN-LAMPIRAN", "{{DAFTAR_LAMPIRAN}}")
-	return text
+// lengkapiHeaderDraft menambah rujukan ke header pengganti pada section yang
+// tidak punya header utama (dan header halaman pertama, kalau halaman pertama
+// dibedakan). Section yang sudah punya header tidak diubah.
+func lengkapiHeaderDraft(doc string) string {
+	return sectPrRE.ReplaceAllStringFunc(doc, func(sect string) string {
+		ref := ""
+		if !defaultHeaderRefRE.MatchString(sect) {
+			ref += `<w:headerReference w:type="default" r:id="` + headerDraftRel + `"/>`
+		}
+		if strings.Contains(sect, "<w:titlePg") && !firstHeaderRefRE.MatchString(sect) {
+			ref += `<w:headerReference w:type="first" r:id="` + headerDraftRel + `"/>`
+		}
+		if ref == "" {
+			return sect
+		}
+		if strings.HasSuffix(sect, "/>") && !strings.Contains(sect, "</w:sectPr>") {
+			return strings.TrimSuffix(sect, "/>") + ">" + ref + "</w:sectPr>"
+		}
+		i := strings.Index(sect, ">") + 1
+		return sect[:i] + ref + sect[i:]
+	})
 }
 
 func paragraphText(paragraph string) string {
@@ -174,62 +252,6 @@ func transformParagraph(xmlText string, predicate func(string) bool, transform f
 		if updated != paragraph {
 			return xmlText[:loc[0]] + updated + xmlText[loc[1]:]
 		}
-	}
-	return xmlText
-}
-
-func replaceInParagraph(xmlText, anchor, needle, replacement string) string {
-	return transformParagraph(xmlText, func(text string) bool {
-		return strings.Contains(text, anchor)
-	}, func(paragraph string) string {
-		return replaceAcrossWordRuns(paragraph, needle, replacement)
-	})
-}
-
-func replaceExactParagraph(xmlText, expected, replacement string) string {
-	return transformParagraph(xmlText, func(text string) bool {
-		return strings.TrimSpace(text) == expected
-	}, func(paragraph string) string {
-		return replaceAcrossWordRuns(paragraph, paragraphText(paragraph), replacement)
-	})
-}
-
-func formatKeyValueParagraph(xmlText, expected, label, placeholder string, colonPosition, valuePosition int) string {
-	return transformParagraph(xmlText, func(text string) bool {
-		return strings.TrimSpace(text) == expected
-	}, func(paragraph string) string {
-		pPrEnd := strings.Index(paragraph, "</w:pPr>")
-		if pPrEnd < 0 {
-			return paragraph
-		}
-		pPrEnd += len("</w:pPr>")
-		pPr := paragraph[:pPrEnd]
-		tabs := fmt.Sprintf(`<w:tabs><w:tab w:val="left" w:pos="%d"/><w:tab w:val="left" w:pos="%d"/></w:tabs>`, colonPosition, valuePosition)
-		pPr = strings.Replace(pPr, "</w:pPr>", tabs+"</w:pPr>", 1)
-		content := `<w:r><w:t>` + html.EscapeString(label) + `</w:t><w:tab/><w:t>:</w:t><w:tab/><w:t>` + placeholder + `</w:t></w:r>`
-		return pPr + content + "</w:p>"
-	})
-}
-
-func insertIntoNextEmptyParagraph(xmlText, anchor, placeholder string) string {
-	paragraphs := wordParagraphRE.FindAllStringIndex(xmlText, -1)
-	anchorIndex := -1
-	for i, loc := range paragraphs {
-		if strings.Contains(paragraphText(xmlText[loc[0]:loc[1]]), anchor) {
-			anchorIndex = i
-			break
-		}
-	}
-	if anchorIndex < 0 {
-		return xmlText
-	}
-	for _, loc := range paragraphs[anchorIndex+1:] {
-		paragraph := xmlText[loc[0]:loc[1]]
-		if strings.TrimSpace(paragraphText(paragraph)) != "" {
-			return xmlText
-		}
-		injected := strings.Replace(paragraph, "</w:p>", `<w:r><w:t>`+placeholder+`</w:t></w:r></w:p>`, 1)
-		return xmlText[:loc[0]] + injected + xmlText[loc[1]:]
 	}
 	return xmlText
 }
