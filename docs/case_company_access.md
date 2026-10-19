@@ -57,6 +57,8 @@ perusahaannya, bukan dari centang "Internal".
 
 User yang sudah ada tidak dipindahkan otomatis. `LEGAL` lama yang terdaftar di
 anak usaha baru pindah ke induk setelah ADMIN membuka Edit lalu menyimpannya.
+Satu pengecualian: saat induk diganti (bagian 8.1), semua `LEGAL` dipindah ke
+induk baru sekaligus.
 User yang masuk lewat LDAP dibuat sebagai `USER` di perusahaan yang cocok dengan
 domain emailnya, atau di induk kalau tidak ada yang cocok.
 
@@ -122,8 +124,8 @@ Perubahan perusahaan tercatat di audit log sebagai perubahan perkara.
 | ADMIN tidak dibatasi perusahaannya | Ya |
 | Induk dikenali dari tanda `is_parent`, bukan dari domain email | Ya. Database lama ditandai otomatis saat server menyala, hanya kalau belum ada induk |
 | Induk tidak bisa dijadikan non-internal atau dihapus | Ya di backend. Tampilan menu Perusahaan sudah disesuaikan, tetapi belum dicoba di browser |
-| Domain email induk bisa diubah | Ya di backend. Form Edit di menu Perusahaan masih mengunci kolomnya |
-| Induk bisa diganti lewat menu | Belum. Sedang dikerjakan |
+| Domain email induk bisa diubah | Ya, lewat form Edit di menu Perusahaan |
+| Induk bisa diganti lewat menu (8.1) | Ya. Tampilan di menu Perusahaan belum dicoba di browser |
 | Perusahaan user mengikuti perannya (2.1) | Ya di backend. Form user sudah disesuaikan, tetapi belum dicoba di browser |
 | Dokumen perkara di Repositori Dokumen dibatasi per perusahaan | Ya, lihat bagian 9 |
 
@@ -144,8 +146,8 @@ anak usaha itu melihat perkara semua perusahaan.
 
 Induk dikunci: baris berlabel "Induk" di menu itu tidak bisa dicabut centang
 "Internal"-nya dan tidak bisa dihapus. Nama dan domain emailnya tetap bisa
-diubah, karena induk dikenali dari tandanya, bukan dari domain. Induk belum
-bisa dipindahkan ke perusahaan lain lewat menu.
+diubah, karena induk dikenali dari tandanya, bukan dari domain. Untuk
+memindahkan induk ke perusahaan lain, lihat 8.1.
 
 Perusahaan baru bawaannya tidak internal.
 
@@ -159,7 +161,48 @@ masih bertanda internal. ADMIN perlu mencabut centang keduanya satu kali.
 Sebelum mencabut, pastikan tidak ada user LEGAL yang terdaftar di anak usaha
 itu, karena ia akan ikut dibatasi.
 
-Rujukan kode: penentuan cakupan user ada di `companyScope()` pada
+### 8.1 Mengganti induk
+
+ADMIN mengganti induk dengan aksi **Jadikan induk** (ikon mahkota) di baris
+perusahaan tujuan. Aksi itu dijaga permission `company.set_parent.all`, yang
+dimiliki semua ADMIN. Sebelum mengonfirmasi, dialog menampilkan dampaknya yang
+dihitung server: induk sekarang, jumlah `LEGAL` yang akan dipindah, dan
+`LEGAL_AU` yang menghalangi.
+
+Mengganti induk memindahkan data user, jadi lakukan dengan sengaja. Dalam satu
+langkah, dan semuanya batal kalau salah satu gagal:
+
+| Yang terdampak | Akibat |
+|---|---|
+| Perusahaan tujuan | Menjadi induk dan ditandai internal. Sejak itu ia dikunci seperti induk |
+| Induk lama | Bukan induk lagi, tetapi **tetap internal**. Kuncinya lepas, jadi centang Internal-nya bisa dicabut dan ia bisa dihapus |
+| Semua `LEGAL` | Dipindah ke perusahaan tujuan, karena `LEGAL` selalu terdaftar di induk |
+| `USER` dan `ADMIN` | Tidak dipindah. Perusahaan mereka adalah tempat mereka bekerja |
+| `LEGAL_AU` di perusahaan tujuan | Pergantian **ditolak** selama masih ada, karena `LEGAL_AU` tidak boleh terdaftar di induk |
+| User LDAP baru dengan domain email yang tidak dikenal | Masuk ke induk baru |
+| Perkara | Tidak berubah. Tetap milik perusahaan pemiliknya |
+
+Langkah-langkahnya:
+
+1. Di **Kelola User**, pindahkan setiap `LEGAL_AU` yang terdaftar di perusahaan
+   tujuan ke anak usaha lain, atau ganti perannya. Dialog menyebut nama mereka.
+2. Di **Data Master > Perusahaan**, klik **Jadikan induk** di baris tujuan.
+   Periksa angka di dialog, lalu konfirmasi.
+3. Putuskan apakah induk lama tetap internal. Kalau user induk lama tidak boleh
+   lagi melihat perkara semua perusahaan, buka Edit induk lama dan cabut
+   centang Internal-nya. `LEGAL` sudah pindah di langkah 2, jadi mereka tidak
+   ikut dibatasi.
+4. Minta user yang dipindah login ulang. Kuncian pilihan perusahaan di form
+   perkara baru menyesuaikan setelah login ulang.
+
+Pergantian tercatat di Audit Log dengan aksi `PARENT_CHANGE` (filter "Ganti
+Induk"): induk lama, induk baru, dan ID setiap `LEGAL` yang dipindah. Untuk
+membatalkan, jalankan **Jadikan induk** lagi di induk lama. Langkah 1 juga
+berlaku untuk induk lama.
+
+### 8.2 Rujukan kode
+
+Penentuan cakupan user ada di `companyScope()` pada
 `backend/internal/handler/legal_case.handler.go`, dan pemeriksaannya di
 `findCase()` pada `backend/internal/service/legal_case.service.go`. Tesnya di
 `backend/internal/router/perkara_test.go`: `TestAnakUsahaBawaanDibatasi`
@@ -169,7 +212,9 @@ Rujukan kode: penentuan cakupan user ada di `companyScope()` pada
 database lama ditandai `BackfillParentCompany()` di
 `backend/internal/seed/companies.go`, dengan tes `TestIndukDariTanda`. Kuncian
 induk ada di `backend/internal/service/company.service.go`, dengan tes
-`TestPerusahaanIndukDikunci`. Kedua tes itu di
+`TestPerusahaanIndukDikunci`. Pergantian induk ada di `MakeParent()` pada
+`company.service.go` dan `backend/internal/repository/company.repository.go`
+(transaksinya), dengan tes `TestGantiInduk`. Ketiga tes itu di
 `backend/internal/router/master_test.go`. Perusahaan user per peran ditentukan
 `resolveCompanySelection()` di `backend/internal/service/helpers.go`, dengan tes
 `TestPerusahaanUserPerPeran` di `backend/internal/router/sesi_test.go`.

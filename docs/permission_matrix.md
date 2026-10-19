@@ -107,8 +107,11 @@ Setiap fitur memiliki kumpulan aksi default. Admin dapat memberikan/mencabut aks
 |-------------|-------|-----------|
 | `master_data.view` | View Master Data | Melihat master data |
 | `master_data.manage` | Manage Master Data | Mengelola master data (create/edit/delete) |
+| `company.set_parent.all` | Perusahaan - Ganti Induk | Menjadikan perusahaan lain sebagai induk dan memindah semua LEGAL ke sana. Lihat `docs/case_company_access.md` bagian 8.1 |
 
 Catatan: Master data mencakup Company, Purpose Type, Case Type, Case Category, Document Type, Regency, Cedant, Division.
+
+Catatan `company.set_parent.all`: dipisah dari `master_data.manage` karena dampaknya memindahkan data user, bukan hanya mengubah satu baris master. Endpoint-nya (`GET /admin/companies/:id/make-parent/preview` dan `POST /admin/companies/:id/make-parent`) ada di grup `/admin`, jadi hanya ADMIN yang bisa memakainya. Sesuai aturan 1.2, override tidak berlaku untuk ADMIN, sehingga semua ADMIN bisa mengganti induk.
 
 ### 2.8 Notification Settings
 | Action Code | Label | Keterangan |
@@ -190,6 +193,7 @@ Tabel ini menunjukkan permission default yang dimiliki setiap role **sebelum ove
 | **Audit Log** | View | ✅ | ❌ | ❌ | ❌ | ❌ |
 | **Master Data** | View | ✅ | ❌ | ❌ | ❌ | ❌ |
 | | Manage | ✅ | ❌ | ❌ | ❌ | ❌ |
+| | Ganti Perusahaan Induk | ✅ | ❌ | ❌ | ❌ | ❌ |
 | **Notifications** | View Settings | ✅ | ❌ | ❌ | ❌ | ❌ |
 | | Manage Settings | ✅ | ❌ | ❌ | ❌ | ❌ |
 | | View Reminders | ✅ | ✅ | ❌ | ✅ | ❌ |
@@ -380,7 +384,9 @@ Bagian ini menjelaskan status implementasi permission untuk setiap fitur, termas
 |------|--------|--------|
 | View | ✅ | `master_data.view` |
 | Manage (CRUD) | ✅ | `master_data.manage` |
+| Ganti perusahaan induk | ✅ | `company.set_parent.all`, dijaga di route (`requirePermission`) dan di menu Perusahaan (`hasPermission`) |
 | **Kekurangan / Belum Ada** | | |
+| Route tambah, ubah, dan hapus perusahaan | ⚠️ | Hanya memeriksa peran ADMIN, tidak memeriksa `master_data.manage`. Karena override tidak berlaku untuk ADMIN, hasilnya sama untuk saat ini, tetapi penjagaannya tidak mengikuti katalog di atas |
 | `master_data.export` | ⚠️ | Belum ada export master data per entitas. |
 | `master_data.import` | ⚠️ | Belum ada import master data. |
 
