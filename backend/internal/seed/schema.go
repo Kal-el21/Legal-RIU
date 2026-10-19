@@ -561,6 +561,9 @@ func RunAllMigrationsAndSeeds(db *gorm.DB, store *storage.MinIOClient) error {
 	if err := SeedCompanies(db); err != nil {
 		return err
 	}
+	if err := BackfillParentCompany(db); err != nil {
+		return err
+	}
 	if err := SeedPurposeTypes(db); err != nil {
 		return err
 	}

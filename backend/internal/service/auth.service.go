@@ -161,8 +161,10 @@ func (s *authService) LDAPLogin(req dto.LDAPLoginRequest, ipAddress, userAgent *
 		divisionID := lookupDivisionID(s.userRepo, division)
 		companyID := lookupCompanyID(s.userRepo, email)
 		if companyID == nil {
-			// User dari AD adalah karyawan Indonesia Re walau domain emailnya berbeda.
-			companyID = lookupCompanyID(s.userRepo, "@"+entity.ParentCompanyDomain)
+			// Domain email yang tidak dikenal masuk ke induk yang berlaku.
+			if parent, err := s.userRepo.FindParentCompany(); err == nil {
+				companyID = &parent.ID
+			}
 		}
 		temporaryPassword, tokenErr := utils.GenerateSecureToken(32)
 		if tokenErr != nil {

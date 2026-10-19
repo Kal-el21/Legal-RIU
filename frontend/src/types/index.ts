@@ -40,6 +40,20 @@ export interface Company {
   updated_at: string
 }
 
+// Dampak "Jadikan induk". Selama blocking_users tidak kosong, server menolak pergantian.
+export interface ParentChangePreview {
+  current_parent: Company | null
+  target: Company
+  legal_to_move: number
+  blocking_users: { id: string; full_name: string; email: string }[]
+}
+
+export interface ParentChangeResult {
+  previous_parent: Company | null
+  parent: Company
+  moved_legal_ids: string[]
+}
+
 export interface PurposeType {
   id: string
   name: string
@@ -346,6 +360,7 @@ export type AuditAction =
   | 'DELETE'
   | 'FILE_DELETE'
   | 'PERMISSION_UPDATE'
+  | 'PARENT_CHANGE'
 
 export interface AuditLog {
   id: string

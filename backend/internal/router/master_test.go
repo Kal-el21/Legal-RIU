@@ -8,6 +8,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
+	"strings"
+	"sync"
 	"testing"
 
 	"legal-riu-portal/internal/entity"
@@ -315,10 +318,10 @@ func TestSeedPerusahaanBawaan(t *testing.T) {
 	}
 }
 
-// Induk dikenali dari domain surelnya (entity.ParentCompanyDomain). Tanda
-// internal dan domainnya tidak bisa diubah dan ia tidak bisa dihapus; kalau
+// Tanda internal induk tidak bisa dicabut dan ia tidak bisa dihapus; kalau
 // bisa, user induk kehilangan pandangan ke perkara anak usaha, atau sistem
-// berjalan tanpa induk. Perusahaan lain tetap bebas diatur.
+// berjalan tanpa induk. Domainnya boleh diubah karena induk dikenali dari
+// tandanya. Perusahaan lain tetap bebas diatur.
 func TestPerusahaanIndukDikunci(t *testing.T) {
 	admin := masukPeran(t, entity.RoleAdmin)
 	const alamat = "/api/v1/admin/companies"
@@ -360,13 +363,19 @@ func TestPerusahaanIndukDikunci(t *testing.T) {
 	if kode := ubah(induk.ID, induk.Name, induk.EmailDomain, false); kode != http.StatusBadRequest {
 		t.Errorf("mencabut tanda internal induk: dapat %d, harap 400", kode)
 	}
-	if kode := ubah(induk.ID, induk.Name, "induk-pindah.example", true); kode != http.StatusBadRequest {
-		t.Errorf("mengubah domain induk: dapat %d, harap 400", kode)
+	if kode := ubah(induk.ID, induk.Name, "induk-pindah.example", true); kode != http.StatusOK {
+		t.Errorf("mengubah domain induk: dapat %d, harap 200", kode)
+	}
+	if p := baca(induk.ID); !p.IsParent || p.EmailDomain != "induk-pindah.example" {
+		t.Errorf("induk setelah domainnya diubah: %+v, harap tetap induk", p)
+	}
+	if kode := ubah(induk.ID, induk.Name, induk.EmailDomain, true); kode != http.StatusOK {
+		t.Errorf("mengembalikan domain induk: dapat %d, harap 200", kode)
 	}
 	if kode := panggil(t, admin, http.MethodDelete, alamat+"/"+induk.ID, nil).Code; kode != http.StatusBadRequest {
 		t.Errorf("menghapus induk: dapat %d, harap 400", kode)
 	}
-	// Yang dikunci hanya tanda internal dan domainnya; nama tetap boleh diubah.
+	// Yang dikunci hanya tanda internal; nama tetap boleh diubah.
 	if kode := ubah(induk.ID, induk.Name+" (Persero)", induk.EmailDomain, true); kode != http.StatusOK {
 		t.Errorf("mengubah nama induk: dapat %d, harap 200", kode)
 	}
@@ -398,4 +407,286 @@ func TestPerusahaanIndukDikunci(t *testing.T) {
 		t.Errorf("perusahaan lain setelah diubah: %+v", p)
 	}
 	harapKode(t, panggil(t, admin, http.MethodDelete, alamat+"/"+lain.ID, nil), http.StatusOK, "menghapus perusahaan lain")
+}
+
+// Induk dikenali dari tanda is_parent, bukan dari domain email, supaya bisa
+// diganti. Isian tanda untuk database lama hanya berjalan kalau belum ada induk;
+// kalau tidak, induk yang sudah diganti kembali ke Indonesia Re setiap server
+// dinyalakan ulang. Database menolak dua induk.
+func TestIndukDariTanda(t *testing.T) {
+	jadikanInduk := func(domain string) {
+		t.Helper()
+		// Dua perintah, karena indeks unik menolak dua induk walau hanya sesaat.
+		if err := dbTes.Exec("UPDATE companies SET is_parent = false WHERE is_parent").Error; err != nil {
+			t.Fatal(err)
+		}
+		if domain == "" {
+			return
+		}
+		if err := dbTes.Exec("UPDATE companies SET is_parent = true WHERE email_domain = ?", domain).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	domainInduk := func(konteks string) string {
+		t.Helper()
+		var domain []string
+		dbTes.Raw("SELECT email_domain FROM companies WHERE is_parent AND deleted_at IS NULL").Scan(&domain)
+		if len(domain) != 1 {
+			t.Fatalf("%s: perusahaan bertanda induk %v, harap tepat satu", konteks, domain)
+		}
+		return domain[0]
+	}
+	t.Cleanup(func() { jadikanInduk(entity.ParentCompanyDomain) })
+
+	// Database lama: kolomnya baru ada dan belum ada perusahaan bertanda induk.
+	jadikanInduk("")
+	if err := seed.BackfillParentCompany(dbTes); err != nil {
+		t.Fatal(err)
+	}
+	if got := domainInduk("database lama"); got != entity.ParentCompanyDomain {
+		t.Errorf("database lama: induk %s, harap %s", got, entity.ParentCompanyDomain)
+	}
+
+	// Induk sudah diganti: server yang dinyalakan ulang tidak mengembalikannya.
+	const pengganti = "asei.co.id"
+	jadikanInduk(pengganti)
+	for putaran := 1; putaran <= 2; putaran++ {
+		if err := seed.SeedCompanies(dbTes); err != nil {
+			t.Fatalf("seed perusahaan putaran %d: %v", putaran, err)
+		}
+		if err := seed.BackfillParentCompany(dbTes); err != nil {
+			t.Fatalf("isian induk putaran %d: %v", putaran, err)
+		}
+	}
+	if got := domainInduk("setelah seed berikutnya"); got != pengganti {
+		t.Errorf("setelah seed berikutnya: induk %s, harap tetap %s", got, pengganti)
+	}
+
+	// Aturan yang bergantung pada induk mengikuti tandanya: LEGAL baru
+	// terdaftar di induk pengganti.
+	admin := masukPeran(t, entity.RoleAdmin)
+	var divisi, idPengganti string
+	dbTes.Raw("SELECT id FROM divisions WHERE deleted_at IS NULL LIMIT 1").Scan(&divisi)
+	dbTes.Raw("SELECT id FROM companies WHERE email_domain = ?", pengganti).Scan(&idPengganti)
+	w := panggil(t, admin, http.MethodPost, "/api/v1/admin/users", map[string]string{"full_name": "Legal Induk Pengganti", "email": "tes-induk-pengganti@example.com", "password": sandiTes, "position": "Staff", "division": divisi, "role": "LEGAL"})
+	harapKode(t, w, http.StatusCreated, "membuat LEGAL")
+	var u akun
+	isiData(t, w, &u)
+	t.Cleanup(func() { dbTes.Exec("UPDATE users SET deleted_at = now() WHERE id = ?", u.ID) })
+	var terdaftar string
+	dbTes.Raw("SELECT COALESCE(company_id::text, '') FROM users WHERE id = ?", u.ID).Scan(&terdaftar)
+	if terdaftar != idPengganti {
+		t.Errorf("LEGAL baru terdaftar di %q, harap induk pengganti %q", terdaftar, idPengganti)
+	}
+
+	if err := dbTes.Exec("UPDATE companies SET is_parent = true WHERE email_domain = ?", "resyariah.co.id").Error; err == nil {
+		t.Error("database menerima perusahaan induk kedua")
+	}
+}
+
+// Ganti induk lewat endpoint (docs/case_company_access.md): pratinjau
+// menunjukkan dampaknya tanpa mengubah apa pun; pergantian ditolak selama ada
+// Legal AU di tujuan, karena Legal AU tidak boleh terdaftar di induk; LEGAL ikut
+// pindah, USER dan ADMIN tidak; induk lama tetap internal; pergantian tercatat
+// di audit log dan bisa dibalik.
+func TestGantiInduk(t *testing.T) {
+	admin := masukPeran(t, entity.RoleAdmin)
+	const alamat = "/api/v1/admin/companies"
+	var indukAwal string
+	dbTes.Raw("SELECT id FROM companies WHERE is_parent AND deleted_at IS NULL").Scan(&indukAwal)
+	if indukAwal == "" {
+		t.Fatal("tidak ada perusahaan induk")
+	}
+
+	var perusahaanUji, userUji []string
+	t.Cleanup(func() {
+		dbTes.Exec("UPDATE companies SET is_parent = false WHERE is_parent")
+		dbTes.Exec("UPDATE companies SET is_parent = true WHERE id = ?", indukAwal)
+		dbTes.Exec("UPDATE users SET company_id = ? WHERE role = ? AND company_id IN ?", indukAwal, entity.RoleLegal, perusahaanUji)
+		dbTes.Exec("UPDATE users SET deleted_at = now() WHERE id IN ?", userUji)
+		dbTes.Exec("UPDATE companies SET deleted_at = now() WHERE id IN ?", perusahaanUji)
+	})
+	buatPerusahaan := func(tanda string) string {
+		t.Helper()
+		w := panggil(t, admin, http.MethodPost, alamat, map[string]any{"name": "PT Induk Uji " + tanda, "email_domain": "induk-uji-" + tanda + ".example", "is_internal": false})
+		harapKode(t, w, http.StatusCreated, "membuat perusahaan uji "+tanda)
+		var p struct {
+			ID string `json:"id"`
+		}
+		isiData(t, w, &p)
+		perusahaanUji = append(perusahaanUji, p.ID)
+		return p.ID
+	}
+	buatUser := func(surel string, peran entity.UserRole, perusahaan string) string {
+		t.Helper()
+		if err := tambahUser(surel, peran, uuid.MustParse(perusahaan)); err != nil {
+			t.Fatal(err)
+		}
+		var id string
+		dbTes.Raw("SELECT id FROM users WHERE email = ?", surel).Scan(&id)
+		userUji = append(userUji, id)
+		return id
+	}
+	perusahaanUser := func(id string) string {
+		t.Helper()
+		var perusahaan string
+		dbTes.Raw("SELECT COALESCE(company_id::text, '') FROM users WHERE id = ?", id).Scan(&perusahaan)
+		return perusahaan
+	}
+	type tanda struct {
+		ID         string
+		IsParent   bool
+		IsInternal bool
+	}
+	tandaPerusahaan := func(id string) tanda {
+		t.Helper()
+		var p tanda
+		dbTes.Raw("SELECT id, is_parent, is_internal FROM companies WHERE id = ?", id).Scan(&p)
+		return p
+	}
+	jadikanInduk := func(id string) *httptest.ResponseRecorder {
+		t.Helper()
+		return panggil(t, admin, http.MethodPost, alamat+"/"+id+"/make-parent", nil)
+	}
+
+	tujuan := buatPerusahaan("tujuan")
+	legal := buatUser("tes-ganti-induk-legal@example.com", entity.RoleLegal, indukAwal)
+	user := buatUser("tes-ganti-induk-user@example.com", entity.RoleUser, indukAwal)
+	adminLain := buatUser("tes-ganti-induk-admin@example.com", entity.RoleAdmin, indukAwal)
+	au := buatUser("tes-ganti-induk-au@example.com", entity.RoleLegalAU, tujuan)
+	var legalAktif int64
+	dbTes.Raw("SELECT count(*) FROM users WHERE role = ? AND deleted_at IS NULL", entity.RoleLegal).Scan(&legalAktif)
+
+	t.Run("Pratinjau", func(t *testing.T) {
+		w := panggil(t, admin, http.MethodGet, alamat+"/"+tujuan+"/make-parent/preview", nil)
+		harapKode(t, w, http.StatusOK, "pratinjau ganti induk")
+		var p struct {
+			CurrentParent *struct {
+				ID string `json:"id"`
+			} `json:"current_parent"`
+			LegalToMove   int64 `json:"legal_to_move"`
+			BlockingUsers []struct {
+				ID string `json:"id"`
+			} `json:"blocking_users"`
+		}
+		isiData(t, w, &p)
+		if p.CurrentParent == nil || p.CurrentParent.ID != indukAwal {
+			t.Errorf("induk sekarang di pratinjau: %+v, harap %s", p.CurrentParent, indukAwal)
+		}
+		if p.LegalToMove != legalAktif {
+			t.Errorf("LEGAL yang akan pindah: %d, harap %d", p.LegalToMove, legalAktif)
+		}
+		if len(p.BlockingUsers) != 1 || p.BlockingUsers[0].ID != au {
+			t.Errorf("Legal AU yang menghalangi: %+v, harap hanya %s", p.BlockingUsers, au)
+		}
+		if got := tandaPerusahaan(tujuan); got.IsParent || got.IsInternal {
+			t.Errorf("pratinjau mengubah perusahaan tujuan: %+v", got)
+		}
+	})
+
+	// Selama ada Legal AU di tujuan, ditolak dan tidak ada yang berubah.
+	harapKode(t, jadikanInduk(tujuan), http.StatusBadRequest, "ganti induk selama ada Legal AU di tujuan")
+	if got := tandaPerusahaan(indukAwal); !got.IsParent {
+		t.Fatalf("induk berpindah walau ditolak: %+v", got)
+	}
+	if got := perusahaanUser(legal); got != indukAwal {
+		t.Fatalf("LEGAL pindah walau pergantian ditolak: %s", got)
+	}
+
+	// Legal AU dipindah dulu, seperti yang harus dilakukan admin.
+	dbTes.Exec("UPDATE users SET deleted_at = now() WHERE id = ?", au)
+	w := jadikanInduk(tujuan)
+	harapKode(t, w, http.StatusOK, "ganti induk")
+	var hasil struct {
+		PreviousParent *struct {
+			ID string `json:"id"`
+		} `json:"previous_parent"`
+		Parent struct {
+			ID string `json:"id"`
+		} `json:"parent"`
+		MovedLegalIDs []string `json:"moved_legal_ids"`
+	}
+	isiData(t, w, &hasil)
+	if hasil.PreviousParent == nil || hasil.PreviousParent.ID != indukAwal || hasil.Parent.ID != tujuan {
+		t.Errorf("jawaban ganti induk: lama %+v, baru %s", hasil.PreviousParent, hasil.Parent.ID)
+	}
+	if int64(len(hasil.MovedLegalIDs)) != legalAktif || !slices.Contains(hasil.MovedLegalIDs, legal) {
+		t.Errorf("LEGAL yang dipindah: %d (%v), harap %d termasuk %s", len(hasil.MovedLegalIDs), hasil.MovedLegalIDs, legalAktif, legal)
+	}
+
+	if got := tandaPerusahaan(tujuan); !got.IsParent || !got.IsInternal {
+		t.Errorf("induk baru: %+v, harap induk dan internal", got)
+	}
+	if got := tandaPerusahaan(indukAwal); got.IsParent || !got.IsInternal {
+		t.Errorf("induk lama: %+v, harap bukan induk dan tetap internal", got)
+	}
+	var legalDiLuar int64
+	dbTes.Raw("SELECT count(*) FROM users WHERE role = ? AND deleted_at IS NULL AND company_id IS DISTINCT FROM ?", entity.RoleLegal, tujuan).Scan(&legalDiLuar)
+	if legalDiLuar != 0 {
+		t.Errorf("%d LEGAL tidak ikut pindah ke induk baru", legalDiLuar)
+	}
+	if got := perusahaanUser(user); got != indukAwal {
+		t.Errorf("USER ikut pindah ke %s, harap tetap di induk lama", got)
+	}
+	if got := perusahaanUser(adminLain); got != indukAwal {
+		t.Errorf("ADMIN ikut pindah ke %s, harap tetap di induk lama", got)
+	}
+
+	var catatan struct {
+		OldValue    string
+		NewValue    string
+		Description string
+	}
+	dbTes.Raw("SELECT old_value, new_value, description FROM audit_logs WHERE action = ? AND entity_id = ? ORDER BY created_at DESC LIMIT 1", entity.ActionParentChange, tujuan).Scan(&catatan)
+	if catatan.OldValue != indukAwal || catatan.NewValue != tujuan || !strings.Contains(catatan.Description, legal) {
+		t.Errorf("audit log ganti induk: %+v, harap induk lama %s, induk baru %s, dan ID LEGAL %s", catatan, indukAwal, tujuan, legal)
+	}
+
+	harapKode(t, jadikanInduk(tujuan), http.StatusBadRequest, "menjadikan induk perusahaan yang sudah induk")
+	terhapus := buatPerusahaan("terhapus")
+	harapKode(t, panggil(t, admin, http.MethodDelete, alamat+"/"+terhapus, nil), http.StatusOK, "menghapus perusahaan uji")
+	harapKode(t, jadikanInduk(terhapus), http.StatusBadRequest, "menjadikan induk perusahaan yang dihapus")
+
+	t.Run("Dibalik", func(t *testing.T) {
+		// Legal AU yang terdaftar di induk lama dipindah dulu.
+		var auDiIndukLama []string
+		dbTes.Raw("SELECT id FROM users WHERE role = ? AND company_id = ? AND deleted_at IS NULL", entity.RoleLegalAU, indukAwal).Scan(&auDiIndukLama)
+		parkir := buatPerusahaan("parkir")
+		dbTes.Exec("UPDATE users SET company_id = ? WHERE id IN ?", parkir, auDiIndukLama)
+		t.Cleanup(func() { dbTes.Exec("UPDATE users SET company_id = ? WHERE id IN ?", indukAwal, auDiIndukLama) })
+
+		harapKode(t, jadikanInduk(indukAwal), http.StatusOK, "mengembalikan induk lama")
+		if got := tandaPerusahaan(indukAwal); !got.IsParent {
+			t.Errorf("induk lama setelah dibalik: %+v", got)
+		}
+		if got := tandaPerusahaan(tujuan); got.IsParent || !got.IsInternal {
+			t.Errorf("induk sementara setelah dibalik: %+v, harap bukan induk dan tetap internal", got)
+		}
+		if got := perusahaanUser(legal); got != indukAwal {
+			t.Errorf("LEGAL setelah dibalik terdaftar di %s, harap %s", got, indukAwal)
+		}
+	})
+
+	// Dua admin menekan bersamaan untuk tujuan berbeda: hasilnya tetap satu induk.
+	t.Run("Bersamaan", func(t *testing.T) {
+		calon := []string{buatPerusahaan("serentak-a"), buatPerusahaan("serentak-b")}
+		kode := make([]int, len(calon))
+		var wg sync.WaitGroup
+		for i, id := range calon {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				kode[i] = panggil(t, admin, http.MethodPost, alamat+"/"+id+"/make-parent", nil).Code
+			}()
+		}
+		wg.Wait()
+		var induk []string
+		dbTes.Raw("SELECT id FROM companies WHERE is_parent").Scan(&induk)
+		if len(induk) != 1 || !slices.Contains(calon, induk[0]) {
+			t.Errorf("induk setelah dua permintaan bersamaan: %v (kode %v), harap tepat satu dari %v", induk, kode, calon)
+		}
+		if !slices.Contains(kode, http.StatusOK) {
+			t.Errorf("tidak ada permintaan yang berhasil: kode %v", kode)
+		}
+	})
 }

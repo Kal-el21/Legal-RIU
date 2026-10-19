@@ -3,6 +3,7 @@ package service
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"mime/multipart"
 
 	"legal-riu-portal/internal/dto"
@@ -23,6 +24,8 @@ type CompanyService interface {
 	Delete(id string) error
 	ImportFromExcel(file *multipart.FileHeader) (*dto.ImportResult, error)
 	GenerateImportTemplate() (*bytes.Buffer, error)
+	PreviewMakeParent(id string) (*dto.ParentChangePreviewResponse, error)
+	MakeParent(id string) (*dto.ParentChangeResponse, error)
 }
 
 type companyService struct {
@@ -73,15 +76,9 @@ func (s *companyService) Update(id, name, emailDomain string, isInternal bool) (
 	if err != nil {
 		return nil, errors.New("perusahaan tidak ditemukan")
 	}
-	// Induk dikenali dari domainnya dan usernya harus melihat perkara semua
-	// perusahaan, jadi dua hal itu tidak boleh berubah.
-	if company.IsParent() {
-		if !isInternal {
-			return nil, errors.New("perusahaan induk harus tetap internal")
-		}
-		if emailDomain != company.EmailDomain {
-			return nil, errors.New("domain email perusahaan induk tidak bisa diubah")
-		}
+	// User induk harus melihat perkara semua perusahaan.
+	if company.IsParent && !isInternal {
+		return nil, errors.New("perusahaan induk harus tetap internal")
 	}
 	company.Name = name
 	company.EmailDomain = emailDomain
@@ -97,13 +94,92 @@ func (s *companyService) Delete(id string) error {
 	if err != nil {
 		return errors.New("ID tidak valid")
 	}
-	if company, err := s.repo.FindByID(uid); err == nil && company.IsParent() {
+	if company, err := s.repo.FindByID(uid); err == nil && company.IsParent {
 		return errors.New("perusahaan induk tidak bisa dihapus")
 	}
 	if err := s.repo.Delete(uid); err != nil {
 		return errors.New("gagal menghapus perusahaan")
 	}
 	return nil
+}
+
+func (s *companyService) findTarget(id string) (*entity.Company, error) {
+	uid, err := uuid.Parse(id)
+	if err != nil {
+		return nil, errors.New("ID tidak valid")
+	}
+	company, err := s.repo.FindByID(uid)
+	if err != nil {
+		return nil, errors.New("perusahaan tidak ditemukan")
+	}
+	return company, nil
+}
+
+// PreviewMakeParent menghitung dampak menjadikan perusahaan id induk, tanpa
+// mengubah apa pun.
+func (s *companyService) PreviewMakeParent(id string) (*dto.ParentChangePreviewResponse, error) {
+	target, err := s.findTarget(id)
+	if err != nil {
+		return nil, err
+	}
+	legalToMove, legalAU, err := s.repo.ParentChangeImpact(target.ID)
+	if err != nil {
+		return nil, errors.New("gagal menghitung dampak pergantian induk")
+	}
+	resp := &dto.ParentChangePreviewResponse{
+		Target:        toCompanyResponse(target),
+		LegalToMove:   legalToMove,
+		BlockingUsers: make([]dto.ParentChangeUser, 0, len(legalAU)),
+	}
+	if current, err := s.repo.FindParent(); err == nil {
+		r := toCompanyResponse(current)
+		resp.CurrentParent = &r
+	}
+	for _, u := range legalAU {
+		resp.BlockingUsers = append(resp.BlockingUsers, dto.ParentChangeUser{ID: u.ID.String(), FullName: u.FullName, Email: u.Email})
+	}
+	return resp, nil
+}
+
+// MakeParent menjadikan perusahaan id induk: tanda induk pindah, tujuan menjadi
+// internal, dan semua LEGAL pindah ke sana. Induk lama tetap internal; ADMIN
+// mencabut centangnya lewat menu kalau perlu. USER dan ADMIN tidak dipindah,
+// karena perusahaan mereka adalah tempat mereka bekerja.
+func (s *companyService) MakeParent(id string) (*dto.ParentChangeResponse, error) {
+	target, err := s.findTarget(id)
+	if err != nil {
+		return nil, err
+	}
+	if target.IsParent {
+		return nil, errors.New("perusahaan ini sudah menjadi induk")
+	}
+	// Catatan: diperiksa di luar transaksi. Legal AU yang didaftarkan ke tujuan
+	// tepat saat induk diganti bisa lolos; perketat dengan mengunci baris
+	// perusahaan kalau itu pernah terjadi.
+	_, legalAU, err := s.repo.ParentChangeImpact(target.ID)
+	if err != nil {
+		return nil, errors.New("gagal menghitung dampak pergantian induk")
+	}
+	if len(legalAU) > 0 {
+		return nil, fmt.Errorf("masih ada %d Legal AU di perusahaan ini; pindahkan atau ganti perannya dulu, karena Legal AU tidak boleh terdaftar di induk", len(legalAU))
+	}
+	previous, _ := s.repo.FindParent()
+	moved, err := s.repo.MakeParent(target.ID)
+	if err != nil {
+		return nil, errors.New("gagal mengganti perusahaan induk, coba lagi")
+	}
+
+	target.IsParent, target.IsInternal = true, true
+	resp := &dto.ParentChangeResponse{Parent: toCompanyResponse(target), MovedLegalIDs: make([]string, 0, len(moved))}
+	if previous != nil {
+		previous.IsParent = false
+		r := toCompanyResponse(previous)
+		resp.PreviousParent = &r
+	}
+	for _, uid := range moved {
+		resp.MovedLegalIDs = append(resp.MovedLegalIDs, uid.String())
+	}
+	return resp, nil
 }
 
 func (s *companyService) ImportFromExcel(file *multipart.FileHeader) (*dto.ImportResult, error) {

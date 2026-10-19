@@ -1,6 +1,6 @@
 import api from './api'
 import { useAuthStore } from '@/store/auth.store'
-import type { ApiResponse, CaseChronology, Cedant, Company, Division, LegalCase, PaginatedData, Regency, CaseType, CaseCategory, PurposeType, ImportResult } from '@/types'
+import type { ApiResponse, CaseChronology, Cedant, Company, Division, LegalCase, PaginatedData, Regency, CaseType, CaseCategory, PurposeType, ImportResult, ParentChangePreview, ParentChangeResult } from '@/types'
 
 export interface LegalCaseFilters {
   page?: number
@@ -354,6 +354,16 @@ export const legalCaseService = {
 
   deleteCompany: async (id: string) => {
     await api.delete(`/admin/companies/${id}`)
+  },
+
+  previewMakeParent: async (id: string) => {
+    const res = await api.get<ApiResponse<ParentChangePreview>>(`/admin/companies/${id}/make-parent/preview`)
+    return res.data.data!
+  },
+
+  makeParent: async (id: string) => {
+    const res = await api.post<ApiResponse<ParentChangeResult>>(`/admin/companies/${id}/make-parent`)
+    return res.data.data!
   },
 
   createPurposeType: async (data: { name: string; description?: string; is_active?: boolean }) => {

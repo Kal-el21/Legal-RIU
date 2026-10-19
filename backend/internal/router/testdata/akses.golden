@@ -61,6 +61,7 @@ GET /api/v1/admin/cedants: ADMIN
 GET /api/v1/admin/cedants/import/template: ADMIN
 GET /api/v1/admin/companies: ADMIN
 GET /api/v1/admin/companies/:id: ADMIN
+GET /api/v1/admin/companies/:id/make-parent/preview: ADMIN
 GET /api/v1/admin/companies/import/template: ADMIN
 GET /api/v1/admin/dashboard/recent: ADMIN
 GET /api/v1/admin/dashboard/stats: ADMIN
@@ -227,6 +228,7 @@ POST /api/v1/admin/case-types/import: ADMIN
 POST /api/v1/admin/cedants: ADMIN
 POST /api/v1/admin/cedants/import: ADMIN
 POST /api/v1/admin/companies: ADMIN
+POST /api/v1/admin/companies/:id/make-parent: ADMIN
 POST /api/v1/admin/companies/import: ADMIN
 POST /api/v1/admin/divisions: ADMIN
 POST /api/v1/admin/divisions/import: ADMIN

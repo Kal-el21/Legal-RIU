@@ -277,6 +277,29 @@ export function useUpdateCompany() {
   })
 }
 
+// Selalu dihitung ulang saat dialog dibuka, karena angkanya menentukan keputusan admin.
+export function useMakeParentPreview(id: string | null) {
+  return useQuery({
+    queryKey: [...KEYS.companies(), 'make-parent', id],
+    queryFn: () => legalCaseService.previewMakeParent(id!),
+    enabled: !!id,
+    staleTime: 0,
+  })
+}
+
+export function useMakeParent() {
+  const qc = useQueryClient()
+  return useMutation({
+    meta: { success: 'Perusahaan induk berhasil diganti' },
+    mutationFn: (id: string) => legalCaseService.makeParent(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEYS.companies() })
+      // LEGAL ikut pindah perusahaan.
+      qc.invalidateQueries({ queryKey: ['users'] })
+    },
+  })
+}
+
 export function useDeleteCompany() {
   const qc = useQueryClient()
   return useMutation({

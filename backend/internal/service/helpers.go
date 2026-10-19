@@ -121,7 +121,7 @@ func resolveCompanySelection(userRepo repository.UserRepository, role string, co
 		return nil, nil
 	case "LEGAL":
 		// Kiriman form diabaikan, supaya LEGAL_AU yang dijadikan LEGAL ikut pindah.
-		company, err := userRepo.FindCompanyByDomain(entity.ParentCompanyDomain)
+		company, err := userRepo.FindParentCompany()
 		if err != nil {
 			return nil, errors.New("perusahaan induk tidak ditemukan")
 		}
@@ -138,7 +138,7 @@ func resolveCompanySelection(userRepo repository.UserRepository, role string, co
 		if err != nil {
 			return nil, errors.New("perusahaan tidak ditemukan")
 		}
-		if company.IsParent() {
+		if company.IsParent {
 			return nil, errors.New("role LEGAL_AU harus terdaftar di anak usaha, bukan di perusahaan induk")
 		}
 		return &company.ID, nil
@@ -154,7 +154,7 @@ func resolveCompanySelection(userRepo repository.UserRepository, role string, co
 			}
 			return &company.ID, nil
 		}
-		company, err := userRepo.FindCompanyByDomain(entity.ParentCompanyDomain)
+		company, err := userRepo.FindParentCompany()
 		if err == nil {
 			return &company.ID, nil
 		}
@@ -190,7 +190,7 @@ func toCompanyResponse(company *entity.Company) dto.CompanyResponse {
 		Name:        company.Name,
 		EmailDomain: company.EmailDomain,
 		IsInternal:  company.IsInternal,
-		IsParent:    company.IsParent(),
+		IsParent:    company.IsParent,
 		CreatedAt:   company.CreatedAt,
 		UpdatedAt:   company.UpdatedAt,
 	}
