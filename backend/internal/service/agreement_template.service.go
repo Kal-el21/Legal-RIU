@@ -35,7 +35,7 @@ type AgreementTemplateService interface {
 	Activate(context.Context, string, string) (*entity.AgreementTemplate, error)
 	Download(context.Context, string) ([]byte, string, error)
 	Preview(context.Context, string) ([]byte, error)
-	Placeholders() []dto.PlaceholderReference
+	Placeholders(string) ([]dto.PlaceholderReference, error)
 
 	// Dipakai service dokumen untuk mengunci dan memuat versi template.
 	ActiveTemplate(context.Context, string) (*entity.AgreementTemplate, []byte, error)
@@ -47,7 +47,6 @@ type AgreementTemplateService interface {
 type agreementTemplateService struct {
 	repo      repository.AgreementTemplateRepository
 	storage   *storage.MinIOClient
-	registry  *AgreementRegistry
 	generator *AgreementGenerator
 	converter DOCXConverter
 	// Isi setiap versi tidak pernah berubah, jadi cache cukup di-key oleh ID
@@ -55,12 +54,22 @@ type agreementTemplateService struct {
 	cache sync.Map
 }
 
-func NewAgreementTemplateService(r repository.AgreementTemplateRepository, s *storage.MinIOClient, registry *AgreementRegistry) AgreementTemplateService {
-	return &agreementTemplateService{repo: r, storage: s, registry: registry, generator: NewAgreementGenerator()}
+func NewAgreementTemplateService(r repository.AgreementTemplateRepository, s *storage.MinIOClient) AgreementTemplateService {
+	return &agreementTemplateService{repo: r, storage: s, generator: NewAgreementGenerator()}
 }
 
-func (s *agreementTemplateService) Placeholders() []dto.PlaceholderReference {
-	return PlaceholderCatalog()
+// Placeholders mengembalikan token yang bisa dipakai di template jenis dokumen
+// itu, dari field versi aktifnya.
+func (s *agreementTemplateService) Placeholders(code string) ([]dto.PlaceholderReference, error) {
+	_, tpl, e := s.ActiveType(code)
+	if e != nil {
+		return nil, e
+	}
+	sections, e := templateSections(tpl)
+	if e != nil {
+		return nil, e
+	}
+	return PlaceholderCatalog(sections), nil
 }
 
 func (s *agreementTemplateService) List(code string) ([]entity.AgreementTemplate, error) {
@@ -92,11 +101,17 @@ func (s *agreementTemplateService) Upload(ctx context.Context, uploaderID string
 	if code == "" {
 		code = "PKS"
 	}
-	def, ok := s.registry.Get(code)
-	if !ok {
-		return nil, fmt.Errorf("tipe dokumen %q tidak terdaftar", code)
-	}
 	data, e := readTemplateUpload(file)
+	if e != nil {
+		return nil, e
+	}
+	// Field belum bisa diubah lewat unggahan (PR 9 tahap 9.4), jadi versi baru
+	// diuji dan disimpan dengan field versi aktif.
+	typ, aktif, e := s.ActiveType(code)
+	if e != nil {
+		return nil, e
+	}
+	sections, e := templateSections(aktif)
 	if e != nil {
 		return nil, e
 	}
@@ -105,7 +120,7 @@ func (s *agreementTemplateService) Upload(ctx context.Context, uploaderID string
 	if e != nil {
 		return nil, e
 	}
-	if e = validateTemplatePlaceholders(placeholders); e != nil {
+	if e = validateTemplatePlaceholders(placeholders, sections); e != nil {
 		return nil, e
 	}
 	if !scopeListNumbered {
@@ -114,7 +129,7 @@ func (s *agreementTemplateService) Upload(ctx context.Context, uploaderID string
 
 	// Dry-run memakai jalur generate yang sama dengan dokumen sungguhan supaya
 	// template bermasalah tertolak sebelum sempat dipakai.
-	docx, checksum, e := s.generator.Generate(data, sampleAgreementValues(), GenerateOptions{Draft: true})
+	docx, checksum, e := s.generator.Generate(data, sampleAgreementValues(sections), GenerateOptions{Draft: true})
 	if e != nil {
 		return nil, errors.New("uji coba pembentukan dokumen gagal: " + e.Error())
 	}
@@ -139,7 +154,7 @@ func (s *agreementTemplateService) Upload(ctx context.Context, uploaderID string
 
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
-		name = fmt.Sprintf("%s versi %d", def.Name, version)
+		name = fmt.Sprintf("%s versi %d", typ.Name, version)
 	}
 	tpl := &entity.AgreementTemplate{
 		Code:          code,
@@ -154,11 +169,7 @@ func (s *agreementTemplateService) Upload(ctx context.Context, uploaderID string
 		Note:          strings.TrimSpace(req.Note),
 		EffectiveDate: parseEffectiveDate(req.EffectiveDate),
 		UploadedBy:    &uid,
-	}
-	// Field belum bisa diubah lewat unggahan (PR 9 tahap 9.4), jadi versi baru
-	// memakai field versi aktif.
-	if aktif, err := s.repo.FindActive(code); err == nil {
-		tpl.Fields = aktif.Fields
+		Fields:        aktif.Fields,
 	}
 	tpl.ID = id
 	if e = s.repo.Create(tpl); e != nil {
@@ -217,11 +228,15 @@ func (s *agreementTemplateService) Preview(ctx context.Context, id string) ([]by
 		}
 	}
 	// Template hasil migrasi belum punya pratinjau tersimpan, bentuk sekarang.
+	sections, e := templateSections(tpl)
+	if e != nil {
+		return nil, e
+	}
 	source, e := s.load(ctx, tpl)
 	if e != nil {
 		return nil, e
 	}
-	docx, _, e := s.generator.Generate(source, sampleAgreementValues(), GenerateOptions{Draft: true})
+	docx, _, e := s.generator.Generate(source, sampleAgreementValues(sections), GenerateOptions{Draft: true})
 	if e != nil {
 		return nil, e
 	}
@@ -323,9 +338,9 @@ func readTemplateUpload(file *multipart.FileHeader) ([]byte, error) {
 	return io.ReadAll(f)
 }
 
-func validateTemplatePlaceholders(found []string) error {
+func validateTemplatePlaceholders(found []string, sections []AgreementSectionDefinition) error {
 	supported := map[string]bool{}
-	for _, token := range SupportedPlaceholderTokens() {
+	for _, token := range SupportedPlaceholderTokens(sections) {
 		supported[token] = true
 	}
 	unknown := make([]string, 0)

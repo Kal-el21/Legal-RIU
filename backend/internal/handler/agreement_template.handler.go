@@ -41,7 +41,12 @@ func (h *AgreementTemplateHandler) GetByID(c *gin.Context) {
 }
 
 func (h *AgreementTemplateHandler) Placeholders(c *gin.Context) {
-	utils.OK(c, "Success", h.svc.Placeholders())
+	v, e := h.svc.Placeholders(c.DefaultQuery("code", "PKS"))
+	if e != nil {
+		utils.NotFound(c, e.Error())
+		return
+	}
+	utils.OK(c, "Success", v)
 }
 
 func (h *AgreementTemplateHandler) Upload(c *gin.Context) {

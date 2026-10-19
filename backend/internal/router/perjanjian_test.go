@@ -489,23 +489,29 @@ func TestTemplatePerjanjian(t *testing.T) {
 	legal := masukPeran(t, entity.RoleLegal)
 	const alamat = "/api/v1/legal/agreement-templates"
 
-	w := panggil(t, legal, http.MethodGet, alamat+"/placeholders", nil)
-	harapKode(t, w, http.StatusOK, "rujukan placeholder")
-	var rujukan []struct {
-		Token string `json:"token"`
-	}
-	isiData(t, w, &rujukan)
-	if len(rujukan) == 0 {
-		t.Error("rujukan placeholder kosong")
-	}
-
 	harapKode(t, panggil(t, legal, http.MethodGet, alamat+"/00000000-0000-0000-0000-000000000000", nil), http.StatusNotFound, "template yang tidak ada")
-	harapKode(t, panggilForm(t, legal, http.MethodPost, alamat, nil), http.StatusBadRequest, "unggah tanpa file")
+	w := panggilForm(t, legal, http.MethodPost, alamat, nil)
+	harapKode(t, w, http.StatusBadRequest, "unggah tanpa file")
+	if !strings.Contains(w.Body.String(), "emplate wajib diunggah") {
+		t.Errorf("pesan unggah tanpa file: %s", w.Body)
+	}
 	harapKode(t, panggil(t, legal, http.MethodPost, alamat+"/00000000-0000-0000-0000-000000000000/activate", nil), http.StatusBadRequest, "mengaktifkan template yang tidak ada")
+	harapKode(t, panggil(t, legal, http.MethodGet, alamat+"/placeholders?code=TIDAK-ADA", nil), http.StatusNotFound, "rujukan placeholder jenis yang tidak ada")
 
 	t.Run("TemplateBawaan", func(t *testing.T) {
 		butuhMinIO(t)
-		w := panggil(t, legal, http.MethodGet, alamat, nil)
+		// Rujukan placeholder dibentuk dari field versi aktif, jadi butuh template.
+		w := panggil(t, legal, http.MethodGet, alamat+"/placeholders", nil)
+		harapKode(t, w, http.StatusOK, "rujukan placeholder")
+		var rujukan []struct {
+			Token string `json:"token"`
+		}
+		isiData(t, w, &rujukan)
+		if len(rujukan) == 0 {
+			t.Error("rujukan placeholder kosong")
+		}
+
+		w = panggil(t, legal, http.MethodGet, alamat, nil)
 		harapKode(t, w, http.StatusOK, "daftar template")
 		var daftar []struct {
 			ID     string `json:"id"`

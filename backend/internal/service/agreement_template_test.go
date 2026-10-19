@@ -7,7 +7,7 @@ import (
 
 func TestSupportedPlaceholderTokens(t *testing.T) {
 	tokens := map[string]bool{}
-	for _, token := range SupportedPlaceholderTokens() {
+	for _, token := range SupportedPlaceholderTokens(bagianPKS(t)) {
 		tokens[token] = true
 	}
 	for _, want := range []string{"{{NOMOR_PIHAK_PERTAMA}}", "{{NILAI_KONTRAK_TERBILANG}}", "{{DAFTAR_LAMPIRAN}}", scopeListPlaceholder} {
@@ -18,10 +18,10 @@ func TestSupportedPlaceholderTokens(t *testing.T) {
 }
 
 func TestValidateTemplatePlaceholders(t *testing.T) {
-	if err := validateTemplatePlaceholders([]string{"{{NILAI_KONTRAK}}", scopeListPlaceholder}); err != nil {
+	if err := validateTemplatePlaceholders([]string{"{{NILAI_KONTRAK}}", scopeListPlaceholder}, bagianPKS(t)); err != nil {
 		t.Fatalf("token yang dikenal tidak boleh ditolak: %v", err)
 	}
-	err := validateTemplatePlaceholders([]string{"{{NILAI_KONTRAK}}", "{{DENDA_KETERLAMBATAN}}"})
+	err := validateTemplatePlaceholders([]string{"{{NILAI_KONTRAK}}", "{{DENDA_KETERLAMBATAN}}"}, bagianPKS(t))
 	if err == nil {
 		t.Fatal("token tidak dikenal harus ditolak")
 	}
@@ -31,7 +31,7 @@ func TestValidateTemplatePlaceholders(t *testing.T) {
 }
 
 func TestPlaceholderCatalogTerdokumentasi(t *testing.T) {
-	for _, item := range PlaceholderCatalog() {
+	for _, item := range PlaceholderCatalog(bagianPKS(t)) {
 		if item.Group == "" || item.Description == "" {
 			t.Fatalf("token %s belum punya kelompok/keterangan di katalog", item.Token)
 		}

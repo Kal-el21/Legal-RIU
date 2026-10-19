@@ -36,7 +36,9 @@ Perjanjian ini dibuat antara PIHAK PERTAMA dan {{PIHAK_KEDUA_NAMA}} tentang {{JE
 ```
 
 Daftar lengkap placeholder beserta artinya ada di halaman Template Perjanjian, tombol **Lihat N token**. Daftar itu
-yang berlaku; jangan menebak nama placeholder.
+yang berlaku; jangan menebak nama placeholder. Daftarnya dibentuk dari isian jenis dokumen itu: kode placeholder adalah
+nama isian dalam huruf besar, ditambah turunan menurut jenis isiannya (tabel di bawah), dan placeholder sistem yang
+sama untuk semua jenis (nomor perjanjian, tanggal dan tempat tanda tangan, Pihak Pertama, daftar lampiran).
 
 Cara menulis:
 
@@ -52,8 +54,10 @@ Isian sudah diformat sistem. Jangan menambahkan format sendiri di sekitar placeh
 | Jenis | Contoh hasil | Catatan |
 |---|---|---|
 | Nilai uang | `Rp 750.000.000` | Sudah memuat "Rp"; jangan menulis "Rp" di depan placeholder |
-| Terbilang | `tujuh ratus lima puluh juta` | Placeholder berakhiran `_TERBILANG`; kata "rupiah" atau "persen" ditulis di template |
-| Tanggal lengkap | `17 Agustus 2026` | |
+| Persen dan angka | `40`, `33,5` | Tanpa tanda "%"; tulis "%" atau "persen" di template |
+| Terbilang | `tujuh ratus lima puluh juta`, `tiga puluh tiga koma lima` | Placeholder berakhiran `_TERBILANG` untuk uang, persen, angka, dan tanggal; kata "rupiah" atau "persen" ditulis di template |
+| Tanggal lengkap | `17 Agustus 2026` | Turunannya: `_HARI` (`Senin`) dan `_TERBILANG` (`tujuh belas Agustus dua ribu dua puluh enam`) |
+| Isian yang dikosongkan | `-` | Berlaku untuk semua jenis isian, termasuk turunannya |
 | Bagian tanggal tanda tangan | `Senin`, `17`, `Agustus`, `2026` | `HARI_TTD`, `TANGGAL_TTD`, `BULAN_TTD`, `TAHUN_TTD` |
 | Data Pihak Pertama | Alamat, telepon, email, PIC, pejabat | Diambil dari menu Pihak Pertama, bukan diketik di template |
 
@@ -93,13 +97,14 @@ bawaan menyorot rujukan-rujukan itu supaya mudah ditemukan.
 
 ## 7. Isian yang bisa kosong
 
-Daftar isian dan mana yang wajib saat ini ditetapkan aplikasi. Isian yang tidak wajib dan dibiarkan kosong
-meninggalkan celah di kalimat, mis. *"Surat Penawaran No.  perihal  pada tanggal ."*. Letakkan placeholder isian yang
-tidak wajib di kalimat yang tetap terbaca kalau isiannya kosong, atau minta isian itu dijadikan wajib.
+Daftar isian dan mana yang wajib saat ini ditetapkan aplikasi. Isian yang tidak wajib dan dibiarkan kosong tercetak
+sebagai tanda `-`, mis. *"Surat Penawaran No. - perihal - pada tanggal -"*. Letakkan placeholder isian yang tidak wajib
+di kalimat yang tetap terbaca kalau isiannya kosong, atau minta isian itu dijadikan wajib.
 
 ## 8. Daftar periksa sebelum mengaktifkan
 
-Buka **Pratinjau** versi Draft (diisi data contoh) dan periksa:
+Buka **Pratinjau** versi Draft dan periksa. Pratinjau diisi data contoh: isian teks tampil sebagai labelnya dalam
+kurung siku (mis. `[Nama Perusahaan]`), sehingga terlihat isian mana mengisi bagian mana.
 
 - [ ] Tidak ada placeholder yang tercetak apa adanya (`{{...}}`).
 - [ ] Setiap BAGIAN mulai di halaman baru, tanpa ruang kosong besar atau halaman kosong.

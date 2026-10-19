@@ -5,6 +5,9 @@ package router
 // dikuncinya, bukan dari kode.
 
 import (
+	"archive/zip"
+	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -15,6 +18,28 @@ import (
 
 	"github.com/google/uuid"
 )
+
+// docxSederhana membentuk dokumen Word satu paragraf berisi teks itu.
+func docxSederhana(t *testing.T, teks string) []byte {
+	t.Helper()
+	var out bytes.Buffer
+	w := zip.NewWriter(&out)
+	for _, f := range [][2]string{
+		{"[Content_Types].xml", `<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>`},
+		{"_rels/.rels", `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`},
+		{"word/document.xml", `<?xml version="1.0" encoding="UTF-8"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>` + teks + `</w:t></w:r></w:p><w:sectPr/></w:body></w:document>`},
+	} {
+		dst, err := w.Create(f[0])
+		if err != nil {
+			t.Fatal(err)
+		}
+		dst.Write([]byte(f[1]))
+	}
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return out.Bytes()
+}
 
 func hitungBaris(t *testing.T, sql string, args ...any) int64 {
 	t.Helper()
@@ -222,16 +247,22 @@ func TestJenisTanpaTermin(t *testing.T) {
 	legal := masukPeran(t, entity.RoleLegal)
 	const kode = "UJI-NDA"
 
+	// Template jenis ini hanya memuat placeholder field-nya sendiri dan placeholder
+	// sistem, seperti template yang disusun Admin.
 	jenis, tpl := uuid.NewString(), uuid.NewString()
+	path := "agreement-templates/" + kode + "/" + tpl + ".docx"
+	if err := storeTes.UploadBytes(context.Background(), path, docxSederhana(t, "Perjanjian kerahasiaan dengan {{PIHAK_KEDUA_NAMA}}, ditandatangani di {{TEMPAT_TTD}} pada {{TANGGAL_TTD_LENGKAP}}."), "application/vnd.openxmlformats-officedocument.wordprocessingml.document"); err != nil {
+		t.Fatal(err)
+	}
 	eksekusi(t, "INSERT INTO agreement_types (id, created_at, updated_at, code, name, is_active) VALUES (?, now(), now(), ?, 'Perjanjian Kerahasiaan Uji', true)", jenis, kode)
 	eksekusi(t, `INSERT INTO agreement_templates
 		(id, created_at, updated_at, code, version, name, file_name, file_path, checksum, status, is_legacy, note, fields)
-		SELECT ?, now(), now(), ?, 1, 'uji', file_name, file_path, 'uji-nda', 'ACTIVE', false, 'uji', ?
-		FROM agreement_templates WHERE id = ?`,
-		tpl, kode, `[{"title":"Pihak Kedua","fields":[{"name":"pihak_kedua_nama","label":"Nama Perusahaan","type":"text","required":true}]}]`, templateAktif(t).ID)
+		VALUES (?, now(), now(), ?, 1, 'uji', 'nda.docx', ?, 'uji-nda', 'ACTIVE', false, 'uji', ?)`,
+		tpl, kode, path, `[{"title":"Pihak Kedua","fields":[{"name":"pihak_kedua_nama","label":"Nama Perusahaan","type":"text","required":true}]}]`)
 	t.Cleanup(func() {
 		dbTes.Exec("DELETE FROM agreement_templates WHERE id = ?", tpl)
 		dbTes.Exec("DELETE FROM agreement_types WHERE id = ?", jenis)
+		storeTes.DeleteFile(context.Background(), path)
 	})
 
 	w := panggil(t, user, http.MethodGet, "/api/v1/agreement-document-types/"+kode+"/schema", nil)
@@ -254,6 +285,13 @@ func TestJenisTanpaTermin(t *testing.T) {
 	// pertama, walau tidak didefinisikan Admin (keputusan B1).
 	if b := skema.Schema.Sections; len(b) != 1 || len(b[0].Fields) != 2 || b[0].Fields[1].Name != "tempat_ttd" {
 		t.Errorf("isian form jenis tanpa termin: %+v", b)
+	}
+
+	// Daftar placeholder untuk Word mengikuti field jenis itu, bukan field PKS.
+	w = panggil(t, masukPeran(t, entity.RoleAdmin), http.MethodGet, "/api/v1/admin/agreement-templates/placeholders?code="+kode, nil)
+	harapKode(t, w, http.StatusOK, "placeholder jenis tanpa termin")
+	if b := w.Body.String(); !strings.Contains(b, "{{PIHAK_KEDUA_NAMA}}") || !strings.Contains(b, "{{DAFTAR_LAMPIRAN}}") || strings.Contains(b, "{{NILAI_KONTRAK}}") {
+		t.Errorf("placeholder jenis tanpa termin: %s", b)
 	}
 
 	harapKode(t, panggil(t, user, http.MethodPost, urlPerjanjian(""), isiPengajuan(t, user, kode, map[string]any{})), http.StatusBadRequest, "field wajib jenis baru kosong")

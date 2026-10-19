@@ -1,8 +1,6 @@
 package router
 
 import (
-	"fmt"
-
 	"legal-riu-portal/internal/config"
 	"legal-riu-portal/internal/handler"
 	"legal-riu-portal/internal/middleware"
@@ -45,11 +43,7 @@ func New(cfg *config.Config, db *gorm.DB, store *storage.MinIOClient) (*gin.Engi
 	userSvc := service.NewUserService(userRepo)
 	loSvc := service.NewLegalOpinionService(loRepo, store)
 	drSvc := service.NewDocumentReviewService(drRepo, store)
-	agreementRegistry, err := service.NewAgreementRegistry()
-	if err != nil {
-		return nil, fmt.Errorf("agreement registry failed: %w", err)
-	}
-	agreementTemplateSvc := service.NewAgreementTemplateService(agreementTemplateRepo, store, agreementRegistry)
+	agreementTemplateSvc := service.NewAgreementTemplateService(agreementTemplateRepo, store)
 	agreementSvc := service.NewAgreementDocumentService(agreementRepo, store, agreementTemplateSvc)
 	notificationSettingSvc := service.NewNotificationSettingService(notificationSettingRepo, dashRepo)
 	dashSvc := service.NewDashboardService(dashRepo)

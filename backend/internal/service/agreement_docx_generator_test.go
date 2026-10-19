@@ -199,7 +199,7 @@ func TestTemplatePKSBawaan(t *testing.T) {
 		t.Error("template bawaan belum berisi placeholder; masih template lama yang diisi lewat pencocokan kalimat")
 	}
 	known := map[string]bool{}
-	for _, token := range SupportedPlaceholderTokens() {
+	for _, token := range SupportedPlaceholderTokens(definition.Schema.Sections) {
 		known[token] = true
 	}
 	for _, p := range placeholders {
@@ -276,7 +276,7 @@ func TestIsianPanjangTerisiSemua(t *testing.T) {
 	}
 	definition, _ := registry.Get("PKS")
 
-	values := sampleAgreementValues()
+	values := sampleAgreementValues(definition.Schema.Sections)
 	alamat := strings.TrimSpace(strings.Repeat("Jl. Contoh Panjang Nomor 123 Blok A, Kawasan Industri, ", 11))
 	values["PIHAK_KEDUA_ALAMAT"] = alamat
 	poin := make([]string, 20)
@@ -352,7 +352,7 @@ func TestDraftBerwatermark(t *testing.T) {
 		t.Fatal(err)
 	}
 	definition, _ := registry.Get("PKS")
-	values := sampleAgreementValues()
+	values := sampleAgreementValues(definition.Schema.Sections)
 	bentuk := func(draft bool) map[string]string {
 		t.Helper()
 		out, _, err := NewAgreementGenerator().Generate(definition.Template, values, GenerateOptions{Draft: draft})

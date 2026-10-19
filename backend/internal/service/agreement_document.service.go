@@ -365,7 +365,7 @@ func (s *agreementDocumentService) approve(ctx context.Context, d *entity.Agreem
 	if e != nil {
 		return nil, e
 	}
-	values := placeholderValues(d, data, snapshot)
+	values := placeholderValues(d, sections, data, snapshot)
 	docx, checksum, e := s.generator.Generate(source, values, GenerateOptions{})
 	if e != nil {
 		return nil, e
@@ -430,7 +430,11 @@ func (s *agreementDocumentService) Preview(ctx context.Context, id, userID strin
 	if e != nil {
 		return nil, e
 	}
-	docx, _, e := s.generator.Generate(source, placeholderValues(d, data, partyOneSnapshot(master, data)), GenerateOptions{Draft: true})
+	sections, e := s.sectionsFor(d)
+	if e != nil {
+		return nil, e
+	}
+	docx, _, e := s.generator.Generate(source, placeholderValues(d, sections, data, partyOneSnapshot(master, data)), GenerateOptions{Draft: true})
 	if e != nil {
 		return nil, e
 	}
@@ -533,45 +537,4 @@ func partyOneSnapshot(m *entity.AgreementCompanyMaster, data map[string]interfac
 		email = m.Email
 	}
 	return map[string]interface{}{"name": m.Name, "address": m.Address, "phone": phone, "email": email, "pic": pic, "signatory_name": name, "signatory_position": pos, "signing_place": place}
-}
-func placeholderValues(d *entity.AgreementDocument, data, snap map[string]interface{}) map[string]string {
-	get := func(k string) string {
-		v := strings.TrimSpace(valueString(data[k]))
-		if v == "" {
-			return "-"
-		}
-		return v
-	}
-	date := valueString(data["tanggal_ttd"])
-	dt, _ := parseDate(date)
-	atts := make([]string, 0, len(d.Attachments))
-	for i, a := range d.Attachments {
-		atts = append(atts, fmt.Sprintf("%d. %s", i+1, a.FileName))
-	}
-	if len(atts) == 0 {
-		atts = append(atts, "-")
-	}
-	money := func(k string) int64 { return valueInt64(data[k]) }
-	pct := func(k string) int64 { return valueInt64(data[k]) }
-	return map[string]string{"NOMOR_PIHAK_PERTAMA": strOrDash(d.AgreementNumber), "NOMOR_PIHAK_KEDUA": get("nomor_pihak_kedua"), "HARI_TTD": func() string {
-		if dt.IsZero() {
-			return "-"
-		}
-		return indoDays[dt.Weekday()]
-	}(), "TANGGAL_TTD": func() string {
-		if dt.IsZero() {
-			return "-"
-		}
-		return fmt.Sprint(dt.Day())
-	}(), "BULAN_TTD": func() string {
-		if dt.IsZero() {
-			return "-"
-		}
-		return indoMonths[dt.Month()]
-	}(), "TAHUN_TTD": func() string {
-		if dt.IsZero() {
-			return "-"
-		}
-		return fmt.Sprint(dt.Year())
-	}(), "TANGGAL_TTD_LENGKAP": indoDate(date), "TEMPAT_TTD": valueString(snap["signing_place"]), "PIHAK_PERTAMA_NAMA": valueString(snap["name"]), "PIHAK_PERTAMA_ALAMAT": valueString(snap["address"]), "PIHAK_PERTAMA_TELEPON": valueString(snap["phone"]), "PIHAK_PERTAMA_EMAIL": valueString(snap["email"]), "PIHAK_PERTAMA_PIC": valueString(snap["pic"]), "PIHAK_PERTAMA_PEJABAT": valueString(snap["signatory_name"]), "PIHAK_PERTAMA_JABATAN": valueString(snap["signatory_position"]), "PIHAK_KEDUA_NAMA": get("pihak_kedua_nama"), "PIHAK_KEDUA_BIDANG": get("pihak_kedua_bidang"), "PIHAK_KEDUA_ALAMAT": get("pihak_kedua_alamat"), "PIHAK_KEDUA_TELEPON": get("pihak_kedua_telepon"), "PIHAK_KEDUA_EMAIL": get("pihak_kedua_email"), "PIHAK_KEDUA_PIC": get("pihak_kedua_pic"), "PIHAK_KEDUA_PEJABAT": get("pihak_kedua_pejabat"), "PIHAK_KEDUA_JABATAN": get("pihak_kedua_jabatan"), "JENIS_PEKERJAAN": get("jenis_pekerjaan"), "RUANG_LINGKUP": get("ruang_lingkup"), "SURAT_PENAWARAN_NOMOR": get("surat_penawaran_nomor"), "SURAT_PENAWARAN_PERIHAL": get("surat_penawaran_perihal"), "SURAT_PENAWARAN_TANGGAL": indoDate(valueString(data["surat_penawaran_tanggal"])), "SURAT_PENUNJUKAN_NOMOR": get("surat_penunjukan_nomor"), "SURAT_PENUNJUKAN_PERIHAL": get("surat_penunjukan_perihal"), "SURAT_PENUNJUKAN_TANGGAL": indoDate(valueString(data["surat_penunjukan_tanggal"])), "JANGKA_WAKTU_MULAI": indoDate(valueString(data["jangka_waktu_mulai"])), "JANGKA_WAKTU_SELESAI": indoDate(valueString(data["jangka_waktu_selesai"])), "NILAI_KONTRAK": rupiah(money("nilai_kontrak")), "NILAI_KONTRAK_TERBILANG": terbilang(money("nilai_kontrak")), "TERMIN_1_PERSEN": fmt.Sprint(pct("termin_1_persen")), "TERMIN_1_PERSEN_TERBILANG": terbilang(pct("termin_1_persen")), "TERMIN_1_NILAI": rupiah(money("termin_1_nilai")), "TERMIN_1_NILAI_TERBILANG": terbilang(money("termin_1_nilai")), "TERMIN_2_PERSEN": fmt.Sprint(pct("termin_2_persen")), "TERMIN_2_PERSEN_TERBILANG": terbilang(pct("termin_2_persen")), "TERMIN_2_NILAI": rupiah(money("termin_2_nilai")), "TERMIN_2_NILAI_TERBILANG": terbilang(money("termin_2_nilai")), "BANK": get("bank"), "NOMOR_REKENING": get("nomor_rekening"), "ATAS_NAMA": get("atas_nama"), "DAFTAR_LAMPIRAN": strings.Join(atts, "\n")}
 }
