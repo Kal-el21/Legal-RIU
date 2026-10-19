@@ -3,6 +3,7 @@ package seed
 import (
 	"context"
 	"errors"
+	"log"
 	"time"
 
 	"legal-riu-portal/internal/assets"
@@ -19,34 +20,65 @@ const (
 	agreementTemplateMIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 )
 
-// SeedAgreementTemplate memindahkan template PKS yang selama ini di-embed ke
-// dalam binary menjadi versi 1 di database dan MinIO. Template embed tetap
-// dipertahankan sebagai sumber seed ini, bukan dihapus.
+// SeedAgreementTemplate memasang template PKS yang di-embed di aplikasi sebagai
+// versi di database dan MinIO, lalu memindahkan pengajuan yang belum selesai dari
+// template lama ke template itu. Aman dijalankan setiap server start: template
+// bawaan dikenali dari checksum-nya, jadi hanya dipasang sekali per isi file.
 func SeedAgreementTemplate(db *gorm.DB, store *storage.MinIOClient) error {
-	var count int64
-	if err := db.Model(&entity.AgreementTemplate{}).Where("code = ?", agreementTemplateCode).Count(&count).Error; err != nil {
-		return err
-	}
-	if count > 0 {
-		return backfillAgreementDocumentTemplate(db)
-	}
-
 	data, err := assets.Files.ReadFile("templates/pks-template/Draft-PKS-RIU.docx")
 	if err != nil {
 		return err
 	}
+	checksum := service.TemplateChecksum(data)
 
-	now := time.Now()
+	var terpasang int64
+	if err := db.Model(&entity.AgreementTemplate{}).
+		Where("code = ? AND checksum = ?", agreementTemplateCode, checksum).
+		Count(&terpasang).Error; err != nil {
+		return err
+	}
+	if terpasang == 0 {
+		if err := pasangTemplateBawaan(db, store, data, checksum); err != nil {
+			return err
+		}
+	}
+	if err := backfillAgreementDocumentTemplate(db); err != nil {
+		return err
+	}
+	return pindahkanDariTemplateLama(db, checksum)
+}
+
+// pasangTemplateBawaan menambah template bawaan sebagai versi berikutnya. Versi
+// itu langsung aktif kalau yang aktif juga template bawaan (atau belum ada yang
+// aktif); template unggahan Admin tidak pernah diganti.
+func pasangTemplateBawaan(db *gorm.DB, store *storage.MinIOClient, data []byte, checksum string) error {
+	var aktif entity.AgreementTemplate
+	err := db.Where("code = ? AND status = ?", agreementTemplateCode, entity.TemplateStatusActive).First(&aktif).Error
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
+	}
+	aktifkan := errors.Is(err, gorm.ErrRecordNotFound) || aktif.UploadedBy == nil
+
+	var versi int
+	if err := db.Model(&entity.AgreementTemplate{}).
+		Where("code = ?", agreementTemplateCode).
+		Select("COALESCE(MAX(version), 0) + 1").
+		Scan(&versi).Error; err != nil {
+		return err
+	}
+
 	tpl := &entity.AgreementTemplate{
-		Code:        agreementTemplateCode,
-		Version:     1,
-		Name:        "PKS - Template Bawaan",
-		FileName:    "Draft-PKS-RIU.docx",
-		Checksum:    service.TemplateChecksum(data),
-		Status:      entity.TemplateStatusActive,
-		IsLegacy:    true,
-		Note:        "Template bawaan hasil migrasi dari binary aplikasi.",
-		ActivatedAt: &now,
+		Code:     agreementTemplateCode,
+		Version:  versi,
+		Name:     "PKS - Template Bawaan",
+		FileName: "Draft-PKS-RIU.docx",
+		Checksum: checksum,
+		Status:   entity.TemplateStatusDraft,
+		Note:     "Template bawaan aplikasi.",
+	}
+	if aktifkan {
+		now := time.Now()
+		tpl.Status, tpl.ActivatedAt = entity.TemplateStatusActive, &now
 	}
 	tpl.ID = uuid.New()
 	tpl.FilePath = "agreement-templates/" + agreementTemplateCode + "/" + tpl.ID.String() + ".docx"
@@ -54,14 +86,50 @@ func SeedAgreementTemplate(db *gorm.DB, store *storage.MinIOClient) error {
 	if err := store.UploadBytes(context.Background(), tpl.FilePath, data, agreementTemplateMIME); err != nil {
 		return err
 	}
-	if err := db.Create(tpl).Error; err != nil {
-		return err
+	err = db.Transaction(func(tx *gorm.DB) error {
+		if aktifkan {
+			if err := tx.Model(&entity.AgreementTemplate{}).
+				Where("code = ? AND status = ?", agreementTemplateCode, entity.TemplateStatusActive).
+				Update("status", entity.TemplateStatusArchived).Error; err != nil {
+				return err
+			}
+		}
+		return tx.Create(tpl).Error
+	})
+	if err != nil {
+		_ = store.DeleteFile(context.Background(), tpl.FilePath)
 	}
-	return backfillAgreementDocumentTemplate(db)
+	return err
 }
 
-// backfillAgreementDocumentTemplate mengarahkan dokumen lama ke versi 1, karena
-// itulah template yang sesungguhnya dipakai saat dokumen tersebut dibuat.
+// pindahkanDariTemplateLama mengarahkan pengajuan yang belum selesai dari
+// template lama (diisi lewat pencocokan kalimat) ke template bawaan bercheksum
+// itu. Isi keduanya sama (dijaga TestIsiSamaDenganTemplateLama), dan template
+// lama tidak bisa dipakai lagi setelah kode pengisiannya dihapus. Pengajuan
+// Selesai tidak disentuh: dokumen finalnya sudah tersimpan.
+func pindahkanDariTemplateLama(db *gorm.DB, checksum string) error {
+	res := db.Exec(`
+		UPDATE agreement_documents SET
+			template_id = (
+				SELECT id FROM agreement_templates
+				WHERE code = ? AND checksum = ? AND deleted_at IS NULL
+				ORDER BY version DESC LIMIT 1
+			),
+			template_checksum = ?
+		WHERE status <> ?
+			AND template_id IN (SELECT id FROM agreement_templates WHERE is_legacy)
+	`, agreementTemplateCode, checksum, checksum, entity.StatusCompleted)
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected > 0 {
+		log.Printf("%d pengajuan perjanjian dipindah dari template lama ke template bawaan versi baru", res.RowsAffected)
+	}
+	return nil
+}
+
+// backfillAgreementDocumentTemplate mengarahkan dokumen tanpa template ke versi 1,
+// karena itulah template yang sesungguhnya dipakai saat dokumen tersebut dibuat.
 func backfillAgreementDocumentTemplate(db *gorm.DB) error {
 	var tpl entity.AgreementTemplate
 	err := db.Where("code = ? AND version = ?", agreementTemplateCode, 1).First(&tpl).Error

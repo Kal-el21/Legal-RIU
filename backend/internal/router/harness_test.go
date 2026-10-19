@@ -57,6 +57,7 @@ var tanpaMinIO = os.Getenv("TES_TANPA_MINIO") != ""
 var (
 	app       *gin.Engine
 	dbTes     *gorm.DB
+	storeTes  *storage.MinIOClient  // nil kalau TES_TANPA_MINIO
 	tokenUser = map[string]string{} // surel -> access token
 	tokenCSRF string
 )
@@ -106,6 +107,7 @@ func siapkan() error {
 	if !tanpaMinIO {
 		store = storage.InitMinIO(cfg)
 	}
+	storeTes = store
 
 	// Dua kali: migrasi harus jalan di database kosong dan aman diulang.
 	for i := 1; i <= 2; i++ {
