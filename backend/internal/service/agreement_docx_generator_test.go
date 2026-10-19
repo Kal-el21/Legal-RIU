@@ -5,6 +5,8 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"os"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -196,4 +198,137 @@ func assertKeyValueTabs(t *testing.T, paragraphs, texts []string, expected strin
 		return
 	}
 	t.Fatalf("rincian %q tidak ditemukan", expected)
+}
+
+// bugDiketahui melewati tes untuk bug yang belum diperbaiki; jalankan dengan
+// TES_BUG=1 untuk melihatnya merah. Sama dengan helper di paket router.
+func bugDiketahui(t testing.TB, ringkas string) {
+	t.Helper()
+	if os.Getenv("TES_BUG") == "" {
+		t.Skip("BUG DIKETAHUI: " + ringkas)
+	}
+}
+
+var (
+	wordTableRE       = regexp.MustCompile(`(?s)<w:tbl>.*?</w:tbl>`)
+	pageBreakBeforeRE = regexp.MustCompile(`<w:pageBreakBefore(?:\s+w:val="(?:1|true|on)")?\s*/>`)
+	pageBreakRunRE    = regexp.MustCompile(`<w:br\b[^>]*w:type="page"`)
+)
+
+// Template PKS bawaan harus diisi lewat placeholder, dan tiap BAGIAN mulai di
+// halaman baru lewat pemisah halaman, bukan deretan Enter kosong. Deretan Enter
+// ikut terdorong saat isian di atasnya panjang, sehingga muncul ruang atau
+// halaman kosong.
+func TestTemplatePKSBawaan(t *testing.T) {
+	bugDiketahui(t, "template PKS bawaan memakai deretan Enter kosong dan belum berisi placeholder (PR 8 tahap 8.2)")
+	registry, err := NewAgreementRegistry()
+	if err != nil {
+		t.Fatal(err)
+	}
+	definition, _ := registry.Get("PKS")
+
+	placeholders, _, err := InspectTemplate(definition.Template)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(placeholders) == 0 {
+		t.Error("template bawaan belum berisi placeholder; masih template lama yang diisi lewat pencocokan kalimat")
+	}
+	known := map[string]bool{}
+	for _, token := range SupportedPlaceholderTokens() {
+		known[token] = true
+	}
+	for _, p := range placeholders {
+		if !known[p] {
+			t.Errorf("placeholder %s tidak dikenal generator", p)
+		}
+	}
+
+	xmlText := generatedDocumentXML(t, definition.Template)
+
+	// Ruang kosong di dalam tabel (mis. tempat tanda tangan basah) disengaja,
+	// jadi hanya paragraf di luar tabel yang diperiksa.
+	run, longest, before := 0, 0, ""
+	for _, paragraph := range wordParagraphRE.FindAllString(wordTableRE.ReplaceAllString(xmlText, ""), -1) {
+		text := strings.TrimSpace(paragraphText(paragraph))
+		if text == "" {
+			run++
+			continue
+		}
+		if run > longest {
+			longest, before = run, text
+		}
+		run = 0
+	}
+	if longest >= 4 {
+		t.Errorf("ada %d paragraf kosong berturut-turut sebelum %q; pakai pemisah halaman, bukan Enter berulang", longest, before)
+	}
+
+	paragraphs := wordParagraphRE.FindAllString(xmlText, -1)
+	for _, heading := range []string{"BAGIAN I", "BAGIAN II", "BAGIAN III"} {
+		i := -1
+		for k, paragraph := range paragraphs {
+			if strings.TrimSpace(paragraphText(paragraph)) == heading {
+				i = k
+				break
+			}
+		}
+		if i < 1 {
+			t.Errorf("judul %q tidak ditemukan", heading)
+			continue
+		}
+		breaks := len(pageBreakBeforeRE.FindAllString(paragraphs[i], -1)) +
+			len(pageBreakRunRE.FindAllString(paragraphs[i], -1)) +
+			len(pageBreakRunRE.FindAllString(paragraphs[i-1], -1))
+		if breaks != 1 {
+			t.Errorf("judul %q didahului %d pemisah halaman, harus tepat 1", heading, breaks)
+		}
+	}
+}
+
+// Isian yang panjang harus tampil utuh di dokumen, tanpa placeholder yang tersisa.
+func TestIsianPanjangTerisiSemua(t *testing.T) {
+	bugDiketahui(t, "template PKS bawaan belum berisi placeholder, isian tidak masuk tanpa mode lama (PR 8 tahap 8.2)")
+	registry, err := NewAgreementRegistry()
+	if err != nil {
+		t.Fatal(err)
+	}
+	definition, _ := registry.Get("PKS")
+
+	values := sampleAgreementValues()
+	alamat := strings.TrimSpace(strings.Repeat("Jl. Contoh Panjang Nomor 123 Blok A, Kawasan Industri, ", 11))
+	values["PIHAK_KEDUA_ALAMAT"] = alamat
+	poin := make([]string, 20)
+	for i := range poin {
+		poin[i] = fmt.Sprintf("Poin ruang lingkup nomor %d", i+1)
+	}
+	values["RUANG_LINGKUP"] = strings.Join(poin, "\n")
+
+	out, _, err := NewAgreementGenerator().Generate(definition.Template, values, GenerateOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	xmlText := generatedDocumentXML(t, out)
+	texts := map[string]bool{}
+	var all []string
+	for _, paragraph := range wordParagraphRE.FindAllString(xmlText, -1) {
+		text := strings.TrimSpace(paragraphText(paragraph))
+		texts[text] = true
+		all = append(all, text)
+	}
+
+	if len(alamat) < 600 {
+		t.Fatalf("alamat uji hanya %d karakter", len(alamat))
+	}
+	if !strings.Contains(strings.Join(all, "\n"), alamat) {
+		t.Error("alamat pihak kedua yang panjang tidak tampil utuh")
+	}
+	for _, item := range poin {
+		if !texts[item] {
+			t.Errorf("poin ruang lingkup %q tidak tampil sebagai paragraf sendiri", item)
+		}
+	}
+	if left := placeholderRE.FindAllString(xmlText, -1); len(left) > 0 {
+		t.Errorf("placeholder tersisa: %v", left)
+	}
 }
