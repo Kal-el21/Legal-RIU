@@ -2,12 +2,14 @@ import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Plus, Search, Edit, Trash2, X } from 'lucide-react'
+import { Plus, Search, Edit, Trash2, X, Crown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { useCompanies, useCreateCompany, useUpdateCompany, useDeleteCompany, useImportCompanies } from '@/hooks/useLegalCase'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { useCompanies, useCreateCompany, useUpdateCompany, useDeleteCompany, useImportCompanies, useMakeParent, useMakeParentPreview } from '@/hooks/useLegalCase'
 import { legalCaseService } from '@/services/legal-case.service'
+import { useAuthStore } from '@/store/auth.store'
 import ImportCard from '@/components/common/ImportCard'
 import type { Company } from '@/types'
 
@@ -45,10 +47,68 @@ function Field({ label, error, children }: { label: string; error?: string; chil
   )
 }
 
+// Konfirmasi ganti induk dengan dampak yang dihitung server. Aturannya di
+// docs/case_company_access.md: hanya LEGAL yang pindah, induk lama tetap
+// internal, dan Legal AU di tujuan harus dipindahkan dulu.
+function MakeParentDialog({ target, onClose }: { target: Company; onClose: () => void }) {
+  const { data: preview, isLoading, isError } = useMakeParentPreview(target.id)
+  const makeParent = useMakeParent()
+  const blocked = (preview?.blocking_users.length ?? 0) > 0
+  const current = preview?.current_parent?.name
+
+  return (
+    <Dialog open onOpenChange={(open) => { if (!open) onClose() }}>
+      <DialogContent showCloseButton={false} className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle style={{ color: '#0B2545' }}>Jadikan {target.name} induk?</DialogTitle>
+          <DialogDescription>Mengganti induk memindahkan data user. Periksa dampaknya sebelum melanjutkan.</DialogDescription>
+        </DialogHeader>
+        {isLoading ? (
+          <p className="text-gray-500">Menghitung dampak...</p>
+        ) : isError || !preview ? (
+          <p role="alert" className="text-red-600">Dampak pergantian gagal dihitung. Tutup dialog ini lalu coba lagi.</p>
+        ) : (
+          <div className="space-y-3 text-gray-700">
+            <ul className="list-disc pl-5 space-y-1.5">
+              <li><strong>{preview.legal_to_move} user LEGAL</strong> akan dipindah ke {target.name}.</li>
+              <li>{target.name} ditandai internal dan menjadi induk.</li>
+              {current && <li>{current} tetap internal. Cabut centangnya di halaman ini kalau user {current} tidak boleh lagi melihat semua perkara.</li>}
+              <li>USER dan ADMIN tetap di perusahaannya.</li>
+            </ul>
+            {blocked && (
+              <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-red-700">
+                <p className="font-medium">{preview.blocking_users.length} Legal AU masih terdaftar di {target.name}.</p>
+                <p className="mt-1">Legal AU tidak boleh terdaftar di induk. Pindahkan ke anak usaha lain atau ganti perannya di Kelola User, lalu buka dialog ini lagi.</p>
+                <ul className="mt-2 list-disc pl-5">
+                  {preview.blocking_users.map((u) => <li key={u.id}>{u.full_name} ({u.email})</li>)}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Batal</Button>
+          <Button
+            disabled={!preview || blocked || makeParent.isPending}
+            onClick={() => makeParent.mutate(target.id, { onSuccess: onClose })}
+            className="text-white"
+            style={{ background: '#0B2545' }}
+          >
+            {makeParent.isPending ? 'Memproses...' : 'Jadikan induk'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 export default function CompanyManagementPage() {
   const [search, setSearch] = useState('')
   const [modal, setModal] = useState<'create' | 'edit' | null>(null)
   const [selected, setSelected] = useState<Company | null>(null)
+  const [parentTarget, setParentTarget] = useState<Company | null>(null)
+  const hasPermission = useAuthStore((state) => state.hasPermission)
+  const canSetParent = hasPermission('company.set_parent.all')
 
   const { data, isLoading } = useCompanies()
   const createMutation = useCreateCompany()
@@ -75,8 +135,8 @@ export default function CompanyManagementPage() {
 
   const onEditSubmit = async (data: FormData) => {
     if (!selected) return
-    // Induk: tanda internal dan domainnya dikunci, server juga menolaknya.
-    const payload = selected.is_parent ? { ...data, email_domain: selected.email_domain, is_internal: true } : data
+    // Induk selalu internal; server juga menolak mencabutnya.
+    const payload = selected.is_parent ? { ...data, is_internal: true } : data
     await updateMutation.mutateAsync({ id: selected.id, data: payload })
     closeModal()
   }
@@ -146,6 +206,11 @@ export default function CompanyManagementPage() {
                       <Button variant="outline" size="icon-sm" onClick={() => openEdit(company)} title="Edit" aria-label="Edit">
                         <Edit className="w-4 h-4" />
                       </Button>
+                      {!company.is_parent && canSetParent && (
+                        <Button variant="outline" size="icon-sm" onClick={() => setParentTarget(company)} title="Jadikan induk" aria-label={`Jadikan ${company.name} induk`}>
+                          <Crown className="w-4 h-4" />
+                        </Button>
+                      )}
                       {!company.is_parent && (
                         <Button variant="outline" size="icon-sm" onClick={() => handleDelete(company)} title="Hapus" aria-label="Hapus" className="text-red-600 hover:bg-red-50 hover:text-red-700">
                           <Trash2 className="w-4 h-4" />
@@ -190,7 +255,7 @@ export default function CompanyManagementPage() {
               <Input {...form.register('name')} />
             </Field>
             <Field label="Domain Email" error={form.formState.errors.email_domain?.message}>
-              <Input {...form.register('email_domain')} readOnly={selected.is_parent} className={selected.is_parent ? 'bg-gray-50 text-gray-500' : ''} />
+              <Input {...form.register('email_domain')} />
             </Field>
             <div className="flex items-center gap-2">
               {selected.is_parent
@@ -198,7 +263,7 @@ export default function CompanyManagementPage() {
                 : <input type="checkbox" id="is_internal" {...form.register('is_internal')} className="rounded border-gray-300" />}
               <Label htmlFor="is_internal" className="text-sm text-gray-700">Perusahaan Internal</Label>
             </div>
-            {selected.is_parent && <p className="text-xs text-gray-500">Perusahaan induk selalu internal, dan domain emailnya tidak bisa diubah.</p>}
+            {selected.is_parent && <p className="text-xs text-gray-500">Perusahaan induk selalu internal dan tidak bisa dihapus. Untuk mengganti induk, pakai aksi "Jadikan induk" di perusahaan lain.</p>}
             <div className="flex gap-2 pt-2">
               <Button type="button" variant="outline" className="flex-1" onClick={closeModal}>Batal</Button>
               <Button type="submit" disabled={updateMutation.isPending} className="flex-1 text-white" style={{ background: '#0B2545' }}>
@@ -208,6 +273,8 @@ export default function CompanyManagementPage() {
           </form>
         </Modal>
       )}
+
+      {parentTarget && <MakeParentDialog target={parentTarget} onClose={() => setParentTarget(null)} />}
     </div>
   )
 }
