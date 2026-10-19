@@ -24,7 +24,7 @@ func toCompanyResponse(c *entity.Company) dto.CompanyResponse {
 		Name:        c.Name,
 		EmailDomain: c.EmailDomain,
 		IsInternal:  c.IsInternal,
-		IsParent:    c.IsParent(),
+		IsParent:    c.IsParent,
 		CreatedAt:   c.CreatedAt,
 		UpdatedAt:   c.UpdatedAt,
 	}

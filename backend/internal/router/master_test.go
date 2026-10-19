@@ -315,10 +315,10 @@ func TestSeedPerusahaanBawaan(t *testing.T) {
 	}
 }
 
-// Induk dikenali dari domain surelnya (entity.ParentCompanyDomain). Tanda
-// internal dan domainnya tidak bisa diubah dan ia tidak bisa dihapus; kalau
+// Tanda internal induk tidak bisa dicabut dan ia tidak bisa dihapus; kalau
 // bisa, user induk kehilangan pandangan ke perkara anak usaha, atau sistem
-// berjalan tanpa induk. Perusahaan lain tetap bebas diatur.
+// berjalan tanpa induk. Domainnya boleh diubah karena induk dikenali dari
+// tandanya. Perusahaan lain tetap bebas diatur.
 func TestPerusahaanIndukDikunci(t *testing.T) {
 	admin := masukPeran(t, entity.RoleAdmin)
 	const alamat = "/api/v1/admin/companies"
@@ -360,13 +360,19 @@ func TestPerusahaanIndukDikunci(t *testing.T) {
 	if kode := ubah(induk.ID, induk.Name, induk.EmailDomain, false); kode != http.StatusBadRequest {
 		t.Errorf("mencabut tanda internal induk: dapat %d, harap 400", kode)
 	}
-	if kode := ubah(induk.ID, induk.Name, "induk-pindah.example", true); kode != http.StatusBadRequest {
-		t.Errorf("mengubah domain induk: dapat %d, harap 400", kode)
+	if kode := ubah(induk.ID, induk.Name, "induk-pindah.example", true); kode != http.StatusOK {
+		t.Errorf("mengubah domain induk: dapat %d, harap 200", kode)
+	}
+	if p := baca(induk.ID); !p.IsParent || p.EmailDomain != "induk-pindah.example" {
+		t.Errorf("induk setelah domainnya diubah: %+v, harap tetap induk", p)
+	}
+	if kode := ubah(induk.ID, induk.Name, induk.EmailDomain, true); kode != http.StatusOK {
+		t.Errorf("mengembalikan domain induk: dapat %d, harap 200", kode)
 	}
 	if kode := panggil(t, admin, http.MethodDelete, alamat+"/"+induk.ID, nil).Code; kode != http.StatusBadRequest {
 		t.Errorf("menghapus induk: dapat %d, harap 400", kode)
 	}
-	// Yang dikunci hanya tanda internal dan domainnya; nama tetap boleh diubah.
+	// Yang dikunci hanya tanda internal; nama tetap boleh diubah.
 	if kode := ubah(induk.ID, induk.Name+" (Persero)", induk.EmailDomain, true); kode != http.StatusOK {
 		t.Errorf("mengubah nama induk: dapat %d, harap 200", kode)
 	}
@@ -398,4 +404,79 @@ func TestPerusahaanIndukDikunci(t *testing.T) {
 		t.Errorf("perusahaan lain setelah diubah: %+v", p)
 	}
 	harapKode(t, panggil(t, admin, http.MethodDelete, alamat+"/"+lain.ID, nil), http.StatusOK, "menghapus perusahaan lain")
+}
+
+// Induk dikenali dari tanda is_parent, bukan dari domain email, supaya bisa
+// diganti. Isian tanda untuk database lama hanya berjalan kalau belum ada induk;
+// kalau tidak, induk yang sudah diganti kembali ke Indonesia Re setiap server
+// dinyalakan ulang. Database menolak dua induk.
+func TestIndukDariTanda(t *testing.T) {
+	jadikanInduk := func(domain string) {
+		t.Helper()
+		// Dua perintah, karena indeks unik menolak dua induk walau hanya sesaat.
+		if err := dbTes.Exec("UPDATE companies SET is_parent = false WHERE is_parent").Error; err != nil {
+			t.Fatal(err)
+		}
+		if domain == "" {
+			return
+		}
+		if err := dbTes.Exec("UPDATE companies SET is_parent = true WHERE email_domain = ?", domain).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	domainInduk := func(konteks string) string {
+		t.Helper()
+		var domain []string
+		dbTes.Raw("SELECT email_domain FROM companies WHERE is_parent AND deleted_at IS NULL").Scan(&domain)
+		if len(domain) != 1 {
+			t.Fatalf("%s: perusahaan bertanda induk %v, harap tepat satu", konteks, domain)
+		}
+		return domain[0]
+	}
+	t.Cleanup(func() { jadikanInduk(entity.ParentCompanyDomain) })
+
+	// Database lama: kolomnya baru ada dan belum ada perusahaan bertanda induk.
+	jadikanInduk("")
+	if err := seed.BackfillParentCompany(dbTes); err != nil {
+		t.Fatal(err)
+	}
+	if got := domainInduk("database lama"); got != entity.ParentCompanyDomain {
+		t.Errorf("database lama: induk %s, harap %s", got, entity.ParentCompanyDomain)
+	}
+
+	// Induk sudah diganti: server yang dinyalakan ulang tidak mengembalikannya.
+	const pengganti = "asei.co.id"
+	jadikanInduk(pengganti)
+	for putaran := 1; putaran <= 2; putaran++ {
+		if err := seed.SeedCompanies(dbTes); err != nil {
+			t.Fatalf("seed perusahaan putaran %d: %v", putaran, err)
+		}
+		if err := seed.BackfillParentCompany(dbTes); err != nil {
+			t.Fatalf("isian induk putaran %d: %v", putaran, err)
+		}
+	}
+	if got := domainInduk("setelah seed berikutnya"); got != pengganti {
+		t.Errorf("setelah seed berikutnya: induk %s, harap tetap %s", got, pengganti)
+	}
+
+	// Aturan yang bergantung pada induk mengikuti tandanya: LEGAL baru
+	// terdaftar di induk pengganti.
+	admin := masukPeran(t, entity.RoleAdmin)
+	var divisi, idPengganti string
+	dbTes.Raw("SELECT id FROM divisions WHERE deleted_at IS NULL LIMIT 1").Scan(&divisi)
+	dbTes.Raw("SELECT id FROM companies WHERE email_domain = ?", pengganti).Scan(&idPengganti)
+	w := panggil(t, admin, http.MethodPost, "/api/v1/admin/users", map[string]string{"full_name": "Legal Induk Pengganti", "email": "tes-induk-pengganti@example.com", "password": sandiTes, "position": "Staff", "division": divisi, "role": "LEGAL"})
+	harapKode(t, w, http.StatusCreated, "membuat LEGAL")
+	var u akun
+	isiData(t, w, &u)
+	t.Cleanup(func() { dbTes.Exec("UPDATE users SET deleted_at = now() WHERE id = ?", u.ID) })
+	var terdaftar string
+	dbTes.Raw("SELECT COALESCE(company_id::text, '') FROM users WHERE id = ?", u.ID).Scan(&terdaftar)
+	if terdaftar != idPengganti {
+		t.Errorf("LEGAL baru terdaftar di %q, harap induk pengganti %q", terdaftar, idPengganti)
+	}
+
+	if err := dbTes.Exec("UPDATE companies SET is_parent = true WHERE email_domain = ?", "resyariah.co.id").Error; err == nil {
+		t.Error("database menerima perusahaan induk kedua")
+	}
 }

@@ -248,17 +248,15 @@ type Company struct {
 	// nilai bawaan itu saat baris dibuat, sehingga perusahaan non-internal
 	// tersimpan sebagai internal.
 	IsInternal bool `gorm:"not null" json:"is_internal"`
+	// IsParent menandai perusahaan induk. Indeks unik parsial menjamin paling
+	// banyak satu perusahaan bertanda induk.
+	IsParent bool `gorm:"not null;default:false;uniqueIndex:idx_companies_single_parent,where:is_parent" json:"is_parent"`
 }
 
-// ParentCompanyDomain mengenali perusahaan induk (PT Reasuransi Indonesia
-// Utama). Induk ditetapkan di sini, tidak dipilih lewat menu; pilihan lainnya
-// dicatat di .docs/PARENT_COMPANY_OPTIONS.md.
+// ParentCompanyDomain adalah domain induk bawaan (PT Reasuransi Indonesia
+// Utama), dipakai seed untuk menandai induk di database baru dan lama. Induk
+// yang berlaku dibaca dari tanda IsParent, bukan dari domain ini.
 const ParentCompanyDomain = "indonesiare.co.id"
-
-// IsParent melaporkan apakah perusahaan ini induk.
-func (c Company) IsParent() bool {
-	return c.EmailDomain == ParentCompanyDomain
-}
 
 type PurposeType struct {
 	Base

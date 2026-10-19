@@ -25,7 +25,7 @@ anak usaha terlihat oleh induk. Anak usaha tidak melihat perkara anak usaha lain
 
 | Istilah | Arti |
 |---|---|
-| Induk | PT Reasuransi Indonesia Utama. Sistem mengenalinya dari domain email `indonesiare.co.id`, yang ditetapkan di kode (`ParentCompanyDomain` di `backend/internal/entity/entity.go`) |
+| Induk | PT Reasuransi Indonesia Utama. Sistem mengenalinya dari tanda `is_parent` di tabel `companies`, bukan dari domain emailnya. Paling banyak satu perusahaan bertanda induk; database menolak yang kedua. Database baru menandai perusahaan berdomain `indonesiare.co.id` (`ParentCompanyDomain` di `backend/internal/entity/entity.go`) |
 | Anak usaha | Perusahaan lain dalam grup, mis. PT Asuransi ASEI Indonesia dan PT Reasuransi Syariah Indonesia |
 | Legal AU | Peran `LEGAL_AU`: legal dari anak usaha. "AU" berarti anak usaha |
 | Perusahaan pemilik perkara | Nilai `company_id` pada perkara |
@@ -120,7 +120,10 @@ Perubahan perusahaan tercatat di audit log sebagai perubahan perkara.
 | Anak usaha bertanda non-internal di database baru | Ya. Dari tiga perusahaan bawaan hanya induk yang internal |
 | Anak usaha bertanda non-internal di database yang sudah ada | Tidak otomatis. ADMIN mencabut centangnya lewat menu, lihat bagian 8 |
 | ADMIN tidak dibatasi perusahaannya | Ya |
-| Induk tidak bisa dijadikan non-internal, diganti domainnya, atau dihapus | Ya di backend. Tampilan menu Perusahaan sudah disesuaikan, tetapi belum dicoba di browser |
+| Induk dikenali dari tanda `is_parent`, bukan dari domain email | Ya. Database lama ditandai otomatis saat server menyala, hanya kalau belum ada induk |
+| Induk tidak bisa dijadikan non-internal atau dihapus | Ya di backend. Tampilan menu Perusahaan sudah disesuaikan, tetapi belum dicoba di browser |
+| Domain email induk bisa diubah | Ya di backend. Form Edit di menu Perusahaan masih mengunci kolomnya |
+| Induk bisa diganti lewat menu | Belum. Sedang dikerjakan |
 | Perusahaan user mengikuti perannya (2.1) | Ya di backend. Form user sudah disesuaikan, tetapi belum dicoba di browser |
 | Dokumen perkara di Repositori Dokumen dibatasi per perusahaan | Ya, lihat bagian 9 |
 
@@ -140,9 +143,9 @@ Tanda internal diatur ADMIN di menu **Data Master > Perusahaan**. Centang
 anak usaha itu melihat perkara semua perusahaan.
 
 Induk dikunci: baris berlabel "Induk" di menu itu tidak bisa dicabut centang
-"Internal"-nya, tidak bisa diganti domain emailnya, dan tidak bisa dihapus.
-Namanya tetap bisa diubah. Induk tidak bisa dipindahkan ke perusahaan lain
-lewat menu.
+"Internal"-nya dan tidak bisa dihapus. Nama dan domain emailnya tetap bisa
+diubah, karena induk dikenali dari tandanya, bukan dari domain. Induk belum
+bisa dipindahkan ke perusahaan lain lewat menu.
 
 Perusahaan baru bawaannya tidak internal.
 
@@ -161,12 +164,15 @@ Rujukan kode: penentuan cakupan user ada di `companyScope()` pada
 `findCase()` pada `backend/internal/service/legal_case.service.go`. Tesnya di
 `backend/internal/router/perkara_test.go`: `TestAnakUsahaBawaanDibatasi`
 (aturan utama), `TestOperasiPerkaraPerPerusahaan` (semua operasi), dan
-`TestPerusahaanPemilikPerkara` (perusahaan pemilik). Kuncian induk ada di
-`backend/internal/service/company.service.go`, dengan tes
-`TestPerusahaanIndukDikunci` di `backend/internal/router/master_test.go`.
-Perusahaan user per peran ditentukan `resolveCompanySelection()` di
-`backend/internal/service/helpers.go`, dengan tes `TestPerusahaanUserPerPeran`
-di `backend/internal/router/sesi_test.go`.
+`TestPerusahaanPemilikPerkara` (perusahaan pemilik). Tanda induk dibaca lewat
+`FindParentCompany()` di `backend/internal/repository/user.repository.go`, dan
+database lama ditandai `BackfillParentCompany()` di
+`backend/internal/seed/companies.go`, dengan tes `TestIndukDariTanda`. Kuncian
+induk ada di `backend/internal/service/company.service.go`, dengan tes
+`TestPerusahaanIndukDikunci`. Kedua tes itu di
+`backend/internal/router/master_test.go`. Perusahaan user per peran ditentukan
+`resolveCompanySelection()` di `backend/internal/service/helpers.go`, dengan tes
+`TestPerusahaanUserPerPeran` di `backend/internal/router/sesi_test.go`.
 
 ## 9. Repositori Dokumen
 

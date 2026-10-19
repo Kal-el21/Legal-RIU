@@ -14,7 +14,7 @@ import (
 // perusahaan; user anak usaha hanya perkara perusahaannya sendiri. Aturannya ada
 // di docs/case_company_access.md.
 var DEFAULT_COMPANIES = []entity.Company{
-	{Name: "PT Reasuransi Indonesia Utama", EmailDomain: entity.ParentCompanyDomain, IsInternal: true},
+	{Name: "PT Reasuransi Indonesia Utama", EmailDomain: entity.ParentCompanyDomain, IsInternal: true, IsParent: true},
 	{Name: "PT Asuransi ASEI Indonesia", EmailDomain: "asei.co.id", IsInternal: false},
 	{Name: "PT Reasuransi Syariah Indonesia", EmailDomain: "resyariah.co.id", IsInternal: false},
 }
@@ -42,11 +42,23 @@ func SeedCompanies(db *gorm.DB) error {
 			Name:        c.Name,
 			EmailDomain: c.EmailDomain,
 			IsInternal:  c.IsInternal,
+			IsParent:    c.IsParent,
 		}).Error; err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// BackfillParentCompany menandai induk bawaan di database yang dibuat sebelum
+// kolom is_parent ada. Hanya berjalan kalau belum ada induk, supaya induk yang
+// sudah diganti admin tidak dikembalikan setiap server dinyalakan ulang.
+func BackfillParentCompany(db *gorm.DB) error {
+	return db.Exec(`
+		UPDATE companies SET is_parent = true
+		WHERE email_domain = ? AND deleted_at IS NULL
+			AND NOT EXISTS (SELECT 1 FROM companies WHERE is_parent)
+	`, entity.ParentCompanyDomain).Error
 }
 
 func FindCompanyIDByDomain(db *gorm.DB, email string) (uuid.UUID, error) {
@@ -64,11 +76,11 @@ func FindCompanyIDByDomain(db *gorm.DB, email string) (uuid.UUID, error) {
 }
 
 // FindFirstCompanyID mengembalikan perusahaan cadangan untuk user yang surelnya
-// tidak cocok dengan perusahaan mana pun. Perusahaan internal (induk)
-// didahulukan, supaya admin bawaan tidak terdaftar di anak usaha.
+// tidak cocok dengan perusahaan mana pun. Induk didahulukan, lalu perusahaan
+// internal, supaya admin bawaan tidak terdaftar di anak usaha.
 func FindFirstCompanyID(db *gorm.DB) (uuid.UUID, error) {
 	var company entity.Company
-	if err := db.Order("is_internal DESC").First(&company).Error; err != nil {
+	if err := db.Order("is_parent DESC, is_internal DESC").First(&company).Error; err != nil {
 		return uuid.Nil, err
 	}
 	return company.ID, nil

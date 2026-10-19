@@ -26,6 +26,7 @@ type UserRepository interface {
 	FindDivisionByName(name string) (*entity.Division, error)
 	FindCompanyByID(id uuid.UUID) (*entity.Company, error)
 	FindCompanyByDomain(domain string) (*entity.Company, error)
+	FindParentCompany() (*entity.Company, error)
 	FindFirstCompany() (*entity.Company, error)
 }
 
@@ -166,6 +167,14 @@ func (r *userRepository) FindCompanyByID(id uuid.UUID) (*entity.Company, error) 
 func (r *userRepository) FindCompanyByDomain(domain string) (*entity.Company, error) {
 	var company entity.Company
 	if err := r.db.Where("LOWER(email_domain) = LOWER(?)", domain).First(&company).Error; err != nil {
+		return nil, err
+	}
+	return &company, nil
+}
+
+func (r *userRepository) FindParentCompany() (*entity.Company, error) {
+	var company entity.Company
+	if err := r.db.Where("is_parent = ?", true).First(&company).Error; err != nil {
 		return nil, err
 	}
 	return &company, nil

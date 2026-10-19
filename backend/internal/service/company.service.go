@@ -73,15 +73,9 @@ func (s *companyService) Update(id, name, emailDomain string, isInternal bool) (
 	if err != nil {
 		return nil, errors.New("perusahaan tidak ditemukan")
 	}
-	// Induk dikenali dari domainnya dan usernya harus melihat perkara semua
-	// perusahaan, jadi dua hal itu tidak boleh berubah.
-	if company.IsParent() {
-		if !isInternal {
-			return nil, errors.New("perusahaan induk harus tetap internal")
-		}
-		if emailDomain != company.EmailDomain {
-			return nil, errors.New("domain email perusahaan induk tidak bisa diubah")
-		}
+	// User induk harus melihat perkara semua perusahaan.
+	if company.IsParent && !isInternal {
+		return nil, errors.New("perusahaan induk harus tetap internal")
 	}
 	company.Name = name
 	company.EmailDomain = emailDomain
@@ -97,7 +91,7 @@ func (s *companyService) Delete(id string) error {
 	if err != nil {
 		return errors.New("ID tidak valid")
 	}
-	if company, err := s.repo.FindByID(uid); err == nil && company.IsParent() {
+	if company, err := s.repo.FindByID(uid); err == nil && company.IsParent {
 		return errors.New("perusahaan induk tidak bisa dihapus")
 	}
 	if err := s.repo.Delete(uid); err != nil {
