@@ -23,14 +23,16 @@ type AgreementCompanyMaster struct {
 	IsActive                 bool   `gorm:"not null;default:true;index" json:"is_active"`
 }
 
-// AgreementType adalah jenis dokumen perjanjian (mis. PKS). Definisi field-nya
-// tidak disimpan di sini, tetapi di setiap versi template (AgreementTemplate.Fields),
-// karena field dan placeholder DOCX selalu berubah bersamaan.
+// AgreementType adalah jenis dokumen perjanjian (mis. PKS). Fields di sini adalah
+// field kerja yang sedang disusun Admin; pengajuan tidak membacanya. Saat versi
+// template dibuat, field ini disalin ke versi itu (AgreementTemplate.Fields), dan
+// pengajuan memakai salinan beku di versinya.
 type AgreementType struct {
 	Base
-	Code     string `gorm:"size:50;not null;uniqueIndex" json:"code"`
-	Name     string `gorm:"size:255;not null" json:"name"`
-	IsActive bool   `gorm:"not null;default:true" json:"is_active"`
+	Code     string          `gorm:"size:50;not null;uniqueIndex" json:"code"`
+	Name     string          `gorm:"size:255;not null" json:"name"`
+	IsActive bool            `gorm:"not null;default:true" json:"is_active"`
+	Fields   json.RawMessage `gorm:"type:jsonb" json:"fields"`
 }
 
 type TemplateStatus string

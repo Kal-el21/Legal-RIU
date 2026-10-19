@@ -150,6 +150,12 @@ func SeedAgreementTypes(db *gorm.DB) error {
 	if err := db.Where("code = ?", jenis.Code).FirstOrCreate(&jenis).Error; err != nil {
 		return err
 	}
+	// Field kerja Admin (PR 9 tahap 9.3) dimulai dari field bawaan yang sama.
+	if err := db.Model(&entity.AgreementType{}).
+		Where("code = ? AND fields IS NULL", agreementTemplateCode).
+		Update("fields", schema.Sections).Error; err != nil {
+		return err
+	}
 	return db.Model(&entity.AgreementTemplate{}).
 		Where("code = ? AND fields IS NULL", agreementTemplateCode).
 		Update("fields", schema.Sections).Error

@@ -103,6 +103,10 @@ func TestMigrasiJenisDokumen(t *testing.T) {
 	if field[0] == "" || field[0] != field[1] {
 		t.Fatalf("field versi lama setelah putaran 1 dan 2 berbeda atau kosong:\n%s\n%s", field[0], field[1])
 	}
+	// Field kerja Admin dimulai dari field bawaan yang sama.
+	if kerja := fieldJenis(t, "PKS"); kerja != field[0] {
+		t.Errorf("field kerja jenis PKS berbeda dari field versi template:\n%s", kerja)
+	}
 
 	var bagian []bagianField
 	if err := json.Unmarshal([]byte(field[0]), &bagian); err != nil {
@@ -350,4 +354,143 @@ func TestSuratWajibSaatPersetujuan(t *testing.T) {
 		harapKode(t, panggil(t, legal, http.MethodPatch, urlPerjanjian("/legal", "/", p.ID, "/meta"), tanggal), http.StatusOK, "mengisi ulang tanggal tanda tangan")
 		statusPerjanjian(t, legal, p.ID, "COMPLETED", "", http.StatusOK)
 	})
+}
+
+const alamatJenis = "/api/v1/admin/agreement-types"
+
+type jenisDokumen struct {
+	Code     string `json:"code"`
+	Name     string `json:"name"`
+	IsActive bool   `json:"is_active"`
+	Fields   []struct {
+		Title  string `json:"title"`
+		Fields []struct {
+			Name     string   `json:"name"`
+			Label    string   `json:"label"`
+			Type     string   `json:"type"`
+			Required bool     `json:"required"`
+			Options  []string `json:"options"`
+		} `json:"fields"`
+	} `json:"fields"`
+}
+
+// hapusJenisUji membersihkan jenis dokumen buatan tes, juga kalau tes berhenti di tengah.
+func hapusJenisUji(t *testing.T, kode string) {
+	t.Cleanup(func() { dbTes.Exec("DELETE FROM agreement_types WHERE code = ?", kode) })
+}
+
+func fieldJenis(t *testing.T, kode string) string {
+	t.Helper()
+	var raw *string
+	if err := dbTes.Raw("SELECT fields::text FROM agreement_types WHERE code = ?", kode).Scan(&raw).Error; err != nil {
+		t.Fatal(err)
+	}
+	if raw == nil {
+		return ""
+	}
+	return *raw
+}
+
+// Jenis dokumen dan field-nya hanya dikelola ADMIN (keputusan K3). Field yang
+// disimpan di sini adalah field kerja; pengajuan tetap membaca field versi
+// template yang dikuncinya.
+func TestJenisDokumenHanyaAdmin(t *testing.T) {
+	admin := masukPeran(t, entity.RoleAdmin)
+	const kode = "UJI-KELOLA"
+	hapusJenisUji(t, kode)
+
+	for _, peran := range []entity.UserRole{entity.RoleLegal, entity.RoleUser, entity.RoleLegalAU, entity.RoleExternal} {
+		token := masukPeran(t, peran)
+		harapKode(t, panggil(t, token, http.MethodGet, alamatJenis, nil), http.StatusForbidden, string(peran)+" melihat jenis dokumen")
+		harapKode(t, panggil(t, token, http.MethodPost, alamatJenis, map[string]any{"code": kode, "name": "Uji"}), http.StatusForbidden, string(peran)+" membuat jenis dokumen")
+		harapKode(t, panggil(t, token, http.MethodPut, alamatJenis+"/PKS", map[string]any{"name": "Diubah"}), http.StatusForbidden, string(peran)+" mengubah jenis dokumen")
+	}
+
+	isi := map[string]any{"code": " uji-kelola ", "name": "Perjanjian Uji", "fields": []map[string]any{
+		{"title": "Pihak Kedua", "fields": []map[string]any{
+			{"name": "Nama_Mitra", "label": " Nama Mitra ", "type": "text", "required": true},
+			{"name": "JENIS_MITRA", "label": "Jenis Mitra", "type": "select", "options": []string{"Badan usaha", "Perorangan"}},
+		}},
+	}}
+	w := panggil(t, admin, http.MethodPost, alamatJenis, isi)
+	harapKode(t, w, http.StatusCreated, "ADMIN membuat jenis dokumen")
+	var j jenisDokumen
+	isiData(t, w, &j)
+	if j.Code != kode || !j.IsActive || len(j.Fields) != 1 || j.Fields[0].Fields[0].Name != "nama_mitra" || j.Fields[0].Fields[0].Label != "Nama Mitra" {
+		t.Errorf("jenis baru (kode huruf besar, nama field huruf kecil, label dirapikan): %+v", j)
+	}
+
+	w = panggil(t, admin, http.MethodGet, alamatJenis, nil)
+	harapKode(t, w, http.StatusOK, "ADMIN melihat jenis dokumen")
+	var daftar []jenisDokumen
+	isiData(t, w, &daftar)
+	kodeAda := map[string]bool{}
+	for _, d := range daftar {
+		kodeAda[d.Code] = true
+	}
+	if !kodeAda["PKS"] || !kodeAda[kode] {
+		t.Errorf("daftar jenis dokumen: %v", kodeAda)
+	}
+
+	// Mengubah tanpa mengirim field tidak mengosongkan field yang tersimpan.
+	w = panggil(t, admin, http.MethodPut, alamatJenis+"/"+kode, map[string]any{"name": "Perjanjian Uji Diubah", "is_active": false})
+	harapKode(t, w, http.StatusOK, "ADMIN menonaktifkan jenis dokumen")
+	isiData(t, w, &j)
+	if j.Name != "Perjanjian Uji Diubah" || j.IsActive || len(j.Fields) != 1 {
+		t.Errorf("jenis setelah diubah tanpa field: %+v", j)
+	}
+	harapKode(t, panggil(t, admin, http.MethodPut, alamatJenis+"/TIDAK-ADA", map[string]any{"name": "x"}), http.StatusNotFound, "mengubah jenis yang tidak ada")
+}
+
+// Field yang tidak bisa dipakai ditolak dengan pesan yang menyebut field-nya.
+func TestValidasiField(t *testing.T) {
+	admin := masukPeran(t, entity.RoleAdmin)
+	const kode = "UJI-VALIDASI"
+	hapusJenisUji(t, kode)
+	field := func(f ...map[string]any) []map[string]any {
+		return []map[string]any{{"title": "Data", "fields": f}}
+	}
+	teks := func(nama string) map[string]any {
+		return map[string]any{"name": nama, "label": "Isian " + nama, "type": "text"}
+	}
+
+	for _, c := range []struct {
+		nama  string
+		isi   map[string]any
+		pesan string
+	}{
+		{"KodeJenisSalahFormat", map[string]any{"code": "uji nda", "name": "Uji"}, "Kode jenis dokumen"},
+		{"KodeJenisGanda", map[string]any{"code": "PKS", "name": "Uji"}, "sudah dipakai"},
+		{"NamaJenisKosong", map[string]any{"code": kode, "name": " "}, "Nama jenis dokumen wajib diisi"},
+		{"NamaBagianKosong", map[string]any{"code": kode, "name": "Uji", "fields": []map[string]any{{"title": "", "fields": []map[string]any{teks("a")}}}}, "Nama bagian"},
+		{"KodeFieldSalahFormat", map[string]any{"code": kode, "name": "Uji", "fields": field(teks("nama-mitra"))}, "NAMA-MITRA"},
+		{"KodeFieldDiawaliAngka", map[string]any{"code": kode, "name": "Uji", "fields": field(teks("1_nama"))}, "1_NAMA"},
+		{"KodeFieldGanda", map[string]any{"code": kode, "name": "Uji", "fields": field(teks("nama"), teks("NAMA"))}, "dipakai dua kali"},
+		{"LabelKosong", map[string]any{"code": kode, "name": "Uji", "fields": field(map[string]any{"name": "nama", "label": " ", "type": "text"})}, "Label field NAMA"},
+		{"TipeTidakDikenal", map[string]any{"code": kode, "name": "Uji", "fields": field(map[string]any{"name": "warna", "label": "Warna", "type": "color"})}, "Tipe field WARNA"},
+		{"PilihanTanpaOpsi", map[string]any{"code": kode, "name": "Uji", "fields": field(map[string]any{"name": "jenis", "label": "Jenis", "type": "select"})}, "pilihan"},
+		{"BentrokPlaceholderSistem", map[string]any{"code": kode, "name": "Uji", "fields": field(teks("nomor_pihak_pertama"))}, "{{NOMOR_PIHAK_PERTAMA}}"},
+		{"BentrokIsianApprover", map[string]any{"code": kode, "name": "Uji", "fields": field(teks("pihak_pertama_pic"))}, "{{PIHAK_PERTAMA_PIC}}"},
+		{"BentrokDaftarRuangLingkup", map[string]any{"code": kode, "name": "Uji", "fields": field(teks("ruang_lingkup_list"))}, "{{RUANG_LINGKUP_LIST}}"},
+		{"BentrokTurunan", map[string]any{"code": kode, "name": "Uji", "fields": field(map[string]any{"name": "nilai", "label": "Nilai", "type": "money"}, teks("nilai_terbilang"))}, "{{NILAI_TERBILANG}}"},
+	} {
+		t.Run(c.nama, func(t *testing.T) {
+			w := panggil(t, admin, http.MethodPost, alamatJenis, c.isi)
+			harapKode(t, w, http.StatusBadRequest, c.nama)
+			if !strings.Contains(w.Body.String(), c.pesan) {
+				t.Errorf("pesan harus menyebut %q: %s", c.pesan, w.Body)
+			}
+		})
+	}
+	if n := hitungBaris(t, "SELECT COUNT(*) FROM agreement_types WHERE code = ?", kode); n != 0 {
+		t.Errorf("jenis dokumen tersimpan walau ditolak")
+	}
+
+	// Mengubah PKS dengan field yang ditolak tidak mengubah field yang tersimpan.
+	sebelum := fieldJenis(t, "PKS")
+	w := panggil(t, admin, http.MethodPut, alamatJenis+"/PKS", map[string]any{"name": "Perjanjian Kerja Sama", "fields": field(teks("tempat_ttd"))})
+	harapKode(t, w, http.StatusBadRequest, "mengubah PKS dengan field isian sistem")
+	if sesudah := fieldJenis(t, "PKS"); sesudah != sebelum {
+		t.Errorf("field PKS berubah walau ditolak")
+	}
 }

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -18,6 +19,8 @@ type AgreementFieldDefinition struct {
 	Label    string `json:"label"`
 	Type     string `json:"type"`
 	Required bool   `json:"required"`
+	// Options: pilihan untuk tipe select.
+	Options []string `json:"options,omitempty"`
 }
 type AgreementSectionDefinition struct {
 	Title  string                     `json:"title"`
@@ -89,8 +92,12 @@ func validateAgreementForm(sections []AgreementSectionDefinition, data map[strin
 	for _, s := range sections {
 		for _, f := range s.Fields {
 			ada[f.Name] = true
-			if f.Required && strings.TrimSpace(valueString(data[f.Name])) == "" {
+			v := strings.TrimSpace(valueString(data[f.Name]))
+			if f.Required && v == "" {
 				return errors.New(f.Label + " wajib diisi")
+			}
+			if f.Type == "select" && v != "" && !slices.Contains(f.Options, v) {
+				return errors.New(f.Label + " harus salah satu pilihan yang tersedia")
 			}
 		}
 	}

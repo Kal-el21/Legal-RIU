@@ -50,6 +50,7 @@ GET /api/v1/admin/agreement-templates/:id: ADMIN
 GET /api/v1/admin/agreement-templates/:id/download: ADMIN
 GET /api/v1/admin/agreement-templates/:id/preview: ADMIN
 GET /api/v1/admin/agreement-templates/placeholders: ADMIN
+GET /api/v1/admin/agreement-types: ADMIN
 GET /api/v1/admin/audit-logs: ADMIN
 GET /api/v1/admin/case-categories: ADMIN
 GET /api/v1/admin/case-categories/:id: ADMIN
@@ -221,6 +222,7 @@ PATCH /api/v1/notifications/read: ADMIN LEGAL USER
 PATCH /api/v1/notifications/read-all: ADMIN LEGAL USER
 POST /api/v1/admin/agreement-templates: ADMIN
 POST /api/v1/admin/agreement-templates/:id/activate: ADMIN
+POST /api/v1/admin/agreement-types: ADMIN
 POST /api/v1/admin/case-categories: ADMIN
 POST /api/v1/admin/case-categories/import: ADMIN
 POST /api/v1/admin/case-types: ADMIN
@@ -294,6 +296,7 @@ POST /api/v1/legal/review-documents/:id/result: LEGAL
 POST /api/v1/review-documents: USER
 POST /api/v1/review-documents/:id/resubmit: USER
 PUT /api/v1/admin/agreement-company-master: ADMIN
+PUT /api/v1/admin/agreement-types/:code: ADMIN
 PUT /api/v1/admin/case-categories/:id: ADMIN
 PUT /api/v1/admin/case-types/:id: ADMIN
 PUT /api/v1/admin/cedants/:id: ADMIN

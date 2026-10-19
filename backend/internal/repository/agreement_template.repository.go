@@ -20,6 +20,10 @@ type AgreementTemplateRepository interface {
 	Delete(uuid.UUID) error
 	FindTypes() ([]entity.AgreementType, error)
 	FindType(string) (*entity.AgreementType, error)
+	AllTypes() ([]entity.AgreementType, error)
+	TypeByCode(string) (*entity.AgreementType, error)
+	CreateType(*entity.AgreementType) error
+	SaveType(*entity.AgreementType) error
 }
 
 type agreementTemplateRepository struct{ db *gorm.DB }
@@ -102,4 +106,25 @@ func (r *agreementTemplateRepository) FindType(code string) (*entity.AgreementTy
 	var v entity.AgreementType
 	err := r.db.Where("code = ? AND is_active = ?", code, true).First(&v).Error
 	return &v, err
+}
+
+// AllTypes mengembalikan semua jenis dokumen, termasuk yang nonaktif, untuk Admin.
+func (r *agreementTemplateRepository) AllTypes() ([]entity.AgreementType, error) {
+	var items []entity.AgreementType
+	err := r.db.Order("name").Find(&items).Error
+	return items, err
+}
+
+func (r *agreementTemplateRepository) TypeByCode(code string) (*entity.AgreementType, error) {
+	var v entity.AgreementType
+	err := r.db.Where("code = ?", code).First(&v).Error
+	return &v, err
+}
+
+func (r *agreementTemplateRepository) CreateType(v *entity.AgreementType) error {
+	return r.db.Create(v).Error
+}
+
+func (r *agreementTemplateRepository) SaveType(v *entity.AgreementType) error {
+	return r.db.Save(v).Error
 }

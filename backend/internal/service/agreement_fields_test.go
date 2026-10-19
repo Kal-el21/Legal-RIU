@@ -149,6 +149,18 @@ func TestNilaiPerTipe(t *testing.T) {
 	}
 }
 
+// Isian bertipe pilihan hanya menerima salah satu pilihannya; kosong boleh kalau
+// tidak wajib.
+func TestPilihanHarusTersedia(t *testing.T) {
+	bagian := []AgreementSectionDefinition{{Title: "Data", Fields: []AgreementFieldDefinition{{Name: "jenis_mitra", Label: "Jenis Mitra", Type: "select", Options: []string{"Badan usaha", "Perorangan"}}}}}
+	for isian, boleh := range map[string]bool{"Perorangan": true, "": true, "Koperasi": false} {
+		e := validateAgreementForm(bagian, map[string]interface{}{"jenis_mitra": isian})
+		if (e == nil) != boleh {
+			t.Errorf("isian %q: galat %v, harus diterima %v", isian, e, boleh)
+		}
+	}
+}
+
 // Katalog placeholder dibentuk dari field jenis dokumennya: jenis tanpa field
 // ruang lingkup tidak menawarkan {{RUANG_LINGKUP_LIST}}, dan placeholder sistem
 // selalu ada.
