@@ -123,9 +123,9 @@ Perubahan perusahaan tercatat di audit log sebagai perubahan perkara.
 | Anak usaha bertanda non-internal di database yang sudah ada | Tidak otomatis. ADMIN mencabut centangnya lewat menu, lihat bagian 8 |
 | ADMIN tidak dibatasi perusahaannya | Ya |
 | Induk dikenali dari tanda `is_parent`, bukan dari domain email | Ya. Database lama ditandai otomatis saat server menyala, hanya kalau belum ada induk |
-| Induk tidak bisa dijadikan non-internal atau dihapus | Ya di backend. Tampilan menu Perusahaan sudah disesuaikan, tetapi belum dicoba di browser |
+| Induk tidak bisa dijadikan non-internal atau dihapus | Ya, di backend dan di menu Perusahaan |
 | Domain email induk bisa diubah | Ya, lewat form Edit di menu Perusahaan |
-| Induk bisa diganti lewat menu (8.1) | Ya. Tampilan di menu Perusahaan belum dicoba di browser |
+| Induk bisa diganti lewat menu (8.1) | Ya |
 | Perusahaan user mengikuti perannya (2.1) | Ya di backend. Form user sudah disesuaikan, tetapi belum dicoba di browser |
 | Dokumen perkara di Repositori Dokumen dibatasi per perusahaan | Ya, lihat bagian 9 |
 
