@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"os"
 	"regexp"
 	"strings"
 	"testing"
@@ -24,7 +23,7 @@ func TestPKSTemplateGeneration(t *testing.T) {
 	for _, k := range []string{"PIHAK_PERTAMA_ALAMAT", "PIHAK_PERTAMA_TELEPON", "PIHAK_PERTAMA_EMAIL", "PIHAK_PERTAMA_PIC", "PIHAK_KEDUA_TELEPON", "PIHAK_KEDUA_EMAIL", "PIHAK_KEDUA_PIC"} {
 		values[k] = "TEST"
 	}
-	out, _, e := NewAgreementGenerator().Generate(d.Template, values, GenerateOptions{Legacy: true})
+	out, _, e := NewAgreementGenerator().Generate(d.Template, values, GenerateOptions{})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -60,10 +59,14 @@ func TestPKSLegacyDocumentTypeAliases(t *testing.T) {
 	}
 }
 
-// Menguji pengisian lama berbasis pencocokan kalimat, terhadap template lama.
-// Dihapus bersama kodenya di PR 8 tahap 8.4.
-func TestPKSLegacyFieldPlacement(t *testing.T) {
-	template := templatePKSLama(t)
+// Isian masuk ke tempatnya di template PKS bawaan: nomor, surat rujukan, termin,
+// rekening dan alamat dengan tab rata, serta poin ruang lingkup.
+func TestPKSFieldPlacement(t *testing.T) {
+	registry, err := NewAgreementRegistry()
+	if err != nil {
+		t.Fatal(err)
+	}
+	definition, _ := registry.Get("PKS")
 	values := map[string]string{}
 	for _, key := range []string{"NOMOR_PIHAK_PERTAMA", "NOMOR_PIHAK_KEDUA", "HARI_TTD", "TANGGAL_TTD", "BULAN_TTD", "TAHUN_TTD", "TANGGAL_TTD_LENGKAP", "TEMPAT_TTD", "PIHAK_PERTAMA_PEJABAT", "PIHAK_PERTAMA_JABATAN", "PIHAK_KEDUA_NAMA", "PIHAK_KEDUA_ALAMAT", "PIHAK_KEDUA_PEJABAT", "PIHAK_KEDUA_JABATAN", "PIHAK_KEDUA_BIDANG", "JENIS_PEKERJAAN", "SURAT_PENAWARAN_NOMOR", "SURAT_PENAWARAN_PERIHAL", "SURAT_PENAWARAN_TANGGAL", "SURAT_PENUNJUKAN_NOMOR", "SURAT_PENUNJUKAN_PERIHAL", "SURAT_PENUNJUKAN_TANGGAL", "RUANG_LINGKUP", "JANGKA_WAKTU_MULAI", "JANGKA_WAKTU_SELESAI", "NILAI_KONTRAK", "NILAI_KONTRAK_TERBILANG", "TERMIN_1_PERSEN", "TERMIN_1_PERSEN_TERBILANG", "TERMIN_1_NILAI", "TERMIN_1_NILAI_TERBILANG", "TERMIN_2_PERSEN", "TERMIN_2_PERSEN_TERBILANG", "TERMIN_2_NILAI", "TERMIN_2_NILAI_TERBILANG", "BANK", "NOMOR_REKENING", "ATAS_NAMA", "DAFTAR_LAMPIRAN", "PIHAK_PERTAMA_ALAMAT", "PIHAK_PERTAMA_TELEPON", "PIHAK_PERTAMA_EMAIL", "PIHAK_PERTAMA_PIC", "PIHAK_KEDUA_TELEPON", "PIHAK_KEDUA_EMAIL", "PIHAK_KEDUA_PIC"} {
 		values[key] = "TEST-" + key
@@ -83,14 +86,11 @@ func TestPKSLegacyFieldPlacement(t *testing.T) {
 	values["TERMIN_2_NILAI"] = "Rp 10.000.000"
 	values["TERMIN_2_NILAI_TERBILANG"] = "sepuluh juta"
 
-	out, _, err := NewAgreementGenerator().Generate(template, values, GenerateOptions{Draft: true, Legacy: true})
+	out, _, err := NewAgreementGenerator().Generate(definition.Template, values, GenerateOptions{Draft: true})
 	if err != nil {
 		t.Fatal(err)
 	}
 	xmlText := generatedDocumentXML(t, out)
-	if strings.Contains(xmlText, "<w:pageBreakBefore") {
-		t.Fatal("dokumen tidak boleh memiliki pageBreakBefore tambahan")
-	}
 	paragraphs := wordParagraphRE.FindAllString(xmlText, -1)
 	texts := make([]string, len(paragraphs))
 	for i, paragraph := range paragraphs {
@@ -108,17 +108,6 @@ func TestPKSLegacyFieldPlacement(t *testing.T) {
 	assertKeyValueTabs(t, paragraphs, texts, "Telepon:TEST-PIHAK_KEDUA_TELEPON", 1800, 1980)
 	for _, item := range []string{"Analisis kebutuhan", "Implementasi sistem", "Pelatihan pengguna"} {
 		assertContains(t, texts, item)
-	}
-	for _, heading := range []string{"BAGIAN I", "BAGIAN II", "BAGIAN III"} {
-		found := false
-		for i, text := range texts {
-			if text == heading && strings.Contains(paragraphs[i], "<w:lastRenderedPageBreak") && !strings.Contains(paragraphs[i], "<w:pageBreakBefore") {
-				found = true
-			}
-		}
-		if !found {
-			t.Fatalf("heading %q tidak mempertahankan pagination asli", heading)
-		}
 	}
 	assertContains(t, texts, "RUANG LINGKUP PEKERJAAN")
 }
@@ -196,18 +185,6 @@ func assertKeyValueTabs(t *testing.T, paragraphs, texts []string, expected strin
 		return
 	}
 	t.Fatalf("rincian %q tidak ditemukan", expected)
-}
-
-// templatePKSLama adalah template PKS sebelum PR 8: tanpa placeholder, diisi
-// lewat pencocokan kalimat (prepareLegacyPKS). Dipakai tes jalur lama dan
-// pembanding isi sampai kode lama dihapus di PR 8 tahap 8.4.
-func templatePKSLama(t *testing.T) []byte {
-	t.Helper()
-	data, err := os.ReadFile("testdata/pks-template-lama.docx")
-	if err != nil {
-		t.Fatal(err)
-	}
-	return data
 }
 
 var (
@@ -347,51 +324,5 @@ func TestIsianPanjangTerisiSemua(t *testing.T) {
 	}
 	if left := placeholderRE.FindAllString(xmlText, -1); len(left) > 0 {
 		t.Errorf("placeholder tersisa: %v", left)
-	}
-}
-
-// Template baru dibuat dari template lama: placeholder ditaruh di tempat yang
-// sama dengan pengisian lama. Untuk data yang sama, teks setiap paragraf yang
-// berisi kata harus identik; yang boleh berbeda hanya paragraf kosong (deretan
-// Enter yang diganti pemisah halaman). Menjaga supaya tidak ada pasal yang
-// bergeser atau hilang sebelum pengajuan dipindah ke template baru (tahap 8.3).
-func TestIsiSamaDenganTemplateLama(t *testing.T) {
-	registry, err := NewAgreementRegistry()
-	if err != nil {
-		t.Fatal(err)
-	}
-	definition, _ := registry.Get("PKS")
-
-	values := sampleAgreementValues()
-	// Template lama menulis alamat ini langsung di pembukaan; template baru
-	// mengambilnya dari master Pihak Pertama.
-	values["PIHAK_PERTAMA_ALAMAT"] = "Jalan Salemba Raya Nomor 30, Jakarta Pusat"
-
-	isi := func(template []byte, legacy bool) []string {
-		t.Helper()
-		out, _, err := NewAgreementGenerator().Generate(template, values, GenerateOptions{Legacy: legacy})
-		if err != nil {
-			t.Fatal(err)
-		}
-		var texts []string
-		for _, paragraph := range wordParagraphRE.FindAllString(generatedDocumentXML(t, out), -1) {
-			if text := strings.TrimSpace(paragraphText(paragraph)); text != "" {
-				texts = append(texts, text)
-			}
-		}
-		return texts
-	}
-	lama, baru := isi(templatePKSLama(t), true), isi(definition.Template, false)
-
-	for i := 0; i < len(lama) && i < len(baru); i++ {
-		if lama[i] != baru[i] {
-			t.Fatalf("paragraf ke-%d berbeda:\nlama: %q\nbaru: %q", i+1, lama[i], baru[i])
-		}
-	}
-	if len(lama) != len(baru) {
-		t.Fatalf("jumlah paragraf berisi berbeda: lama %d, baru %d", len(lama), len(baru))
-	}
-	if len(lama) < 300 {
-		t.Fatalf("hanya %d paragraf berisi; pembacaan dokumen kemungkinan rusak", len(lama))
 	}
 }

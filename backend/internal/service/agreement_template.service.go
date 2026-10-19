@@ -172,6 +172,9 @@ func (s *agreementTemplateService) Activate(ctx context.Context, id, actorID str
 	if e != nil {
 		return nil, e
 	}
+	if tpl.IsLegacy {
+		return nil, ErrTemplateLama
+	}
 	if tpl.Status == entity.TemplateStatusActive {
 		return tpl, nil
 	}
@@ -198,6 +201,9 @@ func (s *agreementTemplateService) Preview(ctx context.Context, id string) ([]by
 	if e != nil {
 		return nil, e
 	}
+	if tpl.IsLegacy {
+		return nil, ErrTemplateLama
+	}
 	if tpl.PreviewPath != "" {
 		if data, err := s.fetch(ctx, tpl.PreviewPath); err == nil {
 			return data, nil
@@ -208,7 +214,7 @@ func (s *agreementTemplateService) Preview(ctx context.Context, id string) ([]by
 	if e != nil {
 		return nil, e
 	}
-	docx, _, e := s.generator.Generate(source, sampleAgreementValues(), GenerateOptions{Draft: true, Legacy: tpl.IsLegacy})
+	docx, _, e := s.generator.Generate(source, sampleAgreementValues(), GenerateOptions{Draft: true})
 	if e != nil {
 		return nil, e
 	}
@@ -221,6 +227,9 @@ func (s *agreementTemplateService) ActiveTemplate(ctx context.Context, code stri
 	if e != nil {
 		return nil, nil, fmt.Errorf("belum ada template aktif untuk tipe dokumen %q", normalized)
 	}
+	if tpl.IsLegacy {
+		return nil, nil, ErrTemplateLama
+	}
 	data, e := s.load(ctx, tpl)
 	if e != nil {
 		return nil, nil, e
@@ -232,6 +241,9 @@ func (s *agreementTemplateService) TemplateByID(ctx context.Context, id uuid.UUI
 	tpl, e := s.repo.FindByID(id)
 	if e != nil {
 		return nil, nil, errors.New("template dokumen tidak ditemukan")
+	}
+	if tpl.IsLegacy {
+		return nil, nil, ErrTemplateLama
 	}
 	data, e := s.load(ctx, tpl)
 	if e != nil {
@@ -321,6 +333,11 @@ func parseEffectiveDate(raw string) *time.Time {
 
 // TemplateChecksum dipakai juga oleh seed saat mendaftarkan template bawaan
 // sebagai versi pertama.
+// ErrTemplateLama: template versi lama (tanpa placeholder, dulu diisi lewat
+// pencocokan kalimat) tidak bisa lagi dipakai membentuk dokumen, dipratinjau,
+// atau diaktifkan. Versinya tetap tersimpan sebagai riwayat.
+var ErrTemplateLama = errors.New("template ini memakai format lama yang tidak didukung lagi; pakai versi template yang lebih baru")
+
 func TemplateChecksum(data []byte) string {
 	sum := sha256.Sum256(data)
 	return hex.EncodeToString(sum[:])

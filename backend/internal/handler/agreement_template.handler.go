@@ -2,6 +2,7 @@ package handler
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -86,6 +87,10 @@ func (h *AgreementTemplateHandler) Download(c *gin.Context) {
 
 func (h *AgreementTemplateHandler) Preview(c *gin.Context) {
 	data, e := h.svc.Preview(c, c.Param("id"))
+	if errors.Is(e, service.ErrTemplateLama) {
+		utils.BadRequest(c, e.Error(), nil)
+		return
+	}
 	if e != nil {
 		utils.InternalError(c, e.Error())
 		return

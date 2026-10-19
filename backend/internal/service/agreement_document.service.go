@@ -346,7 +346,7 @@ func (s *agreementDocumentService) approve(ctx context.Context, d *entity.Agreem
 		return nil, e
 	}
 	values := placeholderValues(d, data, snapshot)
-	docx, checksum, e := s.generator.Generate(source, values, GenerateOptions{Legacy: tpl.IsLegacy})
+	docx, checksum, e := s.generator.Generate(source, values, GenerateOptions{})
 	if e != nil {
 		return nil, e
 	}
@@ -383,15 +383,20 @@ func (s *agreementDocumentService) Preview(ctx context.Context, id, userID strin
 	if e != nil {
 		return nil, e
 	}
-	if d.Status == entity.StatusCompleted && d.GeneratedPDFPath != "" {
-		obj, err := s.storage.GetFileObject(ctx, d.GeneratedPDFPath)
-		if err == nil {
-			defer obj.Close()
-			if data, readErr := io.ReadAll(obj); readErr == nil {
-				return data, nil
-			}
+	// Perjanjian Selesai selalu dipratinjau dari file finalnya. Kalau file itu hilang,
+	// dokumen tidak dibentuk ulang: hasilnya bukan dokumen yang ditandatangani
+	// (pilihan membentuk ulang sebagai salinan pembanding dicatat di
+	// .docs/future-implementation/bentuk-ulang-perjanjian-final.md).
+	if d.Status == entity.StatusCompleted {
+		if d.GeneratedPDFPath == "" {
+			return nil, ErrFileNotFound
 		}
-		// Jatuh kembali ke generate on-the-fly apabila file final di storage tidak ditemukan.
+		obj, err := s.storage.GetFileObject(ctx, d.GeneratedPDFPath)
+		if err != nil {
+			return nil, err
+		}
+		defer obj.Close()
+		return io.ReadAll(obj)
 	}
 	data, e := decodeForm(d.FormData)
 	if e != nil {
@@ -401,11 +406,11 @@ func (s *agreementDocumentService) Preview(ctx context.Context, id, userID strin
 	if e != nil {
 		return nil, errors.New("Master Pihak Pertama belum tersedia")
 	}
-	tpl, source, e := s.templateFor(ctx, d)
+	_, source, e := s.templateFor(ctx, d)
 	if e != nil {
 		return nil, e
 	}
-	docx, _, e := s.generator.Generate(source, placeholderValues(d, data, partyOneSnapshot(master, data)), GenerateOptions{Draft: true, Legacy: tpl.IsLegacy})
+	docx, _, e := s.generator.Generate(source, placeholderValues(d, data, partyOneSnapshot(master, data)), GenerateOptions{Draft: true})
 	if e != nil {
 		return nil, e
 	}

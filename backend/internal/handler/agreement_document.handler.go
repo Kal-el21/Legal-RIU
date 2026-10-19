@@ -146,7 +146,14 @@ func (h *AgreementDocumentHandler) Preview(c *gin.Context) {
 	b, e := h.svc.Preview(c, c.Param("id"), middleware.GetUserID(c), all)
 	if e != nil {
 		log.Printf("[agreement] Preview ERROR id=%s err=%v", c.Param("id"), e)
-		utils.InternalError(c, e.Error())
+		switch {
+		case errors.Is(e, service.ErrFileNotFound):
+			utils.NotFound(c, "File final perjanjian tidak ditemukan")
+		case errors.Is(e, service.ErrTemplateLama):
+			utils.BadRequest(c, e.Error(), nil)
+		default:
+			utils.InternalError(c, e.Error())
+		}
 		return
 	}
 	log.Printf("[agreement] Preview OK id=%s bytes=%d", c.Param("id"), len(b))

@@ -565,6 +565,26 @@ func eksekusi(t *testing.T, sql string, args ...any) {
 	}
 }
 
+func templateAktif(t *testing.T) barisTemplate {
+	t.Helper()
+	var b barisTemplate
+	if err := dbTes.Raw(kolomTemplate + " WHERE code = 'PKS' AND status = 'ACTIVE'").Scan(&b).Error; err != nil || b.ID == "" {
+		t.Fatalf("template aktif tidak terbaca: %v", err)
+	}
+	return b
+}
+
+// salinTemplate menambah baris template baru yang memakai file template dari,
+// supaya pengajuan tetap bisa dibuat dan dipratinjau.
+func salinTemplate(t *testing.T, dari, id, checksum, status string, legacy bool, uploadedBy any) {
+	t.Helper()
+	eksekusi(t, `INSERT INTO agreement_templates
+		(id, created_at, updated_at, code, version, name, file_name, file_path, checksum, status, is_legacy, note, uploaded_by)
+		SELECT ?, now(), now(), code, (SELECT MAX(version) + 1 FROM agreement_templates WHERE code = 'PKS'),
+			'uji', file_name, file_path, ?, ?, ?, 'uji', ?
+		FROM agreement_templates WHERE id = ?`, id, checksum, status, legacy, uploadedBy, dari)
+}
+
 // Database dari sebelum PR 8: template aktif adalah template lama yang diisi
 // lewat pencocokan kalimat. Seed memasang template bawaan baru sekali saja,
 // mengaktifkannya, dan memindahkan pengajuan yang belum selesai ke sana;
@@ -618,10 +638,7 @@ func TestTemplateUnggahanTidakDitimpa(t *testing.T) {
 	user := masukPeran(t, entity.RoleUser)
 	checksum := checksumTemplateBawaan(t)
 
-	var aktif barisTemplate
-	if err := dbTes.Raw(kolomTemplate + " WHERE code = 'PKS' AND status = 'ACTIVE'").Scan(&aktif).Error; err != nil || aktif.ID == "" {
-		t.Fatalf("template aktif tidak terbaca: %v", err)
-	}
+	aktif := templateAktif(t)
 	var admin string
 	if err := dbTes.Raw("SELECT id FROM users WHERE role = ? AND deleted_at IS NULL LIMIT 1", entity.RoleAdmin).Scan(&admin).Error; err != nil || admin == "" {
 		t.Fatalf("admin tidak terbaca: %v", err)
@@ -632,19 +649,10 @@ func TestTemplateUnggahanTidakDitimpa(t *testing.T) {
 		dbTes.Exec("UPDATE agreement_templates SET status = 'ACTIVE' WHERE code = 'PKS' AND checksum = ?", checksum)
 	})
 
-	// Baris template baru menyalin file template yang sekarang aktif, supaya
-	// pengajuan tetap bisa dibuat dan dipratinjau.
-	salin := func(id, checksum, status string, legacy bool, uploadedBy any) {
-		eksekusi(t, `INSERT INTO agreement_templates
-			(id, created_at, updated_at, code, version, name, file_name, file_path, checksum, status, is_legacy, note, uploaded_by)
-			SELECT ?, now(), now(), code, (SELECT MAX(version) + 1 FROM agreement_templates WHERE code = 'PKS'),
-				'uji', file_name, file_path, ?, ?, ?, 'uji', ?
-			FROM agreement_templates WHERE id = ?`, id, checksum, status, legacy, uploadedBy, aktif.ID)
-	}
 	unggahan, lama := uuid.NewString(), uuid.NewString()
 	eksekusi(t, "UPDATE agreement_templates SET status = 'ARCHIVED' WHERE id = ?", aktif.ID)
-	salin(unggahan, "unggahan-admin-uji", string(entity.TemplateStatusActive), false, admin)
-	salin(lama, "sebelum-pr8-uji-2", string(entity.TemplateStatusArchived), true, nil)
+	salinTemplate(t, aktif.ID, unggahan, "unggahan-admin-uji", string(entity.TemplateStatusActive), false, admin)
+	salinTemplate(t, aktif.ID, lama, "sebelum-pr8-uji-2", string(entity.TemplateStatusArchived), true, nil)
 	// Template bawaan versi ini belum terpasang.
 	eksekusi(t, "UPDATE agreement_templates SET checksum = 'bawaan-sebelumnya-uji' WHERE code = 'PKS' AND checksum = ?", checksum)
 
@@ -663,4 +671,51 @@ func TestTemplateUnggahanTidakDitimpa(t *testing.T) {
 	if id, _ := templatePengajuan(t, p.ID); id != bawaan[0].ID {
 		t.Errorf("pengajuan di template lama menunjuk %s, harus pindah ke template bawaan %s (bukan unggahan Admin)", id, bawaan[0].ID)
 	}
+}
+
+// Perjanjian Selesai dipratinjau dari file finalnya. Kalau file itu hilang, jawabannya
+// 404 seperti unduhan final, bukan dokumen yang dibentuk ulang dari template dan
+// master Pihak Pertama yang sekarang berlaku.
+func TestPratinjauFinalHilang(t *testing.T) {
+	butuhMinIO(t)
+	user := masukPeran(t, entity.RoleUser)
+	legal := masukPeran(t, entity.RoleLegal)
+	for _, c := range []struct{ nama, path string }{
+		{"TanpaPathFile", ""},
+		{"FileTidakAda", "agreement-documents/tidak-ada/final/agreement-hilang.pdf"},
+	} {
+		t.Run(c.nama, func(t *testing.T) {
+			p := buatPerjanjian(t, user, formPerjanjian())
+			eksekusi(t, "UPDATE agreement_documents SET status = ?, generated_pdf_path = ? WHERE id = ?", entity.StatusCompleted, c.path, p.ID)
+			harapKode(t, panggil(t, user, http.MethodGet, urlPerjanjian("", "/", p.ID, "/preview"), nil), http.StatusNotFound, "pratinjau pemilik")
+			harapKode(t, panggil(t, legal, http.MethodGet, urlPerjanjian("/legal", "/", p.ID, "/preview"), nil), http.StatusNotFound, "pratinjau approver")
+		})
+	}
+}
+
+// Template versi lama (tanpa placeholder, dulu diisi lewat pencocokan kalimat)
+// tetap tersimpan sebagai riwayat, tetapi tidak bisa lagi dipratinjau, diaktifkan,
+// atau dipakai membentuk pengajuan. Penolakannya berupa pesan, bukan galat server.
+func TestTemplateLamaDitolak(t *testing.T) {
+	butuhMinIO(t)
+	admin := masukPeran(t, entity.RoleAdmin)
+	user := masukPeran(t, entity.RoleUser)
+	const alamat = "/api/v1/admin/agreement-templates/"
+
+	lama := uuid.NewString()
+	salinTemplate(t, templateAktif(t).ID, lama, "sebelum-pr8-uji-3", string(entity.TemplateStatusArchived), true, nil)
+
+	w := panggil(t, admin, http.MethodGet, alamat+lama+"/preview", nil)
+	harapKode(t, w, http.StatusBadRequest, "pratinjau template lama")
+	if !strings.Contains(w.Body.String(), "format lama") {
+		t.Errorf("pesan pratinjau template lama: %s", w.Body.String())
+	}
+	harapKode(t, panggil(t, admin, http.MethodPost, alamat+lama+"/activate", nil), http.StatusBadRequest, "mengaktifkan template lama")
+	if s := templateDB(t, lama).Status; s != string(entity.TemplateStatusArchived) {
+		t.Errorf("template lama berstatus %s setelah ditolak, harus tetap ARCHIVED", s)
+	}
+
+	p := buatPerjanjian(t, user, formPerjanjian())
+	eksekusi(t, "UPDATE agreement_documents SET template_id = ? WHERE id = ?", lama, p.ID)
+	harapKode(t, panggil(t, user, http.MethodGet, urlPerjanjian("", "/", p.ID, "/preview"), nil), http.StatusBadRequest, "pratinjau pengajuan di template lama")
 }
