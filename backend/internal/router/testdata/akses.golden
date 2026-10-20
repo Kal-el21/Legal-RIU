@@ -258,6 +258,7 @@ POST /api/v1/admin/users: ADMIN
 POST /api/v1/admin/users/:id/reset-password: ADMIN
 POST /api/v1/agreement-documents: USER
 POST /api/v1/agreement-documents/:id/resubmit: USER
+POST /api/v1/agreement-documents/preview-draft: USER
 POST /api/v1/auth/change-password: ADMIN LEGAL LEGAL_AU USER EXTERNAL
 POST /api/v1/external/legal-cases: -
 POST /api/v1/external/legal-cases/:id/chronology: EXTERNAL

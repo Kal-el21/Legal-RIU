@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"mime/multipart"
+	"slices"
 	"strings"
 	"time"
 
@@ -33,6 +34,7 @@ type AgreementDocumentService interface {
 	UpdateMeta(string, dto.AgreementMetaRequest) (*entity.AgreementDocument, error)
 	UpdateStatus(context.Context, string, string, dto.AgreementStatusRequest) (*entity.AgreementDocument, error)
 	Preview(context.Context, string, string, bool) ([]byte, error)
+	PreviewDraft(context.Context, string, dto.PreviewDraftRequest) ([]byte, error)
 	GetGeneratedFile(string, string, bool, string) (*minio.Object, string, error)
 	GetAttachment(string, string, string, bool) (*minio.Object, string, string, error)
 	GetMaster() (*entity.AgreementCompanyMaster, error)
@@ -50,6 +52,9 @@ type agreementDocumentService struct {
 func NewAgreementDocumentService(r repository.AgreementDocumentRepository, s *storage.MinIOClient, templates AgreementTemplateService) AgreementDocumentService {
 	return &agreementDocumentService{r, s, templates, NewAgreementGenerator(), DOCXConverter{}}
 }
+
+// ErrPengajuanTidakAda: pengajuan tidak ada atau bukan milik pengguna.
+var ErrPengajuanTidakAda = errors.New("pengajuan tidak ditemukan")
 
 // ErrTemplateUsang: form dikirim dengan versi template yang sudah bukan versi
 // aktif jenis dokumennya. Dijawab 409 supaya frontend memuat field versi baru.
@@ -167,10 +172,10 @@ func (s *agreementDocumentService) GetByID(id, userID string, all bool) (*entity
 	}
 	d, e := s.repo.FindByID(uid)
 	if e != nil {
-		return nil, errors.New("pengajuan tidak ditemukan")
+		return nil, ErrPengajuanTidakAda
 	}
 	if !all && d.UserID.String() != userID {
-		return nil, errors.New("pengajuan tidak ditemukan")
+		return nil, ErrPengajuanTidakAda
 	}
 	return d, nil
 }
@@ -440,6 +445,68 @@ func (s *agreementDocumentService) Preview(ctx context.Context, id, userID strin
 	}
 	return s.converter.ToPDF(ctx, docx)
 }
+// PreviewDraft membentuk PDF pratinjau dari isian yang belum dikirim (langkah
+// Tinjau di wizard) tanpa menyimpan apa pun. Validasinya sama dengan saat Kirim,
+// jadi yang terlihat di pratinjau sama dengan yang akan dikirim.
+func (s *agreementDocumentService) PreviewDraft(ctx context.Context, userID string, req dto.PreviewDraftRequest) ([]byte, error) {
+	if strings.TrimSpace(req.TemplateID) == "" {
+		return nil, errors.New("versi template wajib disertakan; muat ulang halaman pengajuan")
+	}
+	doc := &entity.AgreementDocument{}
+	var tpl *entity.AgreementTemplate
+	if req.DocumentID != "" {
+		d, e := s.GetByID(req.DocumentID, userID, false)
+		if e != nil {
+			return nil, e
+		}
+		if d.Status != entity.StatusSubmitted && d.Status != entity.StatusNeedRevision {
+			return nil, errors.New("pengajuan tidak dapat diubah pada status ini")
+		}
+		// Revisi tetap memakai versi yang dikunci pengajuan itu.
+		if d.TemplateID == nil || d.TemplateID.String() != req.TemplateID {
+			return nil, ErrTemplateUsang
+		}
+		if tpl, e = s.templates.Get(req.TemplateID); e != nil {
+			return nil, e
+		}
+		doc = d
+	} else {
+		_, aktif, e := s.templates.ActiveType(req.DocumentTypeCode)
+		if e != nil {
+			return nil, e
+		}
+		if aktif.ID.String() != req.TemplateID {
+			return nil, ErrTemplateUsang
+		}
+		tpl = aktif
+	}
+	sections, e := templateSections(tpl)
+	if e != nil {
+		return nil, e
+	}
+	if e = validateAgreementForm(sections, req.FormData); e != nil {
+		return nil, e
+	}
+	master, e := s.repo.GetActiveMaster()
+	if e != nil {
+		return nil, errors.New("Master Pihak Pertama belum tersedia")
+	}
+	_, source, e := s.templates.TemplateByID(ctx, tpl.ID)
+	if e != nil {
+		return nil, e
+	}
+	draf := *doc
+	draf.Attachments = slices.Clone(doc.Attachments)
+	for _, nama := range req.AttachmentNames {
+		draf.Attachments = append(draf.Attachments, entity.AgreementAttachment{FileName: nama})
+	}
+	docx, _, e := s.generator.Generate(source, placeholderValues(&draf, sections, req.FormData, partyOneSnapshot(master, req.FormData)), GenerateOptions{Draft: true})
+	if e != nil {
+		return nil, e
+	}
+	return s.converter.ToPDF(ctx, docx)
+}
+
 func (s *agreementDocumentService) GetGeneratedFile(id, userID string, all bool, kind string) (*minio.Object, string, error) {
 	d, e := s.GetByID(id, userID, all)
 	if e != nil {

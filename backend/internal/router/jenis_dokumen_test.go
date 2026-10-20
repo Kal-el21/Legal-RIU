@@ -728,3 +728,78 @@ func TestVersiDipakaiTidakBisaDihapus(t *testing.T) {
 	harapKode(t, panggil(t, admin, http.MethodGet, alamatKelolaTemplate+"/"+usang, nil), http.StatusNotFound, "versi yang dihapus")
 	ambilPerjanjian(t, user, "", p.ID)
 }
+
+const alamatPratinjauDraf = "/api/v1/agreement-documents/preview-draft"
+
+// Pratinjau sebelum kirim (tahap 9.6a): PDF dibentuk dari isian wizard tanpa
+// menyimpan apa pun, dengan validasi yang sama dengan saat Kirim. Untuk revisi,
+// pratinjau memakai versi template yang dikunci pengajuan itu.
+func TestPratinjauSebelumKirim(t *testing.T) {
+	butuhMinIO(t)
+	user := masukPeran(t, entity.RoleUser)
+	lain := masuk(t, surelUserLain)
+	legal := masukPeran(t, entity.RoleLegal)
+	isi := func(form map[string]any) map[string]any {
+		b := isiPengajuan(t, user, "PKS", form)
+		b["attachment_names"] = []string{"penawaran.pdf"}
+		return b
+	}
+
+	// Pengajuan yang sedang direvisi, dengan versi template baru sudah aktif.
+	p := buatPerjanjian(t, user, formPerjanjian())
+	aktif := templateAktif(t)
+	baru := uuid.NewString()
+	eksekusi(t, "UPDATE agreement_templates SET status = 'ARCHIVED' WHERE id = ?", aktif.ID)
+	salinTemplate(t, aktif.ID, baru, "pratinjau-draf-uji", string(entity.TemplateStatusActive), false, nil)
+	t.Cleanup(func() {
+		dbTes.Exec("DELETE FROM agreement_templates WHERE id = ?", baru)
+		dbTes.Exec("UPDATE agreement_templates SET status = 'ACTIVE' WHERE id = ?", aktif.ID)
+	})
+	revisi := func(templateID string) map[string]any {
+		return map[string]any{"document_type_code": "PKS", "template_id": templateID, "document_id": p.ID, "form_data": formPerjanjian()}
+	}
+
+	dokumen := hitungBaris(t, "SELECT COUNT(*) FROM agreement_documents")
+	lampiran := hitungBaris(t, "SELECT COUNT(*) FROM agreement_attachments")
+
+	harapKode(t, panggil(t, legal, http.MethodPost, alamatPratinjauDraf, isi(formPerjanjian())), http.StatusForbidden, "LEGAL mempratinjau draf")
+	tanpaNama := formPerjanjian()
+	delete(tanpaNama, "pihak_kedua_nama")
+	w := panggil(t, user, http.MethodPost, alamatPratinjauDraf, isi(tanpaNama))
+	harapKode(t, w, http.StatusBadRequest, "pratinjau dengan isian wajib kosong")
+	if !strings.Contains(w.Body.String(), "wajib diisi") {
+		t.Errorf("pesan isian wajib kosong: %s", w.Body)
+	}
+	usang := isi(formPerjanjian())
+	usang["template_id"] = aktif.ID
+	harapKode(t, panggil(t, user, http.MethodPost, alamatPratinjauDraf, usang), http.StatusConflict, "pratinjau dengan versi usang")
+	usang["template_id"] = ""
+	harapKode(t, panggil(t, user, http.MethodPost, alamatPratinjauDraf, usang), http.StatusBadRequest, "pratinjau tanpa versi template")
+	harapKode(t, panggil(t, user, http.MethodPost, alamatPratinjauDraf, revisi(baru)), http.StatusConflict, "pratinjau revisi dengan versi selain versi terkuncinya")
+	harapKode(t, panggil(t, lain, http.MethodPost, alamatPratinjauDraf, revisi(aktif.ID)), http.StatusNotFound, "pratinjau revisi pengajuan milik orang lain")
+
+	t.Run("PDF", func(t *testing.T) {
+		butuhLibreOffice(t)
+		w := panggil(t, user, http.MethodPost, alamatPratinjauDraf, isi(formPerjanjian()))
+		harapKode(t, w, http.StatusOK, "pratinjau pengajuan baru")
+		if !bytes.HasPrefix(w.Body.Bytes(), []byte("%PDF")) || w.Header().Get("Content-Type") != "application/pdf" {
+			t.Errorf("pratinjau bukan PDF (%s)", w.Header().Get("Content-Type"))
+		}
+		w = panggil(t, user, http.MethodPost, alamatPratinjauDraf, revisi(aktif.ID))
+		harapKode(t, w, http.StatusOK, "pratinjau revisi dengan versi terkuncinya")
+	})
+
+	if n := hitungBaris(t, "SELECT COUNT(*) FROM agreement_documents"); n != dokumen {
+		t.Errorf("pengajuan bertambah %d karena pratinjau", n-dokumen)
+	}
+	if n := hitungBaris(t, "SELECT COUNT(*) FROM agreement_attachments"); n != lampiran {
+		t.Errorf("lampiran bertambah %d karena pratinjau", n-lampiran)
+	}
+}
+
+// Pratinjau pengajuan yang tidak ada (atau milik orang lain) dijawab 404, bukan 500
+// (temuan PR 8 tahap 8.4).
+func TestPratinjauPengajuanTidakAda(t *testing.T) {
+	user := masukPeran(t, entity.RoleUser)
+	harapKode(t, panggil(t, user, http.MethodGet, urlPerjanjian("", "/", uuid.NewString(), "/preview"), nil), http.StatusNotFound, "pratinjau pengajuan yang tidak ada")
+}

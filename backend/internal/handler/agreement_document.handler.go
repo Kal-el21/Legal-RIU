@@ -153,6 +153,8 @@ func (h *AgreementDocumentHandler) Preview(c *gin.Context) {
 		switch {
 		case errors.Is(e, service.ErrFileNotFound):
 			utils.NotFound(c, "File final perjanjian tidak ditemukan")
+		case errors.Is(e, service.ErrPengajuanTidakAda):
+			utils.NotFound(c, e.Error())
 		case errors.Is(e, service.ErrTemplateLama):
 			utils.BadRequest(c, e.Error(), nil)
 		default:
@@ -161,6 +163,27 @@ func (h *AgreementDocumentHandler) Preview(c *gin.Context) {
 		return
 	}
 	log.Printf("[agreement] Preview OK id=%s bytes=%d", c.Param("id"), len(b))
+	c.DataFromReader(http.StatusOK, int64(len(b)), "application/pdf", bytes.NewReader(b), map[string]string{"Content-Disposition": "inline; filename=preview.pdf"})
+}
+// PreviewDraft: pratinjau isian wizard yang belum dikirim, tanpa menyimpan apa pun.
+func (h *AgreementDocumentHandler) PreviewDraft(c *gin.Context) {
+	var req dto.PreviewDraftRequest
+	if e := c.ShouldBindJSON(&req); e != nil {
+		utils.BadRequest(c, "Data tidak valid", e.Error())
+		return
+	}
+	b, e := h.svc.PreviewDraft(c, middleware.GetUserID(c), req)
+	switch {
+	case errors.Is(e, service.ErrTemplateUsang):
+		c.JSON(http.StatusConflict, utils.Response{Success: false, Message: e.Error()})
+		return
+	case errors.Is(e, service.ErrPengajuanTidakAda):
+		utils.NotFound(c, e.Error())
+		return
+	case e != nil:
+		utils.BadRequest(c, e.Error(), nil)
+		return
+	}
 	c.DataFromReader(http.StatusOK, int64(len(b)), "application/pdf", bytes.NewReader(b), map[string]string{"Content-Disposition": "inline; filename=preview.pdf"})
 }
 func (h *AgreementDocumentHandler) DownloadPDF(c *gin.Context)  { h.downloadGenerated(c, "pdf") }
