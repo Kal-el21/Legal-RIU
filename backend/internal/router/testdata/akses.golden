@@ -47,6 +47,7 @@ GET /api/v1/admin/agreement-documents/:id/attachments/:attachmentId: ADMIN
 GET /api/v1/admin/agreement-documents/:id/docx: ADMIN
 GET /api/v1/admin/agreement-documents/:id/pdf: ADMIN
 GET /api/v1/admin/agreement-documents/:id/preview: ADMIN
+GET /api/v1/admin/agreement-documents/:id/schema: ADMIN
 GET /api/v1/admin/agreement-templates: ADMIN
 GET /api/v1/admin/agreement-templates/:id: ADMIN
 GET /api/v1/admin/agreement-templates/:id/download: ADMIN
@@ -172,6 +173,7 @@ GET /api/v1/legal/agreement-documents/:id/attachments/:attachmentId: LEGAL
 GET /api/v1/legal/agreement-documents/:id/docx: LEGAL
 GET /api/v1/legal/agreement-documents/:id/pdf: LEGAL
 GET /api/v1/legal/agreement-documents/:id/preview: LEGAL
+GET /api/v1/legal/agreement-documents/:id/schema: LEGAL
 GET /api/v1/legal/agreement-templates: LEGAL
 GET /api/v1/legal/agreement-templates/:id: LEGAL
 GET /api/v1/legal/agreement-templates/:id/download: LEGAL

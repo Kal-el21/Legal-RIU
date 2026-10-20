@@ -34,9 +34,11 @@ func (h *AgreementDocumentHandler) GetType(c *gin.Context) {
 	}
 	utils.OK(c, "Success", v)
 }
-// DocumentSchema: form revisi dari versi template yang dikunci pengajuan.
+// DocumentSchema: definisi field versi template yang dikunci pengajuan, untuk form
+// revisi dan halaman detail (pengaju dan approver).
 func (h *AgreementDocumentHandler) DocumentSchema(c *gin.Context) {
-	v, e := h.svc.DocumentSchema(c.Param("id"), middleware.GetUserID(c))
+	all := middleware.RoleWithAllAccess(c, "agreement_document.view.all") != "USER"
+	v, e := h.svc.DocumentSchema(c.Param("id"), middleware.GetUserID(c), all)
 	if errors.Is(e, service.ErrPengajuanTidakAda) {
 		utils.NotFound(c, e.Error())
 		return

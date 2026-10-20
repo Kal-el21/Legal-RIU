@@ -879,6 +879,21 @@ func TestSkemaPengajuanTerkunci(t *testing.T) {
 		t.Errorf("skema pengajuan baru harus dari versi aktif: %q", s.Schema.Sections[0].Title)
 	}
 	harapKode(t, panggil(t, lain, http.MethodGet, urlPerjanjian("", "/", p.ID, "/schema"), nil), http.StatusNotFound, "skema pengajuan milik orang lain")
+
+	// Approver membaca label isian dari versi yang sama untuk halaman detail (D4).
+	t.Run("Approver", func(t *testing.T) {
+		for _, c := range []struct {
+			peran  entity.UserRole
+			awalan string
+		}{{entity.RoleLegal, "/legal"}, {entity.RoleAdmin, "/admin"}} {
+			token := masukPeran(t, c.peran)
+			if s := baca(token, urlPerjanjian(c.awalan, "/", p.ID, "/schema")); s.Schema.TemplateID != p.TemplateID || s.Schema.Sections[0].Title != "Informasi Umum" {
+				t.Errorf("%s: skema harus dari versi terkunci %s: template %s, bagian pertama %q", c.awalan, p.TemplateID, s.Schema.TemplateID, s.Schema.Sections[0].Title)
+			}
+			harapKode(t, panggil(t, token, http.MethodGet, urlPerjanjian(c.awalan, "/", uuid.NewString(), "/schema"), nil), http.StatusNotFound, c.awalan+" skema pengajuan yang tidak ada")
+		}
+		harapKode(t, panggil(t, user, http.MethodGet, urlPerjanjian("/legal", "/", p.ID, "/schema"), nil), http.StatusForbidden, "USER lewat alamat approver")
+	})
 }
 
 type penandaTemplate struct {

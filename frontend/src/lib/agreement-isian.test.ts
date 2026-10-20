@@ -105,6 +105,11 @@ describe('ringkasNilai', () => {
     expect(ringkasNilai(termin, [{ persen: '30', nilai: '300000', syarat: 'setelah tanda tangan' }, { persen: '70', nilai: '700000', syarat: '' }]))
       .toBe('1. 30% · Rp 300.000 · setelah tanda tangan\n2. 70% · Rp 700.000')
     expect(ringkasNilai({ name: 'n', label: 'N', type: 'percent', required: false }, '33.34')).toBe('33,34%')
+    const tgl = { name: 't', label: 'T', type: 'date', required: false }
+    expect(ringkasNilai(tgl, '2026-08-17')).toBe('17 Agustus 2026')
+    expect(ringkasNilai(tgl, '2026-01-05')).toBe('5 Januari 2026')
+    expect(ringkasNilai(tgl, '17/08/2026')).toBe('17/08/2026')
+    expect(ringkasNilai(tgl, '')).toBe('-')
   })
 })
 

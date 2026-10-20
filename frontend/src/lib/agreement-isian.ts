@@ -115,9 +115,20 @@ export function kosongDi(f: FieldDef, v: Nilai | undefined): string[] {
   )
 }
 
-// ringkasNilai: isian satu field untuk ringkasan Tinjau, ditulis seperti di dokumen.
+const BULAN = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember']
+
+// tanggal: "2026-08-17" menjadi "17 Agustus 2026" (tanpa zona waktu); selain itu apa adanya.
+export function tanggal(s: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s.trim())
+  return m && BULAN[Number(m[2]) - 1] ? `${Number(m[3])} ${BULAN[Number(m[2]) - 1]} ${m[1]}` : s.trim()
+}
+
+// ringkasNilai: isian satu field untuk ringkasan Tinjau dan halaman detail, ditulis
+// seperti di dokumen.
 export function ringkasNilai(f: FieldDef, v: Nilai | undefined): string {
   switch (f.type) {
+    case 'date':
+      return tanggal(teks(v)) || '-'
     case 'money':
       return rupiah(teks(v))
     case 'percent':

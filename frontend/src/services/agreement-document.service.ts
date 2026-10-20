@@ -26,8 +26,8 @@ async function fileError(reason: unknown, fallback: string): Promise<Error> {
 export const agreementService={
  types:()=>api.get('/agreement-document-types').then(r=>data<{code:string;name:string}[]>(r)),
  schema:(code='PKS')=>api.get(`/agreement-document-types/${code}/schema`).then(r=>data<{schema:AgreementSchema}>(r).schema),
- // Form revisi: dari versi template yang dikunci pengajuan, bukan versi aktif.
- schemaFor:(id:string)=>api.get(`/agreement-documents/${id}/schema`).then(r=>data<{schema:AgreementSchema}>(r).schema),
+ // Form revisi dan halaman detail: dari versi template yang dikunci pengajuan, bukan versi aktif.
+ schemaFor:(id:string,base='')=>api.get(`${base}/agreement-documents/${id}/schema`).then(r=>data<{schema:AgreementSchema}>(r).schema),
  // Pratinjau isian yang belum dikirim; tidak ada yang disimpan.
  previewDraft:async(payload:{document_type_code:string;template_id:string;form_data:Record<string,unknown>;attachment_names:string[];document_id?:string})=>{
     try {

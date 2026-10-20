@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { AlertTriangle, ArrowLeft, Download, FileText } from 'lucide-react'
-import { agreementService, type AgreementDocument } from '@/services/agreement-document.service'
+import { agreementService, type AgreementDocument, type AgreementSchema } from '@/services/agreement-document.service'
+import type { FieldDef, Nilai } from '@/lib/agreement-draft'
+import { barisGrup, daftar, dariFormData, ringkasNilai, tanggal, teks } from '@/lib/agreement-isian'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -31,41 +33,84 @@ const approverFieldLabels: Record<string, string> = {
   email: 'Email',
 }
 
-const formFieldLabels: Record<string, string> = {
-  nomor_pihak_kedua: 'Nomor Pihak Kedua',
-  tempat_ttd: 'Usulan Tempat Penandatanganan',
-  pihak_kedua_nama: 'Nama Perusahaan',
-  pihak_kedua_bidang: 'Bidang Usaha',
-  pihak_kedua_alamat: 'Alamat',
-  pihak_kedua_telepon: 'Telepon',
-  pihak_kedua_email: 'Email',
-  pihak_kedua_pic: 'PIC',
-  pihak_kedua_pejabat: 'Nama Pejabat',
-  pihak_kedua_jabatan: 'Jabatan Pejabat',
-  jenis_pekerjaan: 'Jenis Pekerjaan',
-  ruang_lingkup: 'Ruang Lingkup Pekerjaan',
-  surat_penawaran_nomor: 'Nomor Surat Penawaran',
-  surat_penawaran_perihal: 'Perihal Surat Penawaran',
-  surat_penawaran_tanggal: 'Tanggal Surat Penawaran',
-  surat_penunjukan_nomor: 'Nomor Surat Penunjukan',
-  surat_penunjukan_perihal: 'Perihal Surat Penunjukan',
-  surat_penunjukan_tanggal: 'Tanggal Surat Penunjukan',
-  jangka_waktu_mulai: 'Tanggal Mulai',
-  jangka_waktu_selesai: 'Tanggal Selesai',
-  nilai_kontrak: 'Nilai Kontrak (Rupiah)',
-  termin_1_persen: 'Termin 1 (%)',
-  termin_1_nilai: 'Nilai Termin 1',
-  termin_2_persen: 'Termin 2 (%)',
-  termin_2_nilai: 'Nilai Termin 2',
-  bank: 'Bank',
-  nomor_rekening: 'Nomor Rekening',
-  atas_nama: 'Atas Nama',
+// Isian sistem yang ditulis approver; tidak ada di definisi field jenis mana pun.
+const isianApproverLabels: Record<string, string> = {
+  tanggal_ttd: 'Tanggal Penandatanganan',
+  pihak_pertama_pejabat: 'Nama Pejabat Pihak Pertama',
+  pihak_pertama_jabatan: 'Jabatan Pejabat Pihak Pertama',
+  pihak_pertama_pic: 'PIC Pihak Pertama',
+  pihak_pertama_telepon: 'Telepon Pihak Pertama',
+  pihak_pertama_email: 'Email Pihak Pertama',
+}
+
+function NilaiIsian({ f, v }: { f: FieldDef; v: Nilai | undefined }) {
+  if (f.type === 'list') {
+    const poin = daftar(v).filter((x) => x.trim())
+    return poin.length ? <ol className="list-decimal space-y-0.5 pl-5">{poin.map((p, i) => <li key={i}>{p}</li>)}</ol> : <>-</>
+  }
+  if (f.type === 'group') {
+    const baris = barisGrup(v)
+    if (!baris.length) return <>-</>
+    return (
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-gray-100 text-left text-xs text-gray-500">
+              <th className="py-1 pr-3 font-medium">#</th>
+              {(f.fields ?? []).map((s) => <th key={s.name} className="py-1 pr-3 font-medium">{s.label}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {baris.map((b, i) => (
+              <tr key={i} className="border-b border-gray-50 last:border-0 align-top">
+                <td className="py-1 pr-3 text-gray-500">{i + 1}</td>
+                {(f.fields ?? []).map((s) => <td key={s.name} className="py-1 pr-3 whitespace-pre-line">{ringkasNilai(s, b[s.name])}</td>)}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )
+  }
+  return <span className="whitespace-pre-line wrap-break-word">{ringkasNilai(f, v)}</span>
+}
+
+// Isian pengajuan dengan label dari versi template yang dikunci pengajuan (keputusan
+// D4): daftar bernomor, grup (termin) sebagai tabel. Isian yang tidak ada di versi
+// itu (isian approver, atau semua isian kalau skema gagal dimuat) tampil di akhir.
+function DataPengajuan({ data, schema }: { data: Record<string, unknown>; schema?: AgreementSchema }) {
+  const isian = dariFormData(data)
+  const dikenal = new Set(schema?.sections.flatMap((s) => s.fields.map((f) => f.name)) ?? [])
+  const lain = Object.keys(isian).filter((k) => !dikenal.has(k))
+  const baris = (label: string, isi: ReactNode, lebar: boolean) => (
+    <div className={`text-sm py-1.5 border-b border-gray-50 ${lebar ? 'space-y-1' : 'grid grid-cols-2 gap-2'}`}>
+      <span className="text-gray-500">{label}</span>
+      <div className="text-gray-900">{isi}</div>
+    </div>
+  )
+  return (
+    <>
+      {schema?.sections.map((s, i) => (
+        <div key={s.title + i}>
+          <h3 className="mt-3 mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">{s.title}</h3>
+          {s.fields.map((f) => <div key={f.name}>{baris(f.label, <NilaiIsian f={f} v={isian[f.name]} />, f.type === 'group')}</div>)}
+        </div>
+      ))}
+      {lain.length > 0 && schema && <h3 className="mt-3 mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">Lainnya</h3>}
+      {lain.map((k) => {
+        const v = isian[k]
+        const isi = Array.isArray(v) ? v.map((x) => (typeof x === 'string' ? x : Object.values(x).join(' · '))).join('\n') : tanggal(teks(v)) || '-'
+        return <div key={k}>{baris(isianApproverLabels[k] || k.split('_').join(' '), <span className="whitespace-pre-line">{isi}</span>, false)}</div>
+      })}
+    </>
+  )
 }
 
 export default function AgreementDocumentDetail({ apiBase = '', approver = false }: Props) {
   const navigate = useNavigate()
   const { id } = useParams()
   const [document, setDocument] = useState<AgreementDocument>()
+  const [schema, setSchema] = useState<AgreementSchema>()
   const [note, setNote] = useState('')
   const [meta, setMeta] = useState<Record<string, string>>({})
   const [error, setError] = useState('')
@@ -84,8 +129,10 @@ export default function AgreementDocumentDetail({ apiBase = '', approver = false
 
     void (async () => {
       try {
-        const value = await agreementService.get(id, apiBase)
+        // Skema hanya untuk label; kalau gagal dimuat, isian tampil dengan kodenya.
+        const [value, skema] = await Promise.all([agreementService.get(id, apiBase), agreementService.schemaFor(id, apiBase).catch(() => undefined)])
         if (!active) return
+        setSchema(skema)
         console.log('[AgreementDetail] detail sukses', { id, status: value?.status })
         // Master hanya tersedia untuk approver (admin/legal). User biasa tidak punya akses endpoint ini.
         const master = apiBase
@@ -230,7 +277,7 @@ export default function AgreementDocumentDetail({ apiBase = '', approver = false
     <div className="grid lg:grid-cols-2 gap-5 mt-5">
       <div className="bg-white rounded-2xl border border-gray-100 p-6">
         <h2 className="font-semibold mb-3" style={{ color: '#0B2545' }}>Data Pengajuan</h2>
-        {Object.entries(document.form_data).map(([key, value]) => <div key={key} className="grid grid-cols-2 text-sm py-1.5 border-b border-gray-50"><span className="text-gray-500">{formFieldLabels[key] || key.split('_').join(' ')}</span><span className="text-gray-900">{String(value)}</span></div>)}
+        <DataPengajuan data={document.form_data} schema={schema} />
         <h2 className="font-semibold mt-5 mb-3" style={{ color: '#0B2545' }}>Lampiran</h2>
         {document.attachments && document.attachments.length > 0 ? (
           <div className="space-y-2">

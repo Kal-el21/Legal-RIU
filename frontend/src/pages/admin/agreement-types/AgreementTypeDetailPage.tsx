@@ -16,7 +16,7 @@ import {
   useUpdateAgreementType,
   useUploadTemplate,
 } from '@/hooks/useAgreementType'
-import { agreementTemplateService, type AgreementSectionDef, type AgreementTemplate, type TemplateValidation } from '@/services/agreement-template.service'
+import { agreementTemplateService, type AgreementFieldDef, type AgreementSectionDef, type AgreementTemplate, type TemplateValidation } from '@/services/agreement-template.service'
 import type { AgreementType } from '@/services/agreement-type.service'
 import FieldEditor from './FieldEditor'
 
@@ -34,11 +34,17 @@ function formatDate(value?: string) {
 }
 
 // Bentuk pembanding isian: urutan kunci dan isian kosong tidak dianggap perubahan.
+// Sub-field grup dan "membagi nilai" ikut dibandingkan.
+function sidikField(f: AgreementFieldDef): unknown {
+  return {
+    name: f.name.trim().toLowerCase(), label: f.label.trim(), type: f.type, required: !!f.required,
+    options: (f.options ?? []).map((o) => o.trim()).filter(Boolean),
+    fields: f.type === 'group' ? (f.fields ?? []).map(sidikField) : [],
+    split_of: f.type === 'group' ? (f.split_of ?? '').trim().toLowerCase() : '',
+  }
+}
 function sidik(sections?: AgreementSectionDef[] | null) {
-  return JSON.stringify((sections ?? []).map((s) => ({
-    title: s.title.trim(),
-    fields: s.fields.map((f) => ({ name: f.name.trim().toLowerCase(), label: f.label.trim(), type: f.type, required: !!f.required, options: (f.options ?? []).map((o) => o.trim()).filter(Boolean) })),
-  })))
+  return JSON.stringify((sections ?? []).map((s) => ({ title: s.title.trim(), fields: s.fields.map(sidikField) })))
 }
 
 // "Jadikan isian": placeholder dari Word yang belum punya isian ditambahkan sebagai
@@ -89,6 +95,9 @@ function DetailJenis({ jenis }: { jenis: AgreementType }) {
   const bedaDariAktif = !!aktif && sidik(jenis.fields) !== sidik(aktif.fields)
   // Versi (mis. Draft yang belum diaktifkan) yang sudah memuat isian terbaru.
   const versiTerbaru = versions.find((v) => !v.is_legacy && sidik(v.fields) === sidik(jenis.fields))
+  // Template bawaan aplikasi yang lebih baru terpasang sebagai Draft karena isian di
+  // sini sudah diubah Admin (keputusan D3). Versi itu membawa isian bawaannya sendiri.
+  const bawaanBaru = versions.find((v) => v.status === 'DRAFT' && !v.uploaded_by && !v.is_legacy && v.version > (aktif?.version ?? 0) && sidik(v.fields) !== sidik(jenis.fields))
   const keVersiBaru = () => {
     const el = document.getElementById('catatan')
     el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
@@ -166,6 +175,30 @@ function DetailJenis({ jenis }: { jenis: AgreementType }) {
                 Buat versi baru
               </Button>
             )}
+          </div>
+        </div>
+      )}
+
+      {bawaanBaru && (
+        <div className="flex gap-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+          <Info className="w-4 h-4 mt-0.5 shrink-0" />
+          <div className="flex-1 space-y-2">
+            <p>
+              Template bawaan aplikasi diperbarui menjadi v{bawaanBaru.version} dan terpasang sebagai <b>Draft</b>, karena isian di halaman ini sudah diubah.
+              Isian v{bawaanBaru.version} mengikuti definisi bawaan, bukan isian di sini, dan isian di sini tidak ikut berubah.
+              Pratinjau v{bawaanBaru.version} di Riwayat Versi, lalu aktifkan kalau ingin memakainya.
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="bg-white"
+              onClick={() => {
+                setDraf(bawaanBaru.fields ?? [])
+                toast.info(`Isian v${bawaanBaru.version} disalin ke penyusun. Periksa, lalu Simpan isian kalau ingin memakainya untuk versi berikutnya.`)
+              }}
+            >
+              Salin isian v{bawaanBaru.version} ke penyusun
+            </Button>
           </div>
         </div>
       )}

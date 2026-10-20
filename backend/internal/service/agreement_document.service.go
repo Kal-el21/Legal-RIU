@@ -25,7 +25,7 @@ import (
 type AgreementDocumentService interface {
 	ListTypes() []dto.AgreementTypeResponse
 	GetType(string) (*dto.AgreementTypeResponse, error)
-	DocumentSchema(string, string) (*dto.AgreementTypeResponse, error)
+	DocumentSchema(id, userID string, all bool) (*dto.AgreementTypeResponse, error)
 	Create(string, dto.CreateAgreementDocumentRequest, []*multipart.FileHeader) (*entity.AgreementDocument, error)
 	GetAll(string, bool, dto.AgreementListQuery) ([]entity.AgreementDocument, int64, error)
 	GetByID(string, string, bool) (*entity.AgreementDocument, error)
@@ -107,10 +107,11 @@ func (s *agreementDocumentService) GetType(code string) (*dto.AgreementTypeRespo
 	return skemaVersi(typ.Code, typ.Name, tpl)
 }
 
-// DocumentSchema: form revisi dari versi template yang dikunci pengajuan, karena
-// pengajuan itu juga divalidasi dengan versi tersebut.
-func (s *agreementDocumentService) DocumentSchema(id, userID string) (*dto.AgreementTypeResponse, error) {
-	d, e := s.GetByID(id, userID, false)
+// DocumentSchema: definisi field versi template yang dikunci pengajuan, karena
+// pengajuan itu juga divalidasi dengan versi tersebut. Dipakai form revisi dan
+// halaman detail; all untuk approver (semua pengajuan), selain itu hanya milik sendiri.
+func (s *agreementDocumentService) DocumentSchema(id, userID string, all bool) (*dto.AgreementTypeResponse, error) {
+	d, e := s.GetByID(id, userID, all)
 	if e != nil {
 		return nil, e
 	}
