@@ -10,6 +10,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -19,15 +20,21 @@ import (
 	"github.com/google/uuid"
 )
 
-// docxSederhana membentuk dokumen Word satu paragraf berisi teks itu.
-func docxSederhana(t *testing.T, teks string) []byte {
+// docxSederhana membentuk dokumen Word dengan satu paragraf per teks; teks kosong
+// menjadi paragraf kosong (Enter).
+func docxSederhana(t *testing.T, paragraf ...string) []byte {
 	t.Helper()
+	isi := ""
+	for _, teks := range paragraf {
+		isi += `<w:p><w:r><w:t>` + teks + `</w:t></w:r></w:p>`
+	}
 	var out bytes.Buffer
 	w := zip.NewWriter(&out)
 	for _, f := range [][2]string{
 		{"[Content_Types].xml", `<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>`},
 		{"_rels/.rels", `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`},
-		{"word/document.xml", `<?xml version="1.0" encoding="UTF-8"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>` + teks + `</w:t></w:r></w:p><w:sectPr/></w:body></w:document>`},
+		{"word/_rels/document.xml.rels", `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>`},
+		{"word/document.xml", `<?xml version="1.0" encoding="UTF-8"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><w:body>` + isi + `<w:sectPr/></w:body></w:document>`},
 	} {
 		dst, err := w.Create(f[0])
 		if err != nil {
@@ -258,11 +265,12 @@ func TestJenisTanpaTermin(t *testing.T) {
 	if err := storeTes.UploadBytes(context.Background(), path, docxSederhana(t, "Perjanjian kerahasiaan dengan {{PIHAK_KEDUA_NAMA}}, ditandatangani di {{TEMPAT_TTD}} pada {{TANGGAL_TTD_LENGKAP}}."), "application/vnd.openxmlformats-officedocument.wordprocessingml.document"); err != nil {
 		t.Fatal(err)
 	}
-	eksekusi(t, "INSERT INTO agreement_types (id, created_at, updated_at, code, name, is_active) VALUES (?, now(), now(), ?, 'Perjanjian Kerahasiaan Uji', true)", jenis, kode)
+	const field = `[{"title":"Pihak Kedua","fields":[{"name":"pihak_kedua_nama","label":"Nama Perusahaan","type":"text","required":true}]}]`
+	eksekusi(t, "INSERT INTO agreement_types (id, created_at, updated_at, code, name, is_active, fields) VALUES (?, now(), now(), ?, 'Perjanjian Kerahasiaan Uji', true, ?)", jenis, kode, field)
 	eksekusi(t, `INSERT INTO agreement_templates
 		(id, created_at, updated_at, code, version, name, file_name, file_path, checksum, status, is_legacy, note, fields)
 		VALUES (?, now(), now(), ?, 1, 'uji', 'nda.docx', ?, 'uji-nda', 'ACTIVE', false, 'uji', ?)`,
-		tpl, kode, path, `[{"title":"Pihak Kedua","fields":[{"name":"pihak_kedua_nama","label":"Nama Perusahaan","type":"text","required":true}]}]`)
+		tpl, kode, path, field)
 	t.Cleanup(func() {
 		dbTes.Exec("DELETE FROM agreement_templates WHERE id = ?", tpl)
 		dbTes.Exec("DELETE FROM agreement_types WHERE id = ?", jenis)
@@ -493,4 +501,214 @@ func TestValidasiField(t *testing.T) {
 	if sesudah := fieldJenis(t, "PKS"); sesudah != sebelum {
 		t.Errorf("field PKS berubah walau ditolak")
 	}
+}
+
+const alamatKelolaTemplate = "/api/v1/admin/agreement-templates"
+
+func unggahTemplate(t *testing.T, token, kode, catatan string, docx []byte) *httptest.ResponseRecorder {
+	t.Helper()
+	return panggilForm(t, token, http.MethodPost, alamatKelolaTemplate, map[string]string{"code": kode, "note": catatan}, berkas{"file", "template.docx", docx})
+}
+
+// Hasil pencocokan DOCX dengan field (dto.AgreementTemplateValidation).
+type hasilPencocokan struct {
+	Placeholders        []string `json:"placeholders"`
+	UnknownPlaceholders []string `json:"unknown_placeholders"`
+	UnusedPlaceholders  []string `json:"unused_placeholders"`
+	Warnings            []string `json:"warnings"`
+}
+
+type versiBaru struct {
+	Template struct {
+		ID       string `json:"id"`
+		Version  int    `json:"version"`
+		Status   string `json:"status"`
+		Checksum string `json:"checksum"`
+	} `json:"template"`
+	Validation hasilPencocokan `json:"validation"`
+}
+
+func ditolakKarena(t *testing.T, w *httptest.ResponseRecorder) hasilPencocokan {
+	t.Helper()
+	var isi struct {
+		Errors hasilPencocokan `json:"errors"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &isi); err != nil {
+		t.Fatalf("respons penolakan: %v: %s", err, w.Body)
+	}
+	return isi.Errors
+}
+
+// Unggahan dicocokkan dengan field kerja jenis dokumennya, juga untuk jenis baru
+// yang belum punya versi: placeholder tanpa field ditolak beserta daftarnya,
+// field yang tidak dipakai dan deretan Enter kosong menjadi peringatan. Semua
+// penolakan terjadi sebelum konversi PDF, jadi diuji tanpa LibreOffice.
+func TestTemplateDicocokkanDenganField(t *testing.T) {
+	admin := masukPeran(t, entity.RoleAdmin)
+	user := masukPeran(t, entity.RoleUser)
+	const kode = "UJI-RAHASIA"
+	hapusJenisUji(t, kode)
+	t.Cleanup(func() { dbTes.Exec("DELETE FROM agreement_templates WHERE code = ?", kode) })
+	harapKode(t, panggil(t, admin, http.MethodPost, alamatJenis, map[string]any{"code": kode, "name": "Perjanjian Kerahasiaan Uji", "fields": []map[string]any{{"title": "Mitra", "fields": []map[string]any{
+		{"name": "nama_mitra", "label": "Nama Mitra", "type": "text", "required": true},
+		{"name": "jangka_waktu", "label": "Jangka Waktu", "type": "date"},
+		{"name": "catatan", "label": "Catatan", "type": "textarea"},
+	}}}}), http.StatusCreated, "membuat jenis baru")
+
+	// Daftar placeholder untuk disalin ke Word sudah ada sebelum versi pertama.
+	w := panggil(t, admin, http.MethodGet, alamatKelolaTemplate+"/placeholders?code="+kode, nil)
+	harapKode(t, w, http.StatusOK, "placeholder jenis tanpa versi")
+	if b := w.Body.String(); !strings.Contains(b, "{{NAMA_MITRA}}") || !strings.Contains(b, "{{JANGKA_WAKTU_HARI}}") || strings.Contains(b, "{{RUANG_LINGKUP_LIST}}") {
+		t.Errorf("placeholder jenis baru: %s", b)
+	}
+
+	cocok := docxSederhana(t, "Perjanjian dengan {{NAMA_MITRA}} sampai {{JANGKA_WAKTU}} di {{TEMPAT_TTD}}.", "", "", "", "", "", "Penutup.")
+	w = unggahTemplate(t, admin, kode, " ", cocok)
+	harapKode(t, w, http.StatusBadRequest, "unggah tanpa catatan versi")
+	if !strings.Contains(w.Body.String(), "Catatan perubahan wajib diisi") {
+		t.Errorf("pesan tanpa catatan versi: %s", w.Body)
+	}
+
+	w = unggahTemplate(t, admin, kode, "Versi pertama", docxSederhana(t, "{{NAMA_MITRA}} {{NILAI_DENDA}} {{ALAMAT_MITRA}}", "{{RUANG_LINGKUP_LIST}}"))
+	harapKode(t, w, http.StatusBadRequest, "unggah dengan placeholder tanpa field")
+	if asing := strings.Join(ditolakKarena(t, w).UnknownPlaceholders, " "); asing != "{{ALAMAT_MITRA}} {{NILAI_DENDA}} {{RUANG_LINGKUP_LIST}}" {
+		t.Errorf("placeholder tanpa field: %q; %s", asing, w.Body)
+	}
+	harapKode(t, unggahTemplate(t, admin, "TIDAK-ADA", "Versi pertama", cocok), http.StatusBadRequest, "unggah untuk jenis yang tidak ada")
+	if n := hitungBaris(t, "SELECT COUNT(*) FROM agreement_templates WHERE code = ?", kode); n != 0 {
+		t.Errorf("%d versi tersimpan walau ditolak", n)
+	}
+
+	t.Run("Diterima", func(t *testing.T) {
+		butuhMinIO(t)
+		butuhLibreOffice(t)
+		w := unggahTemplate(t, admin, kode, "Versi pertama", cocok)
+		harapKode(t, w, http.StatusCreated, "unggah DOCX yang cocok")
+		var hasil versiBaru
+		isiData(t, w, &hasil)
+		if hasil.Template.Version != 1 || hasil.Template.Status != "DRAFT" {
+			t.Errorf("versi pertama jenis baru: %+v", hasil.Template)
+		}
+		if tidak := strings.Join(hasil.Validation.UnusedPlaceholders, " "); tidak != "{{CATATAN}}" {
+			t.Errorf("field tidak terpakai: %q", tidak)
+		}
+		if !strings.Contains(strings.Join(hasil.Validation.Warnings, " "), "5 paragraf kosong") {
+			t.Errorf("peringatan deretan Enter kosong: %v", hasil.Validation.Warnings)
+		}
+		harapKode(t, panggil(t, admin, http.MethodPost, alamatKelolaTemplate+"/"+hasil.Template.ID+"/activate", nil), http.StatusOK, "mengaktifkan versi pertama")
+		if id := isiPengajuan(t, user, kode, nil)["template_id"]; id != hasil.Template.ID {
+			t.Errorf("form jenis baru memakai template %v, harus %s", id, hasil.Template.ID)
+		}
+	})
+}
+
+// "Simpan sebagai versi baru" menyalin DOCX versi terakhir dan field kerja, dan
+// melewati pencocokan yang sama. Setelah versi baru diaktifkan, pengajuan baru
+// memakainya, sedangkan pengajuan yang sudah berjalan tetap di versinya.
+func TestAktivasiTemplateBaru(t *testing.T) {
+	butuhMinIO(t)
+	admin := masukPeran(t, entity.RoleAdmin)
+	user := masukPeran(t, entity.RoleUser)
+	aktif := templateAktif(t)
+	asli := fieldJenis(t, "PKS")
+	var dibuat []string
+	t.Cleanup(func() {
+		dbTes.Exec("UPDATE agreement_types SET fields = ?::jsonb WHERE code = 'PKS'", asli)
+		dbTes.Exec("UPDATE agreement_templates SET status = 'ARCHIVED' WHERE code = 'PKS' AND status = 'ACTIVE'")
+		dbTes.Exec("UPDATE agreement_templates SET status = 'ACTIVE' WHERE id = ?", aktif.ID)
+		for _, id := range dibuat {
+			dbTes.Exec("DELETE FROM agreement_documents WHERE template_id = ?", id)
+			dbTes.Exec("DELETE FROM agreement_templates WHERE id = ?", id)
+		}
+	})
+	berjalan := buatPerjanjian(t, user, formPerjanjian())
+
+	ubahField := func(ubah func(f map[string]any) bool) []map[string]any {
+		var salinan []map[string]any
+		json.Unmarshal([]byte(asli), &salinan)
+		for _, b := range salinan {
+			var sisa []any
+			for _, f := range b["fields"].([]any) {
+				if ubah(f.(map[string]any)) {
+					sisa = append(sisa, f)
+				}
+			}
+			b["fields"] = sisa
+		}
+		return salinan
+	}
+	versiBaruDari := func(catatan string) *httptest.ResponseRecorder {
+		return panggil(t, admin, http.MethodPost, alamatKelolaTemplate+"/new-version", map[string]string{"code": "PKS", "note": catatan})
+	}
+
+	// Field yang masih dipakai DOCX dihapus: versi baru ditolak.
+	tanpaNilai := ubahField(func(f map[string]any) bool { return f["name"] != "nilai_kontrak" })
+	harapKode(t, panggil(t, admin, http.MethodPut, alamatJenis+"/PKS", map[string]any{"name": "Perjanjian Kerja Sama", "fields": tanpaNilai}), http.StatusOK, "menghapus field nilai kontrak")
+	w := versiBaruDari("Uji tanpa nilai kontrak")
+	harapKode(t, w, http.StatusBadRequest, "versi baru tanpa field yang dipakai DOCX")
+	if asing := strings.Join(ditolakKarena(t, w).UnknownPlaceholders, " "); asing != "{{NILAI_KONTRAK_TERBILANG}} {{NILAI_KONTRAK}}" {
+		t.Errorf("placeholder tanpa field: %q", asing)
+	}
+	harapKode(t, versiBaruDari(""), http.StatusBadRequest, "versi baru tanpa catatan")
+
+	t.Run("VersiBaruAktif", func(t *testing.T) {
+		butuhLibreOffice(t)
+		labelBaru := ubahField(func(f map[string]any) bool {
+			if f["name"] == "pihak_kedua_nama" {
+				f["label"] = "Nama Mitra"
+			}
+			return true
+		})
+		harapKode(t, panggil(t, admin, http.MethodPut, alamatJenis+"/PKS", map[string]any{"name": "Perjanjian Kerja Sama", "fields": labelBaru}), http.StatusOK, "mengganti label")
+		w := versiBaruDari("Uji label baru")
+		harapKode(t, w, http.StatusCreated, "simpan sebagai versi baru")
+		var hasil versiBaru
+		isiData(t, w, &hasil)
+		dibuat = append(dibuat, hasil.Template.ID)
+		if hasil.Template.Version <= aktif.Version || hasil.Template.Status != "DRAFT" || hasil.Template.Checksum != aktif.Checksum {
+			t.Errorf("versi baru (DOCX disalin dari versi %d): %+v", aktif.Version, hasil.Template)
+		}
+		harapKode(t, panggil(t, admin, http.MethodPost, alamatKelolaTemplate+"/"+hasil.Template.ID+"/activate", nil), http.StatusOK, "mengaktifkan versi baru")
+
+		w = panggil(t, user, http.MethodGet, "/api/v1/agreement-document-types/PKS/schema", nil)
+		if !strings.Contains(w.Body.String(), "Nama Mitra") || !strings.Contains(w.Body.String(), hasil.Template.ID) {
+			t.Errorf("form PKS setelah versi baru aktif: %s", w.Body)
+		}
+		if baru := buatPerjanjian(t, user, formPerjanjian()); baru.TemplateID != hasil.Template.ID {
+			t.Errorf("pengajuan baru memakai template %s, harus versi baru %s", baru.TemplateID, hasil.Template.ID)
+		}
+		if id, _ := templatePengajuan(t, berjalan.ID); id != aktif.ID {
+			t.Errorf("pengajuan berjalan pindah ke %s; harus tetap di versi %s", id, aktif.ID)
+		}
+		harapKode(t, panggil(t, user, http.MethodPut, urlPerjanjian("", "/", berjalan.ID), map[string]any{"form_data": formPerjanjian()}), http.StatusOK, "mengubah pengajuan di versi lama")
+	})
+}
+
+// Versi yang masih dipakai pengajuan yang belum Selesai, dan versi aktif, tidak
+// bisa dihapus. Setelah pengajuannya Selesai, versi boleh dihapus.
+func TestVersiDipakaiTidakBisaDihapus(t *testing.T) {
+	butuhMinIO(t)
+	admin := masukPeran(t, entity.RoleAdmin)
+	user := masukPeran(t, entity.RoleUser)
+	legal := masukPeran(t, entity.RoleLegal)
+	aktif := templateAktif(t)
+	usang := uuid.NewString()
+	salinTemplate(t, aktif.ID, usang, "dipakai-uji", string(entity.TemplateStatusArchived), false, nil)
+	t.Cleanup(func() { dbTes.Exec("DELETE FROM agreement_templates WHERE id = ?", usang) })
+	p := buatPerjanjian(t, user, formPerjanjian())
+	eksekusi(t, "UPDATE agreement_documents SET template_id = ? WHERE id = ?", usang, p.ID)
+
+	harapKode(t, panggil(t, legal, http.MethodDelete, "/api/v1/legal/agreement-templates/"+usang, nil), http.StatusForbidden, "LEGAL menghapus versi")
+	w := panggil(t, admin, http.MethodDelete, alamatKelolaTemplate+"/"+usang, nil)
+	harapKode(t, w, http.StatusBadRequest, "menghapus versi yang dipakai pengajuan berjalan")
+	if !strings.Contains(w.Body.String(), "1 pengajuan") {
+		t.Errorf("pesan versi dipakai: %s", w.Body)
+	}
+	w = panggil(t, admin, http.MethodDelete, alamatKelolaTemplate+"/"+aktif.ID, nil)
+	harapKode(t, w, http.StatusBadRequest, "menghapus versi aktif")
+
+	eksekusi(t, "UPDATE agreement_documents SET status = ? WHERE id = ?", entity.StatusCompleted, p.ID)
+	harapKode(t, panggil(t, admin, http.MethodDelete, alamatKelolaTemplate+"/"+usang, nil), http.StatusOK, "menghapus versi setelah pengajuannya Selesai")
+	harapKode(t, panggil(t, admin, http.MethodGet, alamatKelolaTemplate+"/"+usang, nil), http.StatusNotFound, "versi yang dihapus")
+	ambilPerjanjian(t, user, "", p.ID)
 }

@@ -148,7 +148,7 @@ Lonceng notifikasi tidak punya kode permission sendiri. Ketiga endpoint-nya (`GE
 |-------------|-------|-----------|
 | `agreement_type.manage.all` | Jenis Dokumen - Kelola | Membuat, mengubah, dan menonaktifkan jenis dokumen perjanjian beserta field kerjanya (`GET/POST /admin/agreement-types`, `PUT /admin/agreement-types/:code`) |
 | `agreement_template.view.all` | Template Perjanjian - Lihat | Melihat versi template, daftar placeholder, unduh, dan pratinjau |
-| `agreement_template.manage.all` | Template Perjanjian - Kelola | Mengunggah dan mengaktifkan versi template |
+| `agreement_template.manage.all` | Template Perjanjian - Kelola | Mengunggah, membuat versi baru dari DOCX versi terakhir, mengaktifkan, dan menghapus versi template. Hanya ADMIN sejak PR 9 (keputusan T1) |
 | `agreement_company_master.view.all` | Pihak Pertama - Lihat | Melihat master Pihak Pertama |
 | `agreement_company_master.manage.all` | Pihak Pertama - Kelola | Mengelola master Pihak Pertama |
 
@@ -220,7 +220,7 @@ Tabel ini menunjukkan permission default yang dimiliki setiap role **sebelum ove
 | **Auth** | Change Password | ✅ | ❌ | ❌ | ✅ | ✅ |
 | **Perjanjian** | Kelola Jenis Dokumen | ✅ | ❌ | ❌ | ❌ | ❌ |
 | | Lihat Template | ✅ | ✅ | ❌ | ❌ | ❌ |
-| | Kelola Template | ✅ | ✅ | ❌ | ❌ | ❌ |
+| | Kelola Template | ✅ | ❌ | ❌ | ❌ | ❌ |
 | | Lihat Pihak Pertama | ✅ | ❌ | ❌ | ❌ | ❌ |
 | | Kelola Pihak Pertama | ✅ | ❌ | ❌ | ❌ | ❌ |
 

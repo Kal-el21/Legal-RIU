@@ -175,7 +175,6 @@ func assertKeyValueTabs(t *testing.T, paragraphs, texts []string, expected strin
 }
 
 var (
-	wordTableRE       = regexp.MustCompile(`(?s)<w:tbl>.*?</w:tbl>`)
 	pageBreakBeforeRE = regexp.MustCompile(`<w:pageBreakBefore(?:\s+w:val="(?:1|true|on)")?\s*/>`)
 	pageBreakRunRE    = regexp.MustCompile(`<w:br\b[^>]*w:type="page"`)
 )
@@ -228,19 +227,9 @@ func TestTemplatePKSBawaan(t *testing.T) {
 
 	xmlText := generatedDocumentXML(t, definition.Template)
 
-	// Ruang kosong di dalam tabel (mis. tempat tanda tangan basah) disengaja,
-	// jadi hanya paragraf di luar tabel yang diperiksa.
-	run, longest, before := 0, 0, ""
-	for _, paragraph := range wordParagraphRE.FindAllString(wordTableRE.ReplaceAllString(xmlText, ""), -1) {
-		text := strings.TrimSpace(paragraphText(paragraph))
-		if text == "" {
-			run++
-			continue
-		}
-		if run > longest {
-			longest, before = run, text
-		}
-		run = 0
+	longest, before, err := paragrafKosongTerpanjang(definition.Template)
+	if err != nil {
+		t.Fatal(err)
 	}
 	if longest >= 4 {
 		t.Errorf("ada %d paragraf kosong berturut-turut sebelum %q; pakai pemisah halaman, bukan Enter berulang", longest, before)

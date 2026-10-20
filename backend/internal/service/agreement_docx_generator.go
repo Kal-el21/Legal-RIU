@@ -406,6 +406,48 @@ func InspectTemplate(docx []byte) (placeholders []string, scopeListNumbered bool
 	return placeholders, scopeListNumbered, nil
 }
 
+var wordTableRE = regexp.MustCompile(`(?s)<w:tbl>.*?</w:tbl>`)
+
+// paragrafKosongTerpanjang menghitung deretan paragraf kosong terpanjang di isi
+// dokumen, beserta teks paragraf sesudahnya. Deretan Enter ikut terdorong saat
+// isian di atasnya panjang, sehingga muncul ruang atau halaman kosong. Ruang
+// kosong di dalam tabel (mis. tempat tanda tangan basah) disengaja dan tidak
+// dihitung.
+func paragrafKosongTerpanjang(docx []byte) (int, string, error) {
+	r, e := zip.NewReader(bytes.NewReader(docx), int64(len(docx)))
+	if e != nil {
+		return 0, "", errors.New("file bukan DOCX yang valid")
+	}
+	for _, f := range r.File {
+		if f.Name != "word/document.xml" {
+			continue
+		}
+		src, e := f.Open()
+		if e != nil {
+			return 0, "", e
+		}
+		b, e := io.ReadAll(src)
+		src.Close()
+		if e != nil {
+			return 0, "", e
+		}
+		run, longest, before := 0, 0, ""
+		for _, paragraph := range wordParagraphRE.FindAllString(wordTableRE.ReplaceAllString(string(b), ""), -1) {
+			text := strings.TrimSpace(paragraphText(paragraph))
+			if text == "" {
+				run++
+				continue
+			}
+			if run > longest {
+				longest, before = run, text
+			}
+			run = 0
+		}
+		return longest, before, nil
+	}
+	return 0, "", errors.New("isi dokumen (word/document.xml) tidak ditemukan")
+}
+
 func scopeParagraphIsNumbered(xmlText string) bool {
 	for _, loc := range wordParagraphRE.FindAllStringIndex(xmlText, -1) {
 		paragraph := xmlText[loc[0]:loc[1]]

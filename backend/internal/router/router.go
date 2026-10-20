@@ -406,7 +406,9 @@ func registerAgreementTemplateRoutes(group *gin.RouterGroup, requirePermission f
 	group.GET("/agreement-templates/:id/preview", requirePermission("agreement_template.view.all"), h.Preview)
 	group.GET("/agreement-templates/:id/download", requirePermission("agreement_template.view.all"), h.Download)
 	group.POST("/agreement-templates", requirePermission("agreement_template.manage.all"), h.Upload)
+	group.POST("/agreement-templates/new-version", requirePermission("agreement_template.manage.all"), h.NewVersion)
 	group.POST("/agreement-templates/:id/activate", requirePermission("agreement_template.manage.all"), h.Activate)
+	group.DELETE("/agreement-templates/:id", requirePermission("agreement_template.manage.all"), h.Delete)
 }
 
 func registerLegalCaseRoutes(group *gin.RouterGroup, legalCaseHandler *handler.LegalCaseHandler, requirePermission func(...string) gin.HandlerFunc) {

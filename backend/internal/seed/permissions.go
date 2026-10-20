@@ -178,7 +178,8 @@ func rolePermissionSeedData(permissionByCode map[string]entity.Permission) map[e
 		"document_review.upload_result.all",
 		"document_review.download.all",
 		"agreement_document.view.all", "agreement_document.preview.all", "agreement_document.download_attachment.all", "agreement_document.update_meta.all", "agreement_document.update_status.all", "agreement_document.download_pdf.all", "agreement_document.download_docx.all",
-		"agreement_template.view.all", "agreement_template.manage.all",
+		// Unggah dan aktivasi template hanya ADMIN (PR 9, keputusan T1); LEGAL melihat.
+		"agreement_template.view.all",
 		"case_management.view",
 		"case_management.create",
 		"case_management.update",

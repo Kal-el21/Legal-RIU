@@ -485,17 +485,22 @@ func TestPerjanjianBelumBenar(t *testing.T) {
 }
 
 // Template perjanjian: daftar, rujukan placeholder, unduh, dan penolakan unggahan.
+// LEGAL hanya melihat; unggah dan aktivasi hanya ADMIN (keputusan T1).
 func TestTemplatePerjanjian(t *testing.T) {
 	legal := masukPeran(t, entity.RoleLegal)
+	admin := masukPeran(t, entity.RoleAdmin)
 	const alamat = "/api/v1/legal/agreement-templates"
+	const kelola = "/api/v1/admin/agreement-templates"
 
 	harapKode(t, panggil(t, legal, http.MethodGet, alamat+"/00000000-0000-0000-0000-000000000000", nil), http.StatusNotFound, "template yang tidak ada")
-	w := panggilForm(t, legal, http.MethodPost, alamat, nil)
+	harapKode(t, panggilForm(t, legal, http.MethodPost, alamat, nil), http.StatusForbidden, "LEGAL mengunggah template")
+	harapKode(t, panggil(t, legal, http.MethodPost, alamat+"/00000000-0000-0000-0000-000000000000/activate", nil), http.StatusForbidden, "LEGAL mengaktifkan template")
+	w := panggilForm(t, admin, http.MethodPost, kelola, nil)
 	harapKode(t, w, http.StatusBadRequest, "unggah tanpa file")
 	if !strings.Contains(w.Body.String(), "emplate wajib diunggah") {
 		t.Errorf("pesan unggah tanpa file: %s", w.Body)
 	}
-	harapKode(t, panggil(t, legal, http.MethodPost, alamat+"/00000000-0000-0000-0000-000000000000/activate", nil), http.StatusBadRequest, "mengaktifkan template yang tidak ada")
+	harapKode(t, panggil(t, admin, http.MethodPost, kelola+"/00000000-0000-0000-0000-000000000000/activate", nil), http.StatusBadRequest, "mengaktifkan template yang tidak ada")
 	harapKode(t, panggil(t, legal, http.MethodGet, alamat+"/placeholders?code=TIDAK-ADA", nil), http.StatusNotFound, "rujukan placeholder jenis yang tidak ada")
 
 	t.Run("TemplateBawaan", func(t *testing.T) {
@@ -531,8 +536,8 @@ func TestTemplatePerjanjian(t *testing.T) {
 		}
 
 		// Mengaktifkan template yang sudah aktif tidak mengubah apa pun.
-		harapKode(t, panggil(t, legal, http.MethodPost, alamat+"/"+id+"/activate", nil), http.StatusOK, "mengaktifkan template aktif")
-		harapKode(t, panggilForm(t, legal, http.MethodPost, alamat, nil, berkas{"file", "template.pdf", []byte("%PDF")}), http.StatusBadRequest, "unggah template bukan DOCX")
+		harapKode(t, panggil(t, admin, http.MethodPost, kelola+"/"+id+"/activate", nil), http.StatusOK, "mengaktifkan template aktif")
+		harapKode(t, panggilForm(t, admin, http.MethodPost, kelola, nil, berkas{"file", "template.pdf", []byte("%PDF")}), http.StatusBadRequest, "unggah template bukan DOCX")
 	})
 }
 

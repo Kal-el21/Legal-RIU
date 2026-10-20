@@ -31,8 +31,10 @@ const (
 type AgreementTemplateService interface {
 	List(string) ([]entity.AgreementTemplate, error)
 	Get(string) (*entity.AgreementTemplate, error)
-	Upload(context.Context, string, dto.UploadAgreementTemplateRequest, *multipart.FileHeader) (*entity.AgreementTemplate, error)
+	Upload(context.Context, string, dto.UploadAgreementTemplateRequest, *multipart.FileHeader) (*entity.AgreementTemplate, dto.AgreementTemplateValidation, error)
+	NewVersion(context.Context, string, dto.UploadAgreementTemplateRequest) (*entity.AgreementTemplate, dto.AgreementTemplateValidation, error)
 	Activate(context.Context, string, string) (*entity.AgreementTemplate, error)
+	Delete(string) error
 	Download(context.Context, string) ([]byte, string, error)
 	Preview(context.Context, string) ([]byte, error)
 	Placeholders(string) ([]dto.PlaceholderReference, error)
@@ -59,17 +61,41 @@ func NewAgreementTemplateService(r repository.AgreementTemplateRepository, s *st
 }
 
 // Placeholders mengembalikan token yang bisa dipakai di template jenis dokumen
-// itu, dari field versi aktifnya.
+// itu, dari field kerjanya, sehingga Admin bisa menyusun Word sebelum versi
+// pertama ada.
 func (s *agreementTemplateService) Placeholders(code string) ([]dto.PlaceholderReference, error) {
-	_, tpl, e := s.ActiveType(code)
+	typ, e := s.repo.TypeByCode(strings.ToUpper(strings.TrimSpace(code)))
 	if e != nil {
-		return nil, e
+		return nil, ErrJenisTidakAda
 	}
-	sections, e := templateSections(tpl)
+	sections, e := fieldKerja(typ)
 	if e != nil {
 		return nil, e
 	}
 	return PlaceholderCatalog(sections), nil
+}
+
+// ErrTemplateTidakAda: versi template yang diminta tidak ada (atau sudah dihapus).
+var ErrTemplateTidakAda = errors.New("template tidak ditemukan")
+
+// GagalPencocokan: DOCX memuat placeholder yang tidak punya field. Hasil memuat
+// daftarnya, supaya layar Admin bisa menawarkan "Jadikan field".
+type GagalPencocokan struct {
+	Hasil dto.AgreementTemplateValidation
+}
+
+func (g *GagalPencocokan) Error() string {
+	return "placeholder tidak dikenal: " + strings.Join(g.Hasil.UnknownPlaceholders, ", ") + ". Buat field-nya di jenis dokumen, atau perbaiki ejaannya di Word"
+}
+
+// fieldKerja membaca field kerja jenis dokumen (tahap 9.3), yang disalin ke
+// setiap versi baru.
+func fieldKerja(typ *entity.AgreementType) ([]AgreementSectionDefinition, error) {
+	var sections []AgreementSectionDefinition
+	if len(typ.Fields) == 0 || json.Unmarshal(typ.Fields, &sections) != nil || len(sections) == 0 {
+		return nil, fmt.Errorf("jenis dokumen %s belum punya field; susun field sebelum membuat versi template", typ.Code)
+	}
+	return sections, nil
 }
 
 func (s *agreementTemplateService) List(code string) ([]entity.AgreementTemplate, error) {
@@ -87,69 +113,90 @@ func (s *agreementTemplateService) Get(id string) (*entity.AgreementTemplate, er
 	}
 	v, e := s.repo.FindByID(uid)
 	if e != nil {
-		return nil, errors.New("template tidak ditemukan")
+		return nil, ErrTemplateTidakAda
 	}
 	return v, nil
 }
 
-func (s *agreementTemplateService) Upload(ctx context.Context, uploaderID string, req dto.UploadAgreementTemplateRequest, file *multipart.FileHeader) (*entity.AgreementTemplate, error) {
+func (s *agreementTemplateService) Upload(ctx context.Context, uploaderID string, req dto.UploadAgreementTemplateRequest, file *multipart.FileHeader) (*entity.AgreementTemplate, dto.AgreementTemplateValidation, error) {
+	data, e := readTemplateUpload(file)
+	if e != nil {
+		return nil, dto.AgreementTemplateValidation{}, e
+	}
+	return s.buatVersi(ctx, uploaderID, req, data, filepath.Base(file.Filename))
+}
+
+// NewVersion: "Simpan sebagai versi baru" tanpa DOCX baru, mis. setelah Admin
+// mengganti label atau status wajib field. DOCX disalin dari versi terakhir.
+func (s *agreementTemplateService) NewVersion(ctx context.Context, uploaderID string, req dto.UploadAgreementTemplateRequest) (*entity.AgreementTemplate, dto.AgreementTemplateValidation, error) {
+	items, e := s.repo.FindByCode(strings.ToUpper(strings.TrimSpace(req.Code)))
+	if e != nil {
+		return nil, dto.AgreementTemplateValidation{}, e
+	}
+	for i := range items {
+		if items[i].IsLegacy {
+			continue
+		}
+		data, e := s.load(ctx, &items[i])
+		if e != nil {
+			return nil, dto.AgreementTemplateValidation{}, e
+		}
+		return s.buatVersi(ctx, uploaderID, req, data, items[i].FileName)
+	}
+	return nil, dto.AgreementTemplateValidation{}, errors.New("belum ada versi untuk disalin; unggah DOCX untuk versi pertama")
+}
+
+// buatVersi menguji DOCX terhadap field kerja jenis dokumen, lalu menyimpannya
+// sebagai versi Draft berikutnya bersama salinan field kerja itu.
+func (s *agreementTemplateService) buatVersi(ctx context.Context, uploaderID string, req dto.UploadAgreementTemplateRequest, data []byte, fileName string) (*entity.AgreementTemplate, dto.AgreementTemplateValidation, error) {
+	var hasil dto.AgreementTemplateValidation
 	uid, e := uuid.Parse(uploaderID)
 	if e != nil {
-		return nil, errors.New("user tidak valid")
+		return nil, hasil, errors.New("user tidak valid")
+	}
+	note := strings.TrimSpace(req.Note)
+	if note == "" {
+		return nil, hasil, errors.New("Catatan perubahan wajib diisi: tulis apa yang berubah dibanding versi sebelumnya")
 	}
 	code := strings.ToUpper(strings.TrimSpace(req.Code))
 	if code == "" {
 		code = "PKS"
 	}
-	data, e := readTemplateUpload(file)
+	typ, e := s.repo.TypeByCode(code)
 	if e != nil {
-		return nil, e
+		return nil, hasil, fmt.Errorf("tipe dokumen %q tidak terdaftar", code)
 	}
-	// Field belum bisa diubah lewat unggahan (PR 9 tahap 9.4), jadi versi baru
-	// diuji dan disimpan dengan field versi aktif.
-	typ, aktif, e := s.ActiveType(code)
+	sections, e := fieldKerja(typ)
 	if e != nil {
-		return nil, e
+		return nil, hasil, e
 	}
-	sections, e := templateSections(aktif)
-	if e != nil {
-		return nil, e
-	}
-
-	placeholders, scopeListNumbered, e := InspectTemplate(data)
-	if e != nil {
-		return nil, e
-	}
-	if e = validateTemplatePlaceholders(placeholders, sections); e != nil {
-		return nil, e
-	}
-	if !scopeListNumbered {
-		return nil, errors.New("paragraf " + scopeListPlaceholder + " harus diformat sebagai numbered list Word agar poin ruang lingkup bernomor a, b, c")
+	if hasil, e = periksaTemplate(data, sections); e != nil {
+		return nil, hasil, e
 	}
 
 	// Dry-run memakai jalur generate yang sama dengan dokumen sungguhan supaya
 	// template bermasalah tertolak sebelum sempat dipakai.
 	docx, checksum, e := s.generator.Generate(data, sampleAgreementValues(sections), GenerateOptions{Draft: true})
 	if e != nil {
-		return nil, errors.New("uji coba pembentukan dokumen gagal: " + e.Error())
+		return nil, hasil, errors.New("uji coba pembentukan dokumen gagal: " + e.Error())
 	}
 	pdf, e := s.converter.ToPDF(ctx, docx)
 	if e != nil {
-		return nil, errors.New("uji coba konversi PDF gagal: " + e.Error())
+		return nil, hasil, errors.New("uji coba konversi PDF gagal: " + e.Error())
 	}
 
 	version, e := s.repo.NextVersion(code)
 	if e != nil {
-		return nil, e
+		return nil, hasil, e
 	}
 	id := uuid.New()
 	base := templateStoragePrefix + code + "/" + id.String()
 	if e = s.storage.UploadBytes(ctx, base+".docx", data, docxContentType); e != nil {
-		return nil, e
+		return nil, hasil, e
 	}
 	if e = s.storage.UploadBytes(ctx, base+"-preview.pdf", pdf, "application/pdf"); e != nil {
 		s.storage.DeleteFile(ctx, base+".docx")
-		return nil, e
+		return nil, hasil, e
 	}
 
 	name := strings.TrimSpace(req.Name)
@@ -160,25 +207,47 @@ func (s *agreementTemplateService) Upload(ctx context.Context, uploaderID string
 		Code:          code,
 		Version:       version,
 		Name:          name,
-		FileName:      filepath.Base(file.Filename),
+		FileName:      fileName,
 		FilePath:      base + ".docx",
 		PreviewPath:   base + "-preview.pdf",
 		Checksum:      checksum,
 		Status:        entity.TemplateStatusDraft,
-		Placeholders:  marshalPlaceholders(placeholders),
-		Note:          strings.TrimSpace(req.Note),
+		Placeholders:  marshalPlaceholders(hasil.Placeholders),
+		Note:          note,
 		EffectiveDate: parseEffectiveDate(req.EffectiveDate),
 		UploadedBy:    &uid,
-		Fields:        aktif.Fields,
+		Fields:        typ.Fields,
 	}
 	tpl.ID = id
 	if e = s.repo.Create(tpl); e != nil {
 		s.storage.DeleteFile(ctx, base+".docx")
 		s.storage.DeleteFile(ctx, base+"-preview.pdf")
-		return nil, errors.New("gagal menyimpan template")
+		return nil, hasil, errors.New("gagal menyimpan template")
 	}
 	s.cache.Store(tpl.ID, data)
-	return s.repo.FindByID(tpl.ID)
+	v, e := s.repo.FindByID(tpl.ID)
+	return v, hasil, e
+}
+
+// Delete menghapus versi yang tidak lagi dipakai. Versi aktif dan versi yang
+// masih dikunci pengajuan yang belum selesai ditolak; pengajuan Selesai tidak
+// bergantung pada versinya karena dokumen finalnya sudah tersimpan.
+func (s *agreementTemplateService) Delete(id string) error {
+	tpl, e := s.Get(id)
+	if e != nil {
+		return e
+	}
+	if tpl.Status == entity.TemplateStatusActive {
+		return errors.New("Versi aktif tidak bisa dihapus; aktifkan versi lain lebih dulu")
+	}
+	n, e := s.repo.CountRunningDocuments(tpl.ID)
+	if e != nil {
+		return e
+	}
+	if n > 0 {
+		return fmt.Errorf("Versi ini masih dipakai %d pengajuan yang belum selesai, jadi tidak bisa dihapus", n)
+	}
+	return s.repo.Delete(tpl.ID)
 }
 
 func (s *agreementTemplateService) Activate(ctx context.Context, id, actorID string) (*entity.AgreementTemplate, error) {
@@ -350,9 +419,55 @@ func validateTemplatePlaceholders(found []string, sections []AgreementSectionDef
 		}
 	}
 	if len(unknown) > 0 {
-		return errors.New("placeholder tidak dikenal: " + strings.Join(unknown, ", "))
+		return &GagalPencocokan{dto.AgreementTemplateValidation{Placeholders: found, UnknownPlaceholders: unknown}}
 	}
 	return nil
+}
+
+// periksaTemplate mencocokkan DOCX dengan field: placeholder tanpa field ditolak;
+// field yang tidak dipakai dan deretan Enter kosong menjadi peringatan. Berjalan
+// sebelum konversi PDF.
+func periksaTemplate(data []byte, sections []AgreementSectionDefinition) (dto.AgreementTemplateValidation, error) {
+	hasil := dto.AgreementTemplateValidation{UnknownPlaceholders: []string{}, UnusedPlaceholders: []string{}, Warnings: []string{}}
+	found, scopeListNumbered, e := InspectTemplate(data)
+	if e != nil {
+		return hasil, e
+	}
+	hasil.Placeholders = found
+	if e = validateTemplatePlaceholders(found, sections); e != nil {
+		return e.(*GagalPencocokan).Hasil, e
+	}
+	// scopeListNumbered hanya false kalau {{RUANG_LINGKUP_LIST}} ada dan paragrafnya
+	// bukan numbered list; DOCX tanpa placeholder itu tidak ditolak.
+	if !scopeListNumbered {
+		return hasil, errors.New("paragraf " + scopeListPlaceholder + " harus diformat sebagai numbered list Word agar poin ruang lingkup bernomor a, b, c")
+	}
+	dipakai := map[string]bool{}
+	for _, p := range found {
+		dipakai[p] = true
+	}
+	for _, s := range sections {
+		for _, f := range s.Fields {
+			terpakai := f.Name == scopeField && dipakai[scopeListPlaceholder]
+			for token := range fieldPlaceholders(f, contohNilai(f)) {
+				terpakai = terpakai || dipakai["{{"+token+"}}"]
+			}
+			if !terpakai {
+				hasil.UnusedPlaceholders = append(hasil.UnusedPlaceholders, "{{"+strings.ToUpper(f.Name)+"}}")
+			}
+		}
+	}
+	if len(hasil.UnusedPlaceholders) > 0 {
+		hasil.Warnings = append(hasil.Warnings, "Field berikut tidak dipakai di DOCX, jadi isiannya tidak tercetak: "+strings.Join(hasil.UnusedPlaceholders, ", "))
+	}
+	kosong, sebelum, e := paragrafKosongTerpanjang(data)
+	if e != nil {
+		return hasil, e
+	}
+	if kosong >= 4 {
+		hasil.Warnings = append(hasil.Warnings, fmt.Sprintf("Ada %d paragraf kosong berturut-turut sebelum %q. Pakai pemisah halaman (Ctrl+Enter), bukan Enter berulang, supaya tidak muncul ruang atau halaman kosong saat isian panjang.", kosong, sebelum))
+	}
+	return hasil, nil
 }
 
 func marshalPlaceholders(v []string) json.RawMessage {

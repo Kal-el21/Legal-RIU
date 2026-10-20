@@ -7,11 +7,12 @@ Kerja Sama (PKS).
 ## 1. Alur singkat
 
 1. Unduh template yang sedang aktif (ikon unduh di daftar versi), lalu sunting di Word.
-2. Klik **Unggah Versi Baru**. Isi nama versi dan **Catatan Perubahan** (apa yang berubah dibanding versi
+2. Klik **Unggah Versi Baru**. Isi nama versi dan **Catatan Perubahan** (wajib: apa yang berubah dibanding versi
    sebelumnya), lalu **Unggah & Uji**.
-3. Sistem menguji file otomatis: struktur `.docx`, nama setiap placeholder, format paragraf ruang lingkup, lalu
-   membentuk dokumen contoh dan mengubahnya ke PDF. Template yang gagal uji tidak tersimpan; pesannya menjelaskan
-   sebabnya (bagian 9).
+3. Sistem menguji file otomatis: struktur `.docx`, setiap placeholder dicocokkan dengan isian jenis dokumen, format
+   paragraf ruang lingkup, lalu membentuk dokumen contoh dan mengubahnya ke PDF. Template yang gagal uji tidak
+   tersimpan; pesannya menjelaskan sebabnya (bagian 9). Template yang lolos bisa membawa peringatan, mis. isian yang
+   tidak dipakai di Word atau deretan Enter kosong; periksa sebelum mengaktifkan.
 4. Versi yang lolos tersimpan berstatus **Draft**. Buka **Pratinjau** dan periksa hasilnya dengan daftar periksa di
    bagian 8.
 5. Klik **Aktifkan**. Versi aktif sebelumnya otomatis diarsipkan.
@@ -21,10 +22,11 @@ Yang perlu diketahui:
 - Hanya ada satu versi aktif. Pengajuan **baru** memakai versi aktif.
 - Pengajuan yang **sudah dikirim** tetap memakai versi yang dipakainya saat dikirim, sampai selesai. Mengaktifkan
   versi baru tidak mengubah pengajuan yang sedang berjalan.
-- Versi lama tidak dihapus; semuanya tersimpan sebagai riwayat dan bisa diunduh.
+- Versi lama tersimpan sebagai riwayat dan bisa diunduh. Versi yang tidak dipakai lagi boleh dihapus, kecuali versi
+  aktif dan versi yang masih dipakai pengajuan yang belum selesai.
 - Versi berketerangan **"Format lama, hanya bisa diunduh"** adalah template sebelum aplikasi memakai placeholder.
   Versi itu tidak bisa dipratinjau atau diaktifkan lagi.
-- Yang boleh mengunggah dan mengaktifkan: pengguna dengan izin *Template Perjanjian - Kelola*.
+- Yang boleh mengunggah, mengaktifkan, dan menghapus: **Admin**. LEGAL bisa melihat, mengunduh, dan mempratinjau.
 
 ## 2. Placeholder
 
@@ -47,7 +49,8 @@ Cara menulis:
   placeholder yang **salah ketik dan terpecah** tidak terdeteksi saat unggah dan akan tercetak apa adanya di
   dokumen. Kalau ragu, hapus lalu tempel ulang placeholder sebagai teks biasa.
 - Format seluruh placeholder (tebal, miring, huruf) ikut menjadi format isiannya.
-- Placeholder yang tidak dikenal membuat unggahan ditolak dengan pesan *"placeholder tidak dikenal: ..."*.
+- Placeholder yang tidak punya isian di jenis dokumen membuat unggahan ditolak dengan pesan *"placeholder tidak
+  dikenal: ..."* beserta daftarnya. Buat isiannya di jenis dokumen, atau perbaiki ejaannya di Word.
 
 Isian sudah diformat sistem. Jangan menambahkan format sendiri di sekitar placeholder:
 
@@ -118,7 +121,8 @@ kurung siku (mis. `[Nama Perusahaan]`), sehingga terlihat isian mana mengisi bag
 
 | Pesan | Arti | Perbaikan |
 |---|---|---|
-| *placeholder tidak dikenal: {{...}}* | Ada placeholder yang tidak ada di daftar | Bandingkan ejaannya dengan **Lihat N token**; tempel ulang sebagai teks biasa |
+| *placeholder tidak dikenal: {{...}}* | Ada placeholder yang tidak punya isian di jenis dokumen | Bandingkan ejaannya dengan **Lihat N token**; tempel ulang sebagai teks biasa, atau buat isiannya |
+| *Catatan perubahan wajib diisi...* | Catatan Perubahan kosong | Tulis apa yang berubah dibanding versi sebelumnya |
 | *paragraf {{RUANG_LINGKUP_LIST}} harus diformat sebagai numbered list Word...* | Paragraf ruang lingkup bukan list bernomor | Pilih paragraf itu, klik Numbering di Word |
 | *uji coba pembentukan dokumen gagal: ...* | File tidak bisa diisi, mis. placeholder tersisa | Baca rincian setelah titik dua; periksa placeholder yang disebut |
 | *uji coba konversi PDF gagal: ...* | File tidak bisa diubah ke PDF | Buka dan simpan ulang file di Word (format `.docx`, bukan `.doc`), lalu unggah lagi |

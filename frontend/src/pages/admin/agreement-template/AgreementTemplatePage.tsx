@@ -82,8 +82,9 @@ export default function AgreementTemplatePage({ apiBase = '/admin' }: Props) {
     setMessage('')
     setMessageType('')
     try {
-      await agreementTemplateService.upload(apiBase, file, { name, note, effective_date: effectiveDate })
-      setMessage('Template lolos uji coba dan tersimpan sebagai Draft. Tinjau pratinjaunya sebelum diaktifkan.')
+      const { validation } = await agreementTemplateService.upload(apiBase, file, { name, note, effective_date: effectiveDate })
+      const peringatan = validation.warnings.length ? ` Peringatan: ${validation.warnings.join(' ')}` : ''
+      setMessage('Template lolos uji coba dan tersimpan sebagai Draft. Tinjau pratinjaunya sebelum diaktifkan.' + peringatan)
       setMessageType('success')
       setFile(null)
       setName('')
@@ -155,7 +156,7 @@ export default function AgreementTemplatePage({ apiBase = '/admin' }: Props) {
           <Input type="date" value={effectiveDate} onChange={(event) => setEffectiveDate(event.target.value)} />
         </div>
         <div>
-          <Label className="mb-1.5 text-gray-700">Catatan Perubahan</Label>
+          <Label className="mb-1.5 text-gray-700">Catatan Perubahan *</Label>
           <Textarea
             value={note}
             placeholder="Ringkas apa yang berubah pada versi ini"

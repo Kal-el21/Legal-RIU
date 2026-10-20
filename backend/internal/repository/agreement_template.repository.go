@@ -24,6 +24,7 @@ type AgreementTemplateRepository interface {
 	TypeByCode(string) (*entity.AgreementType, error)
 	CreateType(*entity.AgreementType) error
 	SaveType(*entity.AgreementType) error
+	CountRunningDocuments(uuid.UUID) (int64, error)
 }
 
 type agreementTemplateRepository struct{ db *gorm.DB }
@@ -127,4 +128,14 @@ func (r *agreementTemplateRepository) CreateType(v *entity.AgreementType) error 
 
 func (r *agreementTemplateRepository) SaveType(v *entity.AgreementType) error {
 	return r.db.Save(v).Error
+}
+
+// CountRunningDocuments menghitung pengajuan yang belum selesai (bukan Selesai
+// atau Ditolak) yang dikunci ke versi template itu.
+func (r *agreementTemplateRepository) CountRunningDocuments(templateID uuid.UUID) (int64, error) {
+	var n int64
+	err := r.db.Model(&entity.AgreementDocument{}).
+		Where("template_id = ? AND status NOT IN ?", templateID, []entity.SubmissionStatus{entity.StatusCompleted, entity.StatusRejected}).
+		Count(&n).Error
+	return n, err
 }

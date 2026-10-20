@@ -23,6 +23,14 @@ export interface PlaceholderReference {
   description: string
 }
 
+// Hasil pencocokan DOCX dengan field jenis dokumen saat versi dibuat.
+export interface TemplateValidation {
+  placeholders: string[]
+  unknown_placeholders: string[]
+  unused_placeholders: string[]
+  warnings: string[]
+}
+
 export interface UploadTemplatePayload {
   code?: string
   name?: string
@@ -49,7 +57,7 @@ export const agreementTemplateService = {
     if (payload.name) form.append('name', payload.name)
     if (payload.note) form.append('note', payload.note)
     if (payload.effective_date) form.append('effective_date', payload.effective_date)
-    return api.post(`${base}/agreement-templates`, form).then((r) => data<AgreementTemplate>(r))
+    return api.post(`${base}/agreement-templates`, form).then((r) => data<{ template: AgreementTemplate; validation: TemplateValidation }>(r))
   },
 
   activate: (base = '/admin', id: string) =>

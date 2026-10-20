@@ -1,5 +1,6 @@
 # Peran yang lolos pengaman tiap endpoint. Tanda - berarti tidak ada.
 # Dibuat oleh: go test ./internal/router -run TestFotoHakAkses -update
+DELETE /api/v1/admin/agreement-templates/:id: ADMIN
 DELETE /api/v1/admin/case-categories/:id: ADMIN
 DELETE /api/v1/admin/case-types/:id: ADMIN
 DELETE /api/v1/admin/cedants/:id: ADMIN
@@ -31,6 +32,7 @@ DELETE /api/v1/legal-cases/:id/document: -
 DELETE /api/v1/legal-cases/:id/photo: -
 DELETE /api/v1/legal-cases/cedants/:id: -
 DELETE /api/v1/legal-opinions/:id: USER
+DELETE /api/v1/legal/agreement-templates/:id: -
 DELETE /api/v1/legal/legal-cases/:id: LEGAL
 DELETE /api/v1/legal/legal-cases/:id/chronology/:chronId: LEGAL
 DELETE /api/v1/legal/legal-cases/:id/document: LEGAL
@@ -222,6 +224,7 @@ PATCH /api/v1/notifications/read: ADMIN LEGAL USER
 PATCH /api/v1/notifications/read-all: ADMIN LEGAL USER
 POST /api/v1/admin/agreement-templates: ADMIN
 POST /api/v1/admin/agreement-templates/:id/activate: ADMIN
+POST /api/v1/admin/agreement-templates/new-version: ADMIN
 POST /api/v1/admin/agreement-types: ADMIN
 POST /api/v1/admin/case-categories: ADMIN
 POST /api/v1/admin/case-categories/import: ADMIN
@@ -280,8 +283,9 @@ POST /api/v1/legal-cases/cedants/import: -
 POST /api/v1/legal-cases/regencies/import: -
 POST /api/v1/legal-opinions: USER
 POST /api/v1/legal-opinions/:id/resubmit: USER
-POST /api/v1/legal/agreement-templates: LEGAL
-POST /api/v1/legal/agreement-templates/:id/activate: LEGAL
+POST /api/v1/legal/agreement-templates: -
+POST /api/v1/legal/agreement-templates/:id/activate: -
+POST /api/v1/legal/agreement-templates/new-version: -
 POST /api/v1/legal/legal-cases: LEGAL
 POST /api/v1/legal/legal-cases/:id/chronology: LEGAL
 POST /api/v1/legal/legal-cases/:id/chronology/import: LEGAL
