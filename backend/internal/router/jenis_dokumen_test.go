@@ -698,8 +698,24 @@ func TestVersiDipakaiTidakBisaDihapus(t *testing.T) {
 	p := buatPerjanjian(t, user, formPerjanjian())
 	eksekusi(t, "UPDATE agreement_documents SET template_id = ? WHERE id = ?", usang, p.ID)
 
+	// Daftar versi menyebut jumlah pengajuan berjalan per versi (layar Admin, tahap 9.5).
+	w := panggil(t, admin, http.MethodGet, alamatKelolaTemplate+"?code=PKS", nil)
+	harapKode(t, w, http.StatusOK, "daftar versi PKS")
+	var daftar []struct {
+		ID               string `json:"id"`
+		RunningDocuments int64  `json:"running_documents"`
+	}
+	isiData(t, w, &daftar)
+	dipakai := map[string]int64{}
+	for _, v := range daftar {
+		dipakai[v.ID] = v.RunningDocuments
+	}
+	if dipakai[usang] != 1 {
+		t.Errorf("versi %s dipakai %d pengajuan berjalan menurut daftar, harus 1", usang, dipakai[usang])
+	}
+
 	harapKode(t, panggil(t, legal, http.MethodDelete, "/api/v1/legal/agreement-templates/"+usang, nil), http.StatusForbidden, "LEGAL menghapus versi")
-	w := panggil(t, admin, http.MethodDelete, alamatKelolaTemplate+"/"+usang, nil)
+	w = panggil(t, admin, http.MethodDelete, alamatKelolaTemplate+"/"+usang, nil)
 	harapKode(t, w, http.StatusBadRequest, "menghapus versi yang dipakai pengajuan berjalan")
 	if !strings.Contains(w.Body.String(), "1 pengajuan") {
 		t.Errorf("pesan versi dipakai: %s", w.Body)

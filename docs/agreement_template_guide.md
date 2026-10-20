@@ -1,21 +1,33 @@
 # Panduan Menyusun Template Perjanjian - ALEA
 
 Panduan untuk Admin dan tim legal yang menyusun atau memperbarui template dokumen perjanjian di Microsoft Word,
-lalu mengunggahnya di menu **Data Master → Template Perjanjian**. Saat ini berlaku untuk jenis dokumen Perjanjian
-Kerja Sama (PKS).
+lalu mengunggahnya di menu **Data Master → Jenis Perjanjian** (pilih jenisnya, mis. Perjanjian Kerja Sama, lalu
+**Atur**).
 
 ## 1. Alur singkat
 
-1. Unduh template yang sedang aktif (ikon unduh di daftar versi), lalu sunting di Word.
-2. Klik **Unggah Versi Baru**. Isi nama versi dan **Catatan Perubahan** (wajib: apa yang berubah dibanding versi
-   sebelumnya), lalu **Unggah & Uji**.
-3. Sistem menguji file otomatis: struktur `.docx`, setiap placeholder dicocokkan dengan isian jenis dokumen, format
+1. Pastikan isian yang dibutuhkan sudah ada di bagian **Isian Form** dan sudah disimpan (**Simpan isian**). Untuk
+   jenis baru, susun isiannya lebih dulu.
+2. Unduh template yang sedang aktif (ikon unduh di **Riwayat Versi**), lalu sunting di Word. Placeholder bisa disalin
+   dari bagian **Placeholder untuk Word**.
+3. Di **Versi Template Baru**, pilih file, isi nama versi dan **Catatan Perubahan** (wajib: apa yang berubah dibanding
+   versi sebelumnya), lalu **Unggah & Uji**. Kalau Word tidak berubah (mis. hanya label atau status wajib isian yang
+   diganti), pakai **Simpan sebagai versi baru**: DOCX versi terakhir dipakai ulang.
+4. Sistem menguji file otomatis: struktur `.docx`, setiap placeholder dicocokkan dengan isian jenis dokumen, format
    paragraf ruang lingkup, lalu membentuk dokumen contoh dan mengubahnya ke PDF. Template yang gagal uji tidak
    tersimpan; pesannya menjelaskan sebabnya (bagian 9). Template yang lolos bisa membawa peringatan, mis. isian yang
    tidak dipakai di Word atau deretan Enter kosong; periksa sebelum mengaktifkan.
-4. Versi yang lolos tersimpan berstatus **Draft**. Buka **Pratinjau** dan periksa hasilnya dengan daftar periksa di
+5. Versi yang lolos tersimpan berstatus **Draft**. Buka **Pratinjau** dan periksa hasilnya dengan daftar periksa di
    bagian 8.
-5. Klik **Aktifkan**. Versi aktif sebelumnya otomatis diarsipkan.
+6. Klik **Aktifkan**. Versi aktif sebelumnya otomatis diarsipkan. Dialog konfirmasi menyebut berapa pengajuan berjalan
+   yang tetap memakai versi lama.
+
+Kalau unggahan ditolak karena placeholder yang belum punya isian, tombol **Jadikan isian** menambahkannya ke Isian Form
+sebagai teks singkat di bagian baru. Periksa jenis isiannya (uang, tanggal, dan sebagainya), simpan isian, lalu unggah
+ulang.
+
+Perubahan Isian Form baru dipakai pengaju setelah ada versi baru yang diaktifkan. Selama itu halaman menampilkan
+penanda "Ada perubahan isian yang belum dipakai versi mana pun".
 
 Yang perlu diketahui:
 
@@ -37,7 +49,7 @@ dan huruf besar:
 Perjanjian ini dibuat antara PIHAK PERTAMA dan {{PIHAK_KEDUA_NAMA}} tentang {{JENIS_PEKERJAAN}}.
 ```
 
-Daftar lengkap placeholder beserta artinya ada di halaman Template Perjanjian, tombol **Lihat N token**. Daftar itu
+Daftar lengkap placeholder beserta artinya ada di halaman jenis perjanjian, bagian **Placeholder untuk Word**. Daftar itu
 yang berlaku; jangan menebak nama placeholder. Daftarnya dibentuk dari isian jenis dokumen itu: kode placeholder adalah
 nama isian dalam huruf besar, ditambah turunan menurut jenis isiannya (tabel di bawah), dan placeholder sistem yang
 sama untuk semua jenis (nomor perjanjian, tanggal dan tempat tanda tangan, Pihak Pertama, daftar lampiran).
@@ -121,7 +133,7 @@ kurung siku (mis. `[Nama Perusahaan]`), sehingga terlihat isian mana mengisi bag
 
 | Pesan | Arti | Perbaikan |
 |---|---|---|
-| *placeholder tidak dikenal: {{...}}* | Ada placeholder yang tidak punya isian di jenis dokumen | Bandingkan ejaannya dengan **Lihat N token**; tempel ulang sebagai teks biasa, atau buat isiannya |
+| *placeholder tidak dikenal: {{...}}* | Ada placeholder yang tidak punya isian di jenis dokumen | Bandingkan ejaannya dengan **Placeholder untuk Word**; tempel ulang sebagai teks biasa, atau buat isiannya (**Jadikan isian**) |
 | *Catatan perubahan wajib diisi...* | Catatan Perubahan kosong | Tulis apa yang berubah dibanding versi sebelumnya |
 | *paragraf {{RUANG_LINGKUP_LIST}} harus diformat sebagai numbered list Word...* | Paragraf ruang lingkup bukan list bernomor | Pilih paragraf itu, klik Numbering di Word |
 | *uji coba pembentukan dokumen gagal: ...* | File tidak bisa diisi, mis. placeholder tersisa | Baca rincian setelah titik dua; periksa placeholder yang disebut |

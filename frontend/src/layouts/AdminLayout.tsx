@@ -24,7 +24,7 @@ const NAV: (MenuItem | MenuGroup)[] = [
       { label: 'Cedant', href: '/admin/cedants', icon: UserCog, permissions: ['master_data.manage'] },
       { label: 'Divisi', href: '/admin/divisions', icon: Network, permissions: ['master_data.manage'] },
       { label: 'Pihak Pertama', href: '/admin/agreement-company-master', icon: Building2, permissions: ['agreement_company_master.view.all'] },
-      { label: 'Template Perjanjian', href: '/admin/agreement-templates', icon: LayoutTemplate, permissions: ['agreement_template.view.all'] },
+      { label: 'Jenis Perjanjian', href: '/admin/agreement-types', icon: LayoutTemplate, permissions: ['agreement_type.manage.all'] },
     ],
   },
   { label: 'Materi Legal', href: '/admin/materials', icon: BookOpen, permissions: ['legal_material.view'] },

@@ -103,7 +103,17 @@ func (s *agreementTemplateService) List(code string) ([]entity.AgreementTemplate
 	if normalized == "" {
 		normalized = "PKS"
 	}
-	return s.repo.FindByCode(normalized)
+	items, e := s.repo.FindByCode(normalized)
+	if e != nil {
+		return nil, e
+	}
+	// Catatan: satu hitungan per versi; cukup karena versi per jenis hanya puluhan.
+	for i := range items {
+		if items[i].RunningDocuments, e = s.repo.CountRunningDocuments(items[i].ID); e != nil {
+			return nil, e
+		}
+	}
+	return items, nil
 }
 
 func (s *agreementTemplateService) Get(id string) (*entity.AgreementTemplate, error) {

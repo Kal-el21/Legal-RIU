@@ -63,7 +63,8 @@ import AgreementDocumentList from '@/components/shared/AgreementDocumentList'
 import AgreementDocumentForm from '@/components/shared/AgreementDocumentForm'
 import AgreementDocumentDetail from '@/components/shared/AgreementDocumentDetail'
 import AgreementCompanyMasterPage from '@/pages/admin/agreement-company-master/AgreementCompanyMasterPage'
-import AgreementTemplatePage from '@/pages/admin/agreement-template/AgreementTemplatePage'
+import AgreementTypeListPage from '@/pages/admin/agreement-types/AgreementTypeListPage'
+import AgreementTypeDetailPage from '@/pages/admin/agreement-types/AgreementTypeDetailPage'
 import AdminRepositoryDocumentListPage from '@/pages/admin/repository-documents/AdminRepositoryDocumentListPage'
 import LegalRepositoryDocumentListPage from '@/pages/legal/repository-documents/LegalRepositoryDocumentListPage'
 import UserRepositoryDocumentListPage from '@/pages/dashboard/repository-documents/UserRepositoryDocumentListPage'
@@ -164,7 +165,8 @@ export const router = createBrowserRouter([
           { path: '/admin/agreement-documents/:id', element: <AgreementDocumentDetail apiBase="/admin" approver /> },
           { path: '/admin/repository-documents', element: <ErrorBoundary><AdminRepositoryDocumentListPage /></ErrorBoundary> },
           { path: '/admin/agreement-company-master', element: <AgreementCompanyMasterPage /> },
-          { path: '/admin/agreement-templates', element: <AgreementTemplatePage apiBase="/admin" /> },
+          { path: '/admin/agreement-types', element: <AgreementTypeListPage /> },
+          { path: '/admin/agreement-types/:code', element: <AgreementTypeDetailPage /> },
           { path: '/admin/legal-cases', element: <AdminLegalCaseListPage /> },
           { path: '/admin/legal-cases/:id', element: <AdminLegalCaseDetailPage /> },
           { path: '/admin/users', element: <UserManagementPage /> },

@@ -65,6 +65,9 @@ type AgreementTemplate struct {
 	Uploader      *User           `gorm:"foreignKey:UploadedBy" json:"uploader,omitempty"`
 	ActivatedBy   *uuid.UUID      `gorm:"type:uuid" json:"activated_by,omitempty"`
 	ActivatedAt   *time.Time      `json:"activated_at,omitempty"`
+	// RunningDocuments: jumlah pengajuan belum selesai yang dikunci ke versi ini;
+	// diisi saat daftar versi dibaca, tidak disimpan.
+	RunningDocuments int64 `gorm:"-" json:"running_documents"`
 }
 
 type AgreementDocument struct {
