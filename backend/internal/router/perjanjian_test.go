@@ -10,7 +10,9 @@ package router
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os/exec"
@@ -44,21 +46,34 @@ type perjanjian struct {
 	} `json:"attachments"`
 }
 
-// formPerjanjian mengembalikan isi form PKS yang sah. Tiap pemanggilan
-// menghasilkan map baru supaya tes boleh mengubahnya.
+// formPerjanjian mengembalikan isi form PKS yang sah untuk template bawaan: dua
+// termin (yang terakhir dihitung server) dan ruang lingkup sebagai daftar. Tiap
+// pemanggilan menghasilkan map baru supaya tes boleh mengubahnya.
 func formPerjanjian() map[string]any {
 	return map[string]any{
 		"pihak_kedua_nama": "PT Mitra Tes", "pihak_kedua_bidang": "Konsultan", "pihak_kedua_alamat": "Jl. Tes No. 1",
 		"nomor_pihak_kedua": "002/MITRA/2026", "pihak_kedua_telepon": "021 555 0101", "pihak_kedua_email": "mitra@contoh.co.id", "pihak_kedua_pic": "Rina",
 		"pihak_kedua_pejabat": "Siti", "pihak_kedua_jabatan": "Direktur",
-		"jenis_pekerjaan": "Jasa konsultasi", "ruang_lingkup": "Menyusun laporan",
+		"jenis_pekerjaan": "Jasa konsultasi", "ruang_lingkup": []any{"Menyusun laporan"},
 		"surat_penawaran_nomor": "SP-01/2026", "surat_penawaran_perihal": "Penawaran jasa konsultasi", "surat_penawaran_tanggal": "2025-12-01",
 		"surat_penunjukan_nomor": "SPK-01/2026", "surat_penunjukan_perihal": "Penunjukan konsultan", "surat_penunjukan_tanggal": "2025-12-15",
 		"jangka_waktu_mulai": "2026-01-01", "jangka_waktu_selesai": "2026-12-31",
-		"nilai_kontrak": 1000000, "termin_1_persen": 40, "termin_1_nilai": 400000,
-		"termin_2_persen": 60, "termin_2_nilai": 600000,
+		"nilai_kontrak": 1000000, "termin": []any{
+			map[string]any{"persen": 40, "syarat": "setelah Perjanjian ini ditandatangani oleh PARA PIHAK"},
+			map[string]any{"syarat": "setelah serah terima pekerjaan"},
+		},
 		"bank": "Bank Tes", "nomor_rekening": "1234567890", "atas_nama": "PT Mitra Tes",
 	}
+}
+
+// formPerjanjianPR9: isi form untuk versi template PR 8 (definisi field PR 9),
+// dengan termin 1 dan 2 dan ruang lingkup satu kotak teks.
+func formPerjanjianPR9() map[string]any {
+	f := formPerjanjian()
+	delete(f, "termin")
+	f["ruang_lingkup"] = "Menyusun laporan"
+	maps.Copy(f, map[string]any{"termin_1_persen": 40, "termin_1_nilai": 400000, "termin_2_persen": 60, "termin_2_nilai": 600000})
+	return f
 }
 
 func urlPerjanjian(awalan string, sisa ...string) string {
@@ -224,9 +239,12 @@ func TestAlurPerjanjian(t *testing.T) {
 
 	t.Run("ValidasiForm", func(t *testing.T) {
 		kasus := map[string]func(map[string]any){
-			"kolom wajib kosong":            func(f map[string]any) { delete(f, "pihak_kedua_nama") },
-			"persen termin tidak 100":       func(f map[string]any) { f["termin_2_persen"] = 50 },
-			"nilai termin tidak sama":       func(f map[string]any) { f["termin_2_nilai"] = 1 },
+			"kolom wajib kosong": func(f map[string]any) { delete(f, "pihak_kedua_nama") },
+			"persen termin melebihi 100": func(f map[string]any) {
+				f["termin"] = []any{map[string]any{"persen": 70, "syarat": "a"}, map[string]any{"persen": 40, "syarat": "b"}, map[string]any{"syarat": "c"}}
+			},
+			"tanpa termin":                  func(f map[string]any) { f["termin"] = []any{} },
+			"ruang lingkup kosong":          func(f map[string]any) { f["ruang_lingkup"] = []any{" "} },
 			"tanggal selesai sebelum mulai": func(f map[string]any) { f["jangka_waktu_selesai"] = "2025-01-01" },
 		}
 		for nama, rusak := range kasus {
@@ -619,6 +637,57 @@ func templateAktif(t *testing.T) barisTemplate {
 	return b
 }
 
+// fieldPR9: definisi field PKS sebelum PR 10 (termin 1 dan 2) sebagai JSON.
+func fieldPR9(t *testing.T) string {
+	t.Helper()
+	raw, err := assets.Files.ReadFile("templates/pks-template/pr9/form-schema.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var skema struct {
+		Sections json.RawMessage `json:"sections"`
+	}
+	if err := json.Unmarshal(raw, &skema); err != nil {
+		t.Fatal(err)
+	}
+	return string(skema.Sections)
+}
+
+// pasangVersiPR9 menambah versi template bawaan PR 8 (termin 1 dan 2) seperti yang
+// terpasang di server sesudah Deploy 1: DOCX-nya di MinIO, field-nya fields (JSON),
+// atau nil untuk versi sebelum PR 9 yang belum punya field. Mengembalikan id versi.
+func pasangVersiPR9(t *testing.T, status string, fields any) string {
+	t.Helper()
+	butuhMinIO(t)
+	data, err := assets.Files.ReadFile("templates/pks-template/pr9/Draft-PKS-RIU.docx")
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := uuid.NewString()
+	path := "agreement-templates/PKS/" + id + ".docx"
+	if err := storeTes.UploadBytes(context.Background(), path, data, "application/vnd.openxmlformats-officedocument.wordprocessingml.document"); err != nil {
+		t.Fatal(err)
+	}
+	eksekusi(t, `INSERT INTO agreement_templates
+		(id, created_at, updated_at, code, version, name, file_name, file_path, checksum, status, is_legacy, note, fields)
+		VALUES (?, now(), now(), 'PKS', (SELECT MAX(version) + 1 FROM agreement_templates WHERE code = 'PKS'),
+			'PKS - Template Bawaan', 'Draft-PKS-RIU.docx', ?, ?, ?, false, 'Template bawaan aplikasi.', CAST(? AS jsonb))`,
+		id, path, service.TemplateChecksum(data), status, fields)
+	return id
+}
+
+// hapusVersiUji menghapus versi template uji beserta pengajuan yang menguncinya
+// dan file DOCX-nya.
+func hapusVersiUji(id string) {
+	var path string
+	dbTes.Raw("SELECT file_path FROM agreement_templates WHERE id = ?", id).Scan(&path)
+	dbTes.Exec("DELETE FROM agreement_documents WHERE template_id = ?", id)
+	dbTes.Exec("DELETE FROM agreement_templates WHERE id = ?", id)
+	if storeTes != nil && path != "" {
+		storeTes.DeleteFile(context.Background(), path)
+	}
+}
+
 // salinTemplate menambah baris template baru yang memakai file dan field
 // template dari, supaya pengajuan tetap bisa dibuat dan dipratinjau.
 func salinTemplate(t *testing.T, dari, id, checksum, status string, legacy bool, uploadedBy any) {
@@ -777,11 +846,11 @@ func TestWatermarkTampilDiPDF(t *testing.T) {
 
 	form := formPerjanjian()
 	form["pihak_kedua_alamat"] = strings.Repeat("Jl. Contoh Panjang Nomor 123 Blok A, Kawasan Industri, ", 11)
-	var poin []string
+	var poin []any
 	for i := 0; i < 12; i++ {
 		poin = append(poin, "Pelaksanaan pekerjaan tahap lanjutan sesuai jadwal yang disepakati PARA PIHAK")
 	}
-	form["ruang_lingkup"] = strings.Join(poin, "\n")
+	form["ruang_lingkup"] = poin
 	p := buatPerjanjian(t, pemilik, form)
 	statusPerjanjian(t, legal, p.ID, "UNDER_REVIEW", "", http.StatusOK)
 	harapKode(t, panggil(t, legal, http.MethodPatch, urlPerjanjian("/legal", "/", p.ID, "/meta"), map[string]string{"signing_date": "2026-10-11"}), http.StatusOK, "mengisi tanggal tanda tangan")

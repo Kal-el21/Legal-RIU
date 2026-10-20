@@ -1,10 +1,12 @@
 package seed
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"log"
+	"slices"
 	"time"
 
 	"legal-riu-portal/internal/assets"
@@ -19,14 +21,33 @@ import (
 const (
 	agreementTemplateCode = "PKS"
 	agreementTemplateMIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+	berkasTemplateBawaan  = "templates/pks-template/Draft-PKS-RIU.docx"
+	berkasFieldBawaan     = "templates/pks-template/form-schema.json"
+	// Definisi field PR 9 (termin 1 dan 2) untuk versi sebelum PR 9 yang belum
+	// punya field; semuanya memakai template PR 8 yang disimpan di pr9/.
+	berkasFieldPR9 = "templates/pks-template/pr9/form-schema.json"
 )
+
+// bacaSkema membaca nama jenis dan definisi field dari form-schema.json yang di-embed.
+func bacaSkema(path string) (string, json.RawMessage, error) {
+	raw, err := assets.Files.ReadFile(path)
+	if err != nil {
+		return "", nil, err
+	}
+	var schema struct {
+		Name     string          `json:"name"`
+		Sections json.RawMessage `json:"sections"`
+	}
+	err = json.Unmarshal(raw, &schema)
+	return schema.Name, schema.Sections, err
+}
 
 // SeedAgreementTemplate memasang template PKS yang di-embed di aplikasi sebagai
 // versi di database dan MinIO, lalu memindahkan pengajuan yang belum selesai dari
 // template lama ke template itu. Aman dijalankan setiap server start: template
 // bawaan dikenali dari checksum-nya, jadi hanya dipasang sekali per isi file.
 func SeedAgreementTemplate(db *gorm.DB, store *storage.MinIOClient) error {
-	data, err := assets.Files.ReadFile("templates/pks-template/Draft-PKS-RIU.docx")
+	data, err := assets.Files.ReadFile(berkasTemplateBawaan)
 	if err != nil {
 		return err
 	}
@@ -49,16 +70,42 @@ func SeedAgreementTemplate(db *gorm.DB, store *storage.MinIOClient) error {
 	return pindahkanDariTemplateLama(db, checksum)
 }
 
-// pasangTemplateBawaan menambah template bawaan sebagai versi berikutnya. Versi
-// itu langsung aktif kalau yang aktif juga template bawaan (atau belum ada yang
-// aktif); template unggahan Admin tidak pernah diganti.
+// pasangTemplateBawaan menambah template bawaan sebagai versi berikutnya, dengan
+// definisi field bawaannya sendiri. Field kerja jenis PKS ikut diganti ke definisi
+// itu hanya kalau belum diubah Admin, yaitu masih sama dengan field template bawaan
+// yang sudah terpasang (keputusan D3). Versi baru langsung aktif kalau yang aktif juga
+// template bawaan (atau belum ada yang aktif) dan field kerja tidak diubah Admin;
+// template unggahan Admin tidak pernah diganti.
 func pasangTemplateBawaan(db *gorm.DB, store *storage.MinIOClient, data []byte, checksum string) error {
+	_, fields, err := bacaSkema(berkasFieldBawaan)
+	if err != nil {
+		return err
+	}
 	var aktif entity.AgreementTemplate
-	err := db.Where("code = ? AND status = ?", agreementTemplateCode, entity.TemplateStatusActive).First(&aktif).Error
+	err = db.Where("code = ? AND status = ?", agreementTemplateCode, entity.TemplateStatusActive).First(&aktif).Error
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return err
 	}
 	aktifkan := errors.Is(err, gorm.ErrRecordNotFound) || aktif.UploadedBy == nil
+
+	// Field kerja belum diubah Admin kalau masih sama dengan field salah satu
+	// template bawaan. Jenis PKS yang belum terdaftar (database baru) juga belum.
+	var jenis entity.AgreementType
+	gantiKerja := true
+	if err := db.Where("code = ?", agreementTemplateCode).First(&jenis).Error; err == nil && len(jenis.Fields) > 0 {
+		var bawaan []entity.AgreementTemplate
+		if err := db.Select("fields").Where("code = ? AND uploaded_by IS NULL", agreementTemplateCode).Find(&bawaan).Error; err != nil {
+			return err
+		}
+		// Kedua kolom jsonb, jadi isi yang sama terbaca sebagai teks yang sama persis.
+		gantiKerja = slices.ContainsFunc(bawaan, func(v entity.AgreementTemplate) bool { return bytes.Equal(jenis.Fields, v.Fields) })
+	} else if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
+	}
+	if !gantiKerja {
+		aktifkan = false
+		log.Printf("Isian kerja jenis %s sudah diubah Admin: template bawaan baru dipasang sebagai Draft, isian kerja tidak diganti", agreementTemplateCode)
+	}
 
 	var versi int
 	if err := db.Model(&entity.AgreementTemplate{}).
@@ -76,6 +123,7 @@ func pasangTemplateBawaan(db *gorm.DB, store *storage.MinIOClient, data []byte, 
 		Checksum: checksum,
 		Status:   entity.TemplateStatusDraft,
 		Note:     "Template bawaan aplikasi.",
+		Fields:   fields,
 	}
 	if aktifkan {
 		now := time.Now()
@@ -95,6 +143,11 @@ func pasangTemplateBawaan(db *gorm.DB, store *storage.MinIOClient, data []byte, 
 				return err
 			}
 		}
+		if gantiKerja {
+			if err := tx.Model(&entity.AgreementType{}).Where("code = ?", agreementTemplateCode).Update("fields", fields).Error; err != nil {
+				return err
+			}
+		}
 		return tx.Create(tpl).Error
 	})
 	if err != nil {
@@ -107,7 +160,9 @@ func pasangTemplateBawaan(db *gorm.DB, store *storage.MinIOClient, data []byte, 
 // template lama (diisi lewat pencocokan kalimat) ke template bawaan bercheksum
 // itu. Isi keduanya sama (dijaga TestIsiSamaDenganTemplateLama), dan template
 // lama tidak bisa dipakai lagi setelah kode pengisiannya dihapus. Pengajuan
-// Selesai tidak disentuh: dokumen finalnya sudah tersimpan.
+// Selesai tidak disentuh: dokumen finalnya sudah tersimpan. Sejak PR 10 template
+// bawaan memakai termin berulang, tetapi Deploy 1 (PR 8 dan 9) sudah memindah
+// semua pengajuan dari template lama, jadi di server tidak ada lagi yang dipindah.
 func pindahkanDariTemplateLama(db *gorm.DB, checksum string) error {
 	res := db.Exec(`
 		UPDATE agreement_documents SET
@@ -130,35 +185,32 @@ func pindahkanDariTemplateLama(db *gorm.DB, checksum string) error {
 }
 
 // SeedAgreementTypes mendaftarkan jenis dokumen PKS dan mengisi definisi field
-// pada versi template PKS yang belum punya: versi sebelum PR 9 (termasuk versi
-// lama yang masih dikunci pengajuan berjalan) dan template bawaan yang baru
-// dipasang. Field diambil dari form-schema.json yang di-embed. Versi yang sudah
-// punya field tidak disentuh, jadi aman dijalankan berulang.
+// yang belum ada. Field kerja Admin dimulai dari field bawaan. Versi template
+// tanpa field adalah versi sebelum PR 9 (termasuk versi lama yang masih dikunci
+// pengajuan berjalan), yang memakai template PR 8 dengan termin 1 dan 2, jadi
+// diisi definisi field PR 9. Template bawaan membawa field-nya sejak dipasang.
+// Yang sudah punya field tidak disentuh, jadi aman dijalankan berulang.
 func SeedAgreementTypes(db *gorm.DB) error {
-	raw, err := assets.Files.ReadFile("templates/pks-template/form-schema.json")
+	name, bawaan, err := bacaSkema(berkasFieldBawaan)
 	if err != nil {
 		return err
 	}
-	var schema struct {
-		Name     string          `json:"name"`
-		Sections json.RawMessage `json:"sections"`
-	}
-	if err := json.Unmarshal(raw, &schema); err != nil {
+	_, pr9, err := bacaSkema(berkasFieldPR9)
+	if err != nil {
 		return err
 	}
-	jenis := entity.AgreementType{Code: agreementTemplateCode, Name: schema.Name, IsActive: true}
+	jenis := entity.AgreementType{Code: agreementTemplateCode, Name: name, IsActive: true}
 	if err := db.Where("code = ?", jenis.Code).FirstOrCreate(&jenis).Error; err != nil {
 		return err
 	}
-	// Field kerja Admin (PR 9 tahap 9.3) dimulai dari field bawaan yang sama.
 	if err := db.Model(&entity.AgreementType{}).
 		Where("code = ? AND fields IS NULL", agreementTemplateCode).
-		Update("fields", schema.Sections).Error; err != nil {
+		Update("fields", bawaan).Error; err != nil {
 		return err
 	}
 	return db.Model(&entity.AgreementTemplate{}).
 		Where("code = ? AND fields IS NULL", agreementTemplateCode).
-		Update("fields", schema.Sections).Error
+		Update("fields", pr9).Error
 }
 
 // backfillAgreementDocumentTemplate mengarahkan dokumen tanpa template ke versi 1,

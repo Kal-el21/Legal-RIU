@@ -258,7 +258,10 @@ func paragraphText(paragraph string) string {
 	return b.String()
 }
 
-var paraIDRE = regexp.MustCompile(`\s+w14:(?:paraId|textId)="[^"]*"`)
+var (
+	paraIDRE   = regexp.MustCompile(`\s+w14:(?:paraId|textId)="[^"]*"`)
+	bookmarkRE = regexp.MustCompile(`<w:bookmark(?:Start|End)\b[^>]*/>`)
+)
 
 // paragrafBerisi: paragraf yang teksnya memuat salah satu token u.
 func paragrafBerisi(paragraph string, u ParagrafUlang) bool {
@@ -294,8 +297,12 @@ func ulangParagraf(xmlText string, u ParagrafUlang) string {
 		// Salinan tidak boleh berbagi id paragraf Word.
 		paragraph = paraIDRE.ReplaceAllString(paragraph, "")
 		out.WriteString(xmlText[akhir:loc[0]])
-		for _, b := range baris {
+		for i, b := range baris {
 			salinan := paragraph
+			if i > 0 {
+				// Id bookmark Word harus unik; bookmark tetap di salinan pertama.
+				salinan = bookmarkRE.ReplaceAllString(salinan, "")
+			}
 			for t, v := range b {
 				for range strings.Count(teks, "{{"+t+"}}") {
 					salinan = replaceAcrossWordRuns(salinan, "{{"+t+"}}", wordValue(v))

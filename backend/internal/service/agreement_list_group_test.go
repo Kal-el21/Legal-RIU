@@ -89,7 +89,7 @@ func TestDaftarPoinDiulang(t *testing.T) {
 // dihitung server; persen terakhir dan nilai dari browser diabaikan.
 func TestTerminDiulang(t *testing.T) {
 	template := docxDenganIsi(t, `<w:p><w:r><w:t>Nilai kontrak {{NILAI_KONTRAK}} dibagi menjadi {{TERMIN_JUMLAH}} termin:</w:t></w:r></w:p>`+
-		`<w:p><w:r><w:t>Termin {{TERMIN_</w:t></w:r><w:r><w:t>URUTAN}}: {{TERMIN_PERSEN}}% ({{TERMIN_PERSEN_TERBILANG}} persen) sebesar {{TERMIN_NILAI}} ({{TERMIN_NILAI_TERBILANG}} rupiah), dibayarkan {{TERMIN_SYARAT}} (akhir termin {{TERMIN_URUTAN}}).</w:t></w:r></w:p>`+
+		`<w:p><w:bookmarkStart w:id="1" w:name="_Hlk1"/><w:r><w:t>Termin {{TERMIN_</w:t></w:r><w:bookmarkEnd w:id="1"/><w:r><w:t>URUTAN}}: {{TERMIN_PERSEN}}% ({{TERMIN_PERSEN_TERBILANG}} persen) sebesar {{TERMIN_NILAI}} ({{TERMIN_NILAI_TERBILANG}} rupiah), dibayarkan {{TERMIN_SYARAT}} (akhir termin {{TERMIN_URUTAN}}).</w:t></w:r></w:p>`+
 		`<w:p><w:r><w:t>Penutup.</w:t></w:r></w:p><w:sectPr/>`)
 	sections := bagianTermin()
 	data := isianJSON(t, `{"nilai_kontrak": "Rp 750.000.000", "ruang_lingkup": ["Analisis"], "termin": [
@@ -115,6 +115,10 @@ func TestTerminDiulang(t *testing.T) {
 	}
 	if got := teksParagraf(t, out); strings.Join(got, "\n") != strings.Join(harap, "\n") {
 		t.Errorf("paragraf:\n%s\nharus:\n%s", strings.Join(got, "\n"), strings.Join(harap, "\n"))
+	}
+	// Id bookmark Word harus unik, jadi bookmark hanya ikut di salinan pertama.
+	if doc := generatedDocumentXML(t, out); strings.Count(doc, "<w:bookmarkStart") != 1 || strings.Count(doc, "<w:bookmarkEnd") != 1 {
+		t.Errorf("bookmark tergandakan: %d awal, %d akhir", strings.Count(doc, "<w:bookmarkStart"), strings.Count(doc, "<w:bookmarkEnd"))
 	}
 }
 

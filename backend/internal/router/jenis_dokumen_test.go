@@ -79,8 +79,10 @@ func fieldTemplate(t *testing.T, id string) string {
 }
 
 // Migrasi PR 9: jenis PKS terdaftar, dan setiap versi template PKS yang belum
-// punya field (termasuk versi lama yang masih dikunci pengajuan) mendapat field
-// dari form-schema.json. Dijalankan dua kali, seperti server yang dinyalakan ulang.
+// punya field (versi sebelum PR 9, termasuk yang masih dikunci pengajuan) mendapat
+// definisi field PR 9, karena versi itu memakai template PR 8 dengan termin 1 dan 2.
+// Field kerja dimulai dari field template bawaan. Dijalankan dua kali, seperti
+// server yang dinyalakan ulang.
 func TestMigrasiJenisDokumen(t *testing.T) {
 	// Versi lama tanpa field, seperti template sebelum PR 9.
 	lama := uuid.NewString()
@@ -90,7 +92,6 @@ func TestMigrasiJenisDokumen(t *testing.T) {
 			'uji', 'uji.docx', 'uji/tidak-ada.docx', 'sebelum-pr9-uji', 'ARCHIVED', false, 'uji')`, lama)
 	t.Cleanup(func() { dbTes.Exec("DELETE FROM agreement_templates WHERE id = ?", lama) })
 	eksekusi(t, "DELETE FROM agreement_types WHERE code = 'PKS'")
-	eksekusi(t, "UPDATE agreement_templates SET fields = NULL WHERE code = 'PKS'")
 
 	var jenis [2]string
 	var field [2]string
@@ -110,9 +111,9 @@ func TestMigrasiJenisDokumen(t *testing.T) {
 	if field[0] == "" || field[0] != field[1] {
 		t.Fatalf("field versi lama setelah putaran 1 dan 2 berbeda atau kosong:\n%s\n%s", field[0], field[1])
 	}
-	// Field kerja Admin dimulai dari field bawaan yang sama.
-	if kerja := fieldJenis(t, "PKS"); kerja != field[0] {
-		t.Errorf("field kerja jenis PKS berbeda dari field versi template:\n%s", kerja)
+	// Field kerja Admin dimulai dari field template bawaan (grup termin), bukan PR 9.
+	if kerja := fieldJenis(t, "PKS"); !strings.Contains(kerja, `"type": "group"`) || strings.Contains(kerja, "termin_1_persen") {
+		t.Errorf("field kerja jenis PKS bukan field template bawaan:\n%s", kerja)
 	}
 
 	var bagian []bagianField
@@ -183,24 +184,28 @@ func TestMigrasiJenisDokumen(t *testing.T) {
 func TestPengajuanLamaTetapJalan(t *testing.T) {
 	butuhMinIO(t)
 	user := masukPeran(t, entity.RoleUser)
-	aktif := templateAktif(t)
-	p := buatPerjanjian(t, user, formPerjanjian())
 
-	// Versi baru diaktifkan, jadi pengajuan itu kini memakai versi lama.
-	baru := uuid.NewString()
+	// Pengajuan dibuat saat versi PR 8 aktif, lalu template bawaan aktif kembali,
+	// jadi pengajuan itu kini memakai versi lama yang belum punya field.
+	aktif := templateAktif(t)
 	eksekusi(t, "UPDATE agreement_templates SET status = 'ARCHIVED' WHERE id = ?", aktif.ID)
-	salinTemplate(t, aktif.ID, baru, "versi-baru-uji", string(entity.TemplateStatusActive), false, nil)
+	lama := pasangVersiPR9(t, string(entity.TemplateStatusActive), fieldPR9(t))
 	t.Cleanup(func() {
-		dbTes.Exec("DELETE FROM agreement_templates WHERE id = ?", baru)
+		hapusVersiUji(lama)
 		dbTes.Exec("UPDATE agreement_templates SET status = 'ACTIVE' WHERE id = ?", aktif.ID)
 	})
-	eksekusi(t, "UPDATE agreement_templates SET fields = NULL WHERE code = 'PKS'")
+	p := buatPerjanjian(t, user, formPerjanjianPR9())
+	eksekusi(t, "UPDATE agreement_templates SET status = 'ARCHIVED', fields = NULL WHERE id = ?", lama)
+	eksekusi(t, "UPDATE agreement_templates SET status = 'ACTIVE' WHERE id = ?", aktif.ID)
 	if err := seed.SeedAgreementTypes(dbTes); err != nil {
 		t.Fatal(err)
 	}
+	if f := fieldTemplate(t, lama); !strings.Contains(f, "termin_1_persen") {
+		t.Fatalf("versi PR 8 tidak mendapat field PR 9: %s", f)
+	}
 
 	ambilPerjanjian(t, user, "", p.ID)
-	form := formPerjanjian()
+	form := formPerjanjianPR9()
 	form["tempat_ttd"] = "Bandung"
 	harapKode(t, panggil(t, user, http.MethodPut, urlPerjanjian("", "/", p.ID), map[string]any{"form_data": form}), http.StatusOK, "mengubah pengajuan lama")
 	if v := ambilPerjanjian(t, user, "", p.ID).FormData["tempat_ttd"]; v != "Bandung" {
@@ -663,11 +668,11 @@ func TestAktivasiTemplateBaru(t *testing.T) {
 	}
 
 	// Field yang masih dipakai DOCX dihapus: versi baru ditolak.
-	tanpaNilai := ubahField(func(f map[string]any) bool { return f["name"] != "nilai_kontrak" })
-	harapKode(t, panggil(t, admin, http.MethodPut, alamatJenis+"/PKS", map[string]any{"name": "Perjanjian Kerja Sama", "fields": tanpaNilai}), http.StatusOK, "menghapus field nilai kontrak")
-	w := versiBaruDari("Uji tanpa nilai kontrak")
+	tanpaBank := ubahField(func(f map[string]any) bool { return f["name"] != "bank" })
+	harapKode(t, panggil(t, admin, http.MethodPut, alamatJenis+"/PKS", map[string]any{"name": "Perjanjian Kerja Sama", "fields": tanpaBank}), http.StatusOK, "menghapus field bank")
+	w := versiBaruDari("Uji tanpa bank")
 	harapKode(t, w, http.StatusBadRequest, "versi baru tanpa field yang dipakai DOCX")
-	if asing := strings.Join(ditolakKarena(t, w).UnknownPlaceholders, " "); asing != "{{NILAI_KONTRAK_TERBILANG}} {{NILAI_KONTRAK}}" {
+	if asing := strings.Join(ditolakKarena(t, w).UnknownPlaceholders, " "); asing != "{{BANK}}" {
 		t.Errorf("placeholder tanpa field: %q", asing)
 	}
 	harapKode(t, versiBaruDari(""), http.StatusBadRequest, "versi baru tanpa catatan")

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"legal-riu-portal/internal/assets"
 	"legal-riu-portal/internal/entity"
 )
 
@@ -19,6 +20,21 @@ func bagianPKS(t *testing.T) []AgreementSectionDefinition {
 	}
 	d, _ := r.Get("PKS")
 	return d.Schema.Sections
+}
+
+// bagianPKSPR9: definisi field PKS sebelum PR 10 (termin 1 dan 2, ruang lingkup
+// satu kotak teks), yang dipakai versi template PR 8.
+func bagianPKSPR9(t *testing.T) []AgreementSectionDefinition {
+	t.Helper()
+	raw, err := assets.Files.ReadFile("templates/pks-template/pr9/form-schema.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var schema AgreementTypeSchema
+	if err := json.Unmarshal(raw, &schema); err != nil {
+		t.Fatal(err)
+	}
+	return schema.Sections
 }
 
 // placeholderValuesSebelumPR9 adalah salinan apa adanya pemetaan manual sebelum
@@ -103,7 +119,7 @@ func TestPKSSamaDenganSebelumnya(t *testing.T) {
 	} {
 		t.Run(c.nama, func(t *testing.T) {
 			lama := placeholderValuesSebelumPR9(c.doc, c.data, snap)
-			baru := placeholderValues(c.doc, bagianPKS(t), c.data, snap)
+			baru := placeholderValues(c.doc, bagianPKSPR9(t), c.data, snap)
 			for k, v := range lama {
 				if baru.Nilai[k] != v {
 					t.Errorf("%s: %q, sebelumnya %q", k, baru.Nilai[k], v)
@@ -173,10 +189,14 @@ func TestKatalogDariField(t *testing.T) {
 		return out
 	}
 	pks := ada(bagianPKS(t))
-	for _, token := range []string{"{{NOMOR_PIHAK_PERTAMA}}", "{{TEMPAT_TTD}}", "{{NILAI_KONTRAK_TERBILANG}}", "{{SURAT_PENAWARAN_TANGGAL_HARI}}", scopeListPlaceholder} {
+	for _, token := range []string{"{{NOMOR_PIHAK_PERTAMA}}", "{{TEMPAT_TTD}}", "{{NILAI_KONTRAK_TERBILANG}}", "{{SURAT_PENAWARAN_TANGGAL_HARI}}", "{{RUANG_LINGKUP}}", "{{TERMIN_JUMLAH}}", "{{TERMIN_SYARAT}}"} {
 		if !pks[token] {
 			t.Errorf("katalog PKS tanpa %s", token)
 		}
+	}
+	// Ruang lingkup PKS kini daftar; {{RUANG_LINGKUP_LIST}} hanya untuk versi PR 8.
+	if pks[scopeListPlaceholder] || pks["{{TERMIN_1_PERSEN}}"] || !ada(bagianPKSPR9(t))[scopeListPlaceholder] {
+		t.Errorf("katalog PKS masih menawarkan placeholder versi PR 8, atau definisi PR 9 kehilangannya")
 	}
 	nda := ada([]AgreementSectionDefinition{{Title: "Pihak Kedua", Fields: []AgreementFieldDefinition{{Name: "pihak_kedua_nama", Label: "Nama", Type: "text"}}}})
 	if !nda["{{PIHAK_KEDUA_NAMA}}"] || !nda["{{DAFTAR_LAMPIRAN}}"] || nda["{{NILAI_KONTRAK}}"] || nda[scopeListPlaceholder] {
