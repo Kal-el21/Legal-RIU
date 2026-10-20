@@ -34,6 +34,19 @@ func (h *AgreementDocumentHandler) GetType(c *gin.Context) {
 	}
 	utils.OK(c, "Success", v)
 }
+// DocumentSchema: form revisi dari versi template yang dikunci pengajuan.
+func (h *AgreementDocumentHandler) DocumentSchema(c *gin.Context) {
+	v, e := h.svc.DocumentSchema(c.Param("id"), middleware.GetUserID(c))
+	if errors.Is(e, service.ErrPengajuanTidakAda) {
+		utils.NotFound(c, e.Error())
+		return
+	}
+	if e != nil {
+		utils.BadRequest(c, e.Error(), nil)
+		return
+	}
+	utils.OK(c, "Success", v)
+}
 func (h *AgreementDocumentHandler) Create(c *gin.Context) {
 	var req dto.CreateAgreementDocumentRequest
 	var files []*multipart.FileHeader

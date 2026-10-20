@@ -60,7 +60,7 @@ import LegalReviewDocumentDetailPage from '@/pages/legal/review-documents/Review
 import LegalMaterialManagementPage from '@/pages/legal/materials/LegalMaterialManagementPage'
 import LegalMaterialDetailPage from '@/pages/legal/materials/LegalMaterialDetailPage'
 import AgreementDocumentList from '@/components/shared/AgreementDocumentList'
-import AgreementDocumentForm from '@/components/shared/AgreementDocumentForm'
+import AgreementWizard from '@/components/shared/AgreementWizard'
 import AgreementDocumentDetail from '@/components/shared/AgreementDocumentDetail'
 import AgreementCompanyMasterPage from '@/pages/admin/agreement-company-master/AgreementCompanyMasterPage'
 import AgreementTypeListPage from '@/pages/admin/agreement-types/AgreementTypeListPage'
@@ -130,9 +130,9 @@ export const router = createBrowserRouter([
           { path: '/dashboard/review-documents/:id', element: <ReviewDocumentDetailPage /> },
           { path: '/dashboard/review-documents/:id/edit', element: <ReviewDocumentFormPage /> },
           { path: '/dashboard/agreement-documents', element: <AgreementDocumentList basePath="/dashboard/agreement-documents" requester /> },
-          { path: '/dashboard/agreement-documents/new', element: <AgreementDocumentForm /> },
+          { path: '/dashboard/agreement-documents/new', element: <AgreementWizard /> },
           { path: '/dashboard/agreement-documents/:id', element: <AgreementDocumentDetail /> },
-          { path: '/dashboard/agreement-documents/:id/edit', element: <AgreementDocumentForm /> },
+          { path: '/dashboard/agreement-documents/:id/edit', element: <AgreementWizard /> },
           { path: '/dashboard/repository-documents', element: <ErrorBoundary><UserRepositoryDocumentListPage /></ErrorBoundary> },
           { path: '/dashboard/legal-cases', element: <AdminLegalCaseListPage /> },
           { path: '/dashboard/legal-cases/:id', element: <AdminLegalCaseDetailPage /> },

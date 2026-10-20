@@ -25,6 +25,7 @@ import (
 type AgreementDocumentService interface {
 	ListTypes() []dto.AgreementTypeResponse
 	GetType(string) (*dto.AgreementTypeResponse, error)
+	DocumentSchema(string, string) (*dto.AgreementTypeResponse, error)
 	Create(string, dto.CreateAgreementDocumentRequest, []*multipart.FileHeader) (*entity.AgreementDocument, error)
 	GetAll(string, bool, dto.AgreementListQuery) ([]entity.AgreementDocument, int64, error)
 	GetByID(string, string, bool) (*entity.AgreementDocument, error)
@@ -102,16 +103,46 @@ func (s *agreementDocumentService) GetType(code string) (*dto.AgreementTypeRespo
 	if e != nil {
 		return nil, errors.New("tipe dokumen tidak ditemukan")
 	}
+	return skemaVersi(typ.Code, typ.Name, tpl)
+}
+
+// DocumentSchema: form revisi dari versi template yang dikunci pengajuan, karena
+// pengajuan itu juga divalidasi dengan versi tersebut.
+func (s *agreementDocumentService) DocumentSchema(id, userID string) (*dto.AgreementTypeResponse, error) {
+	d, e := s.GetByID(id, userID, false)
+	if e != nil {
+		return nil, e
+	}
+	if d.TemplateID == nil {
+		return nil, errors.New("pengajuan tidak terhubung ke versi template")
+	}
+	tpl, e := s.templates.Get(d.TemplateID.String())
+	if e != nil {
+		return nil, e
+	}
+	name := d.DocumentTypeCode
+	if types, err := s.templates.ActiveTypes(); err == nil {
+		for _, t := range types {
+			if t.Code == d.DocumentTypeCode {
+				name = t.Name
+			}
+		}
+	}
+	return skemaVersi(d.DocumentTypeCode, name, tpl)
+}
+
+// skemaVersi: form satu versi template, ditambah isian sistem di bagian pertama.
+func skemaVersi(code, name string, tpl *entity.AgreementTemplate) (*dto.AgreementTypeResponse, error) {
 	sections, e := templateSections(tpl)
 	if e != nil {
 		return nil, e
 	}
 	sections[0].Fields = append(sections[0].Fields, isianSistemPengaju...)
-	schema, e := json.Marshal(map[string]interface{}{"code": typ.Code, "name": typ.Name, "template_id": tpl.ID, "template_version": tpl.Version, "sections": sections})
+	schema, e := json.Marshal(map[string]interface{}{"code": code, "name": name, "template_id": tpl.ID, "template_version": tpl.Version, "sections": sections})
 	if e != nil {
 		return nil, e
 	}
-	return &dto.AgreementTypeResponse{Code: typ.Code, Name: typ.Name, Schema: schema}, nil
+	return &dto.AgreementTypeResponse{Code: code, Name: name, Schema: schema}, nil
 }
 
 func (s *agreementDocumentService) Create(userID string, req dto.CreateAgreementDocumentRequest, files []*multipart.FileHeader) (*entity.AgreementDocument, error) {

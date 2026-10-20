@@ -803,3 +803,54 @@ func TestPratinjauPengajuanTidakAda(t *testing.T) {
 	user := masukPeran(t, entity.RoleUser)
 	harapKode(t, panggil(t, user, http.MethodGet, urlPerjanjian("", "/", uuid.NewString(), "/preview"), nil), http.StatusNotFound, "pratinjau pengajuan yang tidak ada")
 }
+
+// Form revisi digambar dari versi template yang dikunci pengajuan, bukan versi
+// aktif, karena pengajuan itu juga divalidasi dengan versi terkuncinya.
+func TestSkemaPengajuanTerkunci(t *testing.T) {
+	butuhMinIO(t)
+	user := masukPeran(t, entity.RoleUser)
+	lain := masuk(t, surelUserLain)
+	p := buatPerjanjian(t, user, formPerjanjian())
+
+	aktif := templateAktif(t)
+	baru := uuid.NewString()
+	eksekusi(t, "UPDATE agreement_templates SET status = 'ARCHIVED' WHERE id = ?", aktif.ID)
+	salinTemplate(t, aktif.ID, baru, "skema-terkunci-uji", string(entity.TemplateStatusActive), false, nil)
+	eksekusi(t, `UPDATE agreement_templates SET fields = jsonb_set(fields, '{0,title}', '"Informasi Versi Baru"') WHERE id = ?`, baru)
+	t.Cleanup(func() {
+		dbTes.Exec("DELETE FROM agreement_templates WHERE id = ?", baru)
+		dbTes.Exec("UPDATE agreement_templates SET status = 'ACTIVE' WHERE id = ?", aktif.ID)
+	})
+
+	type skema struct {
+		Schema struct {
+			TemplateID string `json:"template_id"`
+			Sections   []struct {
+				Title  string `json:"title"`
+				Fields []struct {
+					Name string `json:"name"`
+				} `json:"fields"`
+			} `json:"sections"`
+		} `json:"schema"`
+	}
+	baca := func(token, alamat string) skema {
+		t.Helper()
+		w := panggil(t, token, http.MethodGet, alamat, nil)
+		harapKode(t, w, http.StatusOK, alamat)
+		var s skema
+		isiData(t, w, &s)
+		return s
+	}
+	terkunci := baca(user, urlPerjanjian("", "/", p.ID, "/schema"))
+	if terkunci.Schema.TemplateID != p.TemplateID || terkunci.Schema.Sections[0].Title != "Informasi Umum" {
+		t.Errorf("skema revisi harus dari versi terkunci %s: template %s, bagian pertama %q", p.TemplateID, terkunci.Schema.TemplateID, terkunci.Schema.Sections[0].Title)
+	}
+	pertama := terkunci.Schema.Sections[0].Fields
+	if len(pertama) == 0 || pertama[len(pertama)-1].Name != "tempat_ttd" {
+		t.Errorf("skema revisi tanpa isian sistem tempat_ttd: %+v", pertama)
+	}
+	if s := baca(user, "/api/v1/agreement-document-types/PKS/schema"); s.Schema.Sections[0].Title != "Informasi Versi Baru" {
+		t.Errorf("skema pengajuan baru harus dari versi aktif: %q", s.Schema.Sections[0].Title)
+	}
+	harapKode(t, panggil(t, lain, http.MethodGet, urlPerjanjian("", "/", p.ID, "/schema"), nil), http.StatusNotFound, "skema pengajuan milik orang lain")
+}

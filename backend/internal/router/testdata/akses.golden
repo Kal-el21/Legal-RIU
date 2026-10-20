@@ -115,6 +115,7 @@ GET /api/v1/agreement-documents/:id: USER
 GET /api/v1/agreement-documents/:id/attachments/:attachmentId: USER
 GET /api/v1/agreement-documents/:id/pdf: USER
 GET /api/v1/agreement-documents/:id/preview: USER
+GET /api/v1/agreement-documents/:id/schema: USER
 GET /api/v1/auth/me: ADMIN LEGAL LEGAL_AU USER EXTERNAL
 GET /api/v1/auth/permissions: ADMIN LEGAL LEGAL_AU USER EXTERNAL
 GET /api/v1/case-categories: ADMIN LEGAL LEGAL_AU EXTERNAL

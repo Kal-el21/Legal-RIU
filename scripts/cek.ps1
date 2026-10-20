@@ -20,6 +20,7 @@ Langkah 'Backend: go vet'  'backend'  { go vet ./... }
 Langkah 'Backend: go test' 'backend'  { go test -count=1 ./... }
 Langkah 'Frontend: tsc'    'frontend' { npx tsc --noEmit }
 Langkah 'Frontend: lint'   'frontend' { npm run lint }
+Langkah 'Frontend: test'   'frontend' { npm test }
 Langkah 'Frontend: build'  'frontend' { npm run build }
 
 Write-Host "`nSemua pemeriksaan lulus." -ForegroundColor Green
