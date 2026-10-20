@@ -55,8 +55,9 @@ export function isianKosong(bagian: SectionDef, isian: Isian): string[] {
   return bagian.fields.filter((f) => f.required && !(isian[f.name] ?? '').trim()).map((f) => f.label)
 }
 
-// Draf pengajuan baru yang belum dikirim, disimpan di browser. Versi template dan
-// field-nya ikut disimpan supaya isian bisa dipindah kalau Admin mengganti versi.
+// Draf pengajuan baru yang belum dikirim, disimpan di browser per pengguna supaya
+// di komputer bersama draf pengguna lain tidak terbuka. Versi template dan field-nya
+// ikut disimpan supaya isian bisa dipindah kalau Admin mengganti versi.
 export interface Draf {
   code: string
   template_id: string
@@ -64,28 +65,43 @@ export interface Draf {
   isian: Isian
 }
 
-const KUNCI_DRAF = 'alea-draf-perjanjian'
+type Penyimpanan = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>
 
-export function bacaDraf(): Draf | null {
+const kunciDraf = (userId: string) => `alea-draf-perjanjian:${userId}`
+
+// Penyimpanan bisa tidak tersedia (mis. mode privat, atau di luar browser); draf
+// lalu tidak disimpan.
+const browser = (): Penyimpanan | null => {
   try {
-    const raw = localStorage.getItem(KUNCI_DRAF)
+    return globalThis.localStorage ?? null
+  } catch {
+    return null
+  }
+}
+
+export function bacaDraf(userId: string, penyimpanan = browser()): Draf | null {
+  if (!userId || !penyimpanan) return null
+  try {
+    const raw = penyimpanan.getItem(kunciDraf(userId))
     return raw ? (JSON.parse(raw) as Draf) : null
   } catch {
     return null
   }
 }
 
-export function simpanDraf(draf: Draf) {
+export function simpanDraf(userId: string, draf: Draf, penyimpanan = browser()) {
+  if (!userId || !penyimpanan) return
   try {
-    localStorage.setItem(KUNCI_DRAF, JSON.stringify(draf))
+    penyimpanan.setItem(kunciDraf(userId), JSON.stringify(draf))
   } catch {
-    // Penyimpanan browser tidak tersedia (mis. mode privat); draf tidak disimpan.
+    // Penyimpanan penuh atau ditolak; draf tidak disimpan.
   }
 }
 
-export function hapusDraf() {
+export function hapusDraf(userId: string, penyimpanan = browser()) {
+  if (!userId || !penyimpanan) return
   try {
-    localStorage.removeItem(KUNCI_DRAF)
+    penyimpanan.removeItem(kunciDraf(userId))
   } catch {
     // Tidak ada yang perlu dihapus.
   }

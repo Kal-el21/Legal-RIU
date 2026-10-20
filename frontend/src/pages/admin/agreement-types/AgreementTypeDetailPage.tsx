@@ -50,8 +50,8 @@ function jadikanIsian(sections: AgreementSectionDef[], tokens: string[]): Agreem
   const baru = kode
     .filter((k) => !/_(TERBILANG|HARI)$/.test(k) || !dasar.has(k.replace(/_(TERBILANG|HARI)$/, '')))
     .map((k) => k === 'RUANG_LINGKUP_LIST'
-      ? { name: 'ruang_lingkup', label: 'Ruang Lingkup', type: 'textarea', required: false }
-      : { name: k.toLowerCase(), label: k.toLowerCase().split('_').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' '), type: 'text', required: false })
+      ? { name: 'ruang_lingkup', label: 'Ruang Lingkup', type: 'textarea', required: true }
+      : { name: k.toLowerCase(), label: k.toLowerCase().split('_').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' '), type: 'text', required: true })
   return [...sections, { title: 'Isian baru dari Word', fields: baru }]
 }
 
@@ -87,6 +87,13 @@ function DetailJenis({ jenis }: { jenis: AgreementType }) {
   const aktif = versions.find((v) => v.status === 'ACTIVE')
   const belumDisimpan = sidik(draf) !== sidik(jenis.fields) || nama.trim() !== jenis.name
   const bedaDariAktif = !!aktif && sidik(jenis.fields) !== sidik(aktif.fields)
+  // Versi (mis. Draft yang belum diaktifkan) yang sudah memuat isian terbaru.
+  const versiTerbaru = versions.find((v) => !v.is_legacy && sidik(v.fields) === sidik(jenis.fields))
+  const keVersiBaru = () => {
+    const el = document.getElementById('catatan')
+    el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    el?.focus({ preventScroll: true })
+  }
   const kelompokToken = useMemo(() => {
     const groups = new Map<string, typeof placeholders>()
     placeholders.forEach((p) => groups.set(p.group || 'Lainnya', [...(groups.get(p.group || 'Lainnya') || []), p]))
@@ -114,9 +121,13 @@ function DetailJenis({ jenis }: { jenis: AgreementType }) {
 
   const konfirmasiAktif = (v: AgreementTemplate) => {
     const berjalan = aktif?.running_documents ?? 0
-    const pesan = aktif && berjalan > 0
+    // Versi menyalin isian saat dibuat; mengaktifkan versi lama tidak membawa perubahan isian terakhir.
+    const lamaIsian = sidik(v.fields) !== sidik(jenis.fields)
+      ? `v${v.version} tidak memuat perubahan isian terakhir. Untuk memakai isian terbaru, batalkan lalu klik Simpan sebagai versi baru.\n\n`
+      : ''
+    const pesan = lamaIsian + (aktif && berjalan > 0
       ? `Aktifkan v${v.version}? ${berjalan} pengajuan yang sedang berjalan masih memakai v${aktif.version} dan akan tetap memakainya. Pengajuan baru memakai v${v.version}.`
-      : `Aktifkan v${v.version}? Pengajuan baru akan memakai versi ini.`
+      : `Aktifkan v${v.version}? Pengajuan baru akan memakai versi ini.`)
     if (window.confirm(pesan)) aktifkan.mutate(v.id)
   }
 
@@ -142,11 +153,20 @@ function DetailJenis({ jenis }: { jenis: AgreementType }) {
       {(!aktif || bedaDariAktif) && (
         <div className="flex gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
-          <p>
-            {!aktif
-              ? 'Jenis ini belum punya versi template aktif, jadi pengaju belum bisa memilihnya. Susun isian, unggah DOCX, lalu aktifkan versinya.'
-              : 'Ada perubahan isian yang belum dipakai versi mana pun. Pengaju masih memakai isian versi aktif. Unggah DOCX atau Simpan sebagai versi baru, lalu aktifkan.'}
-          </p>
+          <div className="flex-1 space-y-2">
+            <p>
+              {!aktif
+                ? 'Jenis ini belum punya versi template aktif, jadi pengaju belum bisa memilihnya. ' + (versiTerbaru ? `v${versiTerbaru.version} sudah memuat isian terbaru; aktifkan di Riwayat Versi.` : 'Susun isian, unggah DOCX, lalu aktifkan versinya.')
+                : versiTerbaru
+                  ? `Isian terbaru sudah ada di v${versiTerbaru.version}, tetapi belum diaktifkan. Pengaju masih memakai isian v${aktif.version}.`
+                  : `Ada perubahan isian yang belum dipakai versi mana pun. Pengaju masih memakai isian v${aktif.version}. Buat versi baru (Unggah DOCX atau Simpan sebagai versi baru), lalu aktifkan versi itu.`}
+            </p>
+            {!versiTerbaru && (
+              <Button variant="outline" size="sm" className="bg-white" onClick={keVersiBaru}>
+                Buat versi baru
+              </Button>
+            )}
+          </div>
         </div>
       )}
 
@@ -309,6 +329,7 @@ function DetailJenis({ jenis }: { jenis: AgreementType }) {
                       <td className="px-6 py-4">
                         <span className={`inline-block text-xs px-2 py-0.5 rounded-full border ${statusStyle[v.status]}`}>{statusLabel[v.status]}</span>
                         {v.is_legacy && <p className="text-xs text-gray-500 mt-1">Format lama, hanya bisa diunduh</p>}
+                        {!v.is_legacy && sidik(v.fields) !== sidik(jenis.fields) && <p className="text-xs text-amber-700 mt-1">Isian versi ini berbeda dari isian sekarang</p>}
                       </td>
                       <td className="px-6 py-4 text-gray-600">{v.running_documents} pengajuan berjalan</td>
                       <td className="px-6 py-4 text-gray-600">

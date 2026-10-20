@@ -49,6 +49,7 @@ type perjanjian struct {
 func formPerjanjian() map[string]any {
 	return map[string]any{
 		"pihak_kedua_nama": "PT Mitra Tes", "pihak_kedua_bidang": "Konsultan", "pihak_kedua_alamat": "Jl. Tes No. 1",
+		"nomor_pihak_kedua": "002/MITRA/2026", "pihak_kedua_telepon": "021 555 0101", "pihak_kedua_email": "mitra@contoh.co.id", "pihak_kedua_pic": "Rina",
 		"pihak_kedua_pejabat": "Siti", "pihak_kedua_jabatan": "Direktur",
 		"jenis_pekerjaan": "Jasa konsultasi", "ruang_lingkup": "Menyusun laporan",
 		"surat_penawaran_nomor": "SP-01/2026", "surat_penawaran_perihal": "Penawaran jasa konsultasi", "surat_penawaran_tanggal": "2025-12-01",

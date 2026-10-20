@@ -134,7 +134,7 @@ export default function FieldEditor({ sections, onChange }: Props) {
           </div>
 
           <div className="px-4 py-3">
-            <Button type="button" variant="outline" size="sm" onClick={() => ubahBagian(i, { ...bagian, fields: [...bagian.fields, { name: '', label: '', type: 'text', required: false }] })}>
+            <Button type="button" variant="outline" size="sm" onClick={() => ubahBagian(i, { ...bagian, fields: [...bagian.fields, { name: '', label: '', type: 'text', required: true }] })}>
               <Plus className="w-4 h-4" /> Tambah isian
             </Button>
           </div>

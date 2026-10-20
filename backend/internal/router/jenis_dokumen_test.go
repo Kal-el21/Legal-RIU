@@ -142,6 +142,12 @@ func TestMigrasiJenisDokumen(t *testing.T) {
 			t.Errorf("%s bertipe %q, harus percent (keputusan B2)", nama, isi[nama].tipe)
 		}
 	}
+	// Semua isian bawaan wajib; Admin bisa melonggarkannya di Jenis Perjanjian (keputusan F).
+	for nama, f := range isi {
+		if !f.wajib {
+			t.Errorf("isian bawaan %s tidak wajib (keputusan F)", nama)
+		}
+	}
 	for _, surat := range []string{"penawaran", "penunjukan"} {
 		for _, kolom := range []string{"nomor", "perihal", "tanggal"} {
 			if nama := "surat_" + surat + "_" + kolom; !isi[nama].wajib {
@@ -930,4 +936,34 @@ func TestPenandaTemplateLama(t *testing.T) {
 	if milik.OldTemplate != nil || daftarPenanda(t, user, "")[berjalan.ID].OldTemplate != nil {
 		t.Error("pengaju diberi penanda template lama")
 	}
+}
+
+// Tempat tanda tangan tidak wajib bagi pengaju, tetapi dokumen final tidak boleh
+// tanpa tempat: persetujuan ditolak kalau isian approver, usulan pengaju, dan
+// tempat bawaan master semuanya kosong (keputusan G).
+func TestTempatTandaTanganSaatPersetujuan(t *testing.T) {
+	butuhMinIO(t)
+	pemilik := masukPeran(t, entity.RoleUser)
+	legal := masukPeran(t, entity.RoleLegal)
+	var bawaan string
+	dbTes.Raw("SELECT default_signing_place FROM agreement_company_masters WHERE is_active LIMIT 1").Scan(&bawaan)
+	eksekusi(t, "UPDATE agreement_company_masters SET default_signing_place = '' WHERE is_active")
+	t.Cleanup(func() {
+		dbTes.Exec("UPDATE agreement_company_masters SET default_signing_place = ? WHERE is_active", bawaan)
+	})
+
+	p := buatPerjanjian(t, pemilik, formPerjanjian())
+	statusPerjanjian(t, legal, p.ID, "UNDER_REVIEW", "", http.StatusOK)
+	harapKode(t, panggil(t, legal, http.MethodPatch, urlPerjanjian("/legal", "/", p.ID, "/meta"), map[string]string{"signing_date": "2026-10-20"}), http.StatusOK, "mengisi tanggal tanda tangan")
+	w := panggil(t, legal, http.MethodPatch, urlPerjanjian("/legal", "/", p.ID, "/status"), map[string]string{"status": "COMPLETED"})
+	harapKode(t, w, http.StatusBadRequest, "menyetujui tanpa tempat tanda tangan")
+	if !strings.Contains(w.Body.String(), "Tempat penandatanganan wajib diisi") {
+		t.Errorf("pesan tanpa tempat tanda tangan: %s", w.Body)
+	}
+
+	t.Run("TempatDariApprover", func(t *testing.T) {
+		butuhLibreOffice(t)
+		harapKode(t, panggil(t, legal, http.MethodPatch, urlPerjanjian("/legal", "/", p.ID, "/meta"), map[string]string{"signing_place": "Bandung"}), http.StatusOK, "approver mengisi tempat")
+		statusPerjanjian(t, legal, p.ID, "COMPLETED", "", http.StatusOK)
+	})
 }

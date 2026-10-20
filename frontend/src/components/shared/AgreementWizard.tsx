@@ -5,14 +5,13 @@ import { AlertTriangle, ArrowLeft, ArrowRight, Check, RefreshCw, Send, X } from 
 import { toast } from 'sonner'
 import { agreementService, type AgreementDocument, type AgreementSchema } from '@/services/agreement-document.service'
 import { bacaDraf, hapusDraf, isianKosong, pindahkanIsian, simpanDraf, type FieldDef, type HasilPindah, type Isian } from '@/lib/agreement-draft'
+import { useAuthStore } from '@/store/auth.store'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import StatusBadge from '@/components/common/StatusBadge'
 import type { SubmissionStatus } from '@/types'
-
-type Langkah = { jenis: 'jenis' } | { jenis: 'bagian'; i: number } | { jenis: 'lampiran' } | { jenis: 'tinjau' }
 
 // Termin PKS: termin kedua dihitung dari termin pertama. Diganti grup termin di PR 10.
 function hitungTermin(isian: Isian, adaTermin: boolean): Isian {
@@ -26,6 +25,15 @@ function hitungTermin(isian: Isian, adaTermin: boolean): Isian {
 }
 
 const OTOMATIS = new Set(['termin_2_persen', 'termin_2_nilai'])
+
+// Gulir ke elemen sesudah layar digambar ulang (mis. setelah kembali dari Tinjau).
+function gulirKe(id: string) {
+  setTimeout(() => {
+    const el = document.getElementById(id)
+    el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement) el.focus({ preventScroll: true })
+  }, 50)
+}
 
 function InputIsian({ f, nilai, ubah }: { f: FieldDef; nilai: string; ubah: (v: string) => void }) {
   if (f.type === 'textarea') {
@@ -43,24 +51,25 @@ function InputIsian({ f, nilai, ubah }: { f: FieldDef; nilai: string; ubah: (v: 
   return <Input id={f.name} type={tipe} step={f.type === 'money' ? undefined : 'any'} readOnly={OTOMATIS.has(f.name)} value={nilai} onChange={(e) => ubah(e.target.value)} />
 }
 
-// Wizard pembuatan dan revisi pengajuan perjanjian (PR 9 tahap 9.6). Langkah 1
-// "Isi data": pilih jenis, satu langkah per bagian isian, lampiran. Langkah 2
-// "Tinjau": ringkasan dan PDF pratinjau sebelum dikirim. Isian pengajuan baru
-// yang belum dikirim disimpan di browser beserta versi templatenya.
+// Wizard pembuatan dan revisi pengajuan perjanjian (PR 9, keputusan E). Langkah 1
+// "Isi data": satu halaman, satu kartu per bagian isian, lalu lampiran. Langkah 2
+// "Tinjau": ringkasan dan PDF pratinjau sebelum dikirim. Isian pengajuan baru yang
+// belum dikirim disimpan di browser per pengguna, beserta versi templatenya.
 export default function AgreementWizard() {
   const { id } = useParams()
   const revisi = !!id
   const navigate = useNavigate()
+  const userId = useAuthStore((s) => s.user?.id ?? '')
 
   const [types, setTypes] = useState<{ code: string; name: string }[]>([])
   const [schema, setSchema] = useState<AgreementSchema>()
   const [doc, setDoc] = useState<AgreementDocument>()
   const [isian, setIsian] = useState<Isian>({})
   const [files, setFiles] = useState<File[]>([])
-  const [posisi, setPosisi] = useState(0)
+  const [tinjau, setTinjau] = useState(false)
   const [tandaBaru, setTandaBaru] = useState<Set<string>>(new Set())
-  const [pesanPindah, setPesanPindah] = useState<{ versi: boolean; dihapus: string[] } | null>(null)
-  const [galatLangkah, setGalatLangkah] = useState<string[]>([])
+  const [pesanPindah, setPesanPindah] = useState<{ versi: boolean; baru: number; dihapus: string[] } | null>(null)
+  const [kosong, setKosong] = useState<string[]>([])
   const [galat, setGalat] = useState('')
   const [pratinjau, setPratinjau] = useState('')
   const [galatPratinjau, setGalatPratinjau] = useState('')
@@ -71,28 +80,17 @@ export default function AgreementWizard() {
   const sections = useMemo(() => schema?.sections ?? [], [schema])
   const adaTermin = sections.some((s) => s.fields.some((f) => f.name === 'termin_2_persen'))
   const kirimIsian = useMemo(() => hitungTermin(isian, adaTermin), [isian, adaTermin])
-  const langkah: Langkah[] = useMemo(() => [
-    ...(revisi ? [] : [{ jenis: 'jenis' } as const]),
-    ...sections.map((_, i) => ({ jenis: 'bagian', i }) as const),
-    { jenis: 'lampiran' } as const,
-    { jenis: 'tinjau' } as const,
-  ], [revisi, sections])
-  const sekarang = langkah[Math.min(posisi, langkah.length - 1)]
+  const semuaKosong = sections.flatMap((s) => isianKosong(s, kirimIsian))
 
-  const lengkap = (l: Langkah) => (l.jenis === 'jenis' ? !!schema : l.jenis === 'bagian' ? isianKosong(sections[l.i], kirimIsian).length === 0 : true)
-  const bisaKe = (k: number) => langkah.slice(0, k).every(lengkap)
-
-  // Pindahkan isian ke field versi lain. Versi diganti Admin: field baru ditandai
-  // dan pengaju diarahkan ke langkahnya. Ganti jenis: cukup catatan isian yang tidak terpakai.
+  // Pindahkan isian ke field versi lain. Versi diganti Admin: field baru ditandai dan
+  // digulir ke tempatnya. Ganti jenis: cukup catatan isian yang tidak terpakai.
   const terapkanPindah = (hasil: HasilPindah, baru: AgreementSchema, versi: boolean) => {
     setSchema(baru)
     setIsian(hasil.isian)
+    setTinjau(false)
     setTandaBaru(new Set(versi ? hasil.baru : []))
-    setPesanPindah(versi || hasil.dihapus.length ? { versi, dihapus: hasil.dihapus } : null)
-    if (versi && hasil.baru.length) {
-      const i = baru.sections.findIndex((s) => s.fields.some((f) => hasil.baru.includes(f.name)))
-      if (i >= 0) setPosisi(i + (revisi ? 0 : 1))
-    }
+    setPesanPindah(versi || hasil.dihapus.length ? { versi, baru: versi ? hasil.baru.length : 0, dihapus: hasil.dihapus } : null)
+    if (versi && hasil.baru.length) gulirKe(hasil.baru[0])
   }
 
   useEffect(() => {
@@ -109,7 +107,7 @@ export default function AgreementWizard() {
     agreementService.types()
       .then(async (daftar) => {
         setTypes(daftar)
-        const draf = bacaDraf()
+        const draf = bacaDraf(userId)
         const code = draf && daftar.some((t) => t.code === draf.code) ? draf.code : daftar.length === 1 ? daftar[0].code : ''
         if (!code) return
         const s = await agreementService.schema(code)
@@ -122,13 +120,11 @@ export default function AgreementWizard() {
         }
       })
       .catch((e: Error) => setGalat(e.message))
-    // terapkanPindah hanya memakai setter dan nilai awal, jadi cukup dijalankan sekali per halaman.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id])
+  }, [id, userId])
 
   useEffect(() => {
-    if (!revisi && schema) simpanDraf({ code: schema.code, template_id: schema.template_id, sections: schema.sections, isian })
-  }, [revisi, schema, isian])
+    if (!revisi && schema) simpanDraf(userId, { code: schema.code, template_id: schema.template_id, sections: schema.sections, isian })
+  }, [revisi, userId, schema, isian])
 
   useEffect(() => () => { if (urlPratinjau.current) URL.revokeObjectURL(urlPratinjau.current) }, [])
 
@@ -174,17 +170,24 @@ export default function AgreementWizard() {
     }
   }
 
-  const pindahKe = (k: number) => {
-    if (!bisaKe(k)) return
-    setGalatLangkah([])
-    setPosisi(k)
-    if (langkah[k].jenis === 'tinjau') void bentukPratinjau()
+  // Lanjut ke Tinjau memeriksa semua isian wajib sekaligus dan menggulir ke yang kosong pertama.
+  const keTinjau = () => {
+    if (!schema) return setKosong(['Jenis perjanjian'])
+    const pertama = sections.flatMap((s) => s.fields).find((f) => f.required && !(kirimIsian[f.name] ?? '').trim())
+    if (pertama) {
+      setKosong(semuaKosong)
+      gulirKe(pertama.name)
+      return
+    }
+    setKosong([])
+    setTinjau(true)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+    void bentukPratinjau()
   }
 
-  const lanjut = () => {
-    const kosong = sekarang.jenis === 'bagian' ? isianKosong(sections[sekarang.i], kirimIsian) : sekarang.jenis === 'jenis' && !schema ? ['Jenis perjanjian'] : []
-    if (kosong.length) return setGalatLangkah(kosong)
-    pindahKe(posisi + 1)
+  const ubahBagian = (i: number) => {
+    setTinjau(false)
+    gulirKe(`bagian-${i}`)
   }
 
   const kirim = async () => {
@@ -196,7 +199,7 @@ export default function AgreementWizard() {
         if (doc?.status === 'NEED_REVISION') await agreementService.resubmit(id, files)
       } else {
         await agreementService.create({ document_type_code: schema.code, template_id: schema.template_id, form_data: kirimIsian }, files)
-        hapusDraf()
+        hapusDraf(userId)
       }
       toast.success(revisi ? 'Revisi pengajuan tersimpan' : 'Pengajuan perjanjian terkirim')
       navigate('/dashboard/agreement-documents')
@@ -208,7 +211,6 @@ export default function AgreementWizard() {
     }
   }
 
-  const judulLangkah = (l: Langkah) => (l.jenis === 'jenis' ? 'Jenis' : l.jenis === 'bagian' ? sections[l.i].title : l.jenis === 'lampiran' ? 'Lampiran' : 'Tinjau')
   const ubah = (name: string, v: string) => setIsian((lama) => ({ ...lama, [name]: v }))
 
   if (galat) return <div className="p-12 text-center text-red-600">{galat}</div>
@@ -227,31 +229,33 @@ export default function AgreementWizard() {
       <h1 className="text-2xl font-bold mb-5" style={{ color: '#0B2545' }}>{revisi ? 'Revisi' : 'Pengajuan'} {schema?.name ?? 'Perjanjian'}</h1>
 
       <ol className="flex flex-wrap gap-2 mb-6" aria-label="Langkah pengajuan">
-        {langkah.map((l, k) => {
-          const aktif = k === posisi
-          const selesai = k < posisi && lengkap(l)
-          return (
-            <li key={k}>
-              <button
-                type="button"
-                onClick={() => pindahKe(k)}
-                disabled={!bisaKe(k)}
-                aria-current={aktif ? 'step' : undefined}
-                className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm transition disabled:cursor-not-allowed disabled:opacity-50 ${aktif ? 'border-[#0B2545] bg-[#0B2545] text-white' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}
-              >
-                {selesai ? <Check className="w-3.5 h-3.5" /> : <span className="text-xs">{l.jenis === 'tinjau' ? '2' : `1.${k + 1}`}</span>}
-                {judulLangkah(l)}
-              </button>
-            </li>
-          )
-        })}
+        {[{ judul: 'Isi data', ke: false }, { judul: 'Tinjau', ke: true }].map((l, k) => (
+          <li key={l.judul}>
+            <button
+              type="button"
+              onClick={() => (l.ke ? keTinjau() : setTinjau(false))}
+              disabled={l.ke && (!schema || semuaKosong.length > 0)}
+              aria-current={tinjau === l.ke ? 'step' : undefined}
+              className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm transition disabled:cursor-not-allowed disabled:opacity-50 ${tinjau === l.ke ? 'border-[#0B2545] bg-[#0B2545] text-white' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}
+            >
+              {!l.ke && tinjau ? <Check className="w-3.5 h-3.5" /> : <span className="text-xs">{k + 1}</span>}
+              {l.judul}
+            </button>
+          </li>
+        ))}
       </ol>
 
       {pesanPindah && (
         <div className="mb-5 flex gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
           <div className="flex-1 space-y-1">
-            {pesanPindah.versi && <p className="font-medium">Template sudah diperbarui Admin. Periksa kembali isian Anda; isian yang baru ditandai.</p>}
+            {pesanPindah.versi && (
+              <p className="font-medium">
+                {pesanPindah.baru > 0
+                  ? `Template sudah diperbarui Admin. ${pesanPindah.baru} isian baru ditandai "Baru di template ini"; isi atau periksa sebelum mengirim.`
+                  : 'Template sudah diperbarui Admin. Tidak ada isian baru; periksa kembali isian Anda sebelum mengirim.'}
+              </p>
+            )}
             {pesanPindah.dihapus.length > 0 && <p>Isian berikut tidak ada di template ini dan tidak ikut dikirim: {pesanPindah.dihapus.join(', ')}.</p>}
           </div>
           <Button variant="ghost" size="icon-sm" onClick={() => setPesanPindah(null)} aria-label="Tutup pemberitahuan" title="Tutup">
@@ -260,76 +264,85 @@ export default function AgreementWizard() {
         </div>
       )}
 
-      <section className="bg-white rounded-2xl border border-gray-100 p-6 mb-5">
-        {sekarang.jenis === 'jenis' && (
-          <div className="space-y-3">
-            <h2 className="text-lg font-semibold" style={{ color: '#0B2545' }}>Pilih jenis perjanjian</h2>
-            {!types.length && <p className="text-sm text-gray-500">Belum ada jenis perjanjian yang bisa diajukan.</p>}
-            <div className="grid sm:grid-cols-2 gap-3">
-              {types.map((t) => (
-                <button
-                  key={t.code}
-                  type="button"
-                  onClick={() => void pilihJenis(t.code)}
-                  aria-pressed={schema?.code === t.code}
-                  className={`rounded-xl border p-4 text-left transition ${schema?.code === t.code ? 'border-[#0B2545] ring-1 ring-[#0B2545]' : 'border-gray-200 hover:bg-gray-50'}`}
-                >
-                  <p className="font-medium text-gray-900">{t.name}</p>
-                  <p className="text-xs font-mono text-gray-500">{t.code}</p>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {sekarang.jenis === 'bagian' && (
-          <div>
-            <h2 className="text-lg font-semibold mb-4" style={{ color: '#0B2545' }}>{sections[sekarang.i].title}</h2>
-            <div className="grid md:grid-cols-2 gap-4">
-              {sections[sekarang.i].fields.map((f) => (
-                <div key={f.name} className={f.type === 'textarea' ? 'md:col-span-2' : ''}>
-                  <Label htmlFor={f.name} className="mb-1.5 text-gray-700">
-                    {f.label}{f.required && ' *'}
-                    {tandaBaru.has(f.name) && <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800">Baru di template ini</span>}
-                  </Label>
-                  <InputIsian f={f} nilai={kirimIsian[f.name] ?? ''} ubah={(v) => ubah(f.name, v)} />
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {sekarang.jenis === 'lampiran' && (
-          <div>
-            <h2 className="text-lg font-semibold mb-3" style={{ color: '#0B2545' }}>Lampiran</h2>
-            {!!doc?.attachments?.length && (
-              <ul className="mb-3 space-y-1 text-sm text-gray-600">
-                {doc.attachments.map((a) => <li key={a.id}>{a.file_name} <span className="text-gray-400">(sudah terlampir)</span></li>)}
-              </ul>
-            )}
-            <input type="file" multiple aria-label="Pilih file lampiran" onChange={(e) => setFiles((lama) => [...lama, ...Array.from(e.target.files || [])])} className="block w-full text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-gray-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-gray-700 hover:file:bg-gray-200" />
-            {files.length > 0 && (
-              <ul className="mt-3 space-y-2">
-                {files.map((file, index) => (
-                  <li key={`${file.name}-${index}`} className="flex items-center justify-between gap-3 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-sm">
-                    <span className="truncate text-gray-800">{file.name}</span>
-                    <Button variant="outline" size="xs" type="button" onClick={() => setFiles((lama) => lama.filter((_, i) => i !== index))} aria-label="Hapus lampiran" className="shrink-0 text-red-600 hover:bg-red-50 hover:text-red-700">Hapus</Button>
-                  </li>
+      {!tinjau ? (
+        <div className="space-y-5">
+          {!revisi && types.length > 1 && (
+            <section className="bg-white rounded-2xl border border-gray-100 p-6">
+              <h2 className="text-lg font-semibold mb-3" style={{ color: '#0B2545' }}>Jenis perjanjian</h2>
+              <div className="grid sm:grid-cols-2 gap-3">
+                {types.map((t) => (
+                  <button
+                    key={t.code}
+                    type="button"
+                    onClick={() => void pilihJenis(t.code)}
+                    aria-pressed={schema?.code === t.code}
+                    className={`rounded-xl border p-4 text-left transition ${schema?.code === t.code ? 'border-[#0B2545] ring-1 ring-[#0B2545]' : 'border-gray-200 hover:bg-gray-50'}`}
+                  >
+                    <p className="font-medium text-gray-900">{t.name}</p>
+                    <p className="text-xs font-mono text-gray-500">{t.code}</p>
+                  </button>
                 ))}
-              </ul>
-            )}
-            {!revisi && <p className="mt-3 text-xs text-gray-400">File lampiran tidak ikut tersimpan di browser; pilih ulang kalau halaman ditutup sebelum dikirim.</p>}
-          </div>
-        )}
+              </div>
+            </section>
+          )}
+          {!revisi && !types.length && <p className="text-sm text-gray-500">Belum ada jenis perjanjian yang bisa diajukan.</p>}
 
-        {sekarang.jenis === 'tinjau' && (
-          <div className="space-y-5">
+          {sections.map((s, i) => (
+            <section key={s.title + i} id={`bagian-${i}`} className="bg-white rounded-2xl border border-gray-100 p-6 scroll-mt-6">
+              <h2 className="text-lg font-semibold mb-4" style={{ color: '#0B2545' }}>{s.title}</h2>
+              <div className="grid md:grid-cols-2 gap-4">
+                {s.fields.map((f) => (
+                  <div key={f.name} className={f.type === 'textarea' ? 'md:col-span-2' : ''}>
+                    <Label htmlFor={f.name} className="mb-1.5 text-gray-700">
+                      {f.label}{f.required && ' *'}
+                      {tandaBaru.has(f.name) && <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800">Baru di template ini</span>}
+                    </Label>
+                    <InputIsian f={f} nilai={kirimIsian[f.name] ?? ''} ubah={(v) => ubah(f.name, v)} />
+                  </div>
+                ))}
+              </div>
+            </section>
+          ))}
+
+          {schema && (
+            <section className="bg-white rounded-2xl border border-gray-100 p-6">
+              <h2 className="text-lg font-semibold mb-3" style={{ color: '#0B2545' }}>Lampiran</h2>
+              {!!doc?.attachments?.length && (
+                <ul className="mb-3 space-y-1 text-sm text-gray-600">
+                  {doc.attachments.map((a) => <li key={a.id}>{a.file_name} <span className="text-gray-400">(sudah terlampir)</span></li>)}
+                </ul>
+              )}
+              <input type="file" multiple aria-label="Pilih file lampiran" onChange={(e) => setFiles((lama) => [...lama, ...Array.from(e.target.files || [])])} className="block w-full text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-gray-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-gray-700 hover:file:bg-gray-200" />
+              {files.length > 0 && (
+                <ul className="mt-3 space-y-2">
+                  {files.map((file, index) => (
+                    <li key={`${file.name}-${index}`} className="flex items-center justify-between gap-3 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-sm">
+                      <span className="truncate text-gray-800">{file.name}</span>
+                      <Button variant="outline" size="xs" type="button" onClick={() => setFiles((lama) => lama.filter((_, i) => i !== index))} aria-label="Hapus lampiran" className="shrink-0 text-red-600 hover:bg-red-50 hover:text-red-700">Hapus</Button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {!revisi && <p className="mt-3 text-xs text-gray-400">File lampiran tidak ikut tersimpan di browser; pilih ulang kalau halaman ditutup sebelum dikirim.</p>}
+            </section>
+          )}
+
+          {kosong.length > 0 && <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700">Lengkapi dulu: {kosong.join(', ')}.</p>}
+          <div className="flex justify-end">
+            <Button onClick={keTinjau} disabled={!schema} className="text-white" style={{ background: '#0B2545' }}>
+              Lanjut ke Tinjau <ArrowRight className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-5">
+          <section className="bg-white rounded-2xl border border-gray-100 p-6">
             <div className="grid gap-4 md:grid-cols-2">
               {sections.map((s, i) => (
                 <div key={s.title + i} className="rounded-xl border border-gray-100 p-4">
                   <div className="flex items-center justify-between mb-2">
                     <h3 className="font-medium text-gray-900">{s.title}</h3>
-                    <Button variant="outline" size="xs" onClick={() => pindahKe(i + (revisi ? 0 : 1))}>Ubah</Button>
+                    <Button variant="outline" size="xs" onClick={() => ubahBagian(i)}>Ubah</Button>
                   </div>
                   <dl className="space-y-1 text-sm">
                     {s.fields.map((f) => (
@@ -342,39 +355,28 @@ export default function AgreementWizard() {
                 </div>
               ))}
             </div>
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="font-medium text-gray-900">Pratinjau dokumen</h3>
-                <Button variant="outline" size="sm" onClick={() => void bentukPratinjau()} disabled={memuatPratinjau}>
-                  <RefreshCw className={`w-4 h-4 ${memuatPratinjau ? 'animate-spin' : ''}`} /> Perbarui pratinjau
-                </Button>
-              </div>
-              {galatPratinjau && <p className="mb-2 rounded-lg bg-red-50 p-3 text-sm text-red-700">{galatPratinjau}</p>}
-              {memuatPratinjau && !pratinjau && <div className="rounded-xl border border-gray-100 p-12 text-center text-gray-400">Membentuk pratinjau...</div>}
-              {pratinjau && <iframe title="Pratinjau dokumen perjanjian" src={pratinjau} className="h-[75vh] w-full rounded-xl border border-gray-200" />}
+          </section>
+          <section className="bg-white rounded-2xl border border-gray-100 p-6">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-medium text-gray-900">Pratinjau dokumen</h3>
+              <Button variant="outline" size="sm" onClick={() => void bentukPratinjau()} disabled={memuatPratinjau}>
+                <RefreshCw className={`w-4 h-4 ${memuatPratinjau ? 'animate-spin' : ''}`} /> Perbarui pratinjau
+              </Button>
             </div>
+            {galatPratinjau && <p className="mb-2 rounded-lg bg-red-50 p-3 text-sm text-red-700">{galatPratinjau}</p>}
+            {memuatPratinjau && !pratinjau && <div className="rounded-xl border border-gray-100 p-12 text-center text-gray-400">Membentuk pratinjau...</div>}
+            {pratinjau && <iframe title="Pratinjau dokumen perjanjian" src={pratinjau} className="h-[75vh] w-full rounded-xl border border-gray-200" />}
+          </section>
+          <div className="flex justify-between">
+            <Button variant="outline" onClick={() => setTinjau(false)}>
+              <ArrowLeft className="w-4 h-4" /> Kembali ke Isi data
+            </Button>
+            <Button onClick={() => void kirim()} disabled={mengirim} className="flex items-center gap-2 text-white" style={{ background: '#C8102E' }}>
+              <Send className="w-4 h-4" /> {mengirim ? 'Mengirim...' : revisi ? 'Simpan dan Ajukan Ulang' : 'Kirim Pengajuan'}
+            </Button>
           </div>
-        )}
-
-        {galatLangkah.length > 0 && (
-          <p className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">Lengkapi dulu: {galatLangkah.join(', ')}.</p>
-        )}
-      </section>
-
-      <div className="flex justify-between">
-        <Button variant="outline" onClick={() => pindahKe(posisi - 1)} disabled={posisi === 0}>
-          <ArrowLeft className="w-4 h-4" /> Sebelumnya
-        </Button>
-        {sekarang.jenis === 'tinjau' ? (
-          <Button onClick={() => void kirim()} disabled={mengirim} className="flex items-center gap-2 text-white" style={{ background: '#C8102E' }}>
-            <Send className="w-4 h-4" /> {mengirim ? 'Mengirim...' : revisi ? 'Simpan dan Ajukan Ulang' : 'Kirim Pengajuan'}
-          </Button>
-        ) : (
-          <Button onClick={lanjut} className="text-white" style={{ background: '#0B2545' }}>
-            Lanjut <ArrowRight className="w-4 h-4" />
-          </Button>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   )
 }

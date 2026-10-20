@@ -448,6 +448,10 @@ func (s *agreementDocumentService) approve(ctx context.Context, d *entity.Agreem
 	if valueString(data["tanggal_ttd"]) == "" {
 		return nil, errors.New("tanggal tanda tangan wajib diisi approver")
 	}
+	// Tempat tidak wajib bagi pengaju, tetapi dokumen final tidak boleh tanpa tempat (keputusan G).
+	if strings.TrimSpace(valueString(snapshot["signing_place"])) == "" {
+		return nil, errors.New("Tempat penandatanganan wajib diisi: isi di data persetujuan, atau isi tempat bawaan di master Pihak Pertama")
+	}
 	tpl, source, e := s.templateFor(ctx, d)
 	if e != nil {
 		return nil, e

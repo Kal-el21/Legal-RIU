@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isianKosong, pindahkanIsian, type SectionDef } from './agreement-draft'
+import { bacaDraf, hapusDraf, isianKosong, pindahkanIsian, simpanDraf, type SectionDef } from './agreement-draft'
 
 const teks = (name: string, label = name, required = false) => ({ name, label, type: 'text', required })
 
@@ -46,5 +46,30 @@ describe('isianKosong', () => {
     const bagian: SectionDef = { title: 'Mitra', fields: [teks('nama_mitra', 'Nama Mitra', true), teks('pic', 'PIC'), teks('npwp', 'NPWP', true)] }
     expect(isianKosong(bagian, { nama_mitra: ' ', pic: '' })).toEqual(['Nama Mitra', 'NPWP'])
     expect(isianKosong(bagian, { nama_mitra: 'PT A', npwp: '01' })).toEqual([])
+  })
+})
+
+describe('draf per pengguna', () => {
+  const penyimpanan = () => {
+    const isi = new Map<string, string>()
+    return { getItem: (k: string) => isi.get(k) ?? null, setItem: (k: string, v: string) => void isi.set(k, v), removeItem: (k: string) => void isi.delete(k) }
+  }
+  const draf = (nama: string) => ({ code: 'PKS', template_id: 'v1', sections: [], isian: { nama_mitra: nama } })
+
+  it('draf pengguna lain di browser yang sama tidak terbuka', () => {
+    const p = penyimpanan()
+    simpanDraf('user-a', draf('PT A'), p)
+    simpanDraf('user-b', draf('PT B'), p)
+    expect(bacaDraf('user-a', p)?.isian.nama_mitra).toBe('PT A')
+    expect(bacaDraf('user-b', p)?.isian.nama_mitra).toBe('PT B')
+    hapusDraf('user-a', p)
+    expect(bacaDraf('user-a', p)).toBeNull()
+    expect(bacaDraf('user-b', p)?.isian.nama_mitra).toBe('PT B')
+  })
+
+  it('tanpa pengguna tidak menyimpan apa pun', () => {
+    const p = penyimpanan()
+    simpanDraf('', draf('PT A'), p)
+    expect(bacaDraf('', p)).toBeNull()
   })
 })

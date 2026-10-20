@@ -112,7 +112,8 @@ bawaan menyorot rujukan-rujukan itu supaya mudah ditemukan.
 
 ## 7. Isian yang bisa kosong
 
-Daftar isian dan mana yang wajib saat ini ditetapkan aplikasi. Isian yang tidak wajib dan dibiarkan kosong tercetak
+Semua isian bawaan wajib, dan isian baru dimulai wajib. Admin bisa melonggarkannya lewat centang **Wajib** di Isian Form,
+lalu membuat versi baru. Isian yang tidak wajib dan dibiarkan kosong tercetak
 sebagai tanda `-`, mis. *"Surat Penawaran No. - perihal - pada tanggal -"*. Letakkan placeholder isian yang tidak wajib
 di kalimat yang tetap terbaca kalau isiannya kosong, atau minta isian itu dijadikan wajib.
 
