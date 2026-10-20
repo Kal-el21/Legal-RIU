@@ -23,6 +23,18 @@ type AgreementCompanyMaster struct {
 	IsActive                 bool   `gorm:"not null;default:true;index" json:"is_active"`
 }
 
+// AgreementType adalah jenis dokumen perjanjian (mis. PKS). Fields di sini adalah
+// field kerja yang sedang disusun Admin; pengajuan tidak membacanya. Saat versi
+// template dibuat, field ini disalin ke versi itu (AgreementTemplate.Fields), dan
+// pengajuan memakai salinan beku di versinya.
+type AgreementType struct {
+	Base
+	Code     string          `gorm:"size:50;not null;uniqueIndex" json:"code"`
+	Name     string          `gorm:"size:255;not null" json:"name"`
+	IsActive bool            `gorm:"not null;default:true" json:"is_active"`
+	Fields   json.RawMessage `gorm:"type:jsonb" json:"fields"`
+}
+
 type TemplateStatus string
 
 const (
@@ -46,12 +58,17 @@ type AgreementTemplate struct {
 	Status        TemplateStatus  `gorm:"size:20;not null;default:'DRAFT';index" json:"status"`
 	IsLegacy      bool            `gorm:"not null;default:false" json:"is_legacy"`
 	Placeholders  json.RawMessage `gorm:"type:jsonb" json:"placeholders,omitempty"`
+	Fields        json.RawMessage `gorm:"type:jsonb" json:"fields,omitempty"` // definisi field per bagian, dipakai pengajuan dengan versi ini
 	Note          string          `gorm:"type:text" json:"note"`
 	EffectiveDate *time.Time      `json:"effective_date,omitempty"`
 	UploadedBy    *uuid.UUID      `gorm:"type:uuid" json:"uploaded_by,omitempty"`
 	Uploader      *User           `gorm:"foreignKey:UploadedBy" json:"uploader,omitempty"`
 	ActivatedBy   *uuid.UUID      `gorm:"type:uuid" json:"activated_by,omitempty"`
+	Activator     *User           `gorm:"foreignKey:ActivatedBy" json:"activator,omitempty"`
 	ActivatedAt   *time.Time      `json:"activated_at,omitempty"`
+	// RunningDocuments: jumlah pengajuan belum selesai yang dikunci ke versi ini;
+	// diisi saat daftar versi dibaca, tidak disimpan.
+	RunningDocuments int64 `gorm:"-" json:"running_documents"`
 }
 
 type AgreementDocument struct {
@@ -75,6 +92,18 @@ type AgreementDocument struct {
 	Approver          *User                 `gorm:"foreignKey:ApprovedBy" json:"approver,omitempty"`
 	ApprovedAt        *time.Time            `json:"approved_at,omitempty"`
 	Attachments       []AgreementAttachment `gorm:"foreignKey:AgreementDocumentID" json:"attachments,omitempty"`
+	// OldTemplate diisi untuk approver kalau pengajuan berjalan masih memakai versi
+	// template lama; tidak disimpan.
+	OldTemplate *TemplateLama `gorm:"-" json:"old_template,omitempty"`
+}
+
+// TemplateLama: versi template pengajuan dibanding versi aktif jenisnya (PR 9 tahap 9.7).
+type TemplateLama struct {
+	Version       int        `json:"version"`
+	ActiveVersion int        `json:"active_version"`
+	ActiveNote    string     `json:"active_note"`
+	ActivatedAt   *time.Time `json:"activated_at,omitempty"`
+	ActivatedBy   string     `json:"activated_by"`
 }
 
 type AgreementAttachment struct {

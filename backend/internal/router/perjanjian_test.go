@@ -49,8 +49,11 @@ type perjanjian struct {
 func formPerjanjian() map[string]any {
 	return map[string]any{
 		"pihak_kedua_nama": "PT Mitra Tes", "pihak_kedua_bidang": "Konsultan", "pihak_kedua_alamat": "Jl. Tes No. 1",
+		"nomor_pihak_kedua": "002/MITRA/2026", "pihak_kedua_telepon": "021 555 0101", "pihak_kedua_email": "mitra@contoh.co.id", "pihak_kedua_pic": "Rina",
 		"pihak_kedua_pejabat": "Siti", "pihak_kedua_jabatan": "Direktur",
 		"jenis_pekerjaan": "Jasa konsultasi", "ruang_lingkup": "Menyusun laporan",
+		"surat_penawaran_nomor": "SP-01/2026", "surat_penawaran_perihal": "Penawaran jasa konsultasi", "surat_penawaran_tanggal": "2025-12-01",
+		"surat_penunjukan_nomor": "SPK-01/2026", "surat_penunjukan_perihal": "Penunjukan konsultan", "surat_penunjukan_tanggal": "2025-12-15",
 		"jangka_waktu_mulai": "2026-01-01", "jangka_waktu_selesai": "2026-12-31",
 		"nilai_kontrak": 1000000, "termin_1_persen": 40, "termin_1_nilai": 400000,
 		"termin_2_persen": 60, "termin_2_nilai": 600000,
@@ -66,9 +69,27 @@ func urlPerjanjian(awalan string, sisa ...string) string {
 	return u
 }
 
+// isiPengajuan membentuk isi permintaan membuat pengajuan seperti yang dikirim
+// frontend: kode jenis, versi template dari skema jenis itu, dan isian form.
+func isiPengajuan(t *testing.T, token, kode string, form map[string]any) map[string]any {
+	t.Helper()
+	isi := map[string]any{"document_type_code": kode, "form_data": form}
+	w := panggil(t, token, http.MethodGet, "/api/v1/agreement-document-types/"+kode+"/schema", nil)
+	if w.Code == http.StatusOK {
+		var skema struct {
+			Schema struct {
+				TemplateID string `json:"template_id"`
+			} `json:"schema"`
+		}
+		isiData(t, w, &skema)
+		isi["template_id"] = skema.Schema.TemplateID
+	}
+	return isi
+}
+
 func buatPerjanjian(t *testing.T, token string, form map[string]any) perjanjian {
 	t.Helper()
-	w := panggil(t, token, http.MethodPost, urlPerjanjian(""), map[string]any{"document_type_code": "PKS", "form_data": form})
+	w := panggil(t, token, http.MethodPost, urlPerjanjian(""), isiPengajuan(t, token, "PKS", form))
 	harapKode(t, w, http.StatusCreated, "membuat perjanjian")
 	var p perjanjian
 	isiData(t, w, &p)
@@ -118,8 +139,11 @@ func butuhLibreOffice(t *testing.T) {
 }
 
 // Jenis perjanjian dan skema formnya, yang dipakai frontend untuk menggambar form.
+// Hanya jenis yang punya template aktif yang tampil, dan template butuh MinIO.
 func TestJenisPerjanjian(t *testing.T) {
 	user := masukPeran(t, entity.RoleUser)
+	harapKode(t, panggil(t, user, http.MethodGet, "/api/v1/agreement-document-types/TIDAK-ADA/schema", nil), http.StatusNotFound, "skema jenis yang tidak ada")
+	butuhMinIO(t)
 
 	w := panggil(t, user, http.MethodGet, "/api/v1/agreement-document-types", nil)
 	harapKode(t, w, http.StatusOK, "daftar jenis perjanjian")
@@ -135,15 +159,17 @@ func TestJenisPerjanjian(t *testing.T) {
 	harapKode(t, w, http.StatusOK, "skema PKS")
 	var skema struct {
 		Schema struct {
-			Sections []json.RawMessage `json:"sections"`
+			TemplateID string            `json:"template_id"`
+			Sections   []json.RawMessage `json:"sections"`
 		} `json:"schema"`
 	}
 	isiData(t, w, &skema)
 	if len(skema.Schema.Sections) == 0 {
 		t.Error("skema PKS tidak punya bagian form")
 	}
-
-	harapKode(t, panggil(t, user, http.MethodGet, "/api/v1/agreement-document-types/TIDAK-ADA/schema", nil), http.StatusNotFound, "skema jenis yang tidak ada")
+	if skema.Schema.TemplateID != templateAktif(t).ID {
+		t.Errorf("skema PKS menyebut template %q, harus versi aktif", skema.Schema.TemplateID)
+	}
 }
 
 // Data perusahaan (pihak pertama) yang ikut dicetak di setiap perjanjian.
@@ -206,10 +232,13 @@ func TestAlurPerjanjian(t *testing.T) {
 		for nama, rusak := range kasus {
 			form := formPerjanjian()
 			rusak(form)
-			w := panggil(t, pemilik, http.MethodPost, urlPerjanjian(""), map[string]any{"document_type_code": "PKS", "form_data": form})
+			w := panggil(t, pemilik, http.MethodPost, urlPerjanjian(""), isiPengajuan(t, pemilik, "PKS", form))
 			harapKode(t, w, http.StatusBadRequest, nama)
+			if strings.Contains(w.Body.String(), "versi template") {
+				t.Errorf("%s ditolak karena versi template, bukan karena isiannya: %s", nama, w.Body)
+			}
 		}
-		w := panggil(t, pemilik, http.MethodPost, urlPerjanjian(""), map[string]any{"document_type_code": "TIDAK-ADA", "form_data": formPerjanjian()})
+		w := panggil(t, pemilik, http.MethodPost, urlPerjanjian(""), isiPengajuan(t, pemilik, "TIDAK-ADA", formPerjanjian()))
 		harapKode(t, w, http.StatusBadRequest, "jenis perjanjian tidak dikenal")
 	})
 
@@ -306,7 +335,7 @@ func TestLampiranPerjanjian(t *testing.T) {
 	lain := masuk(t, surelUserLain)
 	legal := masukPeran(t, entity.RoleLegal)
 
-	data, _ := json.Marshal(map[string]any{"document_type_code": "PKS", "form_data": formPerjanjian()})
+	data, _ := json.Marshal(isiPengajuan(t, pemilik, "PKS", formPerjanjian()))
 	kolom := map[string]string{"data": string(data)}
 	isiA, isiB := []byte("penawaran"), []byte("penawaran revisi")
 
@@ -457,27 +486,38 @@ func TestPerjanjianBelumBenar(t *testing.T) {
 }
 
 // Template perjanjian: daftar, rujukan placeholder, unduh, dan penolakan unggahan.
+// LEGAL hanya melihat; unggah dan aktivasi hanya ADMIN (keputusan T1).
 func TestTemplatePerjanjian(t *testing.T) {
 	legal := masukPeran(t, entity.RoleLegal)
+	admin := masukPeran(t, entity.RoleAdmin)
 	const alamat = "/api/v1/legal/agreement-templates"
-
-	w := panggil(t, legal, http.MethodGet, alamat+"/placeholders", nil)
-	harapKode(t, w, http.StatusOK, "rujukan placeholder")
-	var rujukan []struct {
-		Token string `json:"token"`
-	}
-	isiData(t, w, &rujukan)
-	if len(rujukan) == 0 {
-		t.Error("rujukan placeholder kosong")
-	}
+	const kelola = "/api/v1/admin/agreement-templates"
 
 	harapKode(t, panggil(t, legal, http.MethodGet, alamat+"/00000000-0000-0000-0000-000000000000", nil), http.StatusNotFound, "template yang tidak ada")
-	harapKode(t, panggilForm(t, legal, http.MethodPost, alamat, nil), http.StatusBadRequest, "unggah tanpa file")
-	harapKode(t, panggil(t, legal, http.MethodPost, alamat+"/00000000-0000-0000-0000-000000000000/activate", nil), http.StatusBadRequest, "mengaktifkan template yang tidak ada")
+	harapKode(t, panggilForm(t, legal, http.MethodPost, alamat, nil), http.StatusForbidden, "LEGAL mengunggah template")
+	harapKode(t, panggil(t, legal, http.MethodPost, alamat+"/00000000-0000-0000-0000-000000000000/activate", nil), http.StatusForbidden, "LEGAL mengaktifkan template")
+	w := panggilForm(t, admin, http.MethodPost, kelola, nil)
+	harapKode(t, w, http.StatusBadRequest, "unggah tanpa file")
+	if !strings.Contains(w.Body.String(), "emplate wajib diunggah") {
+		t.Errorf("pesan unggah tanpa file: %s", w.Body)
+	}
+	harapKode(t, panggil(t, admin, http.MethodPost, kelola+"/00000000-0000-0000-0000-000000000000/activate", nil), http.StatusBadRequest, "mengaktifkan template yang tidak ada")
+	harapKode(t, panggil(t, legal, http.MethodGet, alamat+"/placeholders?code=TIDAK-ADA", nil), http.StatusNotFound, "rujukan placeholder jenis yang tidak ada")
 
 	t.Run("TemplateBawaan", func(t *testing.T) {
 		butuhMinIO(t)
-		w := panggil(t, legal, http.MethodGet, alamat, nil)
+		// Rujukan placeholder dibentuk dari field versi aktif, jadi butuh template.
+		w := panggil(t, legal, http.MethodGet, alamat+"/placeholders", nil)
+		harapKode(t, w, http.StatusOK, "rujukan placeholder")
+		var rujukan []struct {
+			Token string `json:"token"`
+		}
+		isiData(t, w, &rujukan)
+		if len(rujukan) == 0 {
+			t.Error("rujukan placeholder kosong")
+		}
+
+		w = panggil(t, legal, http.MethodGet, alamat, nil)
 		harapKode(t, w, http.StatusOK, "daftar template")
 		var daftar []struct {
 			ID     string `json:"id"`
@@ -497,8 +537,8 @@ func TestTemplatePerjanjian(t *testing.T) {
 		}
 
 		// Mengaktifkan template yang sudah aktif tidak mengubah apa pun.
-		harapKode(t, panggil(t, legal, http.MethodPost, alamat+"/"+id+"/activate", nil), http.StatusOK, "mengaktifkan template aktif")
-		harapKode(t, panggilForm(t, legal, http.MethodPost, alamat, nil, berkas{"file", "template.pdf", []byte("%PDF")}), http.StatusBadRequest, "unggah template bukan DOCX")
+		harapKode(t, panggil(t, admin, http.MethodPost, kelola+"/"+id+"/activate", nil), http.StatusOK, "mengaktifkan template aktif")
+		harapKode(t, panggilForm(t, admin, http.MethodPost, kelola, nil, berkas{"file", "template.pdf", []byte("%PDF")}), http.StatusBadRequest, "unggah template bukan DOCX")
 	})
 }
 
@@ -549,12 +589,16 @@ func templatePengajuan(t *testing.T, id string) (templateID, checksum string) {
 	return b.TemplateID, b.TemplateChecksum
 }
 
-// Seed dijalankan dua kali, seperti server yang dinyalakan ulang.
+// Seed dijalankan dua kali, seperti server yang dinyalakan ulang. Field jenis
+// dokumen ikut diisi, seperti urutan di RunAllMigrationsAndSeeds.
 func jalankanSeedTemplate(t *testing.T) {
 	t.Helper()
 	for i := 1; i <= 2; i++ {
 		if err := seed.SeedAgreementTemplate(dbTes, storeTes); err != nil {
 			t.Fatalf("seed template putaran %d: %v", i, err)
+		}
+		if err := seed.SeedAgreementTypes(dbTes); err != nil {
+			t.Fatalf("seed jenis dokumen putaran %d: %v", i, err)
 		}
 	}
 }
@@ -575,14 +619,14 @@ func templateAktif(t *testing.T) barisTemplate {
 	return b
 }
 
-// salinTemplate menambah baris template baru yang memakai file template dari,
-// supaya pengajuan tetap bisa dibuat dan dipratinjau.
+// salinTemplate menambah baris template baru yang memakai file dan field
+// template dari, supaya pengajuan tetap bisa dibuat dan dipratinjau.
 func salinTemplate(t *testing.T, dari, id, checksum, status string, legacy bool, uploadedBy any) {
 	t.Helper()
 	eksekusi(t, `INSERT INTO agreement_templates
-		(id, created_at, updated_at, code, version, name, file_name, file_path, checksum, status, is_legacy, note, uploaded_by)
+		(id, created_at, updated_at, code, version, name, file_name, file_path, checksum, status, is_legacy, note, uploaded_by, fields)
 		SELECT ?, now(), now(), code, (SELECT MAX(version) + 1 FROM agreement_templates WHERE code = 'PKS'),
-			'uji', file_name, file_path, ?, ?, ?, 'uji', ?
+			'uji', file_name, file_path, ?, ?, ?, 'uji', ?, fields
 		FROM agreement_templates WHERE id = ?`, id, checksum, status, legacy, uploadedBy, dari)
 }
 

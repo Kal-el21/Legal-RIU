@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"mime/multipart"
+	"slices"
 	"strings"
 	"time"
 
@@ -24,15 +25,18 @@ import (
 type AgreementDocumentService interface {
 	ListTypes() []dto.AgreementTypeResponse
 	GetType(string) (*dto.AgreementTypeResponse, error)
+	DocumentSchema(string, string) (*dto.AgreementTypeResponse, error)
 	Create(string, dto.CreateAgreementDocumentRequest, []*multipart.FileHeader) (*entity.AgreementDocument, error)
 	GetAll(string, bool, dto.AgreementListQuery) ([]entity.AgreementDocument, int64, error)
 	GetByID(string, string, bool) (*entity.AgreementDocument, error)
+	Detail(string, string, bool) (*entity.AgreementDocument, error)
 	Update(string, string, dto.UpdateAgreementDocumentRequest) (*entity.AgreementDocument, error)
 	Delete(string, string) error
 	Resubmit(string, string, []*multipart.FileHeader) (*entity.AgreementDocument, error)
 	UpdateMeta(string, dto.AgreementMetaRequest) (*entity.AgreementDocument, error)
 	UpdateStatus(context.Context, string, string, dto.AgreementStatusRequest) (*entity.AgreementDocument, error)
 	Preview(context.Context, string, string, bool) ([]byte, error)
+	PreviewDraft(context.Context, string, dto.PreviewDraftRequest) ([]byte, error)
 	GetGeneratedFile(string, string, bool, string) (*minio.Object, string, error)
 	GetAttachment(string, string, string, bool) (*minio.Object, string, string, error)
 	GetMaster() (*entity.AgreementCompanyMaster, error)
@@ -42,15 +46,21 @@ type AgreementDocumentService interface {
 type agreementDocumentService struct {
 	repo      repository.AgreementDocumentRepository
 	storage   *storage.MinIOClient
-	registry  *AgreementRegistry
 	templates AgreementTemplateService
 	generator *AgreementGenerator
 	converter DOCXConverter
 }
 
-func NewAgreementDocumentService(r repository.AgreementDocumentRepository, s *storage.MinIOClient, registry *AgreementRegistry, templates AgreementTemplateService) AgreementDocumentService {
-	return &agreementDocumentService{r, s, registry, templates, NewAgreementGenerator(), DOCXConverter{}}
+func NewAgreementDocumentService(r repository.AgreementDocumentRepository, s *storage.MinIOClient, templates AgreementTemplateService) AgreementDocumentService {
+	return &agreementDocumentService{r, s, templates, NewAgreementGenerator(), DOCXConverter{}}
 }
+
+// ErrPengajuanTidakAda: pengajuan tidak ada atau bukan milik pengguna.
+var ErrPengajuanTidakAda = errors.New("pengajuan tidak ditemukan")
+
+// ErrTemplateUsang: form dikirim dengan versi template yang sudah bukan versi
+// aktif jenis dokumennya. Dijawab 409 supaya frontend memuat field versi baru.
+var ErrTemplateUsang = errors.New("Template sudah diperbarui Admin. Periksa kembali isian Anda.")
 
 // templateFor selalu mengutamakan versi yang terkunci di dokumen. Pengajuan yang
 // sedang mengantre review karena itu tidak ikut berubah ketika admin
@@ -59,41 +69,81 @@ func (s *agreementDocumentService) templateFor(ctx context.Context, d *entity.Ag
 	if d.TemplateID != nil {
 		return s.templates.TemplateByID(ctx, *d.TemplateID)
 	}
-	return s.templates.ActiveTemplate(ctx, s.canonicalCode(d.DocumentTypeCode))
+	return s.templates.ActiveTemplate(ctx, strings.ToUpper(strings.TrimSpace(d.DocumentTypeCode)))
 }
 
-func (s *agreementDocumentService) canonicalCode(code string) string {
-	if def, ok := s.registry.Get(code); ok {
-		return def.Code
+// sectionsFor membaca definisi field dari versi template yang dikunci dokumen.
+func (s *agreementDocumentService) sectionsFor(d *entity.AgreementDocument) ([]AgreementSectionDefinition, error) {
+	if d.TemplateID == nil {
+		return nil, errors.New("pengajuan tidak terhubung ke versi template")
 	}
-	return strings.ToUpper(strings.TrimSpace(code))
+	tpl, e := s.templates.Get(d.TemplateID.String())
+	if e != nil {
+		return nil, e
+	}
+	return templateSections(tpl)
 }
 
+// ListTypes hanya memuat jenis yang punya template aktif, karena hanya jenis
+// itu yang bisa diajukan.
 func (s *agreementDocumentService) ListTypes() []dto.AgreementTypeResponse {
-	defs := s.registry.List()
-	out := make([]dto.AgreementTypeResponse, 0, len(defs))
-	for _, d := range defs {
-		out = append(out, dto.AgreementTypeResponse{Code: d.Code, Name: d.Name})
+	types, _ := s.templates.ActiveTypes()
+	out := make([]dto.AgreementTypeResponse, 0, len(types))
+	for _, t := range types {
+		if _, _, e := s.templates.ActiveType(t.Code); e == nil {
+			out = append(out, dto.AgreementTypeResponse{Code: t.Code, Name: t.Name})
+		}
 	}
 	return out
 }
+
+// GetType mengembalikan form jenis dokumen dari versi template aktif. Versi itu
+// (template_id) dikirim balik saat pengajuan dibuat.
 func (s *agreementDocumentService) GetType(code string) (*dto.AgreementTypeResponse, error) {
-	d, ok := s.registry.Get(code)
-	if !ok {
+	typ, tpl, e := s.templates.ActiveType(code)
+	if e != nil {
 		return nil, errors.New("tipe dokumen tidak ditemukan")
 	}
-	return &dto.AgreementTypeResponse{Code: d.Code, Name: d.Name, Schema: d.RawSchema}, nil
+	return skemaVersi(typ.Code, typ.Name, tpl)
 }
 
-func (s *agreementDocumentService) definitionFor(code string) (AgreementTypeDefinition, error) {
-	def, ok := s.registry.Get(code)
-	if !ok {
-		return AgreementTypeDefinition{}, fmt.Errorf("tipe dokumen %q tidak terdaftar", strings.TrimSpace(code))
+// DocumentSchema: form revisi dari versi template yang dikunci pengajuan, karena
+// pengajuan itu juga divalidasi dengan versi tersebut.
+func (s *agreementDocumentService) DocumentSchema(id, userID string) (*dto.AgreementTypeResponse, error) {
+	d, e := s.GetByID(id, userID, false)
+	if e != nil {
+		return nil, e
 	}
-	if len(def.Template) == 0 {
-		return AgreementTypeDefinition{}, fmt.Errorf("template untuk tipe dokumen %q tidak tersedia", def.Code)
+	if d.TemplateID == nil {
+		return nil, errors.New("pengajuan tidak terhubung ke versi template")
 	}
-	return def, nil
+	tpl, e := s.templates.Get(d.TemplateID.String())
+	if e != nil {
+		return nil, e
+	}
+	name := d.DocumentTypeCode
+	if types, err := s.templates.ActiveTypes(); err == nil {
+		for _, t := range types {
+			if t.Code == d.DocumentTypeCode {
+				name = t.Name
+			}
+		}
+	}
+	return skemaVersi(d.DocumentTypeCode, name, tpl)
+}
+
+// skemaVersi: form satu versi template, ditambah isian sistem di bagian pertama.
+func skemaVersi(code, name string, tpl *entity.AgreementTemplate) (*dto.AgreementTypeResponse, error) {
+	sections, e := templateSections(tpl)
+	if e != nil {
+		return nil, e
+	}
+	sections[0].Fields = append(sections[0].Fields, isianSistemPengaju...)
+	schema, e := json.Marshal(map[string]interface{}{"code": code, "name": name, "template_id": tpl.ID, "template_version": tpl.Version, "sections": sections})
+	if e != nil {
+		return nil, e
+	}
+	return &dto.AgreementTypeResponse{Code: code, Name: name, Schema: schema}, nil
 }
 
 func (s *agreementDocumentService) Create(userID string, req dto.CreateAgreementDocumentRequest, files []*multipart.FileHeader) (*entity.AgreementDocument, error) {
@@ -101,11 +151,21 @@ func (s *agreementDocumentService) Create(userID string, req dto.CreateAgreement
 	if e != nil {
 		return nil, errors.New("user tidak valid")
 	}
-	def, ok := s.registry.Get(req.DocumentTypeCode)
-	if !ok {
-		return nil, errors.New("tipe dokumen tidak valid")
+	typ, tpl, e := s.templates.ActiveType(req.DocumentTypeCode)
+	if e != nil {
+		return nil, e
 	}
-	if e = validateAgreementForm(def, req.FormData); e != nil {
+	if strings.TrimSpace(req.TemplateID) == "" {
+		return nil, errors.New("versi template wajib disertakan; muat ulang halaman pengajuan")
+	}
+	if req.TemplateID != tpl.ID.String() {
+		return nil, ErrTemplateUsang
+	}
+	sections, e := templateSections(tpl)
+	if e != nil {
+		return nil, e
+	}
+	if e = validateAgreementForm(sections, req.FormData); e != nil {
 		return nil, e
 	}
 	raw, e := json.Marshal(req.FormData)
@@ -116,11 +176,7 @@ func (s *agreementDocumentService) Create(userID string, req dto.CreateAgreement
 	if e != nil {
 		return nil, e
 	}
-	tpl, _, e := s.templates.ActiveTemplate(context.Background(), def.Code)
-	if e != nil {
-		return nil, e
-	}
-	doc := &entity.AgreementDocument{TicketNumber: utils.GenerateTicketNumber("PK", seq), UserID: uid, DocumentTypeCode: def.Code, FormData: raw, AgreementNumber: nil, Status: entity.StatusSubmitted, TemplateID: &tpl.ID, TemplateChecksum: tpl.Checksum}
+	doc := &entity.AgreementDocument{TicketNumber: utils.GenerateTicketNumber("PK", seq), UserID: uid, DocumentTypeCode: typ.Code, FormData: raw, AgreementNumber: nil, Status: entity.StatusSubmitted, TemplateID: &tpl.ID, TemplateChecksum: tpl.Checksum}
 	if e = s.repo.Create(doc); e != nil {
 		return nil, errors.New("gagal membuat pengajuan")
 	}
@@ -139,7 +195,57 @@ func (s *agreementDocumentService) GetAll(userID string, all bool, q dto.Agreeme
 		}
 		owner = &id
 	}
-	return s.repo.FindAll(owner, q.Status, q.DateFrom, q.Search, q.Page, q.Limit)
+	items, total, e := s.repo.FindAll(owner, q.Status, q.DateFrom, q.Search, q.Page, q.Limit)
+	if e == nil && all {
+		s.tandaiTemplateLama(items)
+	}
+	return items, total, e
+}
+
+// Detail: GetByID untuk halaman detail; approver ikut melihat penanda template lama.
+func (s *agreementDocumentService) Detail(id, userID string, all bool) (*entity.AgreementDocument, error) {
+	d, e := s.GetByID(id, userID, all)
+	if e == nil && all {
+		docs := []entity.AgreementDocument{*d}
+		s.tandaiTemplateLama(docs)
+		d.OldTemplate = docs[0].OldTemplate
+	}
+	return d, e
+}
+
+// tandaiTemplateLama mengisi OldTemplate pada pengajuan yang belum selesai dan
+// masih dikunci ke versi selain versi aktif jenisnya. Persetujuannya membentuk
+// dokumen final dengan versi lama itu, jadi approver perlu tahu.
+func (s *agreementDocumentService) tandaiTemplateLama(docs []entity.AgreementDocument) {
+	aktif := map[string]*entity.AgreementTemplate{}
+	versi := map[uuid.UUID]*entity.AgreementTemplate{}
+	for i := range docs {
+		d := &docs[i]
+		if d.TemplateID == nil || d.Status == entity.StatusCompleted || d.Status == entity.StatusRejected {
+			continue
+		}
+		a, ada := aktif[d.DocumentTypeCode]
+		if !ada {
+			_, a, _ = s.templates.ActiveType(d.DocumentTypeCode)
+			aktif[d.DocumentTypeCode] = a
+		}
+		if a == nil || a.ID == *d.TemplateID {
+			continue
+		}
+		v, ada := versi[*d.TemplateID]
+		if !ada {
+			v, _ = s.templates.Get(d.TemplateID.String())
+			versi[*d.TemplateID] = v
+		}
+		if v == nil {
+			continue
+		}
+		oleh := ""
+		if a.Activator != nil {
+			oleh = a.Activator.FullName
+		}
+		d.OldTemplate = &entity.TemplateLama{Version: v.Version, ActiveVersion: a.Version, ActiveNote: a.Note, ActivatedAt: a.ActivatedAt, ActivatedBy: oleh}
+	}
 }
 func (s *agreementDocumentService) GetByID(id, userID string, all bool) (*entity.AgreementDocument, error) {
 	uid, e := uuid.Parse(id)
@@ -148,10 +254,10 @@ func (s *agreementDocumentService) GetByID(id, userID string, all bool) (*entity
 	}
 	d, e := s.repo.FindByID(uid)
 	if e != nil {
-		return nil, errors.New("pengajuan tidak ditemukan")
+		return nil, ErrPengajuanTidakAda
 	}
 	if !all && d.UserID.String() != userID {
-		return nil, errors.New("pengajuan tidak ditemukan")
+		return nil, ErrPengajuanTidakAda
 	}
 	return d, nil
 }
@@ -163,11 +269,11 @@ func (s *agreementDocumentService) Update(id, userID string, req dto.UpdateAgree
 	if d.Status != entity.StatusSubmitted && d.Status != entity.StatusNeedRevision {
 		return nil, errors.New("pengajuan tidak dapat diubah pada status ini")
 	}
-	def, e := s.definitionFor(d.DocumentTypeCode)
+	sections, e := s.sectionsFor(d)
 	if e != nil {
 		return nil, e
 	}
-	if e = validateAgreementForm(def, req.FormData); e != nil {
+	if e = validateAgreementForm(sections, req.FormData); e != nil {
 		return nil, e
 	}
 	d.FormData, _ = json.Marshal(req.FormData)
@@ -322,7 +428,7 @@ func (s *agreementDocumentService) approve(ctx context.Context, d *entity.Agreem
 	if d.Status != entity.StatusUnderReview {
 		return nil, errors.New("pengajuan belum dalam review")
 	}
-	def, e := s.definitionFor(d.DocumentTypeCode)
+	sections, e := s.sectionsFor(d)
 	if e != nil {
 		return nil, e
 	}
@@ -330,8 +436,9 @@ func (s *agreementDocumentService) approve(ctx context.Context, d *entity.Agreem
 	if e != nil {
 		return nil, e
 	}
-	if e = validateAgreementForm(def, data); e != nil {
-		return nil, e
+	// Isian pengajuan hanya bisa diubah pengaju, jadi approver diarahkan ke revisi.
+	if e = validateAgreementForm(sections, data); e != nil {
+		return nil, fmt.Errorf("%w. Kembalikan pengajuan ke pengaju untuk direvisi", e)
 	}
 	master, e := s.repo.GetActiveMaster()
 	if e != nil {
@@ -341,11 +448,15 @@ func (s *agreementDocumentService) approve(ctx context.Context, d *entity.Agreem
 	if valueString(data["tanggal_ttd"]) == "" {
 		return nil, errors.New("tanggal tanda tangan wajib diisi approver")
 	}
+	// Tempat tidak wajib bagi pengaju, tetapi dokumen final tidak boleh tanpa tempat (keputusan G).
+	if strings.TrimSpace(valueString(snapshot["signing_place"])) == "" {
+		return nil, errors.New("Tempat penandatanganan wajib diisi: isi di data persetujuan, atau isi tempat bawaan di master Pihak Pertama")
+	}
 	tpl, source, e := s.templateFor(ctx, d)
 	if e != nil {
 		return nil, e
 	}
-	values := placeholderValues(d, data, snapshot)
+	values := placeholderValues(d, sections, data, snapshot)
 	docx, checksum, e := s.generator.Generate(source, values, GenerateOptions{})
 	if e != nil {
 		return nil, e
@@ -410,12 +521,78 @@ func (s *agreementDocumentService) Preview(ctx context.Context, id, userID strin
 	if e != nil {
 		return nil, e
 	}
-	docx, _, e := s.generator.Generate(source, placeholderValues(d, data, partyOneSnapshot(master, data)), GenerateOptions{Draft: true})
+	sections, e := s.sectionsFor(d)
+	if e != nil {
+		return nil, e
+	}
+	docx, _, e := s.generator.Generate(source, placeholderValues(d, sections, data, partyOneSnapshot(master, data)), GenerateOptions{Draft: true})
 	if e != nil {
 		return nil, e
 	}
 	return s.converter.ToPDF(ctx, docx)
 }
+// PreviewDraft membentuk PDF pratinjau dari isian yang belum dikirim (langkah
+// Tinjau di wizard) tanpa menyimpan apa pun. Validasinya sama dengan saat Kirim,
+// jadi yang terlihat di pratinjau sama dengan yang akan dikirim.
+func (s *agreementDocumentService) PreviewDraft(ctx context.Context, userID string, req dto.PreviewDraftRequest) ([]byte, error) {
+	if strings.TrimSpace(req.TemplateID) == "" {
+		return nil, errors.New("versi template wajib disertakan; muat ulang halaman pengajuan")
+	}
+	doc := &entity.AgreementDocument{}
+	var tpl *entity.AgreementTemplate
+	if req.DocumentID != "" {
+		d, e := s.GetByID(req.DocumentID, userID, false)
+		if e != nil {
+			return nil, e
+		}
+		if d.Status != entity.StatusSubmitted && d.Status != entity.StatusNeedRevision {
+			return nil, errors.New("pengajuan tidak dapat diubah pada status ini")
+		}
+		// Revisi tetap memakai versi yang dikunci pengajuan itu.
+		if d.TemplateID == nil || d.TemplateID.String() != req.TemplateID {
+			return nil, ErrTemplateUsang
+		}
+		if tpl, e = s.templates.Get(req.TemplateID); e != nil {
+			return nil, e
+		}
+		doc = d
+	} else {
+		_, aktif, e := s.templates.ActiveType(req.DocumentTypeCode)
+		if e != nil {
+			return nil, e
+		}
+		if aktif.ID.String() != req.TemplateID {
+			return nil, ErrTemplateUsang
+		}
+		tpl = aktif
+	}
+	sections, e := templateSections(tpl)
+	if e != nil {
+		return nil, e
+	}
+	if e = validateAgreementForm(sections, req.FormData); e != nil {
+		return nil, e
+	}
+	master, e := s.repo.GetActiveMaster()
+	if e != nil {
+		return nil, errors.New("Master Pihak Pertama belum tersedia")
+	}
+	_, source, e := s.templates.TemplateByID(ctx, tpl.ID)
+	if e != nil {
+		return nil, e
+	}
+	draf := *doc
+	draf.Attachments = slices.Clone(doc.Attachments)
+	for _, nama := range req.AttachmentNames {
+		draf.Attachments = append(draf.Attachments, entity.AgreementAttachment{FileName: nama})
+	}
+	docx, _, e := s.generator.Generate(source, placeholderValues(&draf, sections, req.FormData, partyOneSnapshot(master, req.FormData)), GenerateOptions{Draft: true})
+	if e != nil {
+		return nil, e
+	}
+	return s.converter.ToPDF(ctx, docx)
+}
+
 func (s *agreementDocumentService) GetGeneratedFile(id, userID string, all bool, kind string) (*minio.Object, string, error) {
 	d, e := s.GetByID(id, userID, all)
 	if e != nil {
@@ -513,45 +690,4 @@ func partyOneSnapshot(m *entity.AgreementCompanyMaster, data map[string]interfac
 		email = m.Email
 	}
 	return map[string]interface{}{"name": m.Name, "address": m.Address, "phone": phone, "email": email, "pic": pic, "signatory_name": name, "signatory_position": pos, "signing_place": place}
-}
-func placeholderValues(d *entity.AgreementDocument, data, snap map[string]interface{}) map[string]string {
-	get := func(k string) string {
-		v := strings.TrimSpace(valueString(data[k]))
-		if v == "" {
-			return "-"
-		}
-		return v
-	}
-	date := valueString(data["tanggal_ttd"])
-	dt, _ := parseDate(date)
-	atts := make([]string, 0, len(d.Attachments))
-	for i, a := range d.Attachments {
-		atts = append(atts, fmt.Sprintf("%d. %s", i+1, a.FileName))
-	}
-	if len(atts) == 0 {
-		atts = append(atts, "-")
-	}
-	money := func(k string) int64 { return valueInt64(data[k]) }
-	pct := func(k string) int64 { return valueInt64(data[k]) }
-	return map[string]string{"NOMOR_PIHAK_PERTAMA": strOrDash(d.AgreementNumber), "NOMOR_PIHAK_KEDUA": get("nomor_pihak_kedua"), "HARI_TTD": func() string {
-		if dt.IsZero() {
-			return "-"
-		}
-		return indoDays[dt.Weekday()]
-	}(), "TANGGAL_TTD": func() string {
-		if dt.IsZero() {
-			return "-"
-		}
-		return fmt.Sprint(dt.Day())
-	}(), "BULAN_TTD": func() string {
-		if dt.IsZero() {
-			return "-"
-		}
-		return indoMonths[dt.Month()]
-	}(), "TAHUN_TTD": func() string {
-		if dt.IsZero() {
-			return "-"
-		}
-		return fmt.Sprint(dt.Year())
-	}(), "TANGGAL_TTD_LENGKAP": indoDate(date), "TEMPAT_TTD": valueString(snap["signing_place"]), "PIHAK_PERTAMA_NAMA": valueString(snap["name"]), "PIHAK_PERTAMA_ALAMAT": valueString(snap["address"]), "PIHAK_PERTAMA_TELEPON": valueString(snap["phone"]), "PIHAK_PERTAMA_EMAIL": valueString(snap["email"]), "PIHAK_PERTAMA_PIC": valueString(snap["pic"]), "PIHAK_PERTAMA_PEJABAT": valueString(snap["signatory_name"]), "PIHAK_PERTAMA_JABATAN": valueString(snap["signatory_position"]), "PIHAK_KEDUA_NAMA": get("pihak_kedua_nama"), "PIHAK_KEDUA_BIDANG": get("pihak_kedua_bidang"), "PIHAK_KEDUA_ALAMAT": get("pihak_kedua_alamat"), "PIHAK_KEDUA_TELEPON": get("pihak_kedua_telepon"), "PIHAK_KEDUA_EMAIL": get("pihak_kedua_email"), "PIHAK_KEDUA_PIC": get("pihak_kedua_pic"), "PIHAK_KEDUA_PEJABAT": get("pihak_kedua_pejabat"), "PIHAK_KEDUA_JABATAN": get("pihak_kedua_jabatan"), "JENIS_PEKERJAAN": get("jenis_pekerjaan"), "RUANG_LINGKUP": get("ruang_lingkup"), "SURAT_PENAWARAN_NOMOR": get("surat_penawaran_nomor"), "SURAT_PENAWARAN_PERIHAL": get("surat_penawaran_perihal"), "SURAT_PENAWARAN_TANGGAL": indoDate(valueString(data["surat_penawaran_tanggal"])), "SURAT_PENUNJUKAN_NOMOR": get("surat_penunjukan_nomor"), "SURAT_PENUNJUKAN_PERIHAL": get("surat_penunjukan_perihal"), "SURAT_PENUNJUKAN_TANGGAL": indoDate(valueString(data["surat_penunjukan_tanggal"])), "JANGKA_WAKTU_MULAI": indoDate(valueString(data["jangka_waktu_mulai"])), "JANGKA_WAKTU_SELESAI": indoDate(valueString(data["jangka_waktu_selesai"])), "NILAI_KONTRAK": rupiah(money("nilai_kontrak")), "NILAI_KONTRAK_TERBILANG": terbilang(money("nilai_kontrak")), "TERMIN_1_PERSEN": fmt.Sprint(pct("termin_1_persen")), "TERMIN_1_PERSEN_TERBILANG": terbilang(pct("termin_1_persen")), "TERMIN_1_NILAI": rupiah(money("termin_1_nilai")), "TERMIN_1_NILAI_TERBILANG": terbilang(money("termin_1_nilai")), "TERMIN_2_PERSEN": fmt.Sprint(pct("termin_2_persen")), "TERMIN_2_PERSEN_TERBILANG": terbilang(pct("termin_2_persen")), "TERMIN_2_NILAI": rupiah(money("termin_2_nilai")), "TERMIN_2_NILAI_TERBILANG": terbilang(money("termin_2_nilai")), "BANK": get("bank"), "NOMOR_REKENING": get("nomor_rekening"), "ATAS_NAMA": get("atas_nama"), "DAFTAR_LAMPIRAN": strings.Join(atts, "\n")}
 }

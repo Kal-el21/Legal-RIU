@@ -46,20 +46,6 @@ func TestPKSTemplateGeneration(t *testing.T) {
 	}
 }
 
-func TestPKSLegacyDocumentTypeAliases(t *testing.T) {
-	r, err := NewAgreementRegistry()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	for _, code := range []string{"PKS", " pks ", "", "PERJANJIAN KERJA SAMA", "PERJANJIAN_KERJA_SAMA", "lain-lain", "LAIN LAIN", "OTHER"} {
-		definition, ok := r.Get(code)
-		if !ok || definition.Code != "PKS" || len(definition.Template) == 0 {
-			t.Fatalf("kode lama %q tidak menghasilkan template PKS", code)
-		}
-	}
-}
-
 // Isian masuk ke tempatnya di template PKS bawaan: nomor, surat rujukan, termin,
 // rekening dan alamat dengan tab rata, serta poin ruang lingkup.
 func TestPKSFieldPlacement(t *testing.T) {
@@ -189,7 +175,6 @@ func assertKeyValueTabs(t *testing.T, paragraphs, texts []string, expected strin
 }
 
 var (
-	wordTableRE       = regexp.MustCompile(`(?s)<w:tbl>.*?</w:tbl>`)
 	pageBreakBeforeRE = regexp.MustCompile(`<w:pageBreakBefore(?:\s+w:val="(?:1|true|on)")?\s*/>`)
 	pageBreakRunRE    = regexp.MustCompile(`<w:br\b[^>]*w:type="page"`)
 )
@@ -213,7 +198,7 @@ func TestTemplatePKSBawaan(t *testing.T) {
 		t.Error("template bawaan belum berisi placeholder; masih template lama yang diisi lewat pencocokan kalimat")
 	}
 	known := map[string]bool{}
-	for _, token := range SupportedPlaceholderTokens() {
+	for _, token := range SupportedPlaceholderTokens(definition.Schema.Sections) {
 		known[token] = true
 	}
 	for _, p := range placeholders {
@@ -242,19 +227,9 @@ func TestTemplatePKSBawaan(t *testing.T) {
 
 	xmlText := generatedDocumentXML(t, definition.Template)
 
-	// Ruang kosong di dalam tabel (mis. tempat tanda tangan basah) disengaja,
-	// jadi hanya paragraf di luar tabel yang diperiksa.
-	run, longest, before := 0, 0, ""
-	for _, paragraph := range wordParagraphRE.FindAllString(wordTableRE.ReplaceAllString(xmlText, ""), -1) {
-		text := strings.TrimSpace(paragraphText(paragraph))
-		if text == "" {
-			run++
-			continue
-		}
-		if run > longest {
-			longest, before = run, text
-		}
-		run = 0
+	longest, before, err := paragrafKosongTerpanjang(definition.Template)
+	if err != nil {
+		t.Fatal(err)
 	}
 	if longest >= 4 {
 		t.Errorf("ada %d paragraf kosong berturut-turut sebelum %q; pakai pemisah halaman, bukan Enter berulang", longest, before)
@@ -290,7 +265,7 @@ func TestIsianPanjangTerisiSemua(t *testing.T) {
 	}
 	definition, _ := registry.Get("PKS")
 
-	values := sampleAgreementValues()
+	values := sampleAgreementValues(definition.Schema.Sections)
 	alamat := strings.TrimSpace(strings.Repeat("Jl. Contoh Panjang Nomor 123 Blok A, Kawasan Industri, ", 11))
 	values["PIHAK_KEDUA_ALAMAT"] = alamat
 	poin := make([]string, 20)
@@ -366,7 +341,7 @@ func TestDraftBerwatermark(t *testing.T) {
 		t.Fatal(err)
 	}
 	definition, _ := registry.Get("PKS")
-	values := sampleAgreementValues()
+	values := sampleAgreementValues(definition.Schema.Sections)
 	bentuk := func(draft bool) map[string]string {
 		t.Helper()
 		out, _, err := NewAgreementGenerator().Generate(definition.Template, values, GenerateOptions{Draft: draft})

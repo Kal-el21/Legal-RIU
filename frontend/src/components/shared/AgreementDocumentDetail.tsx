@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Download, FileText } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, Download, FileText } from 'lucide-react'
 import { agreementService, type AgreementDocument } from '@/services/agreement-document.service'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import StatusBadge from '@/components/common/StatusBadge'
-import { formatDateTime } from '@/lib/utils'
+import { formatDate, formatDateTime } from '@/lib/utils'
 import type { SubmissionStatus } from '@/types'
 
 interface Props { apiBase?: string; approver?: boolean }
@@ -215,6 +215,18 @@ export default function AgreementDocumentDetail({ apiBase = '', approver = false
       </div>
     </div>
     {error && <div className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</div>}
+    {approver && document.old_template && (() => {
+      const lama = document.old_template
+      return <div className="mt-4 flex gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+        <p>
+          Pengajuan ini memakai template {document.document_type_code} v{lama.version}. Versi aktif saat ini v{lama.active_version}
+          {lama.activated_at && <>, diaktifkan {formatDate(lama.activated_at)}</>}{lama.activated_by && <> oleh {lama.activated_by}</>}.
+          {lama.active_note && <> Catatan v{lama.active_version}: &ldquo;{lama.active_note}&rdquo;.</>}
+          {' '}Jika disetujui, dokumen final dibentuk dengan v{lama.version}. Untuk memakai v{lama.active_version}, tolak dan minta pengaju membuat pengajuan baru.
+        </p>
+      </div>
+    })()}
     <div className="grid lg:grid-cols-2 gap-5 mt-5">
       <div className="bg-white rounded-2xl border border-gray-100 p-6">
         <h2 className="font-semibold mb-3" style={{ color: '#0B2545' }}>Data Pengajuan</h2>

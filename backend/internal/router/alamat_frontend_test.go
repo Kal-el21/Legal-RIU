@@ -250,10 +250,7 @@ func init() {
 }
 
 // Nilai ${base} komponen perjanjian per peran, dari properti apiBase di routes/index.tsx.
-var (
-	basePerjanjian = map[string]string{"USER": "", "ADMIN": "/admin", "LEGAL": "/legal"}
-	baseTemplate   = map[string]string{"ADMIN": "/admin"}
-)
+var basePerjanjian = map[string]string{"USER": "", "ADMIN": "/admin", "LEGAL": "/legal"}
 
 func jabarkan(p panggilanAPI) []varian {
 	var hasil []varian
@@ -269,11 +266,7 @@ func jabarkan(p panggilanAPI) []varian {
 		return hasil
 	}
 	if strings.Contains(p.ekspresi, "${base}") {
-		tabel := basePerjanjian
-		if strings.Contains(p.letak, "agreement-template") {
-			tabel = baseTemplate
-		}
-		for peran, base := range tabel {
+		for peran, base := range basePerjanjian {
 			hasil = append(hasil, varian{rapikan(strings.Replace(p.ekspresi, "${base}", base, 1)), peran})
 		}
 		return hasil

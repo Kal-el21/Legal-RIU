@@ -504,6 +504,7 @@ func RunAllMigrationsAndSeeds(db *gorm.DB, store *storage.MinIOClient) error {
 		&entity.DocumentType{},
 		&entity.LegalMaterial{},
 		&entity.AgreementCompanyMaster{},
+		&entity.AgreementType{},
 		&entity.AgreementTemplate{},
 		&entity.AgreementDocument{},
 		&entity.AgreementAttachment{},
@@ -600,6 +601,9 @@ func RunAllMigrationsAndSeeds(db *gorm.DB, store *storage.MinIOClient) error {
 		if err := SeedAgreementTemplate(db, store); err != nil {
 			return err
 		}
+	}
+	if err := SeedAgreementTypes(db); err != nil {
+		return err
 	}
 	if err := BackfillLegalCaseDefaults(db); err != nil {
 		return err

@@ -108,6 +108,7 @@ func permissionSeedData() []entity.Permission {
 		perm("agreement_company_master.manage.all", "agreement_company_master", "manage", "all", "Pihak Pertama - Kelola", "Mengelola master Pihak Pertama"),
 		perm("agreement_template.view.all", "agreement_template", "view", "all", "Template Perjanjian - Lihat", "Melihat versi template perjanjian"),
 		perm("agreement_template.manage.all", "agreement_template", "manage", "all", "Template Perjanjian - Kelola", "Mengunggah dan mengaktifkan versi template"),
+		perm("agreement_type.manage.all", "agreement_type", "manage", "all", "Jenis Dokumen - Kelola", "Mengelola jenis dokumen perjanjian dan isiannya"),
 
 		perm("case_management.view", "case_management", "view", "all", "Case Management - Lihat", "Melihat case management"),
 		perm("case_management.create", "case_management", "create", "all", "Case Management - Buat", "Membuat case"),
@@ -177,7 +178,8 @@ func rolePermissionSeedData(permissionByCode map[string]entity.Permission) map[e
 		"document_review.upload_result.all",
 		"document_review.download.all",
 		"agreement_document.view.all", "agreement_document.preview.all", "agreement_document.download_attachment.all", "agreement_document.update_meta.all", "agreement_document.update_status.all", "agreement_document.download_pdf.all", "agreement_document.download_docx.all",
-		"agreement_template.view.all", "agreement_template.manage.all",
+		// Unggah dan aktivasi template hanya ADMIN (PR 9, keputusan T1); LEGAL melihat.
+		"agreement_template.view.all",
 		"case_management.view",
 		"case_management.create",
 		"case_management.update",

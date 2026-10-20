@@ -1,8 +1,6 @@
 package router
 
 import (
-	"fmt"
-
 	"legal-riu-portal/internal/config"
 	"legal-riu-portal/internal/handler"
 	"legal-riu-portal/internal/middleware"
@@ -45,12 +43,9 @@ func New(cfg *config.Config, db *gorm.DB, store *storage.MinIOClient) (*gin.Engi
 	userSvc := service.NewUserService(userRepo)
 	loSvc := service.NewLegalOpinionService(loRepo, store)
 	drSvc := service.NewDocumentReviewService(drRepo, store)
-	agreementRegistry, err := service.NewAgreementRegistry()
-	if err != nil {
-		return nil, fmt.Errorf("agreement registry failed: %w", err)
-	}
-	agreementTemplateSvc := service.NewAgreementTemplateService(agreementTemplateRepo, store, agreementRegistry)
-	agreementSvc := service.NewAgreementDocumentService(agreementRepo, store, agreementRegistry, agreementTemplateSvc)
+	agreementTemplateSvc := service.NewAgreementTemplateService(agreementTemplateRepo, store)
+	agreementSvc := service.NewAgreementDocumentService(agreementRepo, store, agreementTemplateSvc)
+	agreementTypeSvc := service.NewAgreementTypeService(agreementTemplateRepo)
 	notificationSettingSvc := service.NewNotificationSettingService(notificationSettingRepo, dashRepo)
 	dashSvc := service.NewDashboardService(dashRepo)
 	auditLogSvc := service.NewAuditLogService(auditLogRepo)
@@ -72,6 +67,7 @@ func New(cfg *config.Config, db *gorm.DB, store *storage.MinIOClient) (*gin.Engi
 	drHandler := handler.NewDocumentReviewHandler(drSvc, auditLogSvc)
 	agreementHandler := handler.NewAgreementDocumentHandler(agreementSvc)
 	agreementTemplateHandler := handler.NewAgreementTemplateHandler(agreementTemplateSvc)
+	agreementTypeHandler := handler.NewAgreementTypeHandler(agreementTypeSvc)
 	dashHandler := handler.NewDashboardHandler(dashSvc)
 	auditLogHandler := handler.NewAuditLogHandler(auditLogSvc, auditLogRepo)
 	legalCaseHandler := handler.NewLegalCaseHandler(legalCaseSvc, auditLogSvc, userRepo)
@@ -182,7 +178,9 @@ func New(cfg *config.Config, db *gorm.DB, store *storage.MinIOClient) (*gin.Engi
 	userOnly.POST("/review-documents/:id/resubmit", requirePermission("document_review.resubmit.own"), drHandler.Resubmit)
 	userOnly.GET("/agreement-documents", requirePermission("agreement_document.view.own"), agreementHandler.GetAll)
 	userOnly.POST("/agreement-documents", requirePermission("agreement_document.create.own"), agreementHandler.Create)
+	userOnly.POST("/agreement-documents/preview-draft", requirePermission("agreement_document.create.own"), agreementHandler.PreviewDraft)
 	userOnly.GET("/agreement-documents/:id", requirePermission("agreement_document.view.own"), agreementHandler.GetByID)
+	userOnly.GET("/agreement-documents/:id/schema", requirePermission("agreement_document.update.own"), agreementHandler.DocumentSchema)
 	userOnly.PUT("/agreement-documents/:id", requirePermission("agreement_document.update.own"), agreementHandler.Update)
 	userOnly.DELETE("/agreement-documents/:id", requirePermission("agreement_document.delete.own"), agreementHandler.Delete)
 	userOnly.POST("/agreement-documents/:id/resubmit", requirePermission("agreement_document.resubmit.own"), agreementHandler.Resubmit)
@@ -293,6 +291,9 @@ func New(cfg *config.Config, db *gorm.DB, store *storage.MinIOClient) (*gin.Engi
 	admin.GET("/agreement-company-master", requirePermission("agreement_company_master.view.all"), agreementHandler.GetMaster)
 	admin.PUT("/agreement-company-master", requirePermission("agreement_company_master.manage.all"), agreementHandler.UpdateMaster)
 	registerAgreementTemplateRoutes(admin, requirePermission, agreementTemplateHandler)
+	admin.GET("/agreement-types", requirePermission("agreement_type.manage.all"), agreementTypeHandler.List)
+	admin.POST("/agreement-types", requirePermission("agreement_type.manage.all"), agreementTypeHandler.Create)
+	admin.PUT("/agreement-types/:code", requirePermission("agreement_type.manage.all"), agreementTypeHandler.Update)
 
 	admin.GET("/users", userHandler.GetAll)
 	admin.POST("/users", userHandler.Create)
@@ -407,7 +408,9 @@ func registerAgreementTemplateRoutes(group *gin.RouterGroup, requirePermission f
 	group.GET("/agreement-templates/:id/preview", requirePermission("agreement_template.view.all"), h.Preview)
 	group.GET("/agreement-templates/:id/download", requirePermission("agreement_template.view.all"), h.Download)
 	group.POST("/agreement-templates", requirePermission("agreement_template.manage.all"), h.Upload)
+	group.POST("/agreement-templates/new-version", requirePermission("agreement_template.manage.all"), h.NewVersion)
 	group.POST("/agreement-templates/:id/activate", requirePermission("agreement_template.manage.all"), h.Activate)
+	group.DELETE("/agreement-templates/:id", requirePermission("agreement_template.manage.all"), h.Delete)
 }
 
 func registerLegalCaseRoutes(group *gin.RouterGroup, legalCaseHandler *handler.LegalCaseHandler, requirePermission func(...string) gin.HandlerFunc) {

@@ -1,8 +1,10 @@
 import api from './api'
 import axios from 'axios'
-export interface AgreementField {name:string;label:string;type:string;required:boolean}
-export interface AgreementSchema {code:string;name:string;sections:{title:string;fields:AgreementField[]}[]}
-export interface AgreementDocument {id:string;ticket_number:string;document_type_code:string;form_data:Record<string,unknown>;agreement_number:string;status:string;approver_note?:string;attachments?:{id:string;file_name:string}[];generated_file_name?:string;created_at?:string;user?:{full_name?:string}}
+export interface AgreementField {name:string;label:string;type:string;required:boolean;options?:string[]}
+export interface AgreementSchema {code:string;name:string;template_id:string;template_version:number;sections:{title:string;fields:AgreementField[]}[]}
+// Penanda untuk approver: pengajuan berjalan masih memakai versi template lama.
+export interface OldTemplate {version:number;active_version:number;active_note:string;activated_at?:string;activated_by:string}
+export interface AgreementDocument {id:string;ticket_number:string;document_type_code:string;template_id?:string;form_data:Record<string,unknown>;old_template?:OldTemplate;agreement_number:string;status:string;approver_note?:string;attachments?:{id:string;file_name:string}[];generated_file_name?:string;created_at?:string;user?:{full_name?:string}}
 const data=<T>(r:{data:{data:T}})=>r.data.data
 
 async function fileError(reason: unknown, fallback: string): Promise<Error> {
@@ -24,6 +26,20 @@ async function fileError(reason: unknown, fallback: string): Promise<Error> {
 export const agreementService={
  types:()=>api.get('/agreement-document-types').then(r=>data<{code:string;name:string}[]>(r)),
  schema:(code='PKS')=>api.get(`/agreement-document-types/${code}/schema`).then(r=>data<{schema:AgreementSchema}>(r).schema),
+ // Form revisi: dari versi template yang dikunci pengajuan, bukan versi aktif.
+ schemaFor:(id:string)=>api.get(`/agreement-documents/${id}/schema`).then(r=>data<{schema:AgreementSchema}>(r).schema),
+ // Pratinjau isian yang belum dikirim; tidak ada yang disimpan.
+ previewDraft:async(payload:{document_type_code:string;template_id:string;form_data:Record<string,string>;attachment_names:string[];document_id?:string})=>{
+    try {
+      const response = await api.post<Blob>('/agreement-documents/preview-draft', payload, { responseType: 'blob' })
+      return response.data
+    } catch (reason) {
+      // status dibawa supaya wizard mengenali 409 (versi template diganti Admin).
+      const e: Error & { status?: number } = await fileError(reason, 'Gagal membentuk pratinjau')
+      if (axios.isAxiosError(reason)) e.status = reason.response?.status
+      throw e
+    }
+  },
   list:(base='',query?:Record<string,unknown>)=>api.get(`${base}/agreement-documents`, query ? {params:query} : undefined).then(r=>data<{items:AgreementDocument[]}>(r).items),
  get:(id:string,base='')=>api.get(`${base}/agreement-documents/${id}`).then(r=>data<AgreementDocument>(r)),
  create:(payload:unknown,files:File[])=>{const f=new FormData();f.append('data',JSON.stringify(payload));files.forEach(x=>f.append('attachments',x));return api.post('/agreement-documents',f).then(r=>data<AgreementDocument>(r))},

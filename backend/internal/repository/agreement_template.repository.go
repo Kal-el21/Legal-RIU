@@ -18,6 +18,13 @@ type AgreementTemplateRepository interface {
 	NextVersion(string) (int, error)
 	Activate(uuid.UUID, string, uuid.UUID) error
 	Delete(uuid.UUID) error
+	FindTypes() ([]entity.AgreementType, error)
+	FindType(string) (*entity.AgreementType, error)
+	AllTypes() ([]entity.AgreementType, error)
+	TypeByCode(string) (*entity.AgreementType, error)
+	CreateType(*entity.AgreementType) error
+	SaveType(*entity.AgreementType) error
+	CountRunningDocuments(uuid.UUID) (int64, error)
 }
 
 type agreementTemplateRepository struct{ db *gorm.DB }
@@ -48,7 +55,7 @@ func (r *agreementTemplateRepository) FindByCode(code string) ([]entity.Agreemen
 
 func (r *agreementTemplateRepository) FindActive(code string) (*entity.AgreementTemplate, error) {
 	var v entity.AgreementTemplate
-	err := r.db.Where("code = ? AND status = ?", code, entity.TemplateStatusActive).Order("version DESC").First(&v).Error
+	err := r.db.Preload("Activator").Where("code = ? AND status = ?", code, entity.TemplateStatusActive).Order("version DESC").First(&v).Error
 	return &v, err
 }
 
@@ -87,4 +94,48 @@ func (r *agreementTemplateRepository) Activate(id uuid.UUID, code string, activa
 
 func (r *agreementTemplateRepository) Delete(id uuid.UUID) error {
 	return r.db.Delete(&entity.AgreementTemplate{}, "id = ?", id).Error
+}
+
+// FindTypes mengembalikan jenis dokumen yang aktif.
+func (r *agreementTemplateRepository) FindTypes() ([]entity.AgreementType, error) {
+	var items []entity.AgreementType
+	err := r.db.Where("is_active = ?", true).Order("name").Find(&items).Error
+	return items, err
+}
+
+func (r *agreementTemplateRepository) FindType(code string) (*entity.AgreementType, error) {
+	var v entity.AgreementType
+	err := r.db.Where("code = ? AND is_active = ?", code, true).First(&v).Error
+	return &v, err
+}
+
+// AllTypes mengembalikan semua jenis dokumen, termasuk yang nonaktif, untuk Admin.
+func (r *agreementTemplateRepository) AllTypes() ([]entity.AgreementType, error) {
+	var items []entity.AgreementType
+	err := r.db.Order("name").Find(&items).Error
+	return items, err
+}
+
+func (r *agreementTemplateRepository) TypeByCode(code string) (*entity.AgreementType, error) {
+	var v entity.AgreementType
+	err := r.db.Where("code = ?", code).First(&v).Error
+	return &v, err
+}
+
+func (r *agreementTemplateRepository) CreateType(v *entity.AgreementType) error {
+	return r.db.Create(v).Error
+}
+
+func (r *agreementTemplateRepository) SaveType(v *entity.AgreementType) error {
+	return r.db.Save(v).Error
+}
+
+// CountRunningDocuments menghitung pengajuan yang belum selesai (bukan Selesai
+// atau Ditolak) yang dikunci ke versi template itu.
+func (r *agreementTemplateRepository) CountRunningDocuments(templateID uuid.UUID) (int64, error) {
+	var n int64
+	err := r.db.Model(&entity.AgreementDocument{}).
+		Where("template_id = ? AND status NOT IN ?", templateID, []entity.SubmissionStatus{entity.StatusCompleted, entity.StatusRejected}).
+		Count(&n).Error
+	return n, err
 }

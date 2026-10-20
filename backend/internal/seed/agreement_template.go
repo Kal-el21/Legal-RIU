@@ -2,6 +2,7 @@ package seed
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log"
 	"time"
@@ -126,6 +127,38 @@ func pindahkanDariTemplateLama(db *gorm.DB, checksum string) error {
 		log.Printf("%d pengajuan perjanjian dipindah dari template lama ke template bawaan versi baru", res.RowsAffected)
 	}
 	return nil
+}
+
+// SeedAgreementTypes mendaftarkan jenis dokumen PKS dan mengisi definisi field
+// pada versi template PKS yang belum punya: versi sebelum PR 9 (termasuk versi
+// lama yang masih dikunci pengajuan berjalan) dan template bawaan yang baru
+// dipasang. Field diambil dari form-schema.json yang di-embed. Versi yang sudah
+// punya field tidak disentuh, jadi aman dijalankan berulang.
+func SeedAgreementTypes(db *gorm.DB) error {
+	raw, err := assets.Files.ReadFile("templates/pks-template/form-schema.json")
+	if err != nil {
+		return err
+	}
+	var schema struct {
+		Name     string          `json:"name"`
+		Sections json.RawMessage `json:"sections"`
+	}
+	if err := json.Unmarshal(raw, &schema); err != nil {
+		return err
+	}
+	jenis := entity.AgreementType{Code: agreementTemplateCode, Name: schema.Name, IsActive: true}
+	if err := db.Where("code = ?", jenis.Code).FirstOrCreate(&jenis).Error; err != nil {
+		return err
+	}
+	// Field kerja Admin (PR 9 tahap 9.3) dimulai dari field bawaan yang sama.
+	if err := db.Model(&entity.AgreementType{}).
+		Where("code = ? AND fields IS NULL", agreementTemplateCode).
+		Update("fields", schema.Sections).Error; err != nil {
+		return err
+	}
+	return db.Model(&entity.AgreementTemplate{}).
+		Where("code = ? AND fields IS NULL", agreementTemplateCode).
+		Update("fields", schema.Sections).Error
 }
 
 // backfillAgreementDocumentTemplate mengarahkan dokumen tanpa template ke versi 1,

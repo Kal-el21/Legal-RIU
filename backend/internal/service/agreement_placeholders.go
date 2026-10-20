@@ -1,72 +1,177 @@
 package service
 
 import (
+	"fmt"
 	"sort"
+	"strconv"
+	"strings"
 
 	"legal-riu-portal/internal/dto"
 	"legal-riu-portal/internal/entity"
 )
 
-// placeholderCatalog memberi label dan pengelompokan untuk setiap token.
-// Daftar token yang benar-benar didukung tetap diturunkan dari placeholderValues
-// agar tidak pernah melenceng dari yang sesungguhnya diisi generator.
-var placeholderCatalog = map[string][2]string{
-	"NOMOR_PIHAK_PERTAMA":       {"Identitas & Tanda Tangan", "Nomor perjanjian internal Indonesia Re"},
-	"NOMOR_PIHAK_KEDUA":         {"Identitas & Tanda Tangan", "Nomor perjanjian dari pihak kedua"},
-	"HARI_TTD":                  {"Identitas & Tanda Tangan", "Nama hari penandatanganan, mis. Senin"},
-	"TANGGAL_TTD":               {"Identitas & Tanda Tangan", "Angka tanggal penandatanganan, mis. 17"},
-	"BULAN_TTD":                 {"Identitas & Tanda Tangan", "Nama bulan penandatanganan, mis. Agustus"},
-	"TAHUN_TTD":                 {"Identitas & Tanda Tangan", "Tahun penandatanganan, mis. 2026"},
-	"TANGGAL_TTD_LENGKAP":       {"Identitas & Tanda Tangan", "Tanggal lengkap, mis. 17 Agustus 2026"},
-	"TEMPAT_TTD":                {"Identitas & Tanda Tangan", "Kota penandatanganan"},
-	"PIHAK_PERTAMA_NAMA":        {"Pihak Pertama", "Nama badan hukum, dari Master Pihak Pertama"},
-	"PIHAK_PERTAMA_ALAMAT":      {"Pihak Pertama", "Alamat kantor"},
-	"PIHAK_PERTAMA_TELEPON":     {"Pihak Pertama", "Nomor telepon"},
-	"PIHAK_PERTAMA_EMAIL":       {"Pihak Pertama", "Alamat email"},
-	"PIHAK_PERTAMA_PIC":         {"Pihak Pertama", "Nama PIC"},
-	"PIHAK_PERTAMA_PEJABAT":     {"Pihak Pertama", "Nama pejabat penanda tangan"},
-	"PIHAK_PERTAMA_JABATAN":     {"Pihak Pertama", "Jabatan pejabat penanda tangan"},
-	"PIHAK_KEDUA_NAMA":          {"Pihak Kedua", "Nama badan hukum pihak kedua"},
-	"PIHAK_KEDUA_BIDANG":        {"Pihak Kedua", "Bidang usaha pihak kedua"},
-	"PIHAK_KEDUA_ALAMAT":        {"Pihak Kedua", "Alamat kantor"},
-	"PIHAK_KEDUA_TELEPON":       {"Pihak Kedua", "Nomor telepon"},
-	"PIHAK_KEDUA_EMAIL":         {"Pihak Kedua", "Alamat email"},
-	"PIHAK_KEDUA_PIC":           {"Pihak Kedua", "Nama PIC"},
-	"PIHAK_KEDUA_PEJABAT":       {"Pihak Kedua", "Nama pejabat penanda tangan"},
-	"PIHAK_KEDUA_JABATAN":       {"Pihak Kedua", "Jabatan pejabat penanda tangan"},
-	"JENIS_PEKERJAAN":           {"Ruang Lingkup & Surat Rujukan", "Jenis pekerjaan yang diperjanjikan"},
-	"RUANG_LINGKUP":             {"Ruang Lingkup & Surat Rujukan", "Ruang lingkup sebagai satu blok teks"},
-	scopeListToken:              {"Ruang Lingkup & Surat Rujukan", "Ruang lingkup sebagai daftar berhuruf a/b/c. Paragrafnya wajib diformat sebagai numbered list Word"},
-	"SURAT_PENAWARAN_NOMOR":     {"Ruang Lingkup & Surat Rujukan", "Nomor surat penawaran"},
-	"SURAT_PENAWARAN_PERIHAL":   {"Ruang Lingkup & Surat Rujukan", "Perihal surat penawaran"},
-	"SURAT_PENAWARAN_TANGGAL":   {"Ruang Lingkup & Surat Rujukan", "Tanggal surat penawaran"},
-	"SURAT_PENUNJUKAN_NOMOR":    {"Ruang Lingkup & Surat Rujukan", "Nomor surat penunjukan"},
-	"SURAT_PENUNJUKAN_PERIHAL":  {"Ruang Lingkup & Surat Rujukan", "Perihal surat penunjukan"},
-	"SURAT_PENUNJUKAN_TANGGAL":  {"Ruang Lingkup & Surat Rujukan", "Tanggal surat penunjukan"},
-	"JANGKA_WAKTU_MULAI":        {"Ruang Lingkup & Surat Rujukan", "Tanggal mulai berlaku"},
-	"JANGKA_WAKTU_SELESAI":      {"Ruang Lingkup & Surat Rujukan", "Tanggal berakhir"},
-	"NILAI_KONTRAK":             {"Nilai Kontrak & Termin", "Nilai kontrak dalam format rupiah"},
-	"NILAI_KONTRAK_TERBILANG":   {"Nilai Kontrak & Termin", "Nilai kontrak dalam huruf"},
-	"TERMIN_1_PERSEN":           {"Nilai Kontrak & Termin", "Persentase termin pertama"},
-	"TERMIN_1_PERSEN_TERBILANG": {"Nilai Kontrak & Termin", "Persentase termin pertama dalam huruf"},
-	"TERMIN_1_NILAI":            {"Nilai Kontrak & Termin", "Nilai termin pertama"},
-	"TERMIN_1_NILAI_TERBILANG":  {"Nilai Kontrak & Termin", "Nilai termin pertama dalam huruf"},
-	"TERMIN_2_PERSEN":           {"Nilai Kontrak & Termin", "Persentase termin kedua"},
-	"TERMIN_2_PERSEN_TERBILANG": {"Nilai Kontrak & Termin", "Persentase termin kedua dalam huruf"},
-	"TERMIN_2_NILAI":            {"Nilai Kontrak & Termin", "Nilai termin kedua"},
-	"TERMIN_2_NILAI_TERBILANG":  {"Nilai Kontrak & Termin", "Nilai termin kedua dalam huruf"},
-	"BANK":                      {"Nilai Kontrak & Termin", "Nama bank pihak kedua"},
-	"NOMOR_REKENING":            {"Nilai Kontrak & Termin", "Nomor rekening pihak kedua"},
-	"ATAS_NAMA":                 {"Nilai Kontrak & Termin", "Nama pemilik rekening"},
-	"DAFTAR_LAMPIRAN":           {"Lampiran", "Daftar bernomor otomatis dari file yang dilampirkan"},
+// Placeholder dokumen perjanjian ada dua macam:
+//   - placeholder sistem, diisi dari data di luar isian pengaju (nomor perjanjian,
+//     tanggal dan tempat tanda tangan, Pihak Pertama, lampiran). Daftarnya tetap di
+//     sini dan tidak bisa dipakai sebagai kode field;
+//   - placeholder field, dibentuk dari definisi field versi template: kodenya nama
+//     field dalam huruf besar, turunannya mengikuti tipe (fieldPlaceholders).
+var systemPlaceholders = map[string][2]string{
+	"NOMOR_PIHAK_PERTAMA":   {"Identitas & Tanda Tangan", "Nomor perjanjian internal Indonesia Re"},
+	"HARI_TTD":              {"Identitas & Tanda Tangan", "Nama hari penandatanganan, mis. Senin"},
+	"TANGGAL_TTD":           {"Identitas & Tanda Tangan", "Angka tanggal penandatanganan, mis. 17"},
+	"BULAN_TTD":             {"Identitas & Tanda Tangan", "Nama bulan penandatanganan, mis. Agustus"},
+	"TAHUN_TTD":             {"Identitas & Tanda Tangan", "Tahun penandatanganan, mis. 2026"},
+	"TANGGAL_TTD_LENGKAP":   {"Identitas & Tanda Tangan", "Tanggal lengkap, mis. 17 Agustus 2026"},
+	"TEMPAT_TTD":            {"Identitas & Tanda Tangan", "Kota penandatanganan"},
+	"PIHAK_PERTAMA_NAMA":    {"Pihak Pertama", "Nama badan hukum, dari Master Pihak Pertama"},
+	"PIHAK_PERTAMA_ALAMAT":  {"Pihak Pertama", "Alamat kantor"},
+	"PIHAK_PERTAMA_TELEPON": {"Pihak Pertama", "Nomor telepon"},
+	"PIHAK_PERTAMA_EMAIL":   {"Pihak Pertama", "Alamat email"},
+	"PIHAK_PERTAMA_PIC":     {"Pihak Pertama", "Nama PIC"},
+	"PIHAK_PERTAMA_PEJABAT": {"Pihak Pertama", "Nama pejabat penanda tangan"},
+	"PIHAK_PERTAMA_JABATAN": {"Pihak Pertama", "Jabatan pejabat penanda tangan"},
+	"DAFTAR_LAMPIRAN":       {"Lampiran", "Daftar bernomor otomatis dari file yang dilampirkan"},
 }
 
-const scopeListToken = "RUANG_LINGKUP_LIST"
+// scopeField: field ruang lingkup yang juga mengisi {{RUANG_LINGKUP_LIST}},
+// satu paragraf per baris. Ditangani khusus sampai tipe daftar hadir di PR 10.
+const scopeField = "ruang_lingkup"
+
+// systemValues mengisi placeholder sistem.
+func systemValues(d *entity.AgreementDocument, data, snap map[string]interface{}) map[string]string {
+	date := valueString(data["tanggal_ttd"])
+	dt, _ := parseDate(date)
+	bagian := func(f func() string) string {
+		if dt.IsZero() {
+			return "-"
+		}
+		return f()
+	}
+	atts := make([]string, 0, len(d.Attachments))
+	for i, a := range d.Attachments {
+		atts = append(atts, fmt.Sprintf("%d. %s", i+1, a.FileName))
+	}
+	if len(atts) == 0 {
+		atts = append(atts, "-")
+	}
+	return map[string]string{
+		"NOMOR_PIHAK_PERTAMA":   strOrDash(d.AgreementNumber),
+		"HARI_TTD":              bagian(func() string { return indoDays[dt.Weekday()] }),
+		"TANGGAL_TTD":           bagian(func() string { return fmt.Sprint(dt.Day()) }),
+		"BULAN_TTD":             bagian(func() string { return indoMonths[dt.Month()] }),
+		"TAHUN_TTD":             bagian(func() string { return fmt.Sprint(dt.Year()) }),
+		"TANGGAL_TTD_LENGKAP":   indoDate(date),
+		"TEMPAT_TTD":            valueString(snap["signing_place"]),
+		"PIHAK_PERTAMA_NAMA":    valueString(snap["name"]),
+		"PIHAK_PERTAMA_ALAMAT":  valueString(snap["address"]),
+		"PIHAK_PERTAMA_TELEPON": valueString(snap["phone"]),
+		"PIHAK_PERTAMA_EMAIL":   valueString(snap["email"]),
+		"PIHAK_PERTAMA_PIC":     valueString(snap["pic"]),
+		"PIHAK_PERTAMA_PEJABAT": valueString(snap["signatory_name"]),
+		"PIHAK_PERTAMA_JABATAN": valueString(snap["signatory_position"]),
+		"DAFTAR_LAMPIRAN":       strings.Join(atts, "\n"),
+	}
+}
+
+// fieldPlaceholders membentuk placeholder satu field beserta turunannya:
+//
+//	money                       KODE (Rp 750.000.000), KODE_TERBILANG
+//	number, percent             KODE (33,5), KODE_TERBILANG
+//	date                        KODE (17 Agustus 2026), KODE_HARI, KODE_TERBILANG
+//	text, textarea, email, tel  KODE
+//
+// Isian kosong menjadi "-" di semua turunannya.
+func fieldPlaceholders(f AgreementFieldDefinition, raw interface{}) map[string]string {
+	key := strings.ToUpper(f.Name)
+	v := strings.TrimSpace(valueString(raw))
+	var out map[string]string
+	switch f.Type {
+	case "money":
+		n := valueInt64(raw)
+		out = map[string]string{key: rupiah(n), key + "_TERBILANG": terbilang(n)}
+	case "number", "percent":
+		n := valueFloat(raw)
+		out = map[string]string{key: angka(n), key + "_TERBILANG": terbilangAngka(n)}
+	case "date":
+		out = map[string]string{key: indoDate(v), key + "_HARI": "-", key + "_TERBILANG": "-"}
+		if d, e := parseDate(v); e == nil {
+			out[key+"_HARI"] = indoDays[d.Weekday()]
+			out[key+"_TERBILANG"] = terbilang(int64(d.Day())) + " " + indoMonths[d.Month()] + " " + terbilang(int64(d.Year()))
+		}
+	default:
+		out = map[string]string{key: v}
+	}
+	if v == "" {
+		for k := range out {
+			out[k] = "-"
+		}
+	}
+	return out
+}
+
+func placeholderValues(d *entity.AgreementDocument, sections []AgreementSectionDefinition, data, snap map[string]interface{}) map[string]string {
+	values := systemValues(d, data, snap)
+	for _, s := range sections {
+		for _, f := range s.Fields {
+			for k, v := range fieldPlaceholders(f, data[f.Name]) {
+				values[k] = v
+			}
+		}
+	}
+	return values
+}
+
+// angka menulis bilangan dengan koma desimal, tanpa nol di belakang: 33,5.
+func angka(n float64) string {
+	return strings.Replace(strconv.FormatFloat(n, 'f', -1, 64), ".", ",", 1)
+}
+
+// terbilangAngka: 33,5 menjadi "tiga puluh tiga koma lima"; angka di belakang
+// koma dibaca satu per satu.
+func terbilangAngka(n float64) string {
+	bulat, pecahan, _ := strings.Cut(strconv.FormatFloat(n, 'f', -1, 64), ".")
+	i, _ := strconv.ParseInt(bulat, 10, 64)
+	out := terbilang(i)
+	if i == 0 {
+		out = "nol"
+	}
+	if pecahan != "" {
+		digit := []string{"nol", "satu", "dua", "tiga", "empat", "lima", "enam", "tujuh", "delapan", "sembilan"}
+		out += " koma"
+		for _, c := range pecahan {
+			out += " " + digit[c-'0']
+		}
+	}
+	return out
+}
+
+// contohNilai: isian contoh per tipe untuk uji coba unggah dan pratinjau template.
+func contohNilai(f AgreementFieldDefinition) string {
+	switch f.Type {
+	case "money":
+		return "20000000"
+	case "number":
+		return "3"
+	case "percent":
+		return "50"
+	case "date":
+		return "2026-08-17"
+	case "email":
+		return "kontak@contoh.co.id"
+	case "tel":
+		return "021 1234567"
+	case "textarea":
+		return "[" + f.Label + " baris 1]\n[" + f.Label + " baris 2]\n[" + f.Label + " baris 3]"
+	default:
+		return "[" + f.Label + "]"
+	}
+}
 
 // sampleAgreementValues membentuk nilai contoh untuk seluruh token melalui jalur
 // yang sama dengan dokumen sungguhan, sehingga dry-run saat unggah menguji
 // generator apa adanya.
-func sampleAgreementValues() map[string]string {
+func sampleAgreementValues(sections []AgreementSectionDefinition) map[string]string {
 	number := "001/CONTOH/RM.01.01/2026"
 	doc := &entity.AgreementDocument{
 		TicketNumber:    "PK-CONTOH-0001",
@@ -76,35 +181,11 @@ func sampleAgreementValues() map[string]string {
 			{FileName: "lampiran-contoh-2.pdf"},
 		},
 	}
-	data := map[string]interface{}{
-		"nomor_pihak_kedua":        "002/CONTOH/2026",
-		"tanggal_ttd":              "2026-08-17",
-		"pihak_kedua_nama":         "PT Contoh Mitra Sejahtera",
-		"pihak_kedua_bidang":       "jasa konsultasi teknologi informasi",
-		"pihak_kedua_alamat":       "Jl. Contoh No. 1, Jakarta Selatan",
-		"pihak_kedua_telepon":      "021 1234567",
-		"pihak_kedua_email":        "kontak@contoh.co.id",
-		"pihak_kedua_pic":          "Rina Contoh",
-		"pihak_kedua_pejabat":      "Andi Contoh",
-		"pihak_kedua_jabatan":      "Direktur Utama",
-		"jenis_pekerjaan":          "pengadaan jasa konsultasi",
-		"ruang_lingkup":            "Analisis kebutuhan sistem\nImplementasi dan konfigurasi\nPelatihan pengguna",
-		"surat_penawaran_nomor":    "PNW-001/2026",
-		"surat_penawaran_perihal":  "Penawaran Jasa Konsultasi",
-		"surat_penawaran_tanggal":  "2026-07-15",
-		"surat_penunjukan_nomor":   "PNJ-001/2026",
-		"surat_penunjukan_perihal": "Penunjukan Penyedia Jasa",
-		"surat_penunjukan_tanggal": "2026-07-30",
-		"jangka_waktu_mulai":       "2026-09-01",
-		"jangka_waktu_selesai":     "2027-08-31",
-		"nilai_kontrak":            "20000000",
-		"termin_1_persen":          "50",
-		"termin_1_nilai":           "10000000",
-		"termin_2_persen":          "50",
-		"termin_2_nilai":           "10000000",
-		"bank":                     "Bank Contoh",
-		"nomor_rekening":           "1234567890",
-		"atas_nama":                "PT Contoh Mitra Sejahtera",
+	data := map[string]interface{}{"tanggal_ttd": "2026-08-17"}
+	for _, s := range sections {
+		for _, f := range s.Fields {
+			data[f.Name] = contohNilai(f)
+		}
 	}
 	snap := map[string]interface{}{
 		"name":               "PT Reasuransi Indonesia Utama (Persero)",
@@ -116,29 +197,45 @@ func sampleAgreementValues() map[string]string {
 		"signatory_position": "Direktur Contoh",
 		"signing_place":      "Jakarta",
 	}
-	return placeholderValues(doc, data, snap)
+	return placeholderValues(doc, sections, data, snap)
 }
 
-// SupportedPlaceholderTokens mengembalikan seluruh token yang dikenal generator,
-// dalam bentuk lengkap dengan kurung kurawal.
-func SupportedPlaceholderTokens() []string {
-	values := sampleAgreementValues()
-	out := make([]string, 0, len(values)+1)
-	for key := range values {
-		out = append(out, "{{"+key+"}}")
+// PlaceholderCatalog mengembalikan seluruh token yang dikenal untuk definisi field
+// itu, beserta kelompok dan keterangannya. Token field dikelompokkan per bagian.
+func PlaceholderCatalog(sections []AgreementSectionDefinition) []dto.PlaceholderReference {
+	out := make([]dto.PlaceholderReference, 0, len(systemPlaceholders))
+	for key, meta := range systemPlaceholders {
+		out = append(out, dto.PlaceholderReference{Token: "{{" + key + "}}", Group: meta[0], Description: meta[1]})
 	}
-	out = append(out, scopeListPlaceholder)
-	sort.Strings(out)
+	for _, s := range sections {
+		for _, f := range s.Fields {
+			key := strings.ToUpper(f.Name)
+			for token := range fieldPlaceholders(f, contohNilai(f)) {
+				desc := f.Label
+				switch strings.TrimPrefix(token, key) {
+				case "_TERBILANG":
+					desc += " dalam huruf"
+				case "_HARI":
+					desc += " (nama hari)"
+				}
+				out = append(out, dto.PlaceholderReference{Token: "{{" + token + "}}", Group: s.Title, Description: desc})
+			}
+			if f.Name == scopeField {
+				out = append(out, dto.PlaceholderReference{Token: scopeListPlaceholder, Group: s.Title, Description: f.Label + " sebagai daftar berhuruf a/b/c. Paragrafnya wajib diformat sebagai numbered list Word"})
+			}
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Token < out[j].Token })
 	return out
 }
 
-func PlaceholderCatalog() []dto.PlaceholderReference {
-	tokens := SupportedPlaceholderTokens()
-	out := make([]dto.PlaceholderReference, 0, len(tokens))
-	for _, token := range tokens {
-		key := token[2 : len(token)-2]
-		meta := placeholderCatalog[key]
-		out = append(out, dto.PlaceholderReference{Token: token, Group: meta[0], Description: meta[1]})
+// SupportedPlaceholderTokens mengembalikan token yang dikenal untuk definisi field
+// itu, lengkap dengan kurung kurawal.
+func SupportedPlaceholderTokens(sections []AgreementSectionDefinition) []string {
+	catalog := PlaceholderCatalog(sections)
+	out := make([]string, len(catalog))
+	for i, item := range catalog {
+		out[i] = item.Token
 	}
 	return out
 }

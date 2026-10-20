@@ -1,30 +1,44 @@
 # Panduan Menyusun Template Perjanjian - ALEA
 
 Panduan untuk Admin dan tim legal yang menyusun atau memperbarui template dokumen perjanjian di Microsoft Word,
-lalu mengunggahnya di menu **Data Master → Template Perjanjian**. Saat ini berlaku untuk jenis dokumen Perjanjian
-Kerja Sama (PKS).
+lalu mengunggahnya di menu **Data Master → Jenis Perjanjian** (pilih jenisnya, mis. Perjanjian Kerja Sama, lalu
+**Atur**).
 
 ## 1. Alur singkat
 
-1. Unduh template yang sedang aktif (ikon unduh di daftar versi), lalu sunting di Word.
-2. Klik **Unggah Versi Baru**. Isi nama versi dan **Catatan Perubahan** (apa yang berubah dibanding versi
-   sebelumnya), lalu **Unggah & Uji**.
-3. Sistem menguji file otomatis: struktur `.docx`, nama setiap placeholder, format paragraf ruang lingkup, lalu
-   membentuk dokumen contoh dan mengubahnya ke PDF. Template yang gagal uji tidak tersimpan; pesannya menjelaskan
-   sebabnya (bagian 9).
-4. Versi yang lolos tersimpan berstatus **Draft**. Buka **Pratinjau** dan periksa hasilnya dengan daftar periksa di
+1. Pastikan isian yang dibutuhkan sudah ada di bagian **Isian Form** dan sudah disimpan (**Simpan isian**). Untuk
+   jenis baru, susun isiannya lebih dulu.
+2. Unduh template yang sedang aktif (ikon unduh di **Riwayat Versi**), lalu sunting di Word. Placeholder bisa disalin
+   dari bagian **Placeholder untuk Word**.
+3. Di **Versi Template Baru**, pilih file, isi nama versi dan **Catatan Perubahan** (wajib: apa yang berubah dibanding
+   versi sebelumnya), lalu **Unggah & Uji**. Kalau Word tidak berubah (mis. hanya label atau status wajib isian yang
+   diganti), pakai **Simpan sebagai versi baru**: DOCX versi terakhir dipakai ulang.
+4. Sistem menguji file otomatis: struktur `.docx`, setiap placeholder dicocokkan dengan isian jenis dokumen, format
+   paragraf ruang lingkup, lalu membentuk dokumen contoh dan mengubahnya ke PDF. Template yang gagal uji tidak
+   tersimpan; pesannya menjelaskan sebabnya (bagian 9). Template yang lolos bisa membawa peringatan, mis. isian yang
+   tidak dipakai di Word atau deretan Enter kosong; periksa sebelum mengaktifkan.
+5. Versi yang lolos tersimpan berstatus **Draft**. Buka **Pratinjau** dan periksa hasilnya dengan daftar periksa di
    bagian 8.
-5. Klik **Aktifkan**. Versi aktif sebelumnya otomatis diarsipkan.
+6. Klik **Aktifkan**. Versi aktif sebelumnya otomatis diarsipkan. Dialog konfirmasi menyebut berapa pengajuan berjalan
+   yang tetap memakai versi lama.
+
+Kalau unggahan ditolak karena placeholder yang belum punya isian, tombol **Jadikan isian** menambahkannya ke Isian Form
+sebagai teks singkat di bagian baru. Periksa jenis isiannya (uang, tanggal, dan sebagainya), simpan isian, lalu unggah
+ulang.
+
+Perubahan Isian Form baru dipakai pengaju setelah ada versi baru yang diaktifkan. Selama itu halaman menampilkan
+penanda "Ada perubahan isian yang belum dipakai versi mana pun".
 
 Yang perlu diketahui:
 
 - Hanya ada satu versi aktif. Pengajuan **baru** memakai versi aktif.
 - Pengajuan yang **sudah dikirim** tetap memakai versi yang dipakainya saat dikirim, sampai selesai. Mengaktifkan
   versi baru tidak mengubah pengajuan yang sedang berjalan.
-- Versi lama tidak dihapus; semuanya tersimpan sebagai riwayat dan bisa diunduh.
+- Versi lama tersimpan sebagai riwayat dan bisa diunduh. Versi yang tidak dipakai lagi boleh dihapus, kecuali versi
+  aktif dan versi yang masih dipakai pengajuan yang belum selesai.
 - Versi berketerangan **"Format lama, hanya bisa diunduh"** adalah template sebelum aplikasi memakai placeholder.
   Versi itu tidak bisa dipratinjau atau diaktifkan lagi.
-- Yang boleh mengunggah dan mengaktifkan: pengguna dengan izin *Template Perjanjian - Kelola*.
+- Yang boleh mengunggah, mengaktifkan, dan menghapus: **Admin**. LEGAL bisa melihat, mengunduh, dan mempratinjau.
 
 ## 2. Placeholder
 
@@ -35,8 +49,10 @@ dan huruf besar:
 Perjanjian ini dibuat antara PIHAK PERTAMA dan {{PIHAK_KEDUA_NAMA}} tentang {{JENIS_PEKERJAAN}}.
 ```
 
-Daftar lengkap placeholder beserta artinya ada di halaman Template Perjanjian, tombol **Lihat N token**. Daftar itu
-yang berlaku; jangan menebak nama placeholder.
+Daftar lengkap placeholder beserta artinya ada di halaman jenis perjanjian, bagian **Placeholder untuk Word**. Daftar itu
+yang berlaku; jangan menebak nama placeholder. Daftarnya dibentuk dari isian jenis dokumen itu: kode placeholder adalah
+nama isian dalam huruf besar, ditambah turunan menurut jenis isiannya (tabel di bawah), dan placeholder sistem yang
+sama untuk semua jenis (nomor perjanjian, tanggal dan tempat tanda tangan, Pihak Pertama, daftar lampiran).
 
 Cara menulis:
 
@@ -45,15 +61,18 @@ Cara menulis:
   placeholder yang **salah ketik dan terpecah** tidak terdeteksi saat unggah dan akan tercetak apa adanya di
   dokumen. Kalau ragu, hapus lalu tempel ulang placeholder sebagai teks biasa.
 - Format seluruh placeholder (tebal, miring, huruf) ikut menjadi format isiannya.
-- Placeholder yang tidak dikenal membuat unggahan ditolak dengan pesan *"placeholder tidak dikenal: ..."*.
+- Placeholder yang tidak punya isian di jenis dokumen membuat unggahan ditolak dengan pesan *"placeholder tidak
+  dikenal: ..."* beserta daftarnya. Buat isiannya di jenis dokumen, atau perbaiki ejaannya di Word.
 
 Isian sudah diformat sistem. Jangan menambahkan format sendiri di sekitar placeholder:
 
 | Jenis | Contoh hasil | Catatan |
 |---|---|---|
 | Nilai uang | `Rp 750.000.000` | Sudah memuat "Rp"; jangan menulis "Rp" di depan placeholder |
-| Terbilang | `tujuh ratus lima puluh juta` | Placeholder berakhiran `_TERBILANG`; kata "rupiah" atau "persen" ditulis di template |
-| Tanggal lengkap | `17 Agustus 2026` | |
+| Persen dan angka | `40`, `33,5` | Tanpa tanda "%"; tulis "%" atau "persen" di template |
+| Terbilang | `tujuh ratus lima puluh juta`, `tiga puluh tiga koma lima` | Placeholder berakhiran `_TERBILANG` untuk uang, persen, angka, dan tanggal; kata "rupiah" atau "persen" ditulis di template |
+| Tanggal lengkap | `17 Agustus 2026` | Turunannya: `_HARI` (`Senin`) dan `_TERBILANG` (`tujuh belas Agustus dua ribu dua puluh enam`) |
+| Isian yang dikosongkan | `-` | Berlaku untuk semua jenis isian, termasuk turunannya |
 | Bagian tanggal tanda tangan | `Senin`, `17`, `Agustus`, `2026` | `HARI_TTD`, `TANGGAL_TTD`, `BULAN_TTD`, `TAHUN_TTD` |
 | Data Pihak Pertama | Alamat, telepon, email, PIC, pejabat | Diambil dari menu Pihak Pertama, bukan diketik di template |
 
@@ -93,13 +112,15 @@ bawaan menyorot rujukan-rujukan itu supaya mudah ditemukan.
 
 ## 7. Isian yang bisa kosong
 
-Daftar isian dan mana yang wajib saat ini ditetapkan aplikasi. Isian yang tidak wajib dan dibiarkan kosong
-meninggalkan celah di kalimat, mis. *"Surat Penawaran No.  perihal  pada tanggal ."*. Letakkan placeholder isian yang
-tidak wajib di kalimat yang tetap terbaca kalau isiannya kosong, atau minta isian itu dijadikan wajib.
+Semua isian bawaan wajib, dan isian baru dimulai wajib. Admin bisa melonggarkannya lewat centang **Wajib** di Isian Form,
+lalu membuat versi baru. Isian yang tidak wajib dan dibiarkan kosong tercetak
+sebagai tanda `-`, mis. *"Surat Penawaran No. - perihal - pada tanggal -"*. Letakkan placeholder isian yang tidak wajib
+di kalimat yang tetap terbaca kalau isiannya kosong, atau minta isian itu dijadikan wajib.
 
 ## 8. Daftar periksa sebelum mengaktifkan
 
-Buka **Pratinjau** versi Draft (diisi data contoh) dan periksa:
+Buka **Pratinjau** versi Draft dan periksa. Pratinjau diisi data contoh: isian teks tampil sebagai labelnya dalam
+kurung siku (mis. `[Nama Perusahaan]`), sehingga terlihat isian mana mengisi bagian mana.
 
 - [ ] Tidak ada placeholder yang tercetak apa adanya (`{{...}}`).
 - [ ] Setiap BAGIAN mulai di halaman baru, tanpa ruang kosong besar atau halaman kosong.
@@ -113,7 +134,8 @@ Buka **Pratinjau** versi Draft (diisi data contoh) dan periksa:
 
 | Pesan | Arti | Perbaikan |
 |---|---|---|
-| *placeholder tidak dikenal: {{...}}* | Ada placeholder yang tidak ada di daftar | Bandingkan ejaannya dengan **Lihat N token**; tempel ulang sebagai teks biasa |
+| *placeholder tidak dikenal: {{...}}* | Ada placeholder yang tidak punya isian di jenis dokumen | Bandingkan ejaannya dengan **Placeholder untuk Word**; tempel ulang sebagai teks biasa, atau buat isiannya (**Jadikan isian**) |
+| *Catatan perubahan wajib diisi...* | Catatan Perubahan kosong | Tulis apa yang berubah dibanding versi sebelumnya |
 | *paragraf {{RUANG_LINGKUP_LIST}} harus diformat sebagai numbered list Word...* | Paragraf ruang lingkup bukan list bernomor | Pilih paragraf itu, klik Numbering di Word |
 | *uji coba pembentukan dokumen gagal: ...* | File tidak bisa diisi, mis. placeholder tersisa | Baca rincian setelah titik dua; periksa placeholder yang disebut |
 | *uji coba konversi PDF gagal: ...* | File tidak bisa diubah ke PDF | Buka dan simpan ulang file di Word (format `.docx`, bukan `.doc`), lalu unggah lagi |

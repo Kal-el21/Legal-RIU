@@ -4,7 +4,19 @@ import "encoding/json"
 
 type CreateAgreementDocumentRequest struct {
 	DocumentTypeCode string                 `json:"document_type_code" binding:"required"`
+	TemplateID       string                 `json:"template_id"` // versi template form, dari skema jenis dokumen
 	FormData         map[string]interface{} `json:"form_data" binding:"required"`
+}
+
+// PreviewDraftRequest: isian wizard yang belum dikirim. DocumentID diisi saat
+// merevisi; versi template harus versi terkunci pengajuan itu. AttachmentNames
+// hanya nama file untuk Daftar Lampiran; file baru diunggah saat Kirim.
+type PreviewDraftRequest struct {
+	DocumentTypeCode string                 `json:"document_type_code"`
+	TemplateID       string                 `json:"template_id"`
+	DocumentID       string                 `json:"document_id"`
+	FormData         map[string]interface{} `json:"form_data" binding:"required"`
+	AttachmentNames  []string               `json:"attachment_names"`
 }
 
 type UpdateAgreementDocumentRequest struct {

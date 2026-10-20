@@ -60,10 +60,11 @@ import LegalReviewDocumentDetailPage from '@/pages/legal/review-documents/Review
 import LegalMaterialManagementPage from '@/pages/legal/materials/LegalMaterialManagementPage'
 import LegalMaterialDetailPage from '@/pages/legal/materials/LegalMaterialDetailPage'
 import AgreementDocumentList from '@/components/shared/AgreementDocumentList'
-import AgreementDocumentForm from '@/components/shared/AgreementDocumentForm'
+import AgreementWizard from '@/components/shared/AgreementWizard'
 import AgreementDocumentDetail from '@/components/shared/AgreementDocumentDetail'
 import AgreementCompanyMasterPage from '@/pages/admin/agreement-company-master/AgreementCompanyMasterPage'
-import AgreementTemplatePage from '@/pages/admin/agreement-template/AgreementTemplatePage'
+import AgreementTypeListPage from '@/pages/admin/agreement-types/AgreementTypeListPage'
+import AgreementTypeDetailPage from '@/pages/admin/agreement-types/AgreementTypeDetailPage'
 import AdminRepositoryDocumentListPage from '@/pages/admin/repository-documents/AdminRepositoryDocumentListPage'
 import LegalRepositoryDocumentListPage from '@/pages/legal/repository-documents/LegalRepositoryDocumentListPage'
 import UserRepositoryDocumentListPage from '@/pages/dashboard/repository-documents/UserRepositoryDocumentListPage'
@@ -129,9 +130,9 @@ export const router = createBrowserRouter([
           { path: '/dashboard/review-documents/:id', element: <ReviewDocumentDetailPage /> },
           { path: '/dashboard/review-documents/:id/edit', element: <ReviewDocumentFormPage /> },
           { path: '/dashboard/agreement-documents', element: <AgreementDocumentList basePath="/dashboard/agreement-documents" requester /> },
-          { path: '/dashboard/agreement-documents/new', element: <AgreementDocumentForm /> },
+          { path: '/dashboard/agreement-documents/new', element: <AgreementWizard /> },
           { path: '/dashboard/agreement-documents/:id', element: <AgreementDocumentDetail /> },
-          { path: '/dashboard/agreement-documents/:id/edit', element: <AgreementDocumentForm /> },
+          { path: '/dashboard/agreement-documents/:id/edit', element: <AgreementWizard /> },
           { path: '/dashboard/repository-documents', element: <ErrorBoundary><UserRepositoryDocumentListPage /></ErrorBoundary> },
           { path: '/dashboard/legal-cases', element: <AdminLegalCaseListPage /> },
           { path: '/dashboard/legal-cases/:id', element: <AdminLegalCaseDetailPage /> },
@@ -164,7 +165,8 @@ export const router = createBrowserRouter([
           { path: '/admin/agreement-documents/:id', element: <AgreementDocumentDetail apiBase="/admin" approver /> },
           { path: '/admin/repository-documents', element: <ErrorBoundary><AdminRepositoryDocumentListPage /></ErrorBoundary> },
           { path: '/admin/agreement-company-master', element: <AgreementCompanyMasterPage /> },
-          { path: '/admin/agreement-templates', element: <AgreementTemplatePage apiBase="/admin" /> },
+          { path: '/admin/agreement-types', element: <AgreementTypeListPage /> },
+          { path: '/admin/agreement-types/:code', element: <AgreementTypeDetailPage /> },
           { path: '/admin/legal-cases', element: <AdminLegalCaseListPage /> },
           { path: '/admin/legal-cases/:id', element: <AdminLegalCaseDetailPage /> },
           { path: '/admin/users', element: <UserManagementPage /> },

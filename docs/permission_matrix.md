@@ -143,6 +143,19 @@ Lonceng notifikasi tidak punya kode permission sendiri. Ketiga endpoint-nya (`GE
 
 ---
 
+### 2.12 Perjanjian: jenis dokumen, template, dan Pihak Pertama
+| Action Code | Label | Keterangan |
+|-------------|-------|-----------|
+| `agreement_type.manage.all` | Jenis Dokumen - Kelola | Membuat, mengubah, dan menonaktifkan jenis dokumen perjanjian beserta field kerjanya (`GET/POST /admin/agreement-types`, `PUT /admin/agreement-types/:code`) |
+| `agreement_template.view.all` | Template Perjanjian - Lihat | Melihat versi template, daftar placeholder, unduh, dan pratinjau |
+| `agreement_template.manage.all` | Template Perjanjian - Kelola | Mengunggah, membuat versi baru dari DOCX versi terakhir, mengaktifkan, dan menghapus versi template. Hanya ADMIN sejak PR 9 (keputusan T1) |
+| `agreement_company_master.view.all` | Pihak Pertama - Lihat | Melihat master Pihak Pertama |
+| `agreement_company_master.manage.all` | Pihak Pertama - Kelola | Mengelola master Pihak Pertama |
+
+Catatan `agreement_type.manage.all`: hanya ADMIN (keputusan K3, PR 9). Endpoint-nya di grup `/admin`, jadi override ke peran lain tidak membuka aksesnya. Field yang disimpan di jenis dokumen adalah field kerja; pengajuan memakai salinan field di versi template yang dikuncinya.
+
+Izin pengajuan perjanjian (`agreement_document.*`) belum dicatat di dokumen ini; sumber yang berlaku `backend/internal/seed/permissions.go`.
+
 ## 3. Default Permission by Role (Baseline)
 
 Tabel ini menunjukkan permission default yang dimiliki setiap role **sebelum override**. Admin selalu memiliki semua permission secara efektif.
@@ -205,6 +218,11 @@ Tabel ini menunjukkan permission default yang dimiliki setiap role **sebelum ove
 | | Update Notifications | ✅ | ❌ | ❌ | ✅ | ✅ |
 | | Manage 2FA | ✅ | ❌ | ❌ | ✅ | ✅ |
 | **Auth** | Change Password | ✅ | ❌ | ❌ | ✅ | ✅ |
+| **Perjanjian** | Kelola Jenis Dokumen | ✅ | ❌ | ❌ | ❌ | ❌ |
+| | Lihat Template | ✅ | ✅ | ❌ | ❌ | ❌ |
+| | Kelola Template | ✅ | ❌ | ❌ | ❌ | ❌ |
+| | Lihat Pihak Pertama | ✅ | ❌ | ❌ | ❌ | ❌ |
+| | Kelola Pihak Pertama | ✅ | ❌ | ❌ | ❌ | ❌ |
 
 ---
 

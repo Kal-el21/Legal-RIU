@@ -34,6 +34,19 @@ func (h *AgreementDocumentHandler) GetType(c *gin.Context) {
 	}
 	utils.OK(c, "Success", v)
 }
+// DocumentSchema: form revisi dari versi template yang dikunci pengajuan.
+func (h *AgreementDocumentHandler) DocumentSchema(c *gin.Context) {
+	v, e := h.svc.DocumentSchema(c.Param("id"), middleware.GetUserID(c))
+	if errors.Is(e, service.ErrPengajuanTidakAda) {
+		utils.NotFound(c, e.Error())
+		return
+	}
+	if e != nil {
+		utils.BadRequest(c, e.Error(), nil)
+		return
+	}
+	utils.OK(c, "Success", v)
+}
 func (h *AgreementDocumentHandler) Create(c *gin.Context) {
 	var req dto.CreateAgreementDocumentRequest
 	var files []*multipart.FileHeader
@@ -50,6 +63,10 @@ func (h *AgreementDocumentHandler) Create(c *gin.Context) {
 		return
 	}
 	v, e := h.svc.Create(middleware.GetUserID(c), req, files)
+	if errors.Is(e, service.ErrTemplateUsang) {
+		c.JSON(http.StatusConflict, utils.Response{Success: false, Message: e.Error()})
+		return
+	}
 	if e != nil {
 		utils.BadRequest(c, e.Error(), nil)
 		return
@@ -73,7 +90,7 @@ func (h *AgreementDocumentHandler) GetAll(c *gin.Context) {
 func (h *AgreementDocumentHandler) GetByID(c *gin.Context) {
 	all := middleware.RoleWithAllAccess(c, "agreement_document.view.all") != "USER"
 	log.Printf("[agreement] GetByID request id=%s user=%s all=%v", c.Param("id"), middleware.GetUserID(c), all)
-	v, e := h.svc.GetByID(c.Param("id"), middleware.GetUserID(c), all)
+	v, e := h.svc.Detail(c.Param("id"), middleware.GetUserID(c), all)
 	if e != nil {
 		log.Printf("[agreement] GetByID ERROR id=%s err=%v", c.Param("id"), e)
 		utils.NotFound(c, e.Error())
@@ -149,6 +166,8 @@ func (h *AgreementDocumentHandler) Preview(c *gin.Context) {
 		switch {
 		case errors.Is(e, service.ErrFileNotFound):
 			utils.NotFound(c, "File final perjanjian tidak ditemukan")
+		case errors.Is(e, service.ErrPengajuanTidakAda):
+			utils.NotFound(c, e.Error())
 		case errors.Is(e, service.ErrTemplateLama):
 			utils.BadRequest(c, e.Error(), nil)
 		default:
@@ -157,6 +176,27 @@ func (h *AgreementDocumentHandler) Preview(c *gin.Context) {
 		return
 	}
 	log.Printf("[agreement] Preview OK id=%s bytes=%d", c.Param("id"), len(b))
+	c.DataFromReader(http.StatusOK, int64(len(b)), "application/pdf", bytes.NewReader(b), map[string]string{"Content-Disposition": "inline; filename=preview.pdf"})
+}
+// PreviewDraft: pratinjau isian wizard yang belum dikirim, tanpa menyimpan apa pun.
+func (h *AgreementDocumentHandler) PreviewDraft(c *gin.Context) {
+	var req dto.PreviewDraftRequest
+	if e := c.ShouldBindJSON(&req); e != nil {
+		utils.BadRequest(c, "Data tidak valid", e.Error())
+		return
+	}
+	b, e := h.svc.PreviewDraft(c, middleware.GetUserID(c), req)
+	switch {
+	case errors.Is(e, service.ErrTemplateUsang):
+		c.JSON(http.StatusConflict, utils.Response{Success: false, Message: e.Error()})
+		return
+	case errors.Is(e, service.ErrPengajuanTidakAda):
+		utils.NotFound(c, e.Error())
+		return
+	case e != nil:
+		utils.BadRequest(c, e.Error(), nil)
+		return
+	}
 	c.DataFromReader(http.StatusOK, int64(len(b)), "application/pdf", bytes.NewReader(b), map[string]string{"Content-Disposition": "inline; filename=preview.pdf"})
 }
 func (h *AgreementDocumentHandler) DownloadPDF(c *gin.Context)  { h.downloadGenerated(c, "pdf") }
