@@ -19,7 +19,7 @@ var (
 	kodeFieldRE = regexp.MustCompile(`^[a-z][a-z0-9_]{0,59}$`)
 )
 
-var tipeField = map[string]bool{"text": true, "textarea": true, "email": true, "tel": true, "number": true, "money": true, "percent": true, "date": true, "select": true}
+var tipeField = map[string]bool{"text": true, "textarea": true, "email": true, "tel": true, "number": true, "money": true, "percent": true, "date": true, "select": true, "list": true, "group": true}
 
 // AgreementTypeInput: isian Admin untuk jenis dokumen. Fields nil pada
 // perubahan berarti field kerja tidak diubah.
@@ -110,13 +110,15 @@ func isiJenis(t *entity.AgreementType, in AgreementTypeInput, gantiField bool) e
 // rapikanField memeriksa definisi field dari Admin dan merapikannya: kode field
 // disimpan huruf kecil (di layar dan di Word ditulis huruf besar, keputusan A),
 // label dan pilihan tanpa spasi di tepi. Setiap placeholder yang dihasilkan,
-// termasuk turunannya, harus unik dan tidak memakai placeholder sistem.
+// termasuk turunan dan placeholder per baris grup, harus unik dan tidak memakai
+// placeholder sistem.
 func rapikanField(in []AgreementSectionDefinition) ([]AgreementSectionDefinition, error) {
 	pemilik := map[string]string{scopeListPlaceholder[2 : len(scopeListPlaceholder)-2]: ""}
 	for key := range systemPlaceholders {
 		pemilik[key] = ""
 	}
 	dipakai := map[string]bool{}
+	uang := map[string]bool{}
 	out := make([]AgreementSectionDefinition, 0, len(in))
 	for i, s := range in {
 		title := strings.TrimSpace(s.Title)
@@ -125,32 +127,32 @@ func rapikanField(in []AgreementSectionDefinition) ([]AgreementSectionDefinition
 		}
 		bagian := AgreementSectionDefinition{Title: title, Fields: make([]AgreementFieldDefinition, 0, len(s.Fields))}
 		for _, f := range s.Fields {
-			f.Name = strings.ToLower(strings.TrimSpace(f.Name))
+			f, e := rapikanSatuField(f, "", dipakai)
+			if e != nil {
+				return nil, e
+			}
 			kode := strings.ToUpper(f.Name)
-			if !kodeFieldRE.MatchString(f.Name) {
-				return nil, fmt.Errorf("Kode field %s hanya boleh huruf, angka, dan garis bawah, diawali huruf, maksimal 60 karakter", kode)
-			}
-			if dipakai[f.Name] {
-				return nil, fmt.Errorf("Kode field %s dipakai dua kali", kode)
-			}
-			dipakai[f.Name] = true
-			if f.Label = strings.TrimSpace(f.Label); f.Label == "" {
-				return nil, fmt.Errorf("Label field %s wajib diisi", kode)
-			}
-			if !tipeField[f.Type] {
-				return nil, fmt.Errorf("Tipe field %s tidak dikenal: %q", kode, f.Type)
-			}
-			opsi := make([]string, 0, len(f.Options))
-			for _, o := range f.Options {
-				if o = strings.TrimSpace(o); o != "" {
-					opsi = append(opsi, o)
+			uang[f.Name] = f.Type == "money"
+			if f.Type == "group" {
+				if len(f.Fields) == 0 {
+					return nil, fmt.Errorf("Grup %s harus punya minimal satu sub-field", kode)
 				}
+				sub := make([]AgreementFieldDefinition, len(f.Fields))
+				subDipakai := map[string]bool{}
+				for j, g := range f.Fields {
+					if sub[j], e = rapikanSatuField(g, kode+"_", subDipakai); e != nil {
+						return nil, e
+					}
+					if g.Type == "list" || g.Type == "group" {
+						return nil, fmt.Errorf("Sub-field %s_%s tidak boleh bertipe daftar atau grup", kode, strings.ToUpper(sub[j].Name))
+					}
+				}
+				f.Fields = sub
+				f.SplitOf = strings.ToLower(strings.TrimSpace(f.SplitOf))
+			} else {
+				f.Fields, f.SplitOf = nil, ""
 			}
-			f.Options = opsi
-			if f.Type == "select" && len(f.Options) == 0 {
-				return nil, fmt.Errorf("Field %s bertipe pilihan harus punya minimal satu pilihan", kode)
-			}
-			for token := range fieldPlaceholders(f, contohNilai(f)) {
+			for token := range tokenField(f) {
 				lain, ada := pemilik[token]
 				switch {
 				case ada && lain == "":
@@ -164,5 +166,56 @@ func rapikanField(in []AgreementSectionDefinition) ([]AgreementSectionDefinition
 		}
 		out = append(out, bagian)
 	}
+	// Rujukan "membagi nilai" diperiksa setelah semua field terbaca, karena field
+	// uangnya boleh berada di bagian mana pun.
+	for _, s := range out {
+		for _, f := range s.Fields {
+			if f.SplitOf == "" {
+				continue
+			}
+			kode := strings.ToUpper(f.Name)
+			if !uang[f.SplitOf] {
+				return nil, fmt.Errorf("Grup %s membagi %s, tetapi %s bukan field uang di jenis ini", kode, strings.ToUpper(f.SplitOf), strings.ToUpper(f.SplitOf))
+			}
+			jumlah := map[string]int{}
+			for _, g := range f.Fields {
+				jumlah[g.Type]++
+			}
+			if jumlah["percent"] != 1 || jumlah["money"] != 1 {
+				return nil, fmt.Errorf("Grup %s yang membagi nilai harus punya tepat satu sub-field persen dan satu sub-field uang", kode)
+			}
+		}
+	}
 	return out, nil
+}
+
+// rapikanSatuField memeriksa kode, label, tipe, dan pilihan satu field atau
+// sub-field. awalan hanya untuk pesan, mis. "TERMIN_" pada sub-field grup.
+func rapikanSatuField(f AgreementFieldDefinition, awalan string, dipakai map[string]bool) (AgreementFieldDefinition, error) {
+	f.Name = strings.ToLower(strings.TrimSpace(f.Name))
+	kode := awalan + strings.ToUpper(f.Name)
+	if !kodeFieldRE.MatchString(f.Name) {
+		return f, fmt.Errorf("Kode field %s hanya boleh huruf, angka, dan garis bawah, diawali huruf, maksimal 60 karakter", kode)
+	}
+	if dipakai[f.Name] {
+		return f, fmt.Errorf("Kode field %s dipakai dua kali", kode)
+	}
+	dipakai[f.Name] = true
+	if f.Label = strings.TrimSpace(f.Label); f.Label == "" {
+		return f, fmt.Errorf("Label field %s wajib diisi", kode)
+	}
+	if !tipeField[f.Type] {
+		return f, fmt.Errorf("Tipe field %s tidak dikenal: %q", kode, f.Type)
+	}
+	opsi := make([]string, 0, len(f.Options))
+	for _, o := range f.Options {
+		if o = strings.TrimSpace(o); o != "" {
+			opsi = append(opsi, o)
+		}
+	}
+	f.Options = opsi
+	if f.Type == "select" && len(f.Options) == 0 {
+		return f, fmt.Errorf("Field %s bertipe pilihan harus punya minimal satu pilihan", kode)
+	}
+	return f, nil
 }

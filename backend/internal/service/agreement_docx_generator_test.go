@@ -24,7 +24,7 @@ func TestPKSTemplateGeneration(t *testing.T) {
 	for _, k := range []string{"PIHAK_PERTAMA_ALAMAT", "PIHAK_PERTAMA_TELEPON", "PIHAK_PERTAMA_EMAIL", "PIHAK_PERTAMA_PIC", "PIHAK_KEDUA_TELEPON", "PIHAK_KEDUA_EMAIL", "PIHAK_KEDUA_PIC"} {
 		values[k] = "TEST"
 	}
-	out, _, e := NewAgreementGenerator().Generate(d.Template, values, GenerateOptions{})
+	out, _, e := NewAgreementGenerator().Generate(d.Template, IsianDokumen{Nilai: values}, GenerateOptions{})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -73,7 +73,7 @@ func TestPKSFieldPlacement(t *testing.T) {
 	values["TERMIN_2_NILAI"] = "Rp 10.000.000"
 	values["TERMIN_2_NILAI_TERBILANG"] = "sepuluh juta"
 
-	out, _, err := NewAgreementGenerator().Generate(definition.Template, values, GenerateOptions{Draft: true})
+	out, _, err := NewAgreementGenerator().Generate(definition.Template, IsianDokumen{Nilai: values}, GenerateOptions{Draft: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -267,12 +267,12 @@ func TestIsianPanjangTerisiSemua(t *testing.T) {
 
 	values := sampleAgreementValues(definition.Schema.Sections)
 	alamat := strings.TrimSpace(strings.Repeat("Jl. Contoh Panjang Nomor 123 Blok A, Kawasan Industri, ", 11))
-	values["PIHAK_KEDUA_ALAMAT"] = alamat
+	values.Nilai["PIHAK_KEDUA_ALAMAT"] = alamat
 	poin := make([]string, 20)
 	for i := range poin {
 		poin[i] = fmt.Sprintf("Poin ruang lingkup nomor %d", i+1)
 	}
-	values["RUANG_LINGKUP"] = strings.Join(poin, "\n")
+	values.Nilai["RUANG_LINGKUP"] = strings.Join(poin, "\n")
 
 	out, _, err := NewAgreementGenerator().Generate(definition.Template, values, GenerateOptions{})
 	if err != nil {
@@ -391,13 +391,19 @@ func TestDraftBerwatermark(t *testing.T) {
 // template unggahan yang disusun tanpa header.
 func docxMinimal(t *testing.T, sectPr string) []byte {
 	t.Helper()
+	return docxDenganIsi(t, `<w:p><w:r><w:t>Isi perjanjian</w:t></w:r></w:p>`+sectPr)
+}
+
+// docxDenganIsi membentuk dokumen Word tanpa header dengan isi body apa adanya.
+func docxDenganIsi(t *testing.T, body string) []byte {
+	t.Helper()
 	var out bytes.Buffer
 	w := zip.NewWriter(&out)
 	for _, f := range [][2]string{
 		{"[Content_Types].xml", `<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>`},
 		{"_rels/.rels", `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`},
 		{"word/_rels/document.xml.rels", `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>`},
-		{"word/document.xml", `<?xml version="1.0" encoding="UTF-8"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><w:body><w:p><w:r><w:t>Isi perjanjian</w:t></w:r></w:p>` + sectPr + `</w:body></w:document>`},
+		{"word/document.xml", `<?xml version="1.0" encoding="UTF-8"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml"><w:body>` + body + `</w:body></w:document>`},
 	} {
 		dst, err := w.Create(f[0])
 		if err != nil {
@@ -423,7 +429,7 @@ func TestWatermarkTemplateTanpaHeader(t *testing.T) {
 	} {
 		t.Run(c.nama, func(t *testing.T) {
 			template := docxMinimal(t, c.sectPr)
-			out, _, err := NewAgreementGenerator().Generate(template, nil, GenerateOptions{Draft: true})
+			out, _, err := NewAgreementGenerator().Generate(template, IsianDokumen{}, GenerateOptions{Draft: true})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -444,7 +450,7 @@ func TestWatermarkTemplateTanpaHeader(t *testing.T) {
 				t.Errorf("rujukan header halaman pertama: ingin %v", c.pertama)
 			}
 
-			final, _, err := NewAgreementGenerator().Generate(template, nil, GenerateOptions{})
+			final, _, err := NewAgreementGenerator().Generate(template, IsianDokumen{}, GenerateOptions{})
 			if err != nil {
 				t.Fatal(err)
 			}

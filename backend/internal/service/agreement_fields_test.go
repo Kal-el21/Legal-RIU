@@ -105,8 +105,8 @@ func TestPKSSamaDenganSebelumnya(t *testing.T) {
 			lama := placeholderValuesSebelumPR9(c.doc, c.data, snap)
 			baru := placeholderValues(c.doc, bagianPKS(t), c.data, snap)
 			for k, v := range lama {
-				if baru[k] != v {
-					t.Errorf("%s: %q, sebelumnya %q", k, baru[k], v)
+				if baru.Nilai[k] != v {
+					t.Errorf("%s: %q, sebelumnya %q", k, baru.Nilai[k], v)
 				}
 			}
 		})

@@ -452,6 +452,9 @@ func periksaTemplate(data []byte, sections []AgreementSectionDefinition) (dto.Ag
 	if !scopeListNumbered {
 		return hasil, errors.New("paragraf " + scopeListPlaceholder + " harus diformat sebagai numbered list Word agar poin ruang lingkup bernomor a, b, c")
 	}
+	if e = periksaParagrafUlang(data, sections); e != nil {
+		return hasil, e
+	}
 	dipakai := map[string]bool{}
 	for _, p := range found {
 		dipakai[p] = true
@@ -459,7 +462,7 @@ func periksaTemplate(data []byte, sections []AgreementSectionDefinition) (dto.Ag
 	for _, s := range sections {
 		for _, f := range s.Fields {
 			terpakai := f.Name == scopeField && dipakai[scopeListPlaceholder]
-			for token := range fieldPlaceholders(f, contohNilai(f)) {
+			for token := range tokenField(f) {
 				terpakai = terpakai || dipakai["{{"+token+"}}"]
 			}
 			if !terpakai {

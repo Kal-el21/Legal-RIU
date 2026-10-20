@@ -467,6 +467,12 @@ func TestValidasiField(t *testing.T) {
 	teks := func(nama string) map[string]any {
 		return map[string]any{"name": nama, "label": "Isian " + nama, "type": "text"}
 	}
+	uang := map[string]any{"name": "nilai_kontrak", "label": "Nilai Kontrak", "type": "money"}
+	grup := func(bagi string, sub ...map[string]any) map[string]any {
+		return map[string]any{"name": "termin", "label": "Termin", "type": "group", "split_of": bagi, "fields": sub}
+	}
+	persen := map[string]any{"name": "persen", "label": "Persen", "type": "percent"}
+	nilai := map[string]any{"name": "nilai", "label": "Nilai", "type": "money"}
 
 	for _, c := range []struct {
 		nama  string
@@ -487,6 +493,15 @@ func TestValidasiField(t *testing.T) {
 		{"BentrokIsianApprover", map[string]any{"code": kode, "name": "Uji", "fields": field(teks("pihak_pertama_pic"))}, "{{PIHAK_PERTAMA_PIC}}"},
 		{"BentrokDaftarRuangLingkup", map[string]any{"code": kode, "name": "Uji", "fields": field(teks("ruang_lingkup_list"))}, "{{RUANG_LINGKUP_LIST}}"},
 		{"BentrokTurunan", map[string]any{"code": kode, "name": "Uji", "fields": field(map[string]any{"name": "nilai", "label": "Nilai", "type": "money"}, teks("nilai_terbilang"))}, "{{NILAI_TERBILANG}}"},
+		{"GrupTanpaSubField", map[string]any{"code": kode, "name": "Uji", "fields": field(grup(""))}, "minimal satu sub-field"},
+		{"SubFieldGanda", map[string]any{"code": kode, "name": "Uji", "fields": field(grup("", teks("syarat"), teks("SYARAT")))}, "TERMIN_SYARAT dipakai dua kali"},
+		{"SubFieldSalahFormat", map[string]any{"code": kode, "name": "Uji", "fields": field(grup("", teks("syarat-bayar")))}, "TERMIN_SYARAT-BAYAR"},
+		{"SubFieldBersarang", map[string]any{"code": kode, "name": "Uji", "fields": field(grup("", map[string]any{"name": "poin", "label": "Poin", "type": "list"}))}, "tidak boleh bertipe daftar atau grup"},
+		{"BagiBukanUang", map[string]any{"code": kode, "name": "Uji", "fields": field(teks("nama"), grup("nama", persen, nilai))}, "NAMA bukan field uang"},
+		{"BagiFieldTidakAda", map[string]any{"code": kode, "name": "Uji", "fields": field(grup("nilai_kontrak", persen, nilai))}, "NILAI_KONTRAK bukan field uang"},
+		{"BagiTanpaPersen", map[string]any{"code": kode, "name": "Uji", "fields": field(uang, grup("nilai_kontrak", nilai, teks("syarat")))}, "tepat satu sub-field persen dan satu sub-field uang"},
+		{"BentrokTurunanGrup", map[string]any{"code": kode, "name": "Uji", "fields": field(grup("", persen), teks("termin_persen_terbilang"))}, "{{TERMIN_PERSEN_TERBILANG}}"},
+		{"BentrokJumlahGrup", map[string]any{"code": kode, "name": "Uji", "fields": field(teks("termin_jumlah"), grup("", teks("syarat")))}, "{{TERMIN_JUMLAH}}"},
 	} {
 		t.Run(c.nama, func(t *testing.T) {
 			w := panggil(t, admin, http.MethodPost, alamatJenis, c.isi)
