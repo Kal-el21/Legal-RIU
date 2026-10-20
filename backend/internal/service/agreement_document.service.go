@@ -29,6 +29,7 @@ type AgreementDocumentService interface {
 	Create(string, dto.CreateAgreementDocumentRequest, []*multipart.FileHeader) (*entity.AgreementDocument, error)
 	GetAll(string, bool, dto.AgreementListQuery) ([]entity.AgreementDocument, int64, error)
 	GetByID(string, string, bool) (*entity.AgreementDocument, error)
+	Detail(string, string, bool) (*entity.AgreementDocument, error)
 	Update(string, string, dto.UpdateAgreementDocumentRequest) (*entity.AgreementDocument, error)
 	Delete(string, string) error
 	Resubmit(string, string, []*multipart.FileHeader) (*entity.AgreementDocument, error)
@@ -194,7 +195,57 @@ func (s *agreementDocumentService) GetAll(userID string, all bool, q dto.Agreeme
 		}
 		owner = &id
 	}
-	return s.repo.FindAll(owner, q.Status, q.DateFrom, q.Search, q.Page, q.Limit)
+	items, total, e := s.repo.FindAll(owner, q.Status, q.DateFrom, q.Search, q.Page, q.Limit)
+	if e == nil && all {
+		s.tandaiTemplateLama(items)
+	}
+	return items, total, e
+}
+
+// Detail: GetByID untuk halaman detail; approver ikut melihat penanda template lama.
+func (s *agreementDocumentService) Detail(id, userID string, all bool) (*entity.AgreementDocument, error) {
+	d, e := s.GetByID(id, userID, all)
+	if e == nil && all {
+		docs := []entity.AgreementDocument{*d}
+		s.tandaiTemplateLama(docs)
+		d.OldTemplate = docs[0].OldTemplate
+	}
+	return d, e
+}
+
+// tandaiTemplateLama mengisi OldTemplate pada pengajuan yang belum selesai dan
+// masih dikunci ke versi selain versi aktif jenisnya. Persetujuannya membentuk
+// dokumen final dengan versi lama itu, jadi approver perlu tahu.
+func (s *agreementDocumentService) tandaiTemplateLama(docs []entity.AgreementDocument) {
+	aktif := map[string]*entity.AgreementTemplate{}
+	versi := map[uuid.UUID]*entity.AgreementTemplate{}
+	for i := range docs {
+		d := &docs[i]
+		if d.TemplateID == nil || d.Status == entity.StatusCompleted || d.Status == entity.StatusRejected {
+			continue
+		}
+		a, ada := aktif[d.DocumentTypeCode]
+		if !ada {
+			_, a, _ = s.templates.ActiveType(d.DocumentTypeCode)
+			aktif[d.DocumentTypeCode] = a
+		}
+		if a == nil || a.ID == *d.TemplateID {
+			continue
+		}
+		v, ada := versi[*d.TemplateID]
+		if !ada {
+			v, _ = s.templates.Get(d.TemplateID.String())
+			versi[*d.TemplateID] = v
+		}
+		if v == nil {
+			continue
+		}
+		oleh := ""
+		if a.Activator != nil {
+			oleh = a.Activator.FullName
+		}
+		d.OldTemplate = &entity.TemplateLama{Version: v.Version, ActiveVersion: a.Version, ActiveNote: a.Note, ActivatedAt: a.ActivatedAt, ActivatedBy: oleh}
+	}
 }
 func (s *agreementDocumentService) GetByID(id, userID string, all bool) (*entity.AgreementDocument, error) {
 	uid, e := uuid.Parse(id)

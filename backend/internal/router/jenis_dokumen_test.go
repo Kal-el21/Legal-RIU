@@ -854,3 +854,80 @@ func TestSkemaPengajuanTerkunci(t *testing.T) {
 	}
 	harapKode(t, panggil(t, lain, http.MethodGet, urlPerjanjian("", "/", p.ID, "/schema"), nil), http.StatusNotFound, "skema pengajuan milik orang lain")
 }
+
+type penandaTemplate struct {
+	ID          string `json:"id"`
+	OldTemplate *struct {
+		Version       int    `json:"version"`
+		ActiveVersion int    `json:"active_version"`
+		ActiveNote    string `json:"active_note"`
+		ActivatedAt   string `json:"activated_at"`
+		ActivatedBy   string `json:"activated_by"`
+	} `json:"old_template"`
+}
+
+func daftarPenanda(t *testing.T, token, awalan string) map[string]penandaTemplate {
+	t.Helper()
+	w := panggil(t, token, http.MethodGet, urlPerjanjian(awalan)+"?limit=100", nil)
+	harapKode(t, w, http.StatusOK, "daftar perjanjian "+awalan)
+	var isi struct {
+		Items []penandaTemplate `json:"items"`
+	}
+	isiData(t, w, &isi)
+	out := map[string]penandaTemplate{}
+	for _, p := range isi.Items {
+		out[p.ID] = p
+	}
+	return out
+}
+
+// Approver melihat pengajuan berjalan yang masih memakai versi template lama,
+// beserta versi aktif dan catatannya, karena persetujuan membentuk dokumen final
+// dengan versi lama itu. Pengajuan Selesai sudah final dan pengaju tidak diberi
+// penanda.
+func TestPenandaTemplateLama(t *testing.T) {
+	butuhMinIO(t)
+	user := masukPeran(t, entity.RoleUser)
+	legal := masukPeran(t, entity.RoleLegal)
+	berjalan := buatPerjanjian(t, user, formPerjanjian())
+	selesai := buatPerjanjian(t, user, formPerjanjian())
+	eksekusi(t, "UPDATE agreement_documents SET status = ? WHERE id = ?", entity.StatusCompleted, selesai.ID)
+
+	var admin struct{ ID, FullName string }
+	dbTes.Raw("SELECT id, full_name FROM users WHERE role = ? AND deleted_at IS NULL LIMIT 1", entity.RoleAdmin).Scan(&admin)
+	aktif := templateAktif(t)
+	baru := uuid.NewString()
+	eksekusi(t, "UPDATE agreement_templates SET status = 'ARCHIVED' WHERE id = ?", aktif.ID)
+	salinTemplate(t, aktif.ID, baru, "penanda-uji", string(entity.TemplateStatusActive), false, nil)
+	eksekusi(t, "UPDATE agreement_templates SET note = 'Klausul denda diperbarui', activated_by = ?, activated_at = now() WHERE id = ?", admin.ID, baru)
+	t.Cleanup(func() {
+		dbTes.Exec("DELETE FROM agreement_documents WHERE template_id = ?", baru)
+		dbTes.Exec("DELETE FROM agreement_templates WHERE id = ?", baru)
+		dbTes.Exec("UPDATE agreement_templates SET status = 'ACTIVE' WHERE id = ?", aktif.ID)
+	})
+	pengajuanBaru := buatPerjanjian(t, user, formPerjanjian())
+	versiBaru := templateDB(t, baru).Version
+
+	var detail penandaTemplate
+	isiData(t, panggil(t, legal, http.MethodGet, urlPerjanjian("/legal", "/", berjalan.ID), nil), &detail)
+	if o := detail.OldTemplate; o == nil || o.Version != aktif.Version || o.ActiveVersion != versiBaru || o.ActiveNote != "Klausul denda diperbarui" || o.ActivatedBy != admin.FullName || o.ActivatedAt == "" {
+		t.Errorf("penanda template lama di detail approver: %+v (harus v%d, aktif v%d oleh %s)", o, aktif.Version, versiBaru, admin.FullName)
+	}
+
+	daftar := daftarPenanda(t, legal, "/legal")
+	if daftar[berjalan.ID].OldTemplate == nil {
+		t.Error("daftar approver tidak menandai pengajuan berjalan di versi lama")
+	}
+	if daftar[pengajuanBaru.ID].OldTemplate != nil {
+		t.Error("pengajuan di versi aktif ditandai template lama")
+	}
+	if daftar[selesai.ID].OldTemplate != nil {
+		t.Error("pengajuan Selesai ditandai template lama")
+	}
+
+	var milik penandaTemplate
+	isiData(t, panggil(t, user, http.MethodGet, urlPerjanjian("", "/", berjalan.ID), nil), &milik)
+	if milik.OldTemplate != nil || daftarPenanda(t, user, "")[berjalan.ID].OldTemplate != nil {
+		t.Error("pengaju diberi penanda template lama")
+	}
+}

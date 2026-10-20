@@ -76,7 +76,10 @@ export default function AgreementDocumentList({ basePath, apiBase = '', requeste
                 <td className="px-6 py-4 text-sm text-gray-700">{item.agreement_number}</td>
                 <td className="px-6 py-4 text-sm text-gray-700">{item.user?.full_name || '-'}</td>
                 <td className="px-6 py-4 text-sm text-gray-700">{item.created_at ? formatDate(item.created_at) : '-'}</td>
-                <td className="px-6 py-4"><StatusBadge status={item.status as SubmissionStatus} /></td>
+                <td className="px-6 py-4">
+                  <StatusBadge status={item.status as SubmissionStatus} />
+                  {item.old_template && <span title={`Memakai v${item.old_template.version}; versi aktif v${item.old_template.active_version}`} className="ml-2 inline-block rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-800">Template lama</span>}
+                </td>
                 <td className="px-6 py-4">
                   <div className="flex items-center gap-1 justify-end">
                     <Link to={`${basePath}/${item.id}`} title="Detail" className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-700"><Eye className="w-4 h-4" /></Link>

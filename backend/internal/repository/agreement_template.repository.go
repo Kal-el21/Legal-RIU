@@ -55,7 +55,7 @@ func (r *agreementTemplateRepository) FindByCode(code string) ([]entity.Agreemen
 
 func (r *agreementTemplateRepository) FindActive(code string) (*entity.AgreementTemplate, error) {
 	var v entity.AgreementTemplate
-	err := r.db.Where("code = ? AND status = ?", code, entity.TemplateStatusActive).Order("version DESC").First(&v).Error
+	err := r.db.Preload("Activator").Where("code = ? AND status = ?", code, entity.TemplateStatusActive).Order("version DESC").First(&v).Error
 	return &v, err
 }
 

@@ -2,7 +2,9 @@ import api from './api'
 import axios from 'axios'
 export interface AgreementField {name:string;label:string;type:string;required:boolean;options?:string[]}
 export interface AgreementSchema {code:string;name:string;template_id:string;template_version:number;sections:{title:string;fields:AgreementField[]}[]}
-export interface AgreementDocument {id:string;ticket_number:string;document_type_code:string;template_id?:string;form_data:Record<string,unknown>;agreement_number:string;status:string;approver_note?:string;attachments?:{id:string;file_name:string}[];generated_file_name?:string;created_at?:string;user?:{full_name?:string}}
+// Penanda untuk approver: pengajuan berjalan masih memakai versi template lama.
+export interface OldTemplate {version:number;active_version:number;active_note:string;activated_at?:string;activated_by:string}
+export interface AgreementDocument {id:string;ticket_number:string;document_type_code:string;template_id?:string;form_data:Record<string,unknown>;old_template?:OldTemplate;agreement_number:string;status:string;approver_note?:string;attachments?:{id:string;file_name:string}[];generated_file_name?:string;created_at?:string;user?:{full_name?:string}}
 const data=<T>(r:{data:{data:T}})=>r.data.data
 
 async function fileError(reason: unknown, fallback: string): Promise<Error> {

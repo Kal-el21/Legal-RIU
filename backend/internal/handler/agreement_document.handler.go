@@ -90,7 +90,7 @@ func (h *AgreementDocumentHandler) GetAll(c *gin.Context) {
 func (h *AgreementDocumentHandler) GetByID(c *gin.Context) {
 	all := middleware.RoleWithAllAccess(c, "agreement_document.view.all") != "USER"
 	log.Printf("[agreement] GetByID request id=%s user=%s all=%v", c.Param("id"), middleware.GetUserID(c), all)
-	v, e := h.svc.GetByID(c.Param("id"), middleware.GetUserID(c), all)
+	v, e := h.svc.Detail(c.Param("id"), middleware.GetUserID(c), all)
 	if e != nil {
 		log.Printf("[agreement] GetByID ERROR id=%s err=%v", c.Param("id"), e)
 		utils.NotFound(c, e.Error())

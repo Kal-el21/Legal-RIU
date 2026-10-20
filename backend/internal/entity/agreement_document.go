@@ -64,6 +64,7 @@ type AgreementTemplate struct {
 	UploadedBy    *uuid.UUID      `gorm:"type:uuid" json:"uploaded_by,omitempty"`
 	Uploader      *User           `gorm:"foreignKey:UploadedBy" json:"uploader,omitempty"`
 	ActivatedBy   *uuid.UUID      `gorm:"type:uuid" json:"activated_by,omitempty"`
+	Activator     *User           `gorm:"foreignKey:ActivatedBy" json:"activator,omitempty"`
 	ActivatedAt   *time.Time      `json:"activated_at,omitempty"`
 	// RunningDocuments: jumlah pengajuan belum selesai yang dikunci ke versi ini;
 	// diisi saat daftar versi dibaca, tidak disimpan.
@@ -91,6 +92,18 @@ type AgreementDocument struct {
 	Approver          *User                 `gorm:"foreignKey:ApprovedBy" json:"approver,omitempty"`
 	ApprovedAt        *time.Time            `json:"approved_at,omitempty"`
 	Attachments       []AgreementAttachment `gorm:"foreignKey:AgreementDocumentID" json:"attachments,omitempty"`
+	// OldTemplate diisi untuk approver kalau pengajuan berjalan masih memakai versi
+	// template lama; tidak disimpan.
+	OldTemplate *TemplateLama `gorm:"-" json:"old_template,omitempty"`
+}
+
+// TemplateLama: versi template pengajuan dibanding versi aktif jenisnya (PR 9 tahap 9.7).
+type TemplateLama struct {
+	Version       int        `json:"version"`
+	ActiveVersion int        `json:"active_version"`
+	ActiveNote    string     `json:"active_note"`
+	ActivatedAt   *time.Time `json:"activated_at,omitempty"`
+	ActivatedBy   string     `json:"activated_by"`
 }
 
 type AgreementAttachment struct {
