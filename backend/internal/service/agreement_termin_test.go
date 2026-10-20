@@ -27,6 +27,7 @@ func TestPembagianTermin(t *testing.T) {
 		// float64 menyimpan 1,005 sebagai 1,00499...; tetap harus menjadi 1,01.
 		{"PersenSetengahDibulatkanKeAtas", 1_000_000, []float64{1.005, 0}, []BarisTermin{{1.01, 10_100}, {98.99, 989_900}}, ""},
 		{"PersenTerakhirDiabaikan", 1_000_000, []float64{25, 99}, []BarisTermin{{25, 250_000}, {75, 750_000}}, ""},
+		{"NilaiTriliunan", 3_000_000_005_003, []float64{33.33, 0}, []BarisTermin{{33.33, 999_900_001_667}, {66.67, 2_000_100_003_336}}, ""},
 		{"TanpaTermin", 1_000_000, nil, nil, "minimal satu termin"},
 		{"PersenMelebihi100", 1_000_000, []float64{60, 50, 0}, nil, "melebihi 100"},
 		{"PersenTepat100TanpaSisa", 1_000_000, []float64{50, 50, 0}, nil, "termin terakhir"},

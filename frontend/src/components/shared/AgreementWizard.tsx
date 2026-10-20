@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { isAxiosError } from 'axios'
-import { AlertTriangle, ArrowLeft, ArrowRight, Check, RefreshCw, Send, X } from 'lucide-react'
+import { AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, Plus, RefreshCw, Send, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { agreementService, type AgreementDocument, type AgreementSchema } from '@/services/agreement-document.service'
-import { bacaDraf, hapusDraf, isianKosong, pindahkanIsian, simpanDraf, type FieldDef, type HasilPindah, type Isian } from '@/lib/agreement-draft'
+import { bacaDraf, hapusDraf, isianKosong, pindahkanIsian, simpanDraf, type Baris, type FieldDef, type HasilPindah, type Isian, type Nilai } from '@/lib/agreement-draft'
+import { angkaSaja, bacaAngka, barisGrup, daftar, dariFormData, kosongDi, ribuan, ringkasNilai, rupiah, siapkanIsian, subBagi, teks, tulisAngka } from '@/lib/agreement-isian'
 import { useAuthStore } from '@/store/auth.store'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -13,10 +14,11 @@ import { Textarea } from '@/components/ui/textarea'
 import StatusBadge from '@/components/common/StatusBadge'
 import type { SubmissionStatus } from '@/types'
 
-// Termin PKS: termin kedua dihitung dari termin pertama. Diganti grup termin di PR 10.
+// Termin versi PKS sebelum PR 10 (termin 1 dan 2): termin kedua dihitung dari termin
+// pertama. Masih dipakai revisi pengajuan yang dikunci ke versi itu (keputusan D1).
 function hitungTermin(isian: Isian, adaTermin: boolean): Isian {
   if (!adaTermin) return isian
-  const n = (v?: string) => (Number.isFinite(Number(v)) ? Number(v) : 0)
+  const n = (v?: Nilai) => bacaAngka(teks(v))
   return {
     ...isian,
     termin_2_persen: String(Math.max(0, 100 - n(isian.termin_1_persen))),
@@ -35,20 +37,116 @@ function gulirKe(id: string) {
   }, 50)
 }
 
-function InputIsian({ f, nilai, ubah }: { f: FieldDef; nilai: string; ubah: (v: string) => void }) {
+// Isian satu nilai. Angka memakai input teks (inputMode), bukan type=number, supaya
+// scroll mouse di atasnya tidak mengubah angka. Uang tampil dengan titik ribuan dan
+// disimpan sebagai angka saja; persen dan angka boleh berkoma.
+function InputIsian({ f, id = f.name, nilai, ubah, readOnly }: { f: FieldDef; id?: string; nilai: string; ubah: (v: string) => void; readOnly?: boolean }) {
   if (f.type === 'textarea') {
-    return <Textarea id={f.name} value={nilai} onChange={(e) => ubah(e.target.value)} placeholder={f.name === 'ruang_lingkup' ? 'Tulis satu poin ruang lingkup per baris' : undefined} />
+    return <Textarea id={id} value={nilai} readOnly={readOnly} onChange={(e) => ubah(e.target.value)} placeholder={f.name === 'ruang_lingkup' ? 'Tulis satu poin ruang lingkup per baris' : undefined} />
   }
   if (f.type === 'select') {
     return (
-      <select id={f.name} value={nilai} onChange={(e) => ubah(e.target.value)} className="h-9 w-full rounded-md border border-input bg-white px-2 text-sm">
+      <select id={id} value={nilai} disabled={readOnly} onChange={(e) => ubah(e.target.value)} className="h-9 w-full rounded-md border border-input bg-white px-2 text-sm">
         <option value="">Pilih...</option>
         {(f.options ?? []).map((o) => <option key={o} value={o}>{o}</option>)}
       </select>
     )
   }
-  const tipe = ['money', 'number', 'percent'].includes(f.type) ? 'number' : f.type
-  return <Input id={f.name} type={tipe} step={f.type === 'money' ? undefined : 'any'} readOnly={OTOMATIS.has(f.name)} value={nilai} onChange={(e) => ubah(e.target.value)} />
+  const otomatis = readOnly || OTOMATIS.has(f.name)
+  const gayaOtomatis = otomatis ? 'bg-gray-50 text-gray-600' : ''
+  if (f.type === 'money') {
+    return (
+      <div className="relative">
+        <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-gray-500">Rp</span>
+        <Input id={id} inputMode="numeric" autoComplete="off" readOnly={otomatis} className={`pl-8 ${gayaOtomatis}`} value={ribuan(nilai)} onChange={(e) => ubah(angkaSaja(e.target.value))} />
+      </div>
+    )
+  }
+  if (f.type === 'percent' || f.type === 'number') {
+    return (
+      <div className="relative">
+        <Input id={id} inputMode="decimal" autoComplete="off" readOnly={otomatis} className={`${f.type === 'percent' ? 'pr-7' : ''} ${gayaOtomatis}`} value={nilai} onChange={(e) => ubah(e.target.value.replace(/[^\d.,]/g, ''))} />
+        {f.type === 'percent' && <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-sm text-gray-500">%</span>}
+      </div>
+    )
+  }
+  // Saran isian (Admin): bisa dipilih atau diketik bebas.
+  const saran = f.type === 'text' && f.options?.length ? `${id}-saran` : undefined
+  return (
+    <>
+      <Input id={id} type={f.type} list={saran} readOnly={otomatis} className={gayaOtomatis} value={nilai} onChange={(e) => ubah(e.target.value)} />
+      {saran && <datalist id={saran}>{f.options!.map((o) => <option key={o} value={o} />)}</datalist>}
+    </>
+  )
+}
+
+// Daftar poin (tipe list): satu isian per poin, bisa ditambah, dihapus, dan digeser.
+function InputDaftar({ f, poin, ubah }: { f: FieldDef; poin: string[]; ubah: (v: string[]) => void }) {
+  const geser = (i: number, arah: number) => {
+    const baru = [...poin]
+    ;[baru[i], baru[i + arah]] = [baru[i + arah], baru[i]]
+    ubah(baru)
+  }
+  return (
+    <div className="space-y-2">
+      {poin.map((p, i) => (
+        <div key={i} className="flex items-center gap-1.5">
+          <span className="w-6 shrink-0 text-right text-sm text-gray-500">{i + 1}.</span>
+          <Input id={i === 0 ? f.name : `${f.name}-${i}`} aria-label={`${f.label} poin ${i + 1}`} value={p} onChange={(e) => ubah(poin.map((x, k) => (k === i ? e.target.value : x)))} />
+          <Button type="button" variant="ghost" size="icon-sm" disabled={i === 0} onClick={() => geser(i, -1)} aria-label={`Naikkan poin ${i + 1}`} title="Naikkan"><ArrowUp className="w-4 h-4" /></Button>
+          <Button type="button" variant="ghost" size="icon-sm" disabled={i === poin.length - 1} onClick={() => geser(i, 1)} aria-label={`Turunkan poin ${i + 1}`} title="Turunkan"><ArrowDown className="w-4 h-4" /></Button>
+          <Button type="button" variant="ghost" size="icon-sm" disabled={poin.length === 1} onClick={() => ubah(poin.filter((_, k) => k !== i))} aria-label={`Hapus poin ${i + 1}`} title="Hapus" className="text-red-600 hover:bg-red-50 hover:text-red-700"><Trash2 className="w-4 h-4" /></Button>
+        </div>
+      ))}
+      <Button type="button" variant="outline" size="sm" onClick={() => ubah([...poin, ''])}><Plus className="w-3.5 h-3.5" /> Tambah poin</Button>
+    </div>
+  )
+}
+
+// Grup berulang (tipe group), mis. termin: satu kartu per baris. Pada grup yang
+// membagi nilai, persen baris terakhir (sisa) dan nilai setiap baris dihitung
+// otomatis dan tampil langsung; galat pembagian menahan Lanjut ke Tinjau.
+function InputGrup({ f, baris, galat, ubah }: { f: FieldDef; baris: Baris[]; galat?: string; ubah: (v: Baris[]) => void }) {
+  const [persen, nilai] = f.split_of ? subBagi(f) : ['', '']
+  const tambah = () => {
+    // Persen baris yang tadinya terakhir adalah sisa hitungan, jadi dikosongkan untuk diisi.
+    const lama = f.split_of && baris.length ? baris.map((b, i) => (i === baris.length - 1 ? { ...b, [persen]: '' } : b)) : baris
+    ubah([...lama, {}])
+  }
+  const jumlah = baris.reduce((n, b) => ({ persen: n.persen + bacaAngka(b[persen] ?? ''), nilai: n.nilai + Number(angkaSaja(b[nilai] ?? '') || 0) }), { persen: 0, nilai: 0 })
+  return (
+    <div className="space-y-3">
+      {!baris.length && <p className="text-sm text-gray-500">Belum ada baris.</p>}
+      {baris.map((b, i) => (
+        <div key={i} className="rounded-xl border border-gray-200 p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <p className="text-sm font-medium text-gray-800">{f.label} {i + 1}</p>
+            <Button type="button" variant="outline" size="xs" disabled={f.required && baris.length === 1} onClick={() => ubah(baris.filter((_, k) => k !== i))} className="text-red-600 hover:bg-red-50 hover:text-red-700">Hapus</Button>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            {(f.fields ?? []).map((s) => {
+              const otomatis = s.name === nilai || (s.name === persen && i === baris.length - 1)
+              const id = `${f.name}-${i}-${s.name}`
+              return (
+                <div key={s.name} className={s.type === 'textarea' || s.options?.length ? 'md:col-span-2' : ''}>
+                  <Label htmlFor={id} className="mb-1 text-xs text-gray-600">
+                    {s.label}{s.required && !otomatis && ' *'}{otomatis && <span className="font-normal text-gray-400"> (otomatis{s.name === persen ? ', sisa' : ''})</span>}
+                  </Label>
+                  <InputIsian f={s} id={id} nilai={b[s.name] ?? ''} readOnly={otomatis} ubah={(v) => ubah(baris.map((x, k) => (k === i ? { ...x, [s.name]: v } : x)))} />
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      ))}
+      {galat ? (
+        <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{galat}</p>
+      ) : (
+        f.split_of && baris.length > 0 && <p className="text-sm text-gray-600">Jumlah: {tulisAngka(Math.round(jumlah.persen * 100) / 100)}% · {rupiah(String(jumlah.nilai))}</p>
+      )}
+      <Button type="button" variant="outline" size="sm" onClick={tambah}><Plus className="w-3.5 h-3.5" /> Tambah {f.label.toLowerCase()}</Button>
+    </div>
+  )
 }
 
 // Wizard pembuatan dan revisi pengajuan perjanjian (PR 9, keputusan E). Langkah 1
@@ -79,8 +177,11 @@ export default function AgreementWizard() {
 
   const sections = useMemo(() => schema?.sections ?? [], [schema])
   const adaTermin = sections.some((s) => s.fields.some((f) => f.name === 'termin_2_persen'))
-  const kirimIsian = useMemo(() => hitungTermin(isian, adaTermin), [isian, adaTermin])
-  const semuaKosong = sections.flatMap((s) => isianKosong(s, kirimIsian))
+  // Isian yang tampil dan dikirim: daftar dan grup dilengkapi, termin dihitung.
+  const disiapkan = useMemo(() => siapkanIsian(sections, isian), [sections, isian])
+  const kirimIsian = useMemo(() => hitungTermin(disiapkan.isian, adaTermin), [disiapkan, adaTermin])
+  const galatGrup = disiapkan.galat
+  const semuaKosong = [...sections.flatMap((s) => isianKosong(s, kirimIsian)), ...Object.values(galatGrup)]
 
   // Pindahkan isian ke field versi lain. Versi diganti Admin: field baru ditandai dan
   // digulir ke tempatnya. Ganti jenis: cukup catatan isian yang tidak terpakai.
@@ -99,7 +200,7 @@ export default function AgreementWizard() {
         .then(([d, s]) => {
           setDoc(d)
           setSchema(s)
-          setIsian(Object.fromEntries(Object.entries(d.form_data).map(([k, v]) => [k, String(v ?? '')])))
+          setIsian(dariFormData(d.form_data))
         })
         .catch((e: Error) => setGalat(e.message))
       return
@@ -170,10 +271,11 @@ export default function AgreementWizard() {
     }
   }
 
-  // Lanjut ke Tinjau memeriksa semua isian wajib sekaligus dan menggulir ke yang kosong pertama.
+  // Lanjut ke Tinjau memeriksa semua isian wajib dan pembagian termin sekaligus, lalu
+  // menggulir ke isian bermasalah yang pertama.
   const keTinjau = () => {
     if (!schema) return setKosong(['Jenis perjanjian'])
-    const pertama = sections.flatMap((s) => s.fields).find((f) => f.required && !(kirimIsian[f.name] ?? '').trim())
+    const pertama = sections.flatMap((s) => s.fields).find((f) => kosongDi(f, kirimIsian[f.name]).length > 0 || galatGrup[f.name])
     if (pertama) {
       setKosong(semuaKosong)
       gulirKe(pertama.name)
@@ -211,7 +313,7 @@ export default function AgreementWizard() {
     }
   }
 
-  const ubah = (name: string, v: string) => setIsian((lama) => ({ ...lama, [name]: v }))
+  const ubah = (name: string, v: Nilai) => setIsian((lama) => ({ ...lama, [name]: v }))
 
   if (galat) return <div className="p-12 text-center text-red-600">{galat}</div>
 
@@ -292,12 +394,18 @@ export default function AgreementWizard() {
               <h2 className="text-lg font-semibold mb-4" style={{ color: '#0B2545' }}>{s.title}</h2>
               <div className="grid md:grid-cols-2 gap-4">
                 {s.fields.map((f) => (
-                  <div key={f.name} className={f.type === 'textarea' ? 'md:col-span-2' : ''}>
-                    <Label htmlFor={f.name} className="mb-1.5 text-gray-700">
+                  <div key={f.name} id={f.type === 'group' ? f.name : undefined} className={['textarea', 'list', 'group'].includes(f.type) ? 'md:col-span-2 scroll-mt-6' : ''}>
+                    <Label htmlFor={f.type === 'group' ? `${f.name}-0-${f.fields?.[0]?.name}` : f.name} className="mb-1.5 text-gray-700">
                       {f.label}{f.required && ' *'}
                       {tandaBaru.has(f.name) && <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800">Baru di template ini</span>}
                     </Label>
-                    <InputIsian f={f} nilai={kirimIsian[f.name] ?? ''} ubah={(v) => ubah(f.name, v)} />
+                    {f.type === 'list' ? (
+                      <InputDaftar f={f} poin={daftar(kirimIsian[f.name])} ubah={(v) => ubah(f.name, v)} />
+                    ) : f.type === 'group' ? (
+                      <InputGrup f={f} baris={barisGrup(kirimIsian[f.name])} galat={galatGrup[f.name]} ubah={(v) => ubah(f.name, v)} />
+                    ) : (
+                      <InputIsian f={f} nilai={teks(kirimIsian[f.name])} ubah={(v) => ubah(f.name, v)} />
+                    )}
                   </div>
                 ))}
               </div>
@@ -348,7 +456,7 @@ export default function AgreementWizard() {
                     {s.fields.map((f) => (
                       <div key={f.name} className="flex gap-2">
                         <dt className="w-2/5 shrink-0 text-gray-500">{f.label}</dt>
-                        <dd className="text-gray-800 whitespace-pre-line break-words">{kirimIsian[f.name]?.trim() || '-'}</dd>
+                        <dd className="text-gray-800 whitespace-pre-line break-words">{ringkasNilai(f, kirimIsian[f.name])}</dd>
                       </div>
                     ))}
                   </dl>

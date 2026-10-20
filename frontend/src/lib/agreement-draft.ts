@@ -2,12 +2,19 @@
 // dan penyimpanan di browser. Fungsi di sini murni (tanpa React) supaya bisa dites
 // dengan Vitest.
 
+import { adaIsi, kosongDi, teks } from './agreement-isian'
+
 export interface FieldDef {
   name: string
   label: string
   type: string
   required: boolean
+  // Pilihan tipe select, atau saran isian tipe text.
   options?: string[]
+  // Sub-field tipe group, diisi sekali per baris.
+  fields?: FieldDef[]
+  // Kode field uang yang dibagi ke baris grup menurut persennya (termin).
+  split_of?: string
 }
 
 export interface SectionDef {
@@ -15,7 +22,11 @@ export interface SectionDef {
   fields: FieldDef[]
 }
 
-export type Isian = Record<string, string>
+// Isian satu field: teks untuk field biasa, daftar poin untuk tipe list, dan baris
+// sub-field untuk tipe group.
+export type Baris = Record<string, string>
+export type Nilai = string | string[] | Baris[]
+export type Isian = Record<string, Nilai>
 
 export interface HasilPindah {
   isian: Isian
@@ -27,10 +38,20 @@ export interface HasilPindah {
 
 const semuaField = (sections: SectionDef[]) => sections.flatMap((s) => s.fields)
 
+// Sub-field grup (kode dan jenis); grup dengan sub-field berbeda dianggap berubah.
+const sidikSub = (f: FieldDef) => JSON.stringify((f.fields ?? []).map((s) => [s.name, s.type]))
+
+// Bentuk isian cocok dengan jenis field-nya (mis. draf lama dengan ruang lingkup teks).
+const bentukCocok = (f: FieldDef, v: Nilai) =>
+  f.type === 'list' ? Array.isArray(v) && v.every((x) => typeof x === 'string')
+    : f.type === 'group' ? Array.isArray(v) && v.every((x) => typeof x === 'object' && x !== null)
+      : typeof v === 'string'
+
 // pindahkanIsian memindahkan isian dari field versi lama ke field versi baru
 // (versi template diganti Admin, atau pengaju berganti jenis perjanjian). Isian
-// berkode sama ikut pindah. Kalau jenis field berubah, isiannya dibuang karena
-// formatnya bisa tidak cocok (mis. teks menjadi uang), dan field ditandai baru.
+// berkode sama ikut pindah. Kalau jenis field (atau sub-field grup) berubah,
+// isiannya dibuang karena formatnya bisa tidak cocok (mis. teks menjadi uang, atau
+// ruang lingkup satu kotak teks menjadi daftar poin), dan field ditandai baru.
 export function pindahkanIsian(isian: Isian, lama: SectionDef[], baru: SectionDef[]): HasilPindah {
   const fieldLama = new Map(semuaField(lama).map((f) => [f.name, f]))
   const namaBaru = new Set(semuaField(baru).map((f) => f.name))
@@ -38,21 +59,25 @@ export function pindahkanIsian(isian: Isian, lama: SectionDef[], baru: SectionDe
   for (const f of semuaField(baru)) {
     const l = fieldLama.get(f.name)
     const nilai = isian[f.name]
-    if (!l || l.type !== f.type || (f.type === 'select' && nilai && !(f.options ?? []).includes(nilai))) {
+    const berubah = !l || l.type !== f.type || (f.type === 'group' && sidikSub(l) !== sidikSub(f)) ||
+      (nilai !== undefined && !bentukCocok(f, nilai)) ||
+      (f.type === 'select' && teks(nilai) && !(f.options ?? []).includes(teks(nilai)))
+    if (berubah) {
       hasil.baru.push(f.name)
       continue
     }
     if (nilai !== undefined) hasil.isian[f.name] = nilai
   }
   hasil.dihapus = semuaField(lama)
-    .filter((f) => !namaBaru.has(f.name) && (isian[f.name] ?? '').trim() !== '')
+    .filter((f) => !namaBaru.has(f.name) && adaIsi(isian[f.name]))
     .map((f) => f.label)
   return hasil
 }
 
-// isianKosong: label field wajib yang belum diisi di satu bagian.
+// isianKosong: isian wajib yang belum diisi di satu bagian, termasuk sub-field
+// wajib per baris grup ("Termin Pembayaran 2: Dibayarkan").
 export function isianKosong(bagian: SectionDef, isian: Isian): string[] {
-  return bagian.fields.filter((f) => f.required && !(isian[f.name] ?? '').trim()).map((f) => f.label)
+  return bagian.fields.flatMap((f) => kosongDi(f, isian[f.name]))
 }
 
 // Draf pengajuan baru yang belum dikirim, disimpan di browser per pengguna supaya
