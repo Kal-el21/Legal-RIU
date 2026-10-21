@@ -128,7 +128,7 @@ func (h *AgreementTemplateHandler) Download(c *gin.Context) {
 	c.DataFromReader(http.StatusOK, int64(len(data)),
 		"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 		bytes.NewReader(data),
-		map[string]string{"Content-Disposition": fmt.Sprintf(`attachment; filename="%s"`, name)})
+		map[string]string{"Content-Disposition": utils.HeaderUnduhan("attachment", name)})
 }
 
 func (h *AgreementTemplateHandler) Preview(c *gin.Context) {

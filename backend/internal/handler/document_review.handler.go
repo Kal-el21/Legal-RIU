@@ -3,7 +3,6 @@ package handler
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"mime/multipart"
 	"strconv"
 	"strings"
@@ -214,7 +213,7 @@ func (h *DocumentReviewHandler) Download(c *gin.Context) {
 	fileName := parts[len(parts)-1]
 
 	c.DataFromReader(-1, -1, "application/octet-stream", obj, map[string]string{
-		"Content-Disposition": fmt.Sprintf(`attachment; filename="%s"`, fileName),
+		"Content-Disposition": utils.HeaderUnduhan("attachment", fileName),
 	})
 }
 
@@ -270,6 +269,6 @@ func (h *DocumentReviewHandler) GeneratePDF(c *gin.Context) {
 	}
 
 	c.DataFromReader(-1, -1, "application/pdf", bytes.NewReader(pdfData), map[string]string{
-		"Content-Disposition": fmt.Sprintf(`attachment; filename="document-review-%s.pdf"`, dr.TicketNumber),
+		"Content-Disposition": utils.HeaderUnduhan("attachment", "document-review-"+dr.TicketNumber+".pdf"),
 	})
 }

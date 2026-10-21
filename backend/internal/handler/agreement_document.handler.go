@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log"
 	"github.com/gin-gonic/gin"
 	"legal-riu-portal/internal/dto"
@@ -225,7 +224,7 @@ func (h *AgreementDocumentHandler) downloadGenerated(c *gin.Context, kind string
 	if kind == "docx" {
 		ct = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 	}
-	c.DataFromReader(http.StatusOK, -1, ct, o, map[string]string{"Content-Disposition": fmt.Sprintf(`attachment; filename="%s"`, n)})
+	c.DataFromReader(http.StatusOK, -1, ct, o, map[string]string{"Content-Disposition": utils.HeaderUnduhan("attachment", n)})
 }
 func (h *AgreementDocumentHandler) DownloadAttachment(c *gin.Context) {
 	all := middleware.RoleWithAllAccess(c, "agreement_document.download_attachment.all") != "USER"
@@ -238,7 +237,7 @@ func (h *AgreementDocumentHandler) DownloadAttachment(c *gin.Context) {
 	if ct == "" {
 		ct = "application/octet-stream"
 	}
-	c.DataFromReader(http.StatusOK, -1, ct, o, map[string]string{"Content-Disposition": fmt.Sprintf(`attachment; filename="%s"`, n)})
+	c.DataFromReader(http.StatusOK, -1, ct, o, map[string]string{"Content-Disposition": utils.HeaderUnduhan("attachment", n)})
 }
 func (h *AgreementDocumentHandler) GetMaster(c *gin.Context) {
 	v, e := h.svc.GetMaster()

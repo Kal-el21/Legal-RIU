@@ -100,6 +100,6 @@ func (h *RepositoryDocumentHandler) Download(c *gin.Context) {
 	}
 	defer obj.Close()
 	c.DataFromReader(http.StatusOK, -1, "application/octet-stream", obj, map[string]string{
-		"Content-Disposition": `attachment; filename="` + fileName + `"`,
+		"Content-Disposition": utils.HeaderUnduhan("attachment", fileName),
 	})
 }
