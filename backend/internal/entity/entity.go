@@ -361,6 +361,9 @@ const (
 	ActionFileDelete       AuditAction = "FILE_DELETE"
 	ActionPermissionUpdate AuditAction = "PERMISSION_UPDATE"
 	ActionParentChange     AuditAction = "PARENT_CHANGE"
+	// Daftar Penandatangan Pihak Pertama diubah Admin, atau approver mengganti
+	// penandatangan usulan saat persetujuan (PR 11).
+	ActionSignatoryChange AuditAction = "SIGNATORY_CHANGE"
 )
 
 type AuditLog struct {

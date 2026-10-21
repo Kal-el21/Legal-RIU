@@ -361,6 +361,7 @@ export type AuditAction =
   | 'FILE_DELETE'
   | 'PERMISSION_UPDATE'
   | 'PARENT_CHANGE'
+  | 'SIGNATORY_CHANGE'
 
 export interface AuditLog {
   id: string

@@ -41,6 +41,10 @@ type AgreementDocumentService interface {
 	GetAttachment(string, string, string, bool) (*minio.Object, string, string, error)
 	GetMaster() (*entity.AgreementCompanyMaster, error)
 	UpdateMaster(dto.AgreementCompanyMasterRequest) (*entity.AgreementCompanyMaster, error)
+	ListSignatories() ([]entity.AgreementSignatory, error)
+	CreateSignatory(dto.AgreementSignatoryRequest) (*entity.AgreementSignatory, error)
+	UpdateSignatory(id string, req dto.AgreementSignatoryRequest) (lama, baru *entity.AgreementSignatory, e error)
+	DeleteSignatory(id string) (*entity.AgreementSignatory, error)
 }
 
 type agreementDocumentService struct {

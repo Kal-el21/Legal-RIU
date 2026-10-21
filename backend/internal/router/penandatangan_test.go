@@ -2,10 +2,13 @@ package router
 
 import (
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"strings"
 	"testing"
 
+	"legal-riu-portal/internal/entity"
 	"legal-riu-portal/internal/seed"
 
 	"github.com/google/uuid"
@@ -50,6 +53,124 @@ func TestMigrasiPenandatangan(t *testing.T) {
 	jalan()
 	if n := hitungBaris(t, "SELECT COUNT(*) FROM agreement_signatories WHERE deleted_at IS NULL"); n != 0 {
 		t.Errorf("%d penandatangan dibuat ulang setelah dihapus Admin", n)
+	}
+}
+
+const alamatPenandatangan = "/api/v1/admin/agreement-signatories"
+
+type penandatangan struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Position  string `json:"position"`
+	MaxValue  *int64 `json:"max_value"`
+	IsDefault bool   `json:"is_default"`
+	IsActive  bool   `json:"is_active"`
+}
+
+// Admin mengelola Daftar Penandatangan. Batas nilai maksimum tidak boleh kembar dan
+// hanya satu yang tak terbatas, di antara penandatangan aktif; hanya satu default.
+// LEGAL hanya membaca (untuk pilihan saat persetujuan), dan setiap perubahan tercatat
+// di audit log.
+func TestKelolaPenandatangan(t *testing.T) {
+	admin := masukPeran(t, entity.RoleAdmin)
+	legal := masukPeran(t, entity.RoleLegal)
+	user := masukPeran(t, entity.RoleUser)
+	eksekusi(t, "DELETE FROM agreement_signatories")
+	t.Cleanup(func() {
+		dbTes.Exec("DELETE FROM agreement_signatories")
+		seed.SeedAgreementSignatories(dbTes)
+	})
+	auditSebelum := hitungBaris(t, "SELECT COUNT(*) FROM audit_logs WHERE action = 'SIGNATORY_CHANGE'")
+	rp := func(n int64) *int64 { return &n }
+	isi := func(nama, jabatan string, maks *int64, def bool) map[string]any {
+		return map[string]any{"name": nama, "position": jabatan, "max_value": maks, "is_default": def, "is_active": true}
+	}
+	buat := func(nama string, maks *int64, def bool) penandatangan {
+		t.Helper()
+		w := panggil(t, admin, http.MethodPost, alamatPenandatangan, isi(nama, "Jabatan "+nama, maks, def))
+		harapKode(t, w, http.StatusCreated, "menambah "+nama)
+		var p penandatangan
+		isiData(t, w, &p)
+		return p
+	}
+	ditolak := func(w *httptest.ResponseRecorder, nama, pesan string) {
+		t.Helper()
+		harapKode(t, w, http.StatusBadRequest, nama)
+		if !strings.Contains(w.Body.String(), pesan) {
+			t.Errorf("%s: pesan harus menyebut %q: %s", nama, pesan, w.Body)
+		}
+	}
+	daftar := func(token, awalan string) []penandatangan {
+		t.Helper()
+		w := panggil(t, token, http.MethodGet, "/api/v1"+awalan+"/agreement-signatories", nil)
+		harapKode(t, w, http.StatusOK, awalan+" membaca Daftar Penandatangan")
+		var d []penandatangan
+		isiData(t, w, &d)
+		return d
+	}
+	nama := func(d []penandatangan) string {
+		var out []string
+		for _, p := range d {
+			out = append(out, p.Name)
+		}
+		return strings.Join(out, " ")
+	}
+
+	buat("Andi", nil, true)
+	sari := buat("Sari", rp(5_000_000_000), false)
+	budi := buat("Budi", rp(500_000_000), false)
+	// Urut dari batas terkecil; tak terbatas paling akhir.
+	if got := nama(daftar(admin, "/admin")); got != "Budi Sari Andi" {
+		t.Errorf("urutan daftar %q, harus Budi Sari Andi", got)
+	}
+
+	ditolak(panggil(t, admin, http.MethodPost, alamatPenandatangan, isi("Rina", "Direktur", rp(500_000_000), false)), "batas kembar", "Rp 500.000.000 sudah dipakai Budi")
+	ditolak(panggil(t, admin, http.MethodPost, alamatPenandatangan, isi("Rina", "Direktur", nil, false)), "dua tak terbatas", "tak terbatas sudah dipakai Andi")
+	ditolak(panggil(t, admin, http.MethodPost, alamatPenandatangan, isi(" ", "Direktur", rp(1), false)), "nama kosong", "Nama penandatangan wajib diisi")
+	ditolak(panggil(t, admin, http.MethodPost, alamatPenandatangan, isi("Rina", " ", rp(1), false)), "jabatan kosong", "Jabatan penandatangan wajib diisi")
+	ditolak(panggil(t, admin, http.MethodPost, alamatPenandatangan, isi("Rina", "Direktur", rp(0), false)), "batas nol", "Nilai maksimum harus lebih dari 0")
+	ditolak(panggil(t, admin, http.MethodPut, alamatPenandatangan+"/"+sari.ID, isi("Sari", "Direktur", rp(500_000_000), false)), "ubah ke batas kembar", "sudah dipakai Budi")
+
+	// Penandatangan nonaktif tidak dihitung: penggantinya boleh memakai batas yang sama,
+	// tetapi mengaktifkannya kembali ditolak selama batasnya dipakai.
+	nonaktif := isi("Sari", "Jabatan Sari", rp(5_000_000_000), false)
+	nonaktif["is_active"] = false
+	harapKode(t, panggil(t, admin, http.MethodPut, alamatPenandatangan+"/"+sari.ID, nonaktif), http.StatusOK, "menonaktifkan Sari")
+	rina := buat("Rina", rp(5_000_000_000), false)
+	nonaktif["position"] = "Direktur (purnatugas)"
+	harapKode(t, panggil(t, admin, http.MethodPut, alamatPenandatangan+"/"+sari.ID, nonaktif), http.StatusOK, "mengubah Sari yang nonaktif")
+	ditolak(panggil(t, admin, http.MethodPut, alamatPenandatangan+"/"+sari.ID, isi("Sari", "Jabatan Sari", rp(5_000_000_000), false)), "aktifkan Sari", "sudah dipakai Rina")
+
+	// Hanya satu default: menjadikan Budi default melepas default Andi.
+	harapKode(t, panggil(t, admin, http.MethodPut, alamatPenandatangan+"/"+budi.ID, isi("Budi", "Jabatan Budi", rp(500_000_000), true)), http.StatusOK, "menjadikan Budi default")
+	for _, p := range daftar(admin, "/admin") {
+		if p.IsDefault != (p.ID == budi.ID) {
+			t.Errorf("%s default %v; hanya Budi yang boleh default", p.Name, p.IsDefault)
+		}
+	}
+
+	harapKode(t, panggil(t, admin, http.MethodDelete, alamatPenandatangan+"/"+rina.ID, nil), http.StatusOK, "menghapus Rina")
+	harapKode(t, panggil(t, admin, http.MethodPut, alamatPenandatangan+"/"+rina.ID, isi("Rina", "Direktur", rp(1), false)), http.StatusNotFound, "mengubah penandatangan yang dihapus")
+	if got := nama(daftar(admin, "/admin")); got != "Budi Sari Andi" {
+		t.Errorf("daftar setelah hapus %q, harus Budi Sari Andi", got)
+	}
+
+	// LEGAL membaca daftar yang sama untuk pilihan persetujuan, tetapi tidak bisa mengubah.
+	if got := nama(daftar(legal, "/legal")); got != "Budi Sari Andi" {
+		t.Errorf("daftar untuk LEGAL %q", got)
+	}
+	harapKode(t, panggil(t, legal, http.MethodPost, alamatPenandatangan, isi("Rina", "Direktur", rp(1), false)), http.StatusForbidden, "LEGAL menambah penandatangan")
+	harapKode(t, panggil(t, legal, http.MethodPut, alamatPenandatangan+"/"+budi.ID, isi("Budi", "Direktur", rp(1), false)), http.StatusForbidden, "LEGAL mengubah penandatangan")
+	harapKode(t, panggil(t, user, http.MethodGet, "/api/v1/legal/agreement-signatories", nil), http.StatusForbidden, "USER membaca Daftar Penandatangan")
+
+	// 4 tambah + 3 ubah + 1 hapus yang berhasil; penolakan tidak tercatat.
+	if n := hitungBaris(t, "SELECT COUNT(*) FROM audit_logs WHERE action = 'SIGNATORY_CHANGE'") - auditSebelum; n != 8 {
+		t.Errorf("%d perubahan Daftar Penandatangan di audit log, harus 8", n)
+	}
+	var catatan struct{ OldValue, NewValue string }
+	dbTes.Raw("SELECT old_value, new_value FROM audit_logs WHERE action = 'SIGNATORY_CHANGE' AND entity_id = ? ORDER BY created_at DESC LIMIT 1", budi.ID).Scan(&catatan)
+	if catatan.OldValue != "Budi, Jabatan Budi, sampai Rp 500.000.000" || catatan.NewValue != "Budi, Jabatan Budi, sampai Rp 500.000.000, default" {
+		t.Errorf("audit log perubahan Budi: %+v", catatan)
 	}
 }
 

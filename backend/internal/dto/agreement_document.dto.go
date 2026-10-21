@@ -60,6 +60,16 @@ type AgreementCompanyMasterRequest struct {
 	DefaultAgreementNumber   string `json:"default_agreement_number"`
 }
 
+// AgreementSignatoryRequest: satu baris Daftar Penandatangan. MaxValue nil berarti
+// tak terbatas. IsActive hanya dipakai saat mengubah; penandatangan baru selalu aktif.
+type AgreementSignatoryRequest struct {
+	Name      string `json:"name"`
+	Position  string `json:"position"`
+	MaxValue  *int64 `json:"max_value"`
+	IsDefault bool   `json:"is_default"`
+	IsActive  *bool  `json:"is_active"`
+}
+
 type AgreementTypeResponse struct {
 	Code   string          `json:"code"`
 	Name   string          `json:"name"`

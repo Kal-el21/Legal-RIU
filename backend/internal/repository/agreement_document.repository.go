@@ -29,6 +29,10 @@ type AgreementDocumentRepository interface {
 	Complete(uuid.UUID, entity.SubmissionStatus, map[string]interface{}) (bool, error)
 	GetActiveMaster() (*entity.AgreementCompanyMaster, error)
 	SaveMaster(*entity.AgreementCompanyMaster) error
+	ListSignatories() ([]entity.AgreementSignatory, error)
+	FindSignatory(uuid.UUID) (*entity.AgreementSignatory, error)
+	SaveSignatory(*entity.AgreementSignatory) error
+	DeleteSignatory(uuid.UUID) error
 }
 
 type agreementDocumentRepository struct{ db *gorm.DB }
@@ -120,4 +124,32 @@ func (r *agreementDocumentRepository) GetActiveMaster() (*entity.AgreementCompan
 }
 func (r *agreementDocumentRepository) SaveMaster(v *entity.AgreementCompanyMaster) error {
 	return r.db.Save(v).Error
+}
+
+// ListSignatories: Daftar Penandatangan, urut dari batas terkecil; tak terbatas di akhir.
+func (r *agreementDocumentRepository) ListSignatories() ([]entity.AgreementSignatory, error) {
+	var v []entity.AgreementSignatory
+	err := r.db.Order("max_value ASC NULLS LAST, created_at").Find(&v).Error
+	return v, err
+}
+func (r *agreementDocumentRepository) FindSignatory(id uuid.UUID) (*entity.AgreementSignatory, error) {
+	var v entity.AgreementSignatory
+	err := r.db.First(&v, "id = ?", id).Error
+	return &v, err
+}
+
+// SaveSignatory menyimpan satu penandatangan. Penandatangan default hanya satu, jadi
+// menjadikan satu baris default melepas default baris lain dalam transaksi yang sama.
+func (r *agreementDocumentRepository) SaveSignatory(v *entity.AgreementSignatory) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if v.IsDefault {
+			if err := tx.Model(&entity.AgreementSignatory{}).Where("id <> ? AND is_default", v.ID).Update("is_default", false).Error; err != nil {
+				return err
+			}
+		}
+		return tx.Save(v).Error
+	})
+}
+func (r *agreementDocumentRepository) DeleteSignatory(id uuid.UUID) error {
+	return r.db.Delete(&entity.AgreementSignatory{}, "id = ?", id).Error
 }
