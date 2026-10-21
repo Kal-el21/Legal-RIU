@@ -691,6 +691,9 @@ func jalankanSeedTemplate(t *testing.T) {
 		if err := seed.SeedAgreementTypes(dbTes); err != nil {
 			t.Fatalf("seed jenis dokumen putaran %d: %v", i, err)
 		}
+		if err := seed.TandaiNilaiUtamaPKS(dbTes); err != nil {
+			t.Fatalf("tandai nilai utama putaran %d: %v", i, err)
+		}
 	}
 }
 
@@ -724,6 +727,17 @@ func fieldPR9(t *testing.T) string {
 		t.Fatal(err)
 	}
 	return string(skema.Sections)
+}
+
+// fieldSesudahDeploy1: definisi field PR 9 seperti tersimpan di server sesudah Deploy 1,
+// yaitu sebelum tanda nilai utama PR 11 ada.
+func fieldSesudahDeploy1(t *testing.T) string {
+	t.Helper()
+	tanpaTanda := strings.Replace(fieldPR9(t), `,"primary_value":true`, "", 1)
+	if tanpaTanda == fieldPR9(t) {
+		t.Fatal("tanda nilai utama tidak ditemukan di form-schema.json PR 9")
+	}
+	return tanpaTanda
 }
 
 // pasangVersiPR9 menambah versi template bawaan PR 8 (termin 1 dan 2) seperti yang

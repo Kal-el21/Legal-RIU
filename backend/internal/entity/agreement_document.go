@@ -23,6 +23,19 @@ type AgreementCompanyMaster struct {
 	IsActive                 bool   `gorm:"not null;default:true;index" json:"is_active"`
 }
 
+// AgreementSignatory adalah penandatangan Pihak Pertama untuk satu rentang nilai
+// kontrak (PR 11). MaxValue nil berarti tak terbatas. Batas bawah tidak disimpan:
+// diturunkan dari batas baris sebelumnya, jadi rentang tidak bisa tumpang tindih atau
+// berlubang. IsDefault dipakai jenis dokumen tanpa nilai utama.
+type AgreementSignatory struct {
+	Base
+	Name      string `gorm:"size:255;not null" json:"name"`
+	Position  string `gorm:"size:255;not null" json:"position"`
+	MaxValue  *int64 `json:"max_value"`
+	IsDefault bool   `gorm:"not null;default:false" json:"is_default"`
+	IsActive  bool   `gorm:"not null;default:true" json:"is_active"`
+}
+
 // AgreementType adalah jenis dokumen perjanjian (mis. PKS). Fields di sini adalah
 // field kerja yang sedang disusun Admin; pengajuan tidak membacanya. Saat versi
 // template dibuat, field ini disalin ke versi itu (AgreementTemplate.Fields), dan
