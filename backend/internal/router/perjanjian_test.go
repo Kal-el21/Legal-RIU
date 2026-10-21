@@ -199,14 +199,16 @@ func TestMasterPerjanjian(t *testing.T) {
 	// Dikembalikan setelah tes, karena pratinjau dan persetujuan memakai data ini.
 	t.Cleanup(func() { panggil(t, admin, http.MethodPut, alamat, awal) })
 
+	// Sejak PR 11 penandatangan diatur di Daftar Penandatangan: Data Perusahaan disimpan
+	// tanpa kolom penandatangan lama, dan kolom itu tidak ikut berubah.
 	baru := map[string]any{
-		"name": "PT Tes Master", "address": "Jl. Master No. 2",
-		"default_signatory_name": "Andi", "default_signatory_position": "Direktur Utama", "default_signing_place": "Jakarta",
+		"name": "PT Tes Master", "address": "Jl. Master No. 2", "default_signing_place": "Jakarta",
+		"default_signatory_name": "Diabaikan",
 	}
 	harapKode(t, panggil(t, admin, http.MethodPut, alamat, baru), http.StatusOK, "mengubah master")
 	var sesudah map[string]any
 	isiData(t, panggil(t, admin, http.MethodGet, alamat, nil), &sesudah)
-	if sesudah["name"] != "PT Tes Master" || sesudah["default_signatory_name"] != "Andi" {
+	if sesudah["name"] != "PT Tes Master" || sesudah["default_signatory_name"] != awal["default_signatory_name"] {
 		t.Errorf("master setelah diubah: %v", sesudah)
 	}
 

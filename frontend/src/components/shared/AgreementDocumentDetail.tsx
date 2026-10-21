@@ -3,7 +3,8 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { AlertTriangle, ArrowLeft, Download, FileText } from 'lucide-react'
 import { agreementService, type AgreementDocument, type AgreementSchema } from '@/services/agreement-document.service'
 import type { FieldDef, Nilai } from '@/lib/agreement-draft'
-import { barisGrup, daftar, dariFormData, ringkasNilai, tanggal, teks } from '@/lib/agreement-isian'
+import { barisGrup, daftar, dariFormData, ringkasNilai, rupiah, tanggal, teks } from '@/lib/agreement-isian'
+import { LAINNYA, dataPersetujuan, isianAwalPersetujuan, rentangPenandatangan, type Penandatangan, type UsulanPenandatangan } from '@/lib/penandatangan'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -26,27 +27,44 @@ const approverFieldLabels: Record<string, string> = {
   agreement_number: 'Nomor Perjanjian',
   signing_place: 'Tempat Penandatanganan',
   signing_date: 'Tanggal Penandatanganan',
-  party_one_signatory_name: 'Nama Pejabat Pihak Pertama',
-  party_one_signatory_position: 'Jabatan Pejabat Pihak Pertama',
   pic: 'PIC',
   phone: 'Telepon',
   email: 'Email',
 }
 
-// Isian awal Data Persetujuan dari master Pihak Pertama dan isian pengajuan. Sejak
-// PR 11 penandatangan tidak diambil dari kolom lama master: kosong berarti memakai
-// penandatangan usulan dari Daftar Penandatangan; diketik berarti Lainnya.
-function isianPersetujuan(value: AgreementDocument, master: Record<string, string>): Record<string, string> {
-  return {
-    agreement_number: String(master.default_agreement_number || value.agreement_number || ''),
-    signing_place: String(master.default_signing_place || value.form_data.tempat_ttd || ''),
-    signing_date: String(value.form_data.tanggal_ttd || ''),
-    party_one_signatory_name: String(value.form_data.pihak_pertama_pejabat || ''),
-    party_one_signatory_position: String(value.form_data.pihak_pertama_jabatan || ''),
-    pic: String(master.pic || ''),
-    phone: String(master.phone || ''),
-    email: String(master.email || ''),
-  }
+// Pilihan penandatangan Pihak Pertama di Data Persetujuan (PR 11, P3): usulan
+// terpilih lebih dulu, bisa diganti dari Daftar Penandatangan atau Lainnya.
+function PilihPenandatangan({ meta, ubah, daftar, usulan }: { meta: Record<string, string>; ubah: (v: Record<string, string>) => void; daftar: Penandatangan[]; usulan?: UsulanPenandatangan | null }) {
+  const rentang = rentangPenandatangan(daftar)
+  const aktif = daftar.filter((p) => p.is_active)
+  const pilihan = meta.party_one_signatory_id ?? ''
+  const dikenal = pilihan === '' || pilihan === LAINNYA || aktif.some((p) => p.id === pilihan)
+  const nilai = usulan?.value != null ? ` untuk nilai ${rupiah(String(usulan.value))}` : ' (jenis ini tanpa nilai utama, memakai default)'
+  return (
+    <div className="space-y-2">
+      <Label htmlFor="penandatangan" className="text-gray-700">Penandatangan Pihak Pertama</Label>
+      <select id="penandatangan" value={pilihan} onChange={(e) => ubah({ party_one_signatory_id: e.target.value })} className="h-9 w-full rounded-md border border-input bg-white px-2 text-sm">
+        <option value="">Pilih penandatangan...</option>
+        {!dikenal && <option value={pilihan} disabled>Pilihan sebelumnya sudah nonaktif; pilih ulang</option>}
+        {aktif.map((p) => (
+          <option key={p.id} value={p.id}>{p.name}, {p.position} ({rentang[p.id]}){p.id === usulan?.id ? ' - usulan' : ''}</option>
+        ))}
+        <option value={LAINNYA}>Lainnya (ketik nama dan jabatan)</option>
+      </select>
+      {usulan?.id ? (
+        <p className="text-xs text-gray-500">Usulan{nilai}: {usulan.name}, {usulan.position}.</p>
+      ) : (
+        usulan && <p className="text-xs text-amber-700">Tidak ada penandatangan di Daftar{nilai}; pilih dari Daftar atau Lainnya.</p>
+      )}
+      {pilihan !== '' && usulan?.id && pilihan !== usulan.id && <p className="text-xs text-amber-700">Berbeda dari usulan; penggantian dicatat di audit log.</p>}
+      {pilihan === LAINNYA && (
+        <div className="grid gap-2 sm:grid-cols-2">
+          <Input aria-label="Nama pejabat penandatangan" placeholder="Nama pejabat" value={meta.party_one_signatory_name ?? ''} onChange={(e) => ubah({ party_one_signatory_name: e.target.value })} />
+          <Input aria-label="Jabatan pejabat penandatangan" placeholder="Jabatan, mis. Plt. Direktur" value={meta.party_one_signatory_position ?? ''} onChange={(e) => ubah({ party_one_signatory_position: e.target.value })} />
+        </div>
+      )}
+    </div>
+  )
 }
 
 // Isian sistem yang ditulis approver; tidak ada di definisi field jenis mana pun.
@@ -139,19 +157,18 @@ export default function AgreementDocumentDetail({ apiBase = '', approver = false
   const [previewLoading, setPreviewLoading] = useState(true)
   const objectUrlRef = useRef('')
   const [galatMaster, setGalatMaster] = useState('')
+  const [daftarTtd, setDaftarTtd] = useState<Penandatangan[]>([])
 
-  // Master Pihak Pertama hanya untuk approver, lewat alamat perannya (/admin atau /legal).
-  // Kalau gagal dimuat, approver diberi tahu, bukan diam-diam diberi isian kosong.
+  // Master Pihak Pertama dan Daftar Penandatangan hanya untuk approver, lewat alamat
+  // perannya (/admin atau /legal). Kalau gagal dimuat, approver diberi tahu, bukan
+  // diam-diam diberi isian kosong.
   const muatMaster = useCallback(async (): Promise<Record<string, string>> => {
     if (!apiBase) return {}
-    try {
-      const master = await agreementService.master(apiBase)
-      setGalatMaster('')
-      return master
-    } catch (reason) {
-      setGalatMaster(reason instanceof Error ? reason.message : 'Gagal memuat data Pihak Pertama')
-      return {}
-    }
+    const [master, penandatangan] = await Promise.allSettled([agreementService.master(apiBase), agreementService.signatories(apiBase)])
+    setDaftarTtd(penandatangan.status === 'fulfilled' ? penandatangan.value : [])
+    const galat = [master, penandatangan].flatMap((r) => (r.status === 'rejected' ? [r.reason instanceof Error ? r.reason.message : 'gagal dimuat'] : []))
+    setGalatMaster(galat.join('; '))
+    return master.status === 'fulfilled' ? master.value : {}
   }, [apiBase])
 
   useEffect(() => {
@@ -169,7 +186,7 @@ export default function AgreementDocumentDetail({ apiBase = '', approver = false
         const master = await muatMaster()
         if (!active) return
         setDocument(value)
-        setMeta(isianPersetujuan(value, master))
+        setMeta(isianAwalPersetujuan(value, master))
         setError('')
       } catch (reason) {
         if (!active) return
@@ -221,7 +238,7 @@ export default function AgreementDocumentDetail({ apiBase = '', approver = false
       const value = await agreementService.get(id, apiBase)
       const master = await muatMaster()
       setDocument(value)
-      setMeta(isianPersetujuan(value, master))
+      setMeta(isianAwalPersetujuan(value, master))
       setError('')
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Gagal memuat pengajuan')
@@ -236,7 +253,7 @@ export default function AgreementDocumentDetail({ apiBase = '', approver = false
     setNotice('')
     setError('')
     try {
-      if (status === 'COMPLETED') await agreementService.meta(apiBase, id, meta)
+      if (status === 'COMPLETED') await agreementService.meta(apiBase, id, dataPersetujuan(meta))
       await agreementService.status(apiBase, id, status, note)
       await load()
       setPreviewRevision((value) => value + 1)
@@ -317,11 +334,13 @@ export default function AgreementDocumentDetail({ apiBase = '', approver = false
           {galatMaster && (
             <p role="alert" className="mb-4 flex gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
               <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
-              <span>Data Pihak Pertama gagal dimuat ({galatMaster}), jadi isian di bawah tidak terisi dari master. Muat ulang halaman, atau isi manual.</span>
+              <span>Data Pihak Pertama atau Daftar Penandatangan gagal dimuat ({galatMaster}), jadi isian di bawah tidak terisi dari master. Muat ulang halaman, atau isi manual.</span>
             </p>
           )}
           <div className="space-y-3">
-            {Object.entries(meta).map(([key, value]) => (
+            {Object.entries(meta).map(([key, value]) => key === 'party_one_signatory_id' ? (
+              <PilihPenandatangan key={key} meta={meta} daftar={daftarTtd} usulan={document.signatory_suggestion} ubah={(v) => setMeta({ ...meta, ...v })} />
+            ) : !key.startsWith('party_one_signatory_') && (
               <div key={key}>
                 <Label className="mb-1.5 text-gray-700">{approverFieldLabels[key] || key.split('_').join(' ')}</Label>
                 <Input type={key === 'signing_date' ? 'date' : 'text'} value={value} onChange={(event) => setMeta({ ...meta, [key]: event.target.value })} />

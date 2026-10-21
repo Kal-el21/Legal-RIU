@@ -43,14 +43,18 @@ function pindah<T>(list: T[], i: number, arah: -1 | 1): T[] {
 }
 
 // Mengganti jenis isian: sub-field dan "membagi nilai" hanya untuk grup.
+// Nilai utama hanya untuk field uang.
 function gantiTipe(f: AgreementFieldDef, type: string): AgreementFieldDef {
-  if (type === 'group') return { ...f, type, fields: f.fields ?? [] }
-  return { ...f, type, fields: undefined, split_of: undefined }
+  const utama = type === 'money' ? f.primary_value : undefined
+  if (type === 'group') return { ...f, type, fields: f.fields ?? [], primary_value: utama }
+  return { ...f, type, fields: undefined, split_of: undefined, primary_value: utama }
 }
 
 interface BarisProps {
   f: AgreementFieldDef
   ubah: (field: Partial<AgreementFieldDef>) => void
+  // Centang Nilai utama (field uang di luar grup); kosong untuk sub-field.
+  nilaiUtama?: (centang: boolean) => void
   naik?: () => void
   turun?: () => void
   hapus: () => void
@@ -60,7 +64,7 @@ interface BarisProps {
 }
 
 // Satu baris isian: kode, label, pilihan atau saran, jenis, wajib, dan urutan.
-function BarisField({ f, ubah, naik, turun, hapus, tipe, awalan = '' }: BarisProps) {
+function BarisField({ f, ubah, nilaiUtama, naik, turun, hapus, tipe, awalan = '' }: BarisProps) {
   return (
     <div className="grid gap-3 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1.4fr)_minmax(0,0.9fr)_auto_auto] items-start">
       <div className="space-y-1">
@@ -98,6 +102,12 @@ function BarisField({ f, ubah, naik, turun, hapus, tipe, awalan = '' }: BarisPro
         >
           {Object.entries(tipe).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
         </select>
+        {nilaiUtama && f.type === 'money' && (
+          <label className="flex items-start gap-2 pt-1 text-xs text-gray-600" title="Nilai kontrak yang memilih penandatangan Pihak Pertama dari Daftar Penandatangan">
+            <input type="checkbox" checked={!!f.primary_value} onChange={(e) => nilaiUtama(e.target.checked)} className="mt-0.5 rounded border-gray-300" />
+            Nilai utama (memilih penandatangan)
+          </label>
+        )}
       </div>
       <label className="flex items-center gap-2 text-sm text-gray-700 md:pt-7">
         <input type="checkbox" checked={f.required} onChange={(e) => ubah({ required: e.target.checked })} className="rounded border-gray-300" />
@@ -169,6 +179,9 @@ export default function FieldEditor({ sections, onChange }: Props) {
   const ubahBagian = (i: number, bagian: AgreementSectionDef) => onChange(sections.map((s, k) => (k === i ? bagian : s)))
   const ubahField = (i: number, j: number, field: Partial<AgreementFieldDef>) =>
     ubahBagian(i, { ...sections[i], fields: sections[i].fields.map((f, k) => (k === j ? { ...f, ...field } : f)) })
+  // Nilai utama hanya satu per jenis: mencentang satu field melepas yang lain.
+  const tandaiNilaiUtama = (i: number, j: number, centang: boolean) =>
+    onChange(sections.map((s, k) => ({ ...s, fields: s.fields.map((f, l) => ({ ...f, primary_value: k === i && l === j ? centang || undefined : centang ? undefined : f.primary_value })) })))
   // Field uang di bagian mana pun boleh dibagi grup.
   const uang = sections.flatMap((s) => s.fields).filter((f) => f.type === 'money')
 
@@ -210,6 +223,7 @@ export default function FieldEditor({ sections, onChange }: Props) {
                   f={f}
                   tipe={TIPE_FIELD}
                   ubah={(field) => ubahField(i, j, field)}
+                  nilaiUtama={(centang) => tandaiNilaiUtama(i, j, centang)}
                   naik={j > 0 ? () => ubahBagian(i, { ...bagian, fields: pindah(bagian.fields, j, -1) }) : undefined}
                   turun={j < bagian.fields.length - 1 ? () => ubahBagian(i, { ...bagian, fields: pindah(bagian.fields, j, 1) }) : undefined}
                   hapus={() => ubahBagian(i, { ...bagian, fields: bagian.fields.filter((_, k) => k !== j) })}

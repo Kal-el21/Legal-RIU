@@ -41,6 +41,7 @@ function sidikField(f: AgreementFieldDef): unknown {
     options: (f.options ?? []).map((o) => o.trim()).filter(Boolean),
     fields: f.type === 'group' ? (f.fields ?? []).map(sidikField) : [],
     split_of: f.type === 'group' ? (f.split_of ?? '').trim().toLowerCase() : '',
+    primary_value: !!f.primary_value,
   }
 }
 function sidik(sections?: AgreementSectionDef[] | null) {

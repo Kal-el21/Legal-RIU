@@ -100,6 +100,7 @@ var pengecualianAlamat = []pengecualian{
 	{"GET", "/review-documents/X/pdf", "USER", "unduh PDF Review Dokumen hanya ada di halaman admin dan legal", false},
 	{"PATCH", "/agreement-documents/X/*", "USER", "aksi approver; detail perjanjian USER dibuka tanpa approver", false},
 	{"GET", "/agreement-company-master", "USER", "master Pihak Pertama hanya dimuat approver (apiBase /admin atau /legal); detail perjanjian USER tidak memanggilnya", false},
+	{"GET", "/agreement-signatories", "USER", "Daftar Penandatangan hanya dimuat approver (apiBase /admin atau /legal); detail perjanjian USER tidak memanggilnya", false},
 }
 
 type panggilanAPI struct {

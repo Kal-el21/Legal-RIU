@@ -678,8 +678,6 @@ func (s *agreementDocumentService) UpdateMaster(req dto.AgreementCompanyMasterRe
 	m.Phone = req.Phone
 	m.Email = req.Email
 	m.PIC = req.PIC
-	m.DefaultSignatoryName = req.DefaultSignatoryName
-	m.DefaultSignatoryPosition = req.DefaultSignatoryPosition
 	m.DefaultSigningPlace = req.DefaultSigningPlace
 	m.DefaultAgreementNumber = req.DefaultAgreementNumber
 	if e = s.repo.SaveMaster(m); e != nil {

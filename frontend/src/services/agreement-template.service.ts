@@ -13,6 +13,8 @@ export interface AgreementFieldDef {
   fields?: AgreementFieldDef[]
   // Kode field uang yang dibagi ke baris grup menurut persennya.
   split_of?: string
+  // Field uang yang memilih penandatangan Pihak Pertama (PR 11); paling banyak satu.
+  primary_value?: boolean
 }
 
 export interface AgreementSectionDef {
