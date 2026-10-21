@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { isAxiosError } from 'axios'
 import { AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, Plus, RefreshCw, Send, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { agreementService, type AgreementDocument, type AgreementSchema } from '@/services/agreement-document.service'
 import { bacaDraf, hapusDraf, isianKosong, pindahkanIsian, simpanDraf, type Baris, type FieldDef, type HasilPindah, type Isian, type Nilai } from '@/lib/agreement-draft'
-import { angkaSaja, bacaAngka, barisGrup, daftar, dariFormData, kosongDi, ribuan, ringkasNilai, rupiah, siapkanIsian, subBagi, teks, tulisAngka } from '@/lib/agreement-isian'
+import { angkaSaja, bacaAngka, barisGrup, daftar, dariFormData, kosongDi, periksaLampiran, ribuan, ringkasNilai, rupiah, siapkanIsian, subBagi, teks, tulisAngka } from '@/lib/agreement-isian'
 import { useAuthStore } from '@/store/auth.store'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -315,6 +315,18 @@ export default function AgreementWizard() {
 
   const ubah = (name: string, v: Nilai) => setIsian((lama) => ({ ...lama, [name]: v }))
 
+  // Lampiran diperiksa saat dipilih; yang ditolak tidak masuk daftar dan disebut namanya.
+  const pilihLampiran = (e: ChangeEvent<HTMLInputElement>) => {
+    const dipilih = Array.from(e.target.files || [])
+    dipilih.forEach((f) => {
+      const alasan = periksaLampiran(f)
+      if (alasan) toast.error(alasan, { duration: 8000 })
+    })
+    setFiles((lama) => [...lama, ...dipilih.filter((f) => !periksaLampiran(f))])
+    // Supaya file yang sama bisa dipilih lagi (mis. setelah unduhannya selesai).
+    e.target.value = ''
+  }
+
   if (galat) return <div className="p-12 text-center text-red-600">{galat}</div>
 
   return (
@@ -420,7 +432,7 @@ export default function AgreementWizard() {
                   {doc.attachments.map((a) => <li key={a.id}>{a.file_name} <span className="text-gray-400">(sudah terlampir)</span></li>)}
                 </ul>
               )}
-              <input type="file" multiple aria-label="Pilih file lampiran" onChange={(e) => setFiles((lama) => [...lama, ...Array.from(e.target.files || [])])} className="block w-full text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-gray-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-gray-700 hover:file:bg-gray-200" />
+              <input type="file" multiple aria-label="Pilih file lampiran" onChange={pilihLampiran} className="block w-full text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-gray-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-gray-700 hover:file:bg-gray-200" />
               {files.length > 0 && (
                 <ul className="mt-3 space-y-2">
                   {files.map((file, index) => (

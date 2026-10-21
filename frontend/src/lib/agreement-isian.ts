@@ -149,6 +149,22 @@ export function ringkasNilai(f: FieldDef, v: Nilai | undefined): string {
   }
 }
 
+// Aturan lampiran sama dengan backend (storage.ValidateUpload).
+const LAMPIRAN_MAKS_MB = 100
+const LAMPIRAN_EKSTENSI = ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.jpg', '.jpeg', '.png', '.webp']
+
+// periksaLampiran: alasan lampiran ditolak, atau null kalau boleh. Diperiksa saat
+// dipilih, supaya file kosong (mis. unduhan yang gagal) tidak baru ketahuan saat Kirim.
+export function periksaLampiran(file: { name: string; size: number }): string | null {
+  if (file.size <= 0) return `${file.name} kosong (0 byte). Pilih ulang filenya; kalau hasil unduhan, pastikan unduhannya selesai.`
+  if (file.size > LAMPIRAN_MAKS_MB * 1024 * 1024) return `${file.name} lebih dari ${LAMPIRAN_MAKS_MB} MB.`
+  const titik = file.name.lastIndexOf('.')
+  if (titik < 0 || !LAMPIRAN_EKSTENSI.includes(file.name.slice(titik).toLowerCase())) {
+    return `${file.name}: jenis file tidak diizinkan. Gunakan PDF, Word, Excel, PowerPoint, atau gambar (JPG, PNG, WEBP).`
+  }
+  return null
+}
+
 // dariFormData: isian tersimpan (JSON pengajuan) menjadi isian wizard; angka
 // menjadi teks, daftar dan baris grup tetap berbentuk daftar.
 export function dariFormData(data: Record<string, unknown>): Isian {

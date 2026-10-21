@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { angkaSaja, bagiTermin, dariFormData, kosongDi, ribuan, ringkasNilai, rupiah, siapkanIsian, type BarisTermin } from './agreement-isian'
+import { angkaSaja, bagiTermin, dariFormData, kosongDi, periksaLampiran, ribuan, ringkasNilai, rupiah, siapkanIsian, type BarisTermin } from './agreement-isian'
 import type { FieldDef, SectionDef } from './agreement-draft'
 
 // Kasus yang sama dengan TestPembagianTermin (backend/internal/service/agreement_termin_test.go),
@@ -110,6 +110,18 @@ describe('ringkasNilai', () => {
     expect(ringkasNilai(tgl, '2026-01-05')).toBe('5 Januari 2026')
     expect(ringkasNilai(tgl, '17/08/2026')).toBe('17/08/2026')
     expect(ringkasNilai(tgl, '')).toBe('-')
+  })
+})
+
+describe('periksaLampiran', () => {
+  it('menolak file kosong, terlalu besar, dan jenis yang ditolak backend, dengan nama filenya', () => {
+    expect(periksaLampiran({ name: 'penawaran.pdf', size: 1 })).toBeNull()
+    expect(periksaLampiran({ name: 'SCAN.JPG', size: 1 })).toBeNull()
+    expect(periksaLampiran({ name: 'penunjukan.pdf', size: 0 })).toMatch(/^penunjukan\.pdf kosong/)
+    expect(periksaLampiran({ name: 'besar.pdf', size: 100 * 1024 * 1024 + 1 })).toMatch(/^besar\.pdf lebih dari 100 MB/)
+    expect(periksaLampiran({ name: 'besar.pdf', size: 100 * 1024 * 1024 })).toBeNull()
+    expect(periksaLampiran({ name: 'program.exe', size: 1 })).toMatch(/^program\.exe: jenis file/)
+    expect(periksaLampiran({ name: 'tanpa-ekstensi', size: 1 })).toMatch(/jenis file/)
   })
 })
 

@@ -169,6 +169,11 @@ func (s *agreementDocumentService) Create(userID string, req dto.CreateAgreement
 	if e = validateAgreementForm(sections, req.FormData); e != nil {
 		return nil, e
 	}
+	// Semua lampiran diperiksa sebelum pengajuan dibuat, supaya file yang ditolak
+	// tidak meninggalkan pengajuan terhapus, nomor tiket hangus, atau lampiran separuh.
+	if e = validateFiles(files); e != nil {
+		return nil, e
+	}
 	raw, e := json.Marshal(req.FormData)
 	if e != nil {
 		return nil, e
@@ -300,6 +305,9 @@ func (s *agreementDocumentService) Resubmit(id, userID string, files []*multipar
 	}
 	if d.Status != entity.StatusNeedRevision {
 		return nil, errors.New("pengajuan tidak dalam status NEED_REVISION")
+	}
+	if e = validateFiles(files); e != nil {
+		return nil, e
 	}
 	round, _ := s.repo.LatestUploadRound(d.ID)
 	if e = s.uploadAttachments(d, d.UserID, files, round+1); e != nil {

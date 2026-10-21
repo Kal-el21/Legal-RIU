@@ -392,6 +392,52 @@ func TestLampiranPerjanjian(t *testing.T) {
 	}
 }
 
+// Satu lampiran kosong (0 byte, mis. unduhan yang gagal) di antara lampiran lain
+// ditolak sebelum apa pun tersimpan: tidak ada pengajuan yang dibuat lalu dihapus
+// (nomor tiket tidak hangus), tidak ada lampiran tertinggal, dan pesannya menyebut
+// file-nya. Sebelumnya lampiran pertama sudah tersimpan saat file kedua ditolak.
+func TestLampiranDitolakTanpaSisa(t *testing.T) {
+	butuhMinIO(t)
+	pemilik := masukPeran(t, entity.RoleUser)
+	legal := masukPeran(t, entity.RoleLegal)
+	data, _ := json.Marshal(isiPengajuan(t, pemilik, "PKS", formPerjanjian()))
+	kolom := map[string]string{"data": string(data)}
+	baik, kosong := berkas{"attachments", "penawaran.pdf", []byte("penawaran")}, berkas{"attachments", "penunjukan.pdf", nil}
+	hitung := func() [2]int64 {
+		return [2]int64{
+			hitungBaris(t, "SELECT COUNT(*) FROM agreement_documents"),
+			hitungBaris(t, "SELECT COUNT(*) FROM agreement_attachments"),
+		}
+	}
+	harapDitolak := func(t *testing.T, w *httptest.ResponseRecorder, nama string) {
+		t.Helper()
+		harapKode(t, w, http.StatusBadRequest, nama)
+		if b := w.Body.String(); !strings.Contains(b, "penunjukan.pdf") || !strings.Contains(b, "kosong") {
+			t.Errorf("pesan harus menyebut file yang kosong: %s", b)
+		}
+	}
+
+	sebelum := hitung()
+	harapDitolak(t, panggilForm(t, pemilik, http.MethodPost, urlPerjanjian(""), kolom, baik, kosong), "membuat pengajuan dengan lampiran kosong")
+	if sesudah := hitung(); sesudah != sebelum {
+		t.Errorf("pengajuan dan lampiran %v, sebelumnya %v: ada yang tersimpan walau ditolak", sesudah, sebelum)
+	}
+
+	t.Run("AjukanUlang", func(t *testing.T) {
+		p := buatPerjanjian(t, pemilik, formPerjanjian())
+		statusPerjanjian(t, legal, p.ID, "UNDER_REVIEW", "", http.StatusOK)
+		statusPerjanjian(t, legal, p.ID, "NEED_REVISION", "lampiran kurang", http.StatusOK)
+		sebelum := hitung()
+		harapDitolak(t, panggilForm(t, pemilik, http.MethodPost, urlPerjanjian("", "/", p.ID, "/resubmit"), nil, baik, kosong), "ajukan ulang dengan lampiran kosong")
+		if sesudah := hitung(); sesudah != sebelum {
+			t.Errorf("lampiran %v, sebelumnya %v: ada yang tersimpan walau ditolak", sesudah, sebelum)
+		}
+		if s := ambilPerjanjian(t, pemilik, "", p.ID).Status; s != "NEED_REVISION" {
+			t.Errorf("status %s setelah ditolak, harus tetap NEED_REVISION", s)
+		}
+	})
+}
+
 // Persetujuan akhir membentuk DOCX dan PDF dari template.
 //
 // Butuh LibreOffice, jadi hanya jalan di dalam container backend: lihat
