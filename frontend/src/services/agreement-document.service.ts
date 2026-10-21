@@ -61,6 +61,7 @@ export const agreementService={
     }
   },
  fileUrl:(base:string,id:string,kind:'preview'|'pdf'|'docx')=>`${api.defaults.baseURL}${base}/agreement-documents/${id}/${kind}`,
- master:()=>api.get('/admin/agreement-company-master').then(r=>data<Record<string,string>>(r)),
+ // Baca master Pihak Pertama lewat alamat peran: /admin untuk ADMIN, /legal untuk approver LEGAL.
+ master:(base='/admin')=>api.get(`${base}/agreement-company-master`).then(r=>data<Record<string,string>>(r)),
  saveMaster:(v:Record<string,string>)=>api.put('/admin/agreement-company-master',v),
 }

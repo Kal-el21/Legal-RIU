@@ -33,6 +33,20 @@ const approverFieldLabels: Record<string, string> = {
   email: 'Email',
 }
 
+// Isian awal Data Persetujuan dari master Pihak Pertama dan isian pengajuan.
+function isianPersetujuan(value: AgreementDocument, master: Record<string, string>): Record<string, string> {
+  return {
+    agreement_number: String(master.default_agreement_number || value.agreement_number || ''),
+    signing_place: String(master.default_signing_place || value.form_data.tempat_ttd || ''),
+    signing_date: String(value.form_data.tanggal_ttd || ''),
+    party_one_signatory_name: String(master.default_signatory_name || value.form_data.pihak_pertama_pejabat || ''),
+    party_one_signatory_position: String(master.default_signatory_position || value.form_data.pihak_pertama_jabatan || ''),
+    pic: String(master.pic || ''),
+    phone: String(master.phone || ''),
+    email: String(master.email || ''),
+  }
+}
+
 // Isian sistem yang ditulis approver; tidak ada di definisi field jenis mana pun.
 const isianApproverLabels: Record<string, string> = {
   tanggal_ttd: 'Tanggal Penandatanganan',
@@ -121,6 +135,21 @@ export default function AgreementDocumentDetail({ apiBase = '', approver = false
   const [previewRevision, setPreviewRevision] = useState(0)
   const [previewLoading, setPreviewLoading] = useState(true)
   const objectUrlRef = useRef('')
+  const [galatMaster, setGalatMaster] = useState('')
+
+  // Master Pihak Pertama hanya untuk approver, lewat alamat perannya (/admin atau /legal).
+  // Kalau gagal dimuat, approver diberi tahu, bukan diam-diam diberi isian kosong.
+  const muatMaster = useCallback(async (): Promise<Record<string, string>> => {
+    if (!apiBase) return {}
+    try {
+      const master = await agreementService.master(apiBase)
+      setGalatMaster('')
+      return master
+    } catch (reason) {
+      setGalatMaster(reason instanceof Error ? reason.message : 'Gagal memuat data Pihak Pertama')
+      return {}
+    }
+  }, [apiBase])
 
   useEffect(() => {
     if (!id) return
@@ -134,22 +163,10 @@ export default function AgreementDocumentDetail({ apiBase = '', approver = false
         if (!active) return
         setSchema(skema)
         console.log('[AgreementDetail] detail sukses', { id, status: value?.status })
-        // Master hanya tersedia untuk approver (admin/legal). User biasa tidak punya akses endpoint ini.
-        const master = apiBase
-          ? await agreementService.master().catch(() => ({}) as Record<string, string>)
-          : ({} as Record<string, string>)
+        const master = await muatMaster()
         if (!active) return
         setDocument(value)
-        setMeta({
-          agreement_number: String(master.default_agreement_number || value.agreement_number || ''),
-          signing_place: String(master.default_signing_place || value.form_data.tempat_ttd || ''),
-          signing_date: String(value.form_data.tanggal_ttd || ''),
-          party_one_signatory_name: String(master.default_signatory_name || value.form_data.pihak_pertama_pejabat || ''),
-          party_one_signatory_position: String(master.default_signatory_position || value.form_data.pihak_pertama_jabatan || ''),
-          pic: String(master.pic || ''),
-          phone: String(master.phone || ''),
-          email: String(master.email || ''),
-        })
+        setMeta(isianPersetujuan(value, master))
         setError('')
       } catch (reason) {
         if (!active) return
@@ -161,7 +178,7 @@ export default function AgreementDocumentDetail({ apiBase = '', approver = false
     return () => {
       active = false
     }
-  }, [apiBase, id])
+  }, [apiBase, id, muatMaster])
 
   useEffect(() => {
     if (!id) return
@@ -199,23 +216,14 @@ export default function AgreementDocumentDetail({ apiBase = '', approver = false
     if (!id) return
     try {
       const value = await agreementService.get(id, apiBase)
-      const master = await agreementService.master().catch(() => ({}) as Record<string, string>)
+      const master = await muatMaster()
       setDocument(value)
-      setMeta({
-        agreement_number: String(master.default_agreement_number || value.agreement_number || ''),
-        signing_place: String(master.default_signing_place || value.form_data.tempat_ttd || ''),
-        signing_date: String(value.form_data.tanggal_ttd || ''),
-        party_one_signatory_name: String(master.default_signatory_name || value.form_data.pihak_pertama_pejabat || ''),
-        party_one_signatory_position: String(master.default_signatory_position || value.form_data.pihak_pertama_jabatan || ''),
-        pic: String(master.pic || ''),
-        phone: String(master.phone || ''),
-        email: String(master.email || ''),
-      })
+      setMeta(isianPersetujuan(value, master))
       setError('')
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Gagal memuat pengajuan')
     }
-  }, [apiBase, id])
+  }, [apiBase, id, muatMaster])
 
   // Satu aksi pada satu waktu: persetujuan butuh beberapa detik untuk menyiapkan
   // PDF, dan tanpa kunci tombol yang ditekan dua kali mengirim dua persetujuan.
@@ -303,6 +311,12 @@ export default function AgreementDocumentDetail({ apiBase = '', approver = false
       <div>
         {approver && <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-4">
           <h2 className="font-semibold mb-4" style={{ color: '#0B2545' }}>Data Persetujuan</h2>
+          {galatMaster && (
+            <p role="alert" className="mb-4 flex gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+              <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+              <span>Data Pihak Pertama gagal dimuat ({galatMaster}), jadi isian di bawah tidak terisi dari master. Muat ulang halaman, atau isi manual.</span>
+            </p>
+          )}
           <div className="space-y-3">
             {Object.entries(meta).map(([key, value]) => (
               <div key={key}>

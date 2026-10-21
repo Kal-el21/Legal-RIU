@@ -333,6 +333,8 @@ func New(cfg *config.Config, db *gorm.DB, store *storage.MinIOClient) (*gin.Engi
 	legal.PATCH("/review-documents/:id/status", requirePermission("document_review.update_status.all"), drHandler.AdminUpdateStatus)
 	legal.POST("/review-documents/:id/result", requirePermission("document_review.upload_result.all"), drHandler.AdminUploadResult)
 	legal.GET("/review-documents/:id/pdf", requirePermission("document_review.view.all"), drHandler.GeneratePDF)
+	// Isian awal persetujuan (nomor, tempat, penandatangan); mengubah master tetap di /admin.
+	legal.GET("/agreement-company-master", requirePermission("agreement_company_master.view.all"), agreementHandler.GetMaster)
 	legal.GET("/agreement-documents", requirePermission("agreement_document.view.all"), agreementHandler.GetAll)
 	legal.GET("/agreement-documents/:id", requirePermission("agreement_document.view.all"), agreementHandler.GetByID)
 	legal.GET("/agreement-documents/:id/schema", requirePermission("agreement_document.view.all"), agreementHandler.DocumentSchema)

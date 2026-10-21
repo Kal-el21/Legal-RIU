@@ -392,6 +392,33 @@ func TestLampiranPerjanjian(t *testing.T) {
 	}
 }
 
+// Approver LEGAL membaca master Pihak Pertama untuk isian awal persetujuan (nomor,
+// tempat, penandatangan). Sebelumnya alamatnya hanya di /admin, jadi LEGAL ditolak
+// 403 dan isian awalnya kosong. Mengubah master tetap hanya ADMIN.
+func TestMasterUntukApprover(t *testing.T) {
+	admin := masukPeran(t, entity.RoleAdmin)
+	legal := masukPeran(t, entity.RoleLegal)
+	user := masukPeran(t, entity.RoleUser)
+	type master struct {
+		Name                 string `json:"name"`
+		DefaultSignatoryName string `json:"default_signatory_name"`
+	}
+	baca := func(token, awalan string) master {
+		t.Helper()
+		w := panggil(t, token, http.MethodGet, "/api/v1"+awalan+"/agreement-company-master", nil)
+		harapKode(t, w, http.StatusOK, awalan+" membaca master Pihak Pertama")
+		var m master
+		isiData(t, w, &m)
+		return m
+	}
+	diAdmin, diLegal := baca(admin, "/admin"), baca(legal, "/legal")
+	if diLegal.Name == "" || diLegal != diAdmin {
+		t.Errorf("master untuk LEGAL %+v, harus sama dengan untuk ADMIN %+v", diLegal, diAdmin)
+	}
+	harapKode(t, panggil(t, user, http.MethodGet, "/api/v1/legal/agreement-company-master", nil), http.StatusForbidden, "USER membaca master lewat alamat approver")
+	harapKode(t, panggil(t, legal, http.MethodPut, "/api/v1/admin/agreement-company-master", map[string]any{"name": "Diubah LEGAL"}), http.StatusForbidden, "LEGAL mengubah master")
+}
+
 // Satu lampiran kosong (0 byte, mis. unduhan yang gagal) di antara lampiran lain
 // ditolak sebelum apa pun tersimpan: tidak ada pengajuan yang dibuat lalu dihapus
 // (nomor tiket tidak hangus), tidak ada lampiran tertinggal, dan pesannya menyebut

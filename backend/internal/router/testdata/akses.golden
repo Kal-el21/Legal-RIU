@@ -167,6 +167,7 @@ GET /api/v1/legal-opinions: USER
 GET /api/v1/legal-opinions/:id: USER
 GET /api/v1/legal-opinions/:id/pdf: USER
 GET /api/v1/legal-opinions/download: USER
+GET /api/v1/legal/agreement-company-master: LEGAL
 GET /api/v1/legal/agreement-documents: LEGAL
 GET /api/v1/legal/agreement-documents/:id: LEGAL
 GET /api/v1/legal/agreement-documents/:id/attachments/:attachmentId: LEGAL

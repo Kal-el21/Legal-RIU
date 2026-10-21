@@ -149,12 +149,29 @@ Lonceng notifikasi tidak punya kode permission sendiri. Ketiga endpoint-nya (`GE
 | `agreement_type.manage.all` | Jenis Dokumen - Kelola | Membuat, mengubah, dan menonaktifkan jenis dokumen perjanjian beserta field kerjanya (`GET/POST /admin/agreement-types`, `PUT /admin/agreement-types/:code`) |
 | `agreement_template.view.all` | Template Perjanjian - Lihat | Melihat versi template, daftar placeholder, unduh, dan pratinjau |
 | `agreement_template.manage.all` | Template Perjanjian - Kelola | Mengunggah, membuat versi baru dari DOCX versi terakhir, mengaktifkan, dan menghapus versi template. Hanya ADMIN sejak PR 9 (keputusan T1) |
-| `agreement_company_master.view.all` | Pihak Pertama - Lihat | Melihat master Pihak Pertama |
+| `agreement_company_master.view.all` | Pihak Pertama - Lihat | Melihat master Pihak Pertama (`GET /admin/agreement-company-master`). LEGAL membacanya lewat `GET /legal/agreement-company-master` untuk isian awal persetujuan (sejak PR 11) |
 | `agreement_company_master.manage.all` | Pihak Pertama - Kelola | Mengelola master Pihak Pertama |
 
 Catatan `agreement_type.manage.all`: hanya ADMIN (keputusan K3, PR 9). Endpoint-nya di grup `/admin`, jadi override ke peran lain tidak membuka aksesnya. Field yang disimpan di jenis dokumen adalah field kerja; pengajuan memakai salinan field di versi template yang dikuncinya.
 
-Izin pengajuan perjanjian (`agreement_document.*`) belum dicatat di dokumen ini; sumber yang berlaku `backend/internal/seed/permissions.go`.
+### 2.13 Perjanjian: pengajuan
+| Action Code | Label | Keterangan |
+|-------------|-------|-----------|
+| `agreement_document.view.own` | Perjanjian - Lihat Milik Sendiri | Melihat pengajuan sendiri beserta definisi isian versi templatenya (`GET /agreement-documents/:id/schema`) |
+| `agreement_document.view.all` | Perjanjian - Lihat Semua | Melihat semua pengajuan beserta definisi isian versinya (alamat `/legal` dan `/admin`) |
+| `agreement_document.create.own` | Perjanjian - Buat | Membuat pengajuan dan membentuk pratinjau sebelum dikirim (`POST /agreement-documents/preview-draft`) |
+| `agreement_document.update.own` | Perjanjian - Edit | Mengubah pengajuan sendiri yang masih Diajukan atau Perlu Revisi |
+| `agreement_document.delete.own` | Perjanjian - Hapus | Menghapus pengajuan sendiri yang masih Diajukan |
+| `agreement_document.resubmit.own` | Perjanjian - Ajukan Ulang | Mengajukan ulang pengajuan yang dikembalikan untuk revisi, beserta lampiran baru |
+| `agreement_document.preview.own` | Perjanjian - Preview Sendiri | Pratinjau PDF pengajuan sendiri |
+| `agreement_document.preview.all` | Perjanjian - Preview Semua | Pratinjau PDF semua pengajuan |
+| `agreement_document.download_attachment.own` | Perjanjian - Attachment Sendiri | Mengunduh lampiran pengajuan sendiri |
+| `agreement_document.download_attachment.all` | Perjanjian - Semua Attachment | Mengunduh lampiran semua pengajuan |
+| `agreement_document.update_meta.all` | Perjanjian - Review Metadata | Mengisi data persetujuan: nomor perjanjian, tanggal dan tempat tanda tangan, penandatangan Pihak Pertama |
+| `agreement_document.update_status.all` | Perjanjian - Ubah Status | Memeriksa, mengembalikan untuk revisi, menolak, dan menyetujui (membentuk dokumen final) |
+| `agreement_document.download_pdf.own` | Perjanjian - PDF Sendiri | Mengunduh PDF final pengajuan sendiri |
+| `agreement_document.download_pdf.all` | Perjanjian - Semua PDF | Mengunduh PDF final semua pengajuan |
+| `agreement_document.download_docx.all` | Perjanjian - DOCX | Mengunduh DOCX final |
 
 ## 3. Default Permission by Role (Baseline)
 
@@ -221,8 +238,12 @@ Tabel ini menunjukkan permission default yang dimiliki setiap role **sebelum ove
 | **Perjanjian** | Kelola Jenis Dokumen | ✅ | ❌ | ❌ | ❌ | ❌ |
 | | Lihat Template | ✅ | ✅ | ❌ | ❌ | ❌ |
 | | Kelola Template | ✅ | ❌ | ❌ | ❌ | ❌ |
-| | Lihat Pihak Pertama | ✅ | ❌ | ❌ | ❌ | ❌ |
+| | Lihat Pihak Pertama | ✅ | ✅ | ❌ | ❌ | ❌ |
 | | Kelola Pihak Pertama | ✅ | ❌ | ❌ | ❌ | ❌ |
+| **Pengajuan Perjanjian** | Lihat Milik Sendiri, Buat, Edit, Hapus, Ajukan Ulang | ✅ | ❌ | ❌ | ✅ | ❌ |
+| | Preview, Attachment, dan PDF Milik Sendiri | ✅ | ❌ | ❌ | ✅ | ❌ |
+| | Lihat Semua, Preview Semua, Semua Attachment, Semua PDF | ✅ | ✅ | ❌ | ❌ | ❌ |
+| | Review Metadata, Ubah Status, DOCX | ✅ | ✅ | ❌ | ❌ | ❌ |
 
 ---
 
