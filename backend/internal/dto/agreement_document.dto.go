@@ -35,6 +35,9 @@ type AgreementMetaRequest struct {
 	AgreementNumber           *string `json:"agreement_number"`
 	SigningPlace              *string `json:"signing_place"`
 	SigningDate               *string `json:"signing_date"`
+	// PartyOneSignatoryID: pilihan dari Daftar Penandatangan; kosong ("") untuk
+	// Lainnya, dengan nama dan jabatan diketik di dua isian berikutnya (PR 11, P3).
+	PartyOneSignatoryID       *string `json:"party_one_signatory_id"`
 	PartyOneSignatoryName     *string `json:"party_one_signatory_name"`
 	PartyOneSignatoryPosition *string `json:"party_one_signatory_position"`
 	Pic                       *string `json:"pic"`

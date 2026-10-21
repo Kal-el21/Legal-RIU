@@ -140,10 +140,15 @@ func (h *AgreementDocumentHandler) UpdateMeta(c *gin.Context) {
 		utils.BadRequest(c, "Data tidak valid", e.Error())
 		return
 	}
-	v, e := h.svc.UpdateMeta(c.Param("id"), req)
+	v, ganti, e := h.svc.UpdateMeta(c.Param("id"), req)
 	if e != nil {
 		utils.BadRequest(c, e.Error(), nil)
 		return
+	}
+	// Approver mengganti penandatangan usulan (PR 11, P3).
+	if ganti != nil {
+		desc := "Penandatangan Pihak Pertama " + v.TicketNumber + " diganti approver"
+		middleware.SetAuditContextWithValues(c, entity.ActionSignatoryChange, "agreement_document", v.ID.String(), &ganti.Usulan, &ganti.Pilihan, &desc)
 	}
 	utils.OK(c, "Metadata diperbarui", v)
 }

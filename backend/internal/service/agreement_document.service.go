@@ -33,7 +33,7 @@ type AgreementDocumentService interface {
 	Update(string, string, dto.UpdateAgreementDocumentRequest) (*entity.AgreementDocument, error)
 	Delete(string, string) error
 	Resubmit(string, string, []*multipart.FileHeader) (*entity.AgreementDocument, error)
-	UpdateMeta(string, dto.AgreementMetaRequest) (*entity.AgreementDocument, error)
+	UpdateMeta(string, dto.AgreementMetaRequest) (*entity.AgreementDocument, *PergantianPenandatangan, error)
 	UpdateStatus(context.Context, string, string, dto.AgreementStatusRequest) (*entity.AgreementDocument, error)
 	Preview(context.Context, string, string, bool) ([]byte, error)
 	PreviewDraft(context.Context, string, dto.PreviewDraftRequest) ([]byte, error)
@@ -170,6 +170,7 @@ func (s *agreementDocumentService) Create(userID string, req dto.CreateAgreement
 	if e != nil {
 		return nil, e
 	}
+	pertahankanIsianApprover(req.FormData, nil)
 	if e = validateAgreementForm(sections, req.FormData); e != nil {
 		return nil, e
 	}
@@ -219,6 +220,9 @@ func (s *agreementDocumentService) Detail(id, userID string, all bool) (*entity.
 		docs := []entity.AgreementDocument{*d}
 		s.tandaiTemplateLama(docs)
 		d.OldTemplate = docs[0].OldTemplate
+		if d.Status != entity.StatusCompleted && d.Status != entity.StatusRejected {
+			d.SignatorySuggestion = s.usulanUntuk(d)
+		}
 	}
 	return d, e
 }
@@ -283,6 +287,11 @@ func (s *agreementDocumentService) Update(id, userID string, req dto.UpdateAgree
 	if e != nil {
 		return nil, e
 	}
+	lama, e := decodeForm(d.FormData)
+	if e != nil {
+		return nil, e
+	}
+	pertahankanIsianApprover(req.FormData, lama)
 	if e = validateAgreementForm(sections, req.FormData); e != nil {
 		return nil, e
 	}
@@ -340,49 +349,52 @@ func (s *agreementDocumentService) uploadAttachments(d *entity.AgreementDocument
 	return nil
 }
 
-func (s *agreementDocumentService) UpdateMeta(id string, req dto.AgreementMetaRequest) (*entity.AgreementDocument, error) {
+func (s *agreementDocumentService) UpdateMeta(id string, req dto.AgreementMetaRequest) (*entity.AgreementDocument, *PergantianPenandatangan, error) {
 	uid, e := uuid.Parse(id)
 	if e != nil {
-		return nil, errors.New("ID tidak valid")
+		return nil, nil, errors.New("ID tidak valid")
 	}
 	d, e := s.repo.FindByID(uid)
 	if e != nil {
-		return nil, errors.New("pengajuan tidak ditemukan")
+		return nil, nil, errors.New("pengajuan tidak ditemukan")
 	}
 	if d.Status == entity.StatusCompleted || d.Status == entity.StatusRejected {
-		return nil, errors.New("pengajuan sudah final")
+		return nil, nil, errors.New("pengajuan sudah final")
 	}
 	data, e := decodeForm(d.FormData)
 	if e != nil {
-		return nil, e
+		return nil, nil, e
 	}
 	if req.AgreementNumber != nil && strings.TrimSpace(*req.AgreementNumber) != "" {
 		num := strings.TrimSpace(*req.AgreementNumber)
 		taken, e := s.repo.AgreementNumberTaken(num, d.ID)
 		if e != nil {
-			return nil, errors.New("gagal memeriksa nomor perjanjian")
+			return nil, nil, errors.New("gagal memeriksa nomor perjanjian")
 		}
 		if taken {
-			return nil, repository.ErrAgreementNumberTaken
+			return nil, nil, repository.ErrAgreementNumberTaken
 		}
 		d.AgreementNumber = &num
 	}
 	setOptional(data, "tempat_ttd", req.SigningPlace)
 	setOptional(data, "tanggal_ttd", req.SigningDate)
-	setOptional(data, "pihak_pertama_pejabat", req.PartyOneSignatoryName)
-	setOptional(data, "pihak_pertama_jabatan", req.PartyOneSignatoryPosition)
 	setOptional(data, "pihak_pertama_pic", req.Pic)
 	setOptional(data, "pihak_pertama_telepon", req.Phone)
 	setOptional(data, "pihak_pertama_email", req.Email)
+	pergantian, e := s.pilihPenandatanganApprover(d, data, req)
+	if e != nil {
+		return nil, nil, e
+	}
 	d.FormData, _ = json.Marshal(data)
 	if e = s.repo.Save(d); e != nil {
 		// Pesan database tidak diteruskan ke pengguna.
 		if errors.Is(e, repository.ErrAgreementNumberTaken) {
-			return nil, e
+			return nil, nil, e
 		}
-		return nil, errors.New("gagal menyimpan metadata")
+		return nil, nil, errors.New("gagal menyimpan metadata")
 	}
-	return s.repo.FindByID(d.ID)
+	v, e := s.repo.FindByID(d.ID)
+	return v, pergantian, e
 }
 func setOptional(m map[string]interface{}, k string, v *string) {
 	if v != nil {
@@ -453,17 +465,19 @@ func (s *agreementDocumentService) approve(ctx context.Context, d *entity.Agreem
 	if e = validateAgreementForm(sections, data); e != nil {
 		return nil, fmt.Errorf("%w. Kembalikan pengajuan ke pengaju untuk direvisi", e)
 	}
-	master, e := s.repo.GetActiveMaster()
+	snapshot, penandatangan, e := s.pihakPertama(sections, data)
 	if e != nil {
-		return nil, errors.New("Master Pihak Pertama belum tersedia")
+		return nil, e
 	}
-	snapshot := partyOneSnapshot(master, data)
 	if valueString(data["tanggal_ttd"]) == "" {
 		return nil, errors.New("tanggal tanda tangan wajib diisi approver")
 	}
 	// Tempat tidak wajib bagi pengaju, tetapi dokumen final tidak boleh tanpa tempat (keputusan G).
 	if strings.TrimSpace(valueString(snapshot["signing_place"])) == "" {
 		return nil, errors.New("Tempat penandatanganan wajib diisi: isi di data persetujuan, atau isi tempat bawaan di master Pihak Pertama")
+	}
+	if penandatangan.Nama == "" {
+		return nil, errors.New("Penandatangan Pihak Pertama belum dipilih: tidak ada penandatangan di Daftar Penandatangan untuk nilai pengajuan ini. Pilih di data persetujuan, atau lengkapi Daftar Penandatangan")
 	}
 	tpl, source, e := s.templateFor(ctx, d)
 	if e != nil {
@@ -526,10 +540,6 @@ func (s *agreementDocumentService) Preview(ctx context.Context, id, userID strin
 	if e != nil {
 		return nil, e
 	}
-	master, e := s.repo.GetActiveMaster()
-	if e != nil {
-		return nil, errors.New("Master Pihak Pertama belum tersedia")
-	}
 	_, source, e := s.templateFor(ctx, d)
 	if e != nil {
 		return nil, e
@@ -538,7 +548,12 @@ func (s *agreementDocumentService) Preview(ctx context.Context, id, userID strin
 	if e != nil {
 		return nil, e
 	}
-	docx, _, e := s.generator.Generate(source, placeholderValues(d, sections, data, partyOneSnapshot(master, data)), GenerateOptions{Draft: true})
+	// Pilihan approver yang sudah tidak aktif tidak menghalangi pratinjau; penandatangannya tercetak "-".
+	snapshot, _, e := s.pihakPertama(sections, data)
+	if snapshot == nil {
+		return nil, e
+	}
+	docx, _, e := s.generator.Generate(source, placeholderValues(d, sections, data, snapshot), GenerateOptions{Draft: true})
 	if e != nil {
 		return nil, e
 	}
@@ -586,9 +601,12 @@ func (s *agreementDocumentService) PreviewDraft(ctx context.Context, userID stri
 	if e = validateAgreementForm(sections, req.FormData); e != nil {
 		return nil, e
 	}
-	master, e := s.repo.GetActiveMaster()
-	if e != nil {
-		return nil, errors.New("Master Pihak Pertama belum tersedia")
+	// Pratinjau pengaju memakai penandatangan usulan, atau pilihan approver kalau revisi (P4).
+	lama, _ := decodeForm(doc.FormData)
+	pertahankanIsianApprover(req.FormData, lama)
+	snapshot, _, e := s.pihakPertama(sections, req.FormData)
+	if snapshot == nil {
+		return nil, e
 	}
 	_, source, e := s.templates.TemplateByID(ctx, tpl.ID)
 	if e != nil {
@@ -599,7 +617,7 @@ func (s *agreementDocumentService) PreviewDraft(ctx context.Context, userID stri
 	for _, nama := range req.AttachmentNames {
 		draf.Attachments = append(draf.Attachments, entity.AgreementAttachment{FileName: nama})
 	}
-	docx, _, e := s.generator.Generate(source, placeholderValues(&draf, sections, req.FormData, partyOneSnapshot(master, req.FormData)), GenerateOptions{Draft: true})
+	docx, _, e := s.generator.Generate(source, placeholderValues(&draf, sections, req.FormData, snapshot), GenerateOptions{Draft: true})
 	if e != nil {
 		return nil, e
 	}
@@ -677,14 +695,13 @@ func decodeForm(raw json.RawMessage) (map[string]interface{}, error) {
 	e := dec.Decode(&m)
 	return m, e
 }
-func partyOneSnapshot(m *entity.AgreementCompanyMaster, data map[string]interface{}) map[string]interface{} {
-	name := valueString(data["pihak_pertama_pejabat"])
+// partyOneSnapshot: data Pihak Pertama yang dibekukan ke dokumen saat disetujui. Sejak
+// PR 11 penandatangan berasal dari Daftar Penandatangan (pilihan approver atau usulan),
+// bukan dari kolom penandatangan lama di master; tanpa penandatangan tercetak "-".
+func partyOneSnapshot(m *entity.AgreementCompanyMaster, data map[string]interface{}, p PenandatanganDipakai) map[string]interface{} {
+	name, pos := p.Nama, p.Jabatan
 	if name == "" {
-		name = m.DefaultSignatoryName
-	}
-	pos := valueString(data["pihak_pertama_jabatan"])
-	if pos == "" {
-		pos = m.DefaultSignatoryPosition
+		name, pos = "-", "-"
 	}
 	place := valueString(data["tempat_ttd"])
 	if place == "" {

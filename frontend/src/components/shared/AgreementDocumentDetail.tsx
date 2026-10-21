@@ -33,14 +33,16 @@ const approverFieldLabels: Record<string, string> = {
   email: 'Email',
 }
 
-// Isian awal Data Persetujuan dari master Pihak Pertama dan isian pengajuan.
+// Isian awal Data Persetujuan dari master Pihak Pertama dan isian pengajuan. Sejak
+// PR 11 penandatangan tidak diambil dari kolom lama master: kosong berarti memakai
+// penandatangan usulan dari Daftar Penandatangan; diketik berarti Lainnya.
 function isianPersetujuan(value: AgreementDocument, master: Record<string, string>): Record<string, string> {
   return {
     agreement_number: String(master.default_agreement_number || value.agreement_number || ''),
     signing_place: String(master.default_signing_place || value.form_data.tempat_ttd || ''),
     signing_date: String(value.form_data.tanggal_ttd || ''),
-    party_one_signatory_name: String(master.default_signatory_name || value.form_data.pihak_pertama_pejabat || ''),
-    party_one_signatory_position: String(master.default_signatory_position || value.form_data.pihak_pertama_jabatan || ''),
+    party_one_signatory_name: String(value.form_data.pihak_pertama_pejabat || ''),
+    party_one_signatory_position: String(value.form_data.pihak_pertama_jabatan || ''),
     pic: String(master.pic || ''),
     phone: String(master.phone || ''),
     email: String(master.email || ''),
@@ -95,7 +97,8 @@ function NilaiIsian({ f, v }: { f: FieldDef; v: Nilai | undefined }) {
 function DataPengajuan({ data, schema }: { data: Record<string, unknown>; schema?: AgreementSchema }) {
   const isian = dariFormData(data)
   const dikenal = new Set(schema?.sections.flatMap((s) => s.fields.map((f) => f.name)) ?? [])
-  const lain = Object.keys(isian).filter((k) => !dikenal.has(k))
+  // Kode pilihan penandatangan hanya untuk sistem; namanya tampil di data persetujuan.
+  const lain = Object.keys(isian).filter((k) => !dikenal.has(k) && k !== 'pihak_pertama_penandatangan_id')
   const baris = (label: string, isi: ReactNode, lebar: boolean) => (
     <div className={`text-sm py-1.5 border-b border-gray-50 ${lebar ? 'space-y-1' : 'grid grid-cols-2 gap-2'}`}>
       <span className="text-gray-500">{label}</span>

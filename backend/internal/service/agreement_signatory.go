@@ -146,6 +146,168 @@ func pilihPenandatangan(daftar []entity.AgreementSignatory, nilai *int64) *entit
 	return terpilih
 }
 
+// Kunci isian pengajuan yang ditulis approver untuk penandatangan Pihak Pertama:
+// pilihan dari Daftar, atau Lainnya (nama dan jabatan diketik sendiri).
+const (
+	isianPenandatanganID = "pihak_pertama_penandatangan_id"
+	isianPejabat         = "pihak_pertama_pejabat"
+	isianJabatan         = "pihak_pertama_jabatan"
+)
+
+// ErrPenandatanganTidakAktif: penandatangan pilihan approver sudah dihapus atau
+// dinonaktifkan sesudah dipilih.
+var ErrPenandatanganTidakAktif = errors.New("Penandatangan yang dipilih sudah tidak aktif di Daftar Penandatangan; pilih ulang di data persetujuan")
+
+// PenandatanganDipakai: penandatangan Pihak Pertama untuk satu dokumen. Sumber:
+// "daftar" (pilihan approver), "lainnya" (diketik approver), "usulan" (menurut nilai
+// utama); kosong kalau belum ada yang bisa dipakai. ID kosong untuk Lainnya.
+type PenandatanganDipakai struct {
+	ID, Nama, Jabatan, Sumber string
+}
+
+func (p PenandatanganDipakai) String() string {
+	if p.Nama == "" {
+		return "tidak ada"
+	}
+	return p.Nama + ", " + p.Jabatan + " (" + map[string]string{"daftar": "dari Daftar", "lainnya": "Lainnya", "usulan": "usulan"}[p.Sumber] + ")"
+}
+
+// isianApprover: isian pengajuan yang hanya ditulis approver lewat data persetujuan
+// (UpdateMeta). tempat_ttd tidak termasuk, karena juga usulan pengaju.
+var isianApprover = []string{"tanggal_ttd", isianPenandatanganID, isianPejabat, isianJabatan, "pihak_pertama_pic", "pihak_pertama_telepon", "pihak_pertama_email"}
+
+// pertahankanIsianApprover membuang isian approver yang dikirim pengaju dan
+// memakai yang tersimpan (lama, nil untuk pengajuan baru), supaya pengaju tidak bisa
+// menentukan penandatangan atau tanggal tanda tangan sendiri.
+func pertahankanIsianApprover(baru, lama map[string]interface{}) {
+	if baru == nil {
+		return
+	}
+	for _, k := range isianApprover {
+		delete(baru, k)
+		if v, ada := lama[k]; ada {
+			baru[k] = v
+		}
+	}
+}
+
+// PergantianPenandatangan: approver mengganti penandatangan usulan, untuk audit log.
+type PergantianPenandatangan struct{ Usulan, Pilihan string }
+
+// pilihPenandatanganApprover menerapkan pilihan penandatangan dari data persetujuan
+// ke isian (P3): penandatangan dari Daftar (harus aktif), atau Lainnya dengan nama dan
+// jabatan yang diketik. Pergantian dikembalikan hanya kalau pilihannya berubah dan
+// bukan usulan, supaya yang tercatat di audit log hanya penggantian usulan.
+func (s *agreementDocumentService) pilihPenandatanganApprover(d *entity.AgreementDocument, data map[string]interface{}, req dto.AgreementMetaRequest) (*PergantianPenandatangan, error) {
+	sections, e := s.sectionsFor(d)
+	if e != nil {
+		return nil, e
+	}
+	daftar, e := s.repo.ListSignatories()
+	if e != nil {
+		return nil, e
+	}
+	sebelum, _ := penandatanganDipakai(daftar, sections, data)
+	id := ""
+	if req.PartyOneSignatoryID != nil {
+		id = strings.TrimSpace(*req.PartyOneSignatoryID)
+	}
+	if id != "" {
+		aktif := false
+		for _, p := range daftar {
+			aktif = aktif || (p.ID.String() == id && p.IsActive)
+		}
+		if !aktif {
+			return nil, errors.New("Penandatangan tidak ditemukan atau nonaktif di Daftar Penandatangan")
+		}
+		data[isianPenandatanganID] = id
+		delete(data, isianPejabat)
+		delete(data, isianJabatan)
+	} else {
+		if req.PartyOneSignatoryID != nil {
+			delete(data, isianPenandatanganID)
+		}
+		setOptional(data, isianPejabat, req.PartyOneSignatoryName)
+		setOptional(data, isianJabatan, req.PartyOneSignatoryPosition)
+	}
+	sesudah, _ := penandatanganDipakai(daftar, sections, data)
+	if sesudah == sebelum || sesudah.Sumber == "usulan" {
+		return nil, nil
+	}
+	usulan := PenandatanganDipakai{}
+	if p := usulanPenandatangan(daftar, sections, data); p != nil {
+		usulan = PenandatanganDipakai{ID: p.ID.String(), Nama: p.Name, Jabatan: p.Position, Sumber: "usulan"}
+	}
+	if sesudah.Sumber == "daftar" && sesudah.ID == usulan.ID {
+		return nil, nil
+	}
+	return &PergantianPenandatangan{Usulan: usulan.String(), Pilihan: sesudah.String()}, nil
+}
+
+// pihakPertama: data Pihak Pertama untuk dokumen (partyOneSnapshot), dengan
+// penandatangan pilihan approver atau usulan dari Daftar Penandatangan.
+func (s *agreementDocumentService) pihakPertama(sections []AgreementSectionDefinition, data map[string]interface{}) (map[string]interface{}, PenandatanganDipakai, error) {
+	master, e := s.repo.GetActiveMaster()
+	if e != nil {
+		return nil, PenandatanganDipakai{}, errors.New("Master Pihak Pertama belum tersedia")
+	}
+	daftar, e := s.repo.ListSignatories()
+	if e != nil {
+		return nil, PenandatanganDipakai{}, e
+	}
+	p, e := penandatanganDipakai(daftar, sections, data)
+	return partyOneSnapshot(master, data, p), p, e
+}
+
+// usulanUntuk: usulan penandatangan untuk halaman detail approver; nil kalau
+// definisi isian atau Daftar tidak terbaca.
+func (s *agreementDocumentService) usulanUntuk(d *entity.AgreementDocument) *entity.UsulanPenandatangan {
+	sections, e := s.sectionsFor(d)
+	if e != nil {
+		return nil
+	}
+	data, e := decodeForm(d.FormData)
+	if e != nil {
+		return nil
+	}
+	daftar, e := s.repo.ListSignatories()
+	if e != nil {
+		return nil
+	}
+	u := &entity.UsulanPenandatangan{Value: nilaiUtama(sections, data)}
+	if p := pilihPenandatangan(daftar, u.Value); p != nil {
+		u.ID, u.Name, u.Position = &p.ID, p.Name, p.Position
+	}
+	return u
+}
+
+// usulanPenandatangan: penandatangan menurut nilai utama pengajuan (P2: dihitung
+// setiap kali dibaca, jadi mengikuti Daftar terbaru sampai disetujui).
+func usulanPenandatangan(daftar []entity.AgreementSignatory, sections []AgreementSectionDefinition, data map[string]interface{}) *entity.AgreementSignatory {
+	return pilihPenandatangan(daftar, nilaiUtama(sections, data))
+}
+
+// penandatanganDipakai: pilihan approver dari Daftar, lalu Lainnya, lalu usulan
+// (P3). Pilihan yang sudah tidak aktif ditolak, supaya dokumen tidak diam-diam
+// ditandatangani orang lain.
+func penandatanganDipakai(daftar []entity.AgreementSignatory, sections []AgreementSectionDefinition, data map[string]interface{}) (PenandatanganDipakai, error) {
+	if id := strings.TrimSpace(valueString(data[isianPenandatanganID])); id != "" {
+		for _, p := range daftar {
+			if p.ID.String() == id && p.IsActive {
+				return PenandatanganDipakai{ID: id, Nama: p.Name, Jabatan: p.Position, Sumber: "daftar"}, nil
+			}
+		}
+		return PenandatanganDipakai{}, ErrPenandatanganTidakAktif
+	}
+	if nama := strings.TrimSpace(valueString(data[isianPejabat])); nama != "" {
+		return PenandatanganDipakai{Nama: nama, Jabatan: strings.TrimSpace(valueString(data[isianJabatan])), Sumber: "lainnya"}, nil
+	}
+	if p := usulanPenandatangan(daftar, sections, data); p != nil {
+		return PenandatanganDipakai{ID: p.ID.String(), Nama: p.Name, Jabatan: p.Position, Sumber: "usulan"}, nil
+	}
+	return PenandatanganDipakai{}, nil
+}
+
 // nilaiUtama: isian field bertanda nilai utama (nilai kontrak, keputusan P1), atau
 // nil kalau jenis dokumennya tidak punya field itu atau isiannya kosong.
 func nilaiUtama(sections []AgreementSectionDefinition, data map[string]interface{}) *int64 {

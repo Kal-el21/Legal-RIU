@@ -1,7 +1,10 @@
 package router
 
 import (
+	"archive/zip"
+	"bytes"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -172,6 +175,205 @@ func TestKelolaPenandatangan(t *testing.T) {
 	if catatan.OldValue != "Budi, Jabatan Budi, sampai Rp 500.000.000" || catatan.NewValue != "Budi, Jabatan Budi, sampai Rp 500.000.000, default" {
 		t.Errorf("audit log perubahan Budi: %+v", catatan)
 	}
+}
+
+// isiDokumenDOCX: teks word/document.xml dari DOCX.
+func isiDokumenDOCX(t *testing.T, docx []byte) string {
+	t.Helper()
+	r, err := zip.NewReader(bytes.NewReader(docx), int64(len(docx)))
+	if err != nil {
+		t.Fatalf("bukan DOCX: %v", err)
+	}
+	for _, f := range r.File {
+		if f.Name == "word/document.xml" {
+			rc, _ := f.Open()
+			b, _ := io.ReadAll(rc)
+			rc.Close()
+			return string(b)
+		}
+	}
+	t.Fatal("word/document.xml tidak ada")
+	return ""
+}
+
+// Penandatangan Pihak Pertama di persetujuan (PR 11): usulan dihitung saat dibaca
+// dari nilai kontrak dan mengikuti Daftar terbaru (P2); approver menggantinya dari
+// Daftar atau Lainnya (P3), dan penggantian tercatat di audit log; tanpa usulan dan
+// tanpa pilihan, persetujuan ditolak. Dokumen final membekukan penandatangannya.
+func TestPenandatanganPersetujuan(t *testing.T) {
+	butuhMinIO(t)
+	admin := masukPeran(t, entity.RoleAdmin)
+	legal := masukPeran(t, entity.RoleLegal)
+	user := masukPeran(t, entity.RoleUser)
+	eksekusi(t, "DELETE FROM agreement_signatories")
+	t.Cleanup(func() {
+		dbTes.Exec("DELETE FROM agreement_signatories")
+		seed.SeedAgreementSignatories(dbTes)
+	})
+	rp := func(n int64) *int64 { return &n }
+	simpan := func(metode, alamat, nama, jabatan string, maks *int64, aktif bool) penandatangan {
+		t.Helper()
+		w := panggil(t, admin, metode, alamat, map[string]any{"name": nama, "position": jabatan, "max_value": maks, "is_active": aktif})
+		if w.Code != http.StatusCreated && w.Code != http.StatusOK {
+			t.Fatalf("menyimpan %s: %d %s", nama, w.Code, w.Body)
+		}
+		var p penandatangan
+		isiData(t, w, &p)
+		return p
+	}
+	simpan(http.MethodPost, alamatPenandatangan, "Budi", "Kepala Divisi", rp(500_000_000), true)
+	sari := simpan(http.MethodPost, alamatPenandatangan, "Sari", "Direktur", rp(5_000_000_000), true)
+	andi := simpan(http.MethodPost, alamatPenandatangan, "Andi", "Direktur Utama", nil, true)
+
+	ajukan := func(nilai int64) perjanjian {
+		t.Helper()
+		form := formPerjanjian()
+		form["nilai_kontrak"] = nilai
+		p := buatPerjanjian(t, user, form)
+		statusPerjanjian(t, legal, p.ID, "UNDER_REVIEW", "", http.StatusOK)
+		return p
+	}
+	type usulan struct {
+		SignatorySuggestion *struct {
+			ID       *string `json:"id"`
+			Name     string  `json:"name"`
+			Position string  `json:"position"`
+			Value    *int64  `json:"value"`
+		} `json:"signatory_suggestion"`
+	}
+	usulanUntuk := func(id string) string {
+		t.Helper()
+		w := panggil(t, legal, http.MethodGet, urlPerjanjian("/legal", "/", id), nil)
+		harapKode(t, w, http.StatusOK, "detail approver")
+		var u usulan
+		isiData(t, w, &u)
+		if u.SignatorySuggestion == nil {
+			return "tanpa data"
+		}
+		if u.SignatorySuggestion.Value == nil || *u.SignatorySuggestion.Value != 750_000_000 && *u.SignatorySuggestion.Value != 6_000_000_000 {
+			t.Errorf("nilai kontrak usulan %v", u.SignatorySuggestion.Value)
+		}
+		return u.SignatorySuggestion.Name
+	}
+	meta := func(id string, isi map[string]any, harap int) {
+		t.Helper()
+		harapKode(t, panggil(t, legal, http.MethodPatch, urlPerjanjian("/legal", "/", id, "/meta"), isi), harap, "data persetujuan")
+	}
+	auditDokumen := func(id string) int64 {
+		return hitungBaris(t, "SELECT COUNT(*) FROM audit_logs WHERE action = 'SIGNATORY_CHANGE' AND entity_id = ?", id)
+	}
+
+	p := ajukan(750_000_000)
+	if got := usulanUntuk(p.ID); got != "Sari" {
+		t.Errorf("usulan untuk Rp750 juta %q, harus Sari", got)
+	}
+	// P2: usulan mengikuti Daftar terbaru sampai disetujui.
+	simpan(http.MethodPut, alamatPenandatangan+"/"+sari.ID, "Sari", "Direktur", rp(700_000_000), true)
+	if got := usulanUntuk(p.ID); got != "Andi" {
+		t.Errorf("usulan sesudah batas Sari diturunkan %q, harus Andi", got)
+	}
+	simpan(http.MethodPut, alamatPenandatangan+"/"+sari.ID, "Sari", "Direktur", rp(5_000_000_000), true)
+
+	// P3: pilihan dari Daftar. Mengganti usulan tercatat sekali; memilih usulannya sendiri tidak.
+	meta(p.ID, map[string]any{"party_one_signatory_id": uuid.NewString()}, http.StatusBadRequest)
+	meta(p.ID, map[string]any{"party_one_signatory_id": sari.ID}, http.StatusOK)
+	if n := auditDokumen(p.ID); n != 0 {
+		t.Errorf("memilih usulan tercatat %d kali di audit log, harus tidak", n)
+	}
+	meta(p.ID, map[string]any{"party_one_signatory_id": andi.ID}, http.StatusOK)
+	meta(p.ID, map[string]any{"party_one_signatory_id": andi.ID}, http.StatusOK)
+	if n := auditDokumen(p.ID); n != 1 {
+		t.Errorf("penggantian usulan tercatat %d kali di audit log, harus 1", n)
+	}
+	var catatan struct{ OldValue, NewValue string }
+	dbTes.Raw("SELECT old_value, new_value FROM audit_logs WHERE action = 'SIGNATORY_CHANGE' AND entity_id = ?", p.ID).Scan(&catatan)
+	if catatan.OldValue != "Sari, Direktur (usulan)" || catatan.NewValue != "Andi, Direktur Utama (dari Daftar)" {
+		t.Errorf("audit log penggantian: %+v", catatan)
+	}
+
+	// Isian approver yang dikirim pengaju tidak tersimpan: saat membuat dibuang, saat
+	// revisi yang tersimpan tetap dipakai. Pengaju tidak bisa menentukan penandatangan.
+	isiApprover := func(id string) string {
+		var v string
+		dbTes.Raw("SELECT concat_ws('|', form_data->>'pihak_pertama_penandatangan_id', form_data->>'pihak_pertama_pejabat', form_data->>'tanggal_ttd') FROM agreement_documents WHERE id = ?", id).Scan(&v)
+		return v
+	}
+	susup := func(form map[string]any) map[string]any {
+		form["pihak_pertama_penandatangan_id"] = andi.ID
+		form["pihak_pertama_pejabat"] = "Penyusup"
+		form["tanggal_ttd"] = "2020-01-01"
+		return form
+	}
+	baru := buatPerjanjian(t, user, susup(formPerjanjian()))
+	if v := isiApprover(baru.ID); v != "" {
+		t.Errorf("isian approver dari pengaju tersimpan saat membuat: %q", v)
+	}
+	meta(baru.ID, map[string]any{"party_one_signatory_id": "", "party_one_signatory_name": "Rudi", "party_one_signatory_position": "Plt. Direktur", "signing_date": "2026-10-11"}, http.StatusOK)
+	harapKode(t, panggil(t, user, http.MethodPut, urlPerjanjian("", "/", baru.ID), map[string]any{"form_data": susup(formPerjanjian())}), http.StatusOK, "revisi pengaju")
+	if v := isiApprover(baru.ID); v != "Rudi|2026-10-11" {
+		t.Errorf("isian approver sesudah revisi pengaju %q, harus tetap Rudi|2026-10-11", v)
+	}
+	// Memilih dari Daftar membuang Lainnya, jadi mengosongkan pilihan kembali ke usulan,
+	// bukan ke nama Lainnya yang lama.
+	meta(baru.ID, map[string]any{"party_one_signatory_id": sari.ID}, http.StatusOK)
+	meta(baru.ID, map[string]any{"party_one_signatory_id": ""}, http.StatusOK)
+	if v := isiApprover(baru.ID); v != "2026-10-11" {
+		t.Errorf("isian approver sesudah pilihan dikosongkan %q, harus hanya tanggal", v)
+	}
+
+	// Lainnya: nama dan jabatan diketik approver.
+	lainnya := ajukan(750_000_000)
+	meta(lainnya.ID, map[string]any{"party_one_signatory_id": "", "party_one_signatory_name": "Rudi", "party_one_signatory_position": "Plt. Direktur"}, http.StatusOK)
+	if n := auditDokumen(lainnya.ID); n != 1 {
+		t.Errorf("penandatangan Lainnya tercatat %d kali di audit log, harus 1", n)
+	}
+
+	// Tanpa usulan (tidak ada yang tak terbatas) dan tanpa pilihan: ditolak sebelum dokumen dibentuk.
+	tanpa := ajukan(6_000_000_000)
+	simpan(http.MethodPut, alamatPenandatangan+"/"+andi.ID, "Andi", "Direktur Utama", nil, false)
+	if got := usulanUntuk(tanpa.ID); got != "" {
+		t.Errorf("usulan untuk Rp6 miliar tanpa baris tak terbatas %q, harus kosong", got)
+	}
+	meta(tanpa.ID, map[string]any{"signing_date": "2026-10-11"}, http.StatusOK)
+	w := panggil(t, legal, http.MethodPatch, urlPerjanjian("/legal", "/", tanpa.ID, "/status"), map[string]string{"status": "COMPLETED"})
+	harapKode(t, w, http.StatusBadRequest, "menyetujui tanpa penandatangan")
+	if !strings.Contains(w.Body.String(), "Penandatangan Pihak Pertama belum dipilih") {
+		t.Errorf("pesan persetujuan tanpa penandatangan: %s", w.Body)
+	}
+	// Pilihan yang dinonaktifkan sesudah dipilih juga ditolak, bukan diganti diam-diam.
+	meta(p.ID, map[string]any{"signing_date": "2026-10-11"}, http.StatusOK)
+	w = panggil(t, legal, http.MethodPatch, urlPerjanjian("/legal", "/", p.ID, "/status"), map[string]string{"status": "COMPLETED"})
+	harapKode(t, w, http.StatusBadRequest, "menyetujui dengan pilihan yang dinonaktifkan")
+	if !strings.Contains(w.Body.String(), "sudah tidak aktif") {
+		t.Errorf("pesan pilihan nonaktif: %s", w.Body)
+	}
+	simpan(http.MethodPut, alamatPenandatangan+"/"+andi.ID, "Andi", "Direktur Utama", nil, true)
+
+	t.Run("DokumenFinal", func(t *testing.T) {
+		butuhLibreOffice(t)
+		meta(lainnya.ID, map[string]any{"signing_date": "2026-10-11"}, http.StatusOK)
+		for _, c := range []struct{ id, nama string }{{p.ID, "Andi"}, {lainnya.ID, "Rudi"}} {
+			statusPerjanjian(t, legal, c.id, "COMPLETED", "", http.StatusOK)
+			var beku string
+			dbTes.Raw("SELECT party_one_snapshot->>'signatory_name' FROM agreement_documents WHERE id = ?", c.id).Scan(&beku)
+			if beku != c.nama {
+				t.Errorf("snapshot penandatangan %q, harus %q", beku, c.nama)
+			}
+			w := panggil(t, legal, http.MethodGet, urlPerjanjian("/legal", "/", c.id, "/docx"), nil)
+			harapKode(t, w, http.StatusOK, "DOCX final")
+			if !strings.Contains(isiDokumenDOCX(t, w.Body.Bytes()), c.nama) {
+				t.Errorf("DOCX final tanpa nama penandatangan %s", c.nama)
+			}
+		}
+		// Mengubah Daftar sesudah persetujuan tidak mengubah dokumen yang sudah disetujui.
+		simpan(http.MethodPut, alamatPenandatangan+"/"+andi.ID, "Andi Baru", "Direktur Utama", nil, true)
+		var beku string
+		dbTes.Raw("SELECT party_one_snapshot->>'signatory_name' FROM agreement_documents WHERE id = ?", p.ID).Scan(&beku)
+		w := panggil(t, legal, http.MethodGet, urlPerjanjian("/legal", "/", p.ID, "/docx"), nil)
+		if beku != "Andi" || strings.Contains(isiDokumenDOCX(t, w.Body.Bytes()), "Andi Baru") {
+			t.Errorf("dokumen final berubah sesudah Daftar diubah: snapshot %q", beku)
+		}
+	})
 }
 
 // nilaiUtamaDi: kode field bertanda primary_value di definisi isian (JSON).
