@@ -1,6 +1,6 @@
 import api from './api'
 import axios from 'axios'
-export interface AgreementField {name:string;label:string;type:string;required:boolean;options?:string[]}
+export interface AgreementField {name:string;label:string;type:string;required:boolean;options?:string[];fields?:AgreementField[];split_of?:string}
 export interface AgreementSchema {code:string;name:string;template_id:string;template_version:number;sections:{title:string;fields:AgreementField[]}[]}
 // Penanda untuk approver: pengajuan berjalan masih memakai versi template lama.
 export interface OldTemplate {version:number;active_version:number;active_note:string;activated_at?:string;activated_by:string}
@@ -26,10 +26,10 @@ async function fileError(reason: unknown, fallback: string): Promise<Error> {
 export const agreementService={
  types:()=>api.get('/agreement-document-types').then(r=>data<{code:string;name:string}[]>(r)),
  schema:(code='PKS')=>api.get(`/agreement-document-types/${code}/schema`).then(r=>data<{schema:AgreementSchema}>(r).schema),
- // Form revisi: dari versi template yang dikunci pengajuan, bukan versi aktif.
- schemaFor:(id:string)=>api.get(`/agreement-documents/${id}/schema`).then(r=>data<{schema:AgreementSchema}>(r).schema),
+ // Form revisi dan halaman detail: dari versi template yang dikunci pengajuan, bukan versi aktif.
+ schemaFor:(id:string,base='')=>api.get(`${base}/agreement-documents/${id}/schema`).then(r=>data<{schema:AgreementSchema}>(r).schema),
  // Pratinjau isian yang belum dikirim; tidak ada yang disimpan.
- previewDraft:async(payload:{document_type_code:string;template_id:string;form_data:Record<string,string>;attachment_names:string[];document_id?:string})=>{
+ previewDraft:async(payload:{document_type_code:string;template_id:string;form_data:Record<string,unknown>;attachment_names:string[];document_id?:string})=>{
     try {
       const response = await api.post<Blob>('/agreement-documents/preview-draft', payload, { responseType: 'blob' })
       return response.data

@@ -6,6 +6,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
+	"maps"
 	"regexp"
 	"strings"
 	"testing"
@@ -18,13 +19,13 @@ func TestPKSTemplateGeneration(t *testing.T) {
 	}
 	d, _ := r.Get("PKS")
 	values := map[string]string{}
-	for _, k := range []string{"NOMOR_PIHAK_PERTAMA", "NOMOR_PIHAK_KEDUA", "HARI_TTD", "TANGGAL_TTD", "BULAN_TTD", "TAHUN_TTD", "TANGGAL_TTD_LENGKAP", "TEMPAT_TTD", "PIHAK_PERTAMA_PEJABAT", "PIHAK_PERTAMA_JABATAN", "PIHAK_KEDUA_NAMA", "PIHAK_KEDUA_ALAMAT", "PIHAK_KEDUA_PEJABAT", "PIHAK_KEDUA_JABATAN", "PIHAK_KEDUA_BIDANG", "JENIS_PEKERJAAN", "SURAT_PENAWARAN_NOMOR", "SURAT_PENAWARAN_PERIHAL", "SURAT_PENAWARAN_TANGGAL", "SURAT_PENUNJUKAN_NOMOR", "SURAT_PENUNJUKAN_PERIHAL", "SURAT_PENUNJUKAN_TANGGAL", "RUANG_LINGKUP", "JANGKA_WAKTU_MULAI", "JANGKA_WAKTU_SELESAI", "NILAI_KONTRAK", "NILAI_KONTRAK_TERBILANG", "TERMIN_1_PERSEN", "TERMIN_1_PERSEN_TERBILANG", "TERMIN_1_NILAI", "TERMIN_1_NILAI_TERBILANG", "TERMIN_2_PERSEN", "TERMIN_2_PERSEN_TERBILANG", "TERMIN_2_NILAI", "TERMIN_2_NILAI_TERBILANG", "BANK", "NOMOR_REKENING", "ATAS_NAMA", "DAFTAR_LAMPIRAN"} {
+	for _, k := range []string{"NOMOR_PIHAK_PERTAMA", "NOMOR_PIHAK_KEDUA", "HARI_TTD", "TANGGAL_TTD", "BULAN_TTD", "TAHUN_TTD", "TANGGAL_TTD_LENGKAP", "TEMPAT_TTD", "PIHAK_PERTAMA_PEJABAT", "PIHAK_PERTAMA_JABATAN", "PIHAK_KEDUA_NAMA", "PIHAK_KEDUA_ALAMAT", "PIHAK_KEDUA_PEJABAT", "PIHAK_KEDUA_JABATAN", "PIHAK_KEDUA_BIDANG", "JENIS_PEKERJAAN", "SURAT_PENAWARAN_NOMOR", "SURAT_PENAWARAN_PERIHAL", "SURAT_PENAWARAN_TANGGAL", "SURAT_PENUNJUKAN_NOMOR", "SURAT_PENUNJUKAN_PERIHAL", "SURAT_PENUNJUKAN_TANGGAL", "JANGKA_WAKTU_MULAI", "JANGKA_WAKTU_SELESAI", "NILAI_KONTRAK", "NILAI_KONTRAK_TERBILANG", "BANK", "NOMOR_REKENING", "ATAS_NAMA", "DAFTAR_LAMPIRAN"} {
 		values[k] = "TEST"
 	}
 	for _, k := range []string{"PIHAK_PERTAMA_ALAMAT", "PIHAK_PERTAMA_TELEPON", "PIHAK_PERTAMA_EMAIL", "PIHAK_PERTAMA_PIC", "PIHAK_KEDUA_TELEPON", "PIHAK_KEDUA_EMAIL", "PIHAK_KEDUA_PIC"} {
 		values[k] = "TEST"
 	}
-	out, _, e := NewAgreementGenerator().Generate(d.Template, values, GenerateOptions{})
+	out, _, e := NewAgreementGenerator().Generate(d.Template, isiPKS(t, values, terminUji(), []interface{}{"TEST"}), GenerateOptions{})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -55,7 +56,7 @@ func TestPKSFieldPlacement(t *testing.T) {
 	}
 	definition, _ := registry.Get("PKS")
 	values := map[string]string{}
-	for _, key := range []string{"NOMOR_PIHAK_PERTAMA", "NOMOR_PIHAK_KEDUA", "HARI_TTD", "TANGGAL_TTD", "BULAN_TTD", "TAHUN_TTD", "TANGGAL_TTD_LENGKAP", "TEMPAT_TTD", "PIHAK_PERTAMA_PEJABAT", "PIHAK_PERTAMA_JABATAN", "PIHAK_KEDUA_NAMA", "PIHAK_KEDUA_ALAMAT", "PIHAK_KEDUA_PEJABAT", "PIHAK_KEDUA_JABATAN", "PIHAK_KEDUA_BIDANG", "JENIS_PEKERJAAN", "SURAT_PENAWARAN_NOMOR", "SURAT_PENAWARAN_PERIHAL", "SURAT_PENAWARAN_TANGGAL", "SURAT_PENUNJUKAN_NOMOR", "SURAT_PENUNJUKAN_PERIHAL", "SURAT_PENUNJUKAN_TANGGAL", "RUANG_LINGKUP", "JANGKA_WAKTU_MULAI", "JANGKA_WAKTU_SELESAI", "NILAI_KONTRAK", "NILAI_KONTRAK_TERBILANG", "TERMIN_1_PERSEN", "TERMIN_1_PERSEN_TERBILANG", "TERMIN_1_NILAI", "TERMIN_1_NILAI_TERBILANG", "TERMIN_2_PERSEN", "TERMIN_2_PERSEN_TERBILANG", "TERMIN_2_NILAI", "TERMIN_2_NILAI_TERBILANG", "BANK", "NOMOR_REKENING", "ATAS_NAMA", "DAFTAR_LAMPIRAN", "PIHAK_PERTAMA_ALAMAT", "PIHAK_PERTAMA_TELEPON", "PIHAK_PERTAMA_EMAIL", "PIHAK_PERTAMA_PIC", "PIHAK_KEDUA_TELEPON", "PIHAK_KEDUA_EMAIL", "PIHAK_KEDUA_PIC"} {
+	for _, key := range []string{"NOMOR_PIHAK_PERTAMA", "NOMOR_PIHAK_KEDUA", "HARI_TTD", "TANGGAL_TTD", "BULAN_TTD", "TAHUN_TTD", "TANGGAL_TTD_LENGKAP", "TEMPAT_TTD", "PIHAK_PERTAMA_PEJABAT", "PIHAK_PERTAMA_JABATAN", "PIHAK_KEDUA_NAMA", "PIHAK_KEDUA_ALAMAT", "PIHAK_KEDUA_PEJABAT", "PIHAK_KEDUA_JABATAN", "PIHAK_KEDUA_BIDANG", "JENIS_PEKERJAAN", "SURAT_PENAWARAN_NOMOR", "SURAT_PENAWARAN_PERIHAL", "SURAT_PENAWARAN_TANGGAL", "SURAT_PENUNJUKAN_NOMOR", "SURAT_PENUNJUKAN_PERIHAL", "SURAT_PENUNJUKAN_TANGGAL", "JANGKA_WAKTU_MULAI", "JANGKA_WAKTU_SELESAI", "NILAI_KONTRAK", "NILAI_KONTRAK_TERBILANG", "BANK", "NOMOR_REKENING", "ATAS_NAMA", "DAFTAR_LAMPIRAN", "PIHAK_PERTAMA_ALAMAT", "PIHAK_PERTAMA_TELEPON", "PIHAK_PERTAMA_EMAIL", "PIHAK_PERTAMA_PIC", "PIHAK_KEDUA_TELEPON", "PIHAK_KEDUA_EMAIL", "PIHAK_KEDUA_PIC"} {
 		values[key] = "TEST-" + key
 	}
 	values["NOMOR_PIHAK_KEDUA"] = "SECOND-32868382846921"
@@ -63,17 +64,9 @@ func TestPKSFieldPlacement(t *testing.T) {
 	values["SURAT_PENAWARAN_NOMOR"] = "OFFER-001"
 	values["SURAT_PENAWARAN_PERIHAL"] = "PENAWARAN IKAN"
 	values["SURAT_PENAWARAN_TANGGAL"] = "15 Juli 2026"
-	values["RUANG_LINGKUP"] = "a. Analisis kebutuhan\n- Implementasi sistem\n3. Pelatihan pengguna"
-	values["TERMIN_1_PERSEN"] = "50"
-	values["TERMIN_1_PERSEN_TERBILANG"] = "lima puluh"
-	values["TERMIN_1_NILAI"] = "Rp 10.000.000"
-	values["TERMIN_1_NILAI_TERBILANG"] = "sepuluh juta"
-	values["TERMIN_2_PERSEN"] = "50"
-	values["TERMIN_2_PERSEN_TERBILANG"] = "lima puluh"
-	values["TERMIN_2_NILAI"] = "Rp 10.000.000"
-	values["TERMIN_2_NILAI_TERBILANG"] = "sepuluh juta"
+	poin := []interface{}{"Analisis kebutuhan", "Implementasi sistem", "Pelatihan pengguna"}
 
-	out, _, err := NewAgreementGenerator().Generate(definition.Template, values, GenerateOptions{Draft: true})
+	out, _, err := NewAgreementGenerator().Generate(definition.Template, isiPKS(t, values, terminUji(), poin), GenerateOptions{Draft: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,8 +79,9 @@ func TestPKSFieldPlacement(t *testing.T) {
 
 	assertNextParagraph(t, texts, "NOMOR PIHAK KEDUA", "SECOND-32868382846921")
 	assertContains(t, texts, "Surat Penawaran No. OFFER-001 perihal PENAWARAN IKAN pada tanggal 15 Juli 2026")
-	assertContains(t, texts, "Termin pertama: Pembayaran sebesar 50% (lima puluh persen) dari Nilai Kontrak atau sebesar Rp 10.000.000 (sepuluh juta rupiah)")
-	assertContains(t, texts, "Termin kedua: Pembayaran sebesar 50% (lima puluh persen) dari Nilai Kontrak atau sebesar Rp 10.000.000 (sepuluh juta rupiah)")
+	assertContains(t, texts, "dibagi menjadi 2 (dua) termin, yaitu:")
+	assertContains(t, texts, "Termin pertama: Pembayaran sebesar 50% (lima puluh persen) dari Nilai Kontrak atau sebesar Rp 10.000.000 (sepuluh juta rupiah) sudah termasuk pajak yang berlaku, yang akan dibayarkan setelah Perjanjian ini ditandatangani oleh PARA PIHAK.")
+	assertContains(t, texts, "Termin kedua: Pembayaran sebesar 50% (lima puluh persen) dari Nilai Kontrak atau sebesar Rp 10.000.000 (sepuluh juta rupiah) sudah termasuk pajak yang berlaku, yang akan dibayarkan setelah serah terima.")
 	assertKeyValueTabs(t, paragraphs, texts, "Bank:TEST-BANK", 2880, 3060)
 	assertKeyValueTabs(t, paragraphs, texts, "Nomor Rekening:TEST-NOMOR_REKENING", 2880, 3060)
 	assertKeyValueTabs(t, paragraphs, texts, "Atas Nama:TEST-ATAS_NAMA", 2880, 3060)
@@ -97,6 +91,32 @@ func TestPKSFieldPlacement(t *testing.T) {
 		assertContains(t, texts, item)
 	}
 	assertContains(t, texts, "RUANG LINGKUP PEKERJAAN")
+}
+
+// terminUji: dua termin 50/50 dari nilai kontrak Rp 20.000.000.
+func terminUji() []interface{} {
+	return []interface{}{
+		map[string]interface{}{"persen": 50, "nilai": 10000000, "syarat": "setelah Perjanjian ini ditandatangani oleh PARA PIHAK"},
+		map[string]interface{}{"persen": 50, "nilai": 10000000, "syarat": "setelah serah terima"},
+	}
+}
+
+// isiPKS melengkapi nilai uji template PKS bawaan dengan termin dan ruang lingkup,
+// yang dicetak lewat paragraf berulang.
+func isiPKS(t *testing.T, values map[string]string, termin, poin []interface{}) IsianDokumen {
+	t.Helper()
+	isi := IsianDokumen{Nilai: values}
+	for _, s := range bagianPKS(t) {
+		for _, f := range s.Fields {
+			raw := map[string][]interface{}{"group": termin, "list": poin}[f.Type]
+			if raw == nil {
+				continue
+			}
+			maps.Copy(isi.Nilai, fieldPlaceholders(f, raw))
+			isi.Ulang = append(isi.Ulang, paragrafUlang(f, raw))
+		}
+	}
+	return isi
 }
 
 func TestIndonesianNumberParsing(t *testing.T) {
@@ -267,12 +287,20 @@ func TestIsianPanjangTerisiSemua(t *testing.T) {
 
 	values := sampleAgreementValues(definition.Schema.Sections)
 	alamat := strings.TrimSpace(strings.Repeat("Jl. Contoh Panjang Nomor 123 Blok A, Kawasan Industri, ", 11))
-	values["PIHAK_KEDUA_ALAMAT"] = alamat
+	values.Nilai["PIHAK_KEDUA_ALAMAT"] = alamat
 	poin := make([]string, 20)
 	for i := range poin {
 		poin[i] = fmt.Sprintf("Poin ruang lingkup nomor %d", i+1)
 	}
-	values["RUANG_LINGKUP"] = strings.Join(poin, "\n")
+	daftar := make([]interface{}, len(poin))
+	for i, p := range poin {
+		daftar[i] = p
+	}
+	for i, u := range values.Ulang {
+		if u.Token[0] == "RUANG_LINGKUP" {
+			values.Ulang[i] = paragrafUlang(AgreementFieldDefinition{Name: "ruang_lingkup", Type: "list"}, daftar)
+		}
+	}
 
 	out, _, err := NewAgreementGenerator().Generate(definition.Template, values, GenerateOptions{})
 	if err != nil {
@@ -391,13 +419,19 @@ func TestDraftBerwatermark(t *testing.T) {
 // template unggahan yang disusun tanpa header.
 func docxMinimal(t *testing.T, sectPr string) []byte {
 	t.Helper()
+	return docxDenganIsi(t, `<w:p><w:r><w:t>Isi perjanjian</w:t></w:r></w:p>`+sectPr)
+}
+
+// docxDenganIsi membentuk dokumen Word tanpa header dengan isi body apa adanya.
+func docxDenganIsi(t *testing.T, body string) []byte {
+	t.Helper()
 	var out bytes.Buffer
 	w := zip.NewWriter(&out)
 	for _, f := range [][2]string{
 		{"[Content_Types].xml", `<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>`},
 		{"_rels/.rels", `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`},
 		{"word/_rels/document.xml.rels", `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>`},
-		{"word/document.xml", `<?xml version="1.0" encoding="UTF-8"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><w:body><w:p><w:r><w:t>Isi perjanjian</w:t></w:r></w:p>` + sectPr + `</w:body></w:document>`},
+		{"word/document.xml", `<?xml version="1.0" encoding="UTF-8"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml"><w:body>` + body + `</w:body></w:document>`},
 	} {
 		dst, err := w.Create(f[0])
 		if err != nil {
@@ -423,7 +457,7 @@ func TestWatermarkTemplateTanpaHeader(t *testing.T) {
 	} {
 		t.Run(c.nama, func(t *testing.T) {
 			template := docxMinimal(t, c.sectPr)
-			out, _, err := NewAgreementGenerator().Generate(template, nil, GenerateOptions{Draft: true})
+			out, _, err := NewAgreementGenerator().Generate(template, IsianDokumen{}, GenerateOptions{Draft: true})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -444,7 +478,7 @@ func TestWatermarkTemplateTanpaHeader(t *testing.T) {
 				t.Errorf("rujukan header halaman pertama: ingin %v", c.pertama)
 			}
 
-			final, _, err := NewAgreementGenerator().Generate(template, nil, GenerateOptions{})
+			final, _, err := NewAgreementGenerator().Generate(template, IsianDokumen{}, GenerateOptions{})
 			if err != nil {
 				t.Fatal(err)
 			}

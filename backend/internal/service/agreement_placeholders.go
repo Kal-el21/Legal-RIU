@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	"maps"
 	"sort"
 	"strconv"
 	"strings"
@@ -80,10 +81,21 @@ func systemValues(d *entity.AgreementDocument, data, snap map[string]interface{}
 //	number, percent             KODE (33,5), KODE_TERBILANG
 //	date                        KODE (17 Agustus 2026), KODE_HARI, KODE_TERBILANG
 //	text, textarea, email, tel  KODE
+//	group                       KODE_JUMLAH (3 (tiga)); placeholder per baris di paragrafUlang
+//	list                        tidak ada; placeholder per poin di paragrafUlang
 //
 // Isian kosong menjadi "-" di semua turunannya.
 func fieldPlaceholders(f AgreementFieldDefinition, raw interface{}) map[string]string {
 	key := strings.ToUpper(f.Name)
+	switch f.Type {
+	case "list":
+		return map[string]string{}
+	case "group":
+		if baris, _ := barisIsian(raw); len(baris) > 0 {
+			return map[string]string{key + "_JUMLAH": jumlahTerbilang(len(baris))}
+		}
+		return map[string]string{key + "_JUMLAH": "-"}
+	}
 	v := strings.TrimSpace(valueString(raw))
 	var out map[string]string
 	switch f.Type {
@@ -110,16 +122,56 @@ func fieldPlaceholders(f AgreementFieldDefinition, raw interface{}) map[string]s
 	return out
 }
 
-func placeholderValues(d *entity.AgreementDocument, sections []AgreementSectionDefinition, data, snap map[string]interface{}) map[string]string {
-	values := systemValues(d, data, snap)
+// paragrafUlang membentuk paragraf berulang field daftar dan grup:
+//
+//	list   KODE, sekali per poin
+//	group  KODE_URUTAN (pertama, kedua, ...) dan placeholder sub-field KODE_SUB, sekali per baris
+func paragrafUlang(f AgreementFieldDefinition, raw interface{}) ParagrafUlang {
+	key := strings.ToUpper(f.Name)
+	baris, _ := barisIsian(raw)
+	if f.Type == "list" {
+		u := ParagrafUlang{Token: []string{key}}
+		for _, b := range baris {
+			if v := strings.TrimSpace(valueString(b)); v != "" {
+				u.Baris = append(u.Baris, map[string]string{key: v})
+			}
+		}
+		return u
+	}
+	u := ParagrafUlang{Token: []string{key + "_URUTAN"}}
+	for _, sub := range f.Fields {
+		for token := range fieldPlaceholders(subGrup(f, sub), nil) {
+			u.Token = append(u.Token, token)
+		}
+	}
+	for i, b := range baris {
+		isi, _ := b.(map[string]interface{})
+		nilai := map[string]string{key + "_URUTAN": urutanTerbilang(i + 1)}
+		for _, sub := range f.Fields {
+			maps.Copy(nilai, fieldPlaceholders(subGrup(f, sub), isi[sub.Name]))
+		}
+		u.Baris = append(u.Baris, nilai)
+	}
+	return u
+}
+
+// subGrup: sub-field dengan kode lengkapnya, mis. persen di grup termin menjadi termin_persen.
+func subGrup(f, sub AgreementFieldDefinition) AgreementFieldDefinition {
+	sub.Name = f.Name + "_" + sub.Name
+	return sub
+}
+
+func placeholderValues(d *entity.AgreementDocument, sections []AgreementSectionDefinition, data, snap map[string]interface{}) IsianDokumen {
+	isi := IsianDokumen{Nilai: systemValues(d, data, snap)}
 	for _, s := range sections {
 		for _, f := range s.Fields {
-			for k, v := range fieldPlaceholders(f, data[f.Name]) {
-				values[k] = v
+			maps.Copy(isi.Nilai, fieldPlaceholders(f, data[f.Name]))
+			if f.Type == "list" || f.Type == "group" {
+				isi.Ulang = append(isi.Ulang, paragrafUlang(f, data[f.Name]))
 			}
 		}
 	}
-	return values
+	return isi
 }
 
 // angka menulis bilangan dengan koma desimal, tanpa nol di belakang: 33,5.
@@ -147,8 +199,20 @@ func terbilangAngka(n float64) string {
 }
 
 // contohNilai: isian contoh per tipe untuk uji coba unggah dan pratinjau template.
-func contohNilai(f AgreementFieldDefinition) string {
+func contohNilai(f AgreementFieldDefinition) interface{} {
 	switch f.Type {
+	case "list":
+		return []interface{}{"[" + f.Label + " poin 1]", "[" + f.Label + " poin 2]"}
+	case "group":
+		baris := make([]interface{}, 2)
+		for i := range baris {
+			isi := map[string]interface{}{}
+			for _, sub := range f.Fields {
+				isi[sub.Name] = contohNilai(sub)
+			}
+			baris[i] = isi
+		}
+		return baris
 	case "money":
 		return "20000000"
 	case "number":
@@ -171,7 +235,7 @@ func contohNilai(f AgreementFieldDefinition) string {
 // sampleAgreementValues membentuk nilai contoh untuk seluruh token melalui jalur
 // yang sama dengan dokumen sungguhan, sehingga dry-run saat unggah menguji
 // generator apa adanya.
-func sampleAgreementValues(sections []AgreementSectionDefinition) map[string]string {
+func sampleAgreementValues(sections []AgreementSectionDefinition) IsianDokumen {
 	number := "001/CONTOH/RM.01.01/2026"
 	doc := &entity.AgreementDocument{
 		TicketNumber:    "PK-CONTOH-0001",
@@ -185,6 +249,12 @@ func sampleAgreementValues(sections []AgreementSectionDefinition) map[string]str
 	for _, s := range sections {
 		for _, f := range s.Fields {
 			data[f.Name] = contohNilai(f)
+		}
+	}
+	// Contoh termin dibagi dari contoh nilai kontrak, jadi angkanya masuk akal.
+	for _, s := range sections {
+		for _, f := range s.Fields {
+			_ = bagiNilaiGrup(f, data)
 		}
 	}
 	snap := map[string]interface{}{
@@ -209,23 +279,48 @@ func PlaceholderCatalog(sections []AgreementSectionDefinition) []dto.Placeholder
 	}
 	for _, s := range sections {
 		for _, f := range s.Fields {
-			key := strings.ToUpper(f.Name)
-			for token := range fieldPlaceholders(f, contohNilai(f)) {
-				desc := f.Label
-				switch strings.TrimPrefix(token, key) {
-				case "_TERBILANG":
-					desc += " dalam huruf"
-				case "_HARI":
-					desc += " (nama hari)"
-				}
+			for token, desc := range tokenField(f) {
 				out = append(out, dto.PlaceholderReference{Token: "{{" + token + "}}", Group: s.Title, Description: desc})
 			}
-			if f.Name == scopeField {
+			if f.Name == scopeField && f.Type != "list" {
 				out = append(out, dto.PlaceholderReference{Token: scopeListPlaceholder, Group: s.Title, Description: f.Label + " sebagai daftar berhuruf a/b/c. Paragrafnya wajib diformat sebagai numbered list Word"})
 			}
 		}
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Token < out[j].Token })
+	return out
+}
+
+// tokenField: semua placeholder satu field, termasuk turunan dan placeholder per
+// baris, beserta keterangannya untuk katalog.
+func tokenField(f AgreementFieldDefinition) map[string]string {
+	out := map[string]string{}
+	turunan := func(g AgreementFieldDefinition, label string) {
+		key := strings.ToUpper(g.Name)
+		for token := range fieldPlaceholders(g, contohNilai(g)) {
+			desc := label
+			switch strings.TrimPrefix(token, key) {
+			case "_TERBILANG":
+				desc += " dalam huruf"
+			case "_HARI":
+				desc += " (nama hari)"
+			}
+			out[token] = desc
+		}
+	}
+	key := strings.ToUpper(f.Name)
+	switch f.Type {
+	case "list":
+		out[key] = f.Label + ", satu paragraf per poin. Paragrafnya wajib diformat sebagai numbered list Word"
+	case "group":
+		out[key+"_JUMLAH"] = "Jumlah baris " + f.Label + ", mis. 3 (tiga)"
+		out[key+"_URUTAN"] = "Urutan baris " + f.Label + ": pertama, kedua, dst. Semua placeholder per baris grup ini ditulis di satu paragraf, yang diulang sekali per baris"
+		for _, sub := range f.Fields {
+			turunan(subGrup(f, sub), f.Label+": "+sub.Label)
+		}
+	default:
+		turunan(f, f.Label)
+	}
 	return out
 }
 

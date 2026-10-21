@@ -76,12 +76,42 @@ Isian sudah diformat sistem. Jangan menambahkan format sendiri di sekitar placeh
 | Bagian tanggal tanda tangan | `Senin`, `17`, `Agustus`, `2026` | `HARI_TTD`, `TANGGAL_TTD`, `BULAN_TTD`, `TAHUN_TTD` |
 | Data Pihak Pertama | Alamat, telepon, email, PIC, pejabat | Diambil dari menu Pihak Pertama, bukan diketik di template |
 
-## 3. Ruang lingkup pekerjaan
+## 3. Daftar poin dan grup berulang
 
-- Tulis `{{RUANG_LINGKUP_LIST}}` di **paragraf sendiri**, dan format paragraf itu sebagai **numbered list** Word
-  (Home → Numbering). Tanpa format itu, unggahan ditolak.
-- Sistem menggandakan paragraf itu sekali per poin isian, sehingga penomorannya (a, b, c) mengikuti list Word.
-- Kalau ruang lingkup ingin ditampilkan sebagai satu blok teks biasa, pakai `{{RUANG_LINGKUP}}`.
+Dua jenis isian dicetak dengan **mengulang satu paragraf** dari template. Jenisnya dipilih di Isian Form.
+
+**Daftar poin** (mis. ruang lingkup pekerjaan; pengaju mengisi satu kotak per poin):
+
+- Tulis `{{KODE}}` (mis. `{{RUANG_LINGKUP}}`) di **paragraf sendiri**, dan format paragraf itu sebagai **numbered
+  list** Word (Home → Numbering). Tanpa format itu, unggahan ditolak.
+- Sistem menggandakan paragraf itu sekali per poin, sehingga penomorannya (a, b, c) mengikuti list Word.
+
+**Grup berulang** (mis. termin pembayaran; pengaju menambah baris sesuai kebutuhan):
+
+- Grup berisi **sub-field**. Placeholder per baris adalah kode grup dan kode sub-field, mis. grup `TERMIN` dengan
+  sub-field `PERSEN` menjadi `{{TERMIN_PERSEN}}`, beserta turunannya (`{{TERMIN_PERSEN_TERBILANG}}`).
+- `{{KODE_URUTAN}}` menjadi *pertama*, *kedua*, *ketiga*, dst. `{{KODE_JUMLAH}}` menjadi jumlah baris, mis.
+  *3 (tiga)*, dan boleh ditulis di luar paragraf berulang.
+- Tulis **semua placeholder per baris satu grup di satu paragraf**; paragraf itu diulang sekali per baris. Kalau
+  tersebar di beberapa paragraf, unggahan ditolak, karena hasilnya tidak berselang-seling per baris.
+- Grup bisa ditandai **membagi nilai** sebuah isian uang (mis. Nilai Kontrak). Grup itu harus punya tepat satu
+  sub-field Persen dan satu sub-field Uang. Pengaju mengisi persen setiap baris kecuali yang terakhir; persen baris
+  terakhir (sisa) dan nilai rupiah setiap baris dihitung sistem, dan jumlahnya selalu sama dengan nilai yang dibagi.
+
+Contoh dari template PKS bawaan:
+
+```
+Pembayaran dari PIHAK PERTAMA kepada PIHAK KEDUA dibagi menjadi {{TERMIN_JUMLAH}} termin, yaitu:
+Termin {{TERMIN_URUTAN}}: Pembayaran sebesar {{TERMIN_PERSEN}}% ({{TERMIN_PERSEN_TERBILANG}} persen) dari Nilai
+Kontrak atau sebesar {{TERMIN_NILAI}} ({{TERMIN_NILAI_TERBILANG}} rupiah) sudah termasuk pajak yang berlaku, yang
+akan dibayarkan {{TERMIN_SYARAT}}.
+```
+
+Isian **Teks singkat** boleh punya **saran isian** (satu per baris di Isian Form), mis. syarat pembayaran yang
+biasa dipakai. Pengaju bisa memilih saran atau mengetik sendiri.
+
+Template PKS sebelum Oktober 2026 memakai `{{RUANG_LINGKUP_LIST}}` untuk ruang lingkup bertipe Teks panjang (satu
+poin per baris); versi lama itu tetap jalan, tetapi template baru sebaiknya memakai Daftar poin.
 
 ## 4. Pindah ke halaman baru
 
@@ -125,6 +155,8 @@ kurung siku (mis. `[Nama Perusahaan]`), sehingga terlihat isian mana mengisi bag
 - [ ] Tidak ada placeholder yang tercetak apa adanya (`{{...}}`).
 - [ ] Setiap BAGIAN mulai di halaman baru, tanpa ruang kosong besar atau halaman kosong.
 - [ ] Ruang lingkup tampil sebagai poin bernomor.
+- [ ] Paragraf termin (grup berulang) tampil sekali per baris contoh, dengan urutan *pertama*, *kedua*, dan jumlah
+  termin di kalimat pembukanya benar.
 - [ ] Nilai uang dan terbilang tidak ganda (mis. tidak ada "Rp Rp").
 - [ ] Rujukan pasal masih menunjuk pasal yang benar.
 - [ ] Data Pihak Pertama (alamat, pejabat) terisi dari menu Pihak Pertama.
@@ -136,7 +168,8 @@ kurung siku (mis. `[Nama Perusahaan]`), sehingga terlihat isian mana mengisi bag
 |---|---|---|
 | *placeholder tidak dikenal: {{...}}* | Ada placeholder yang tidak punya isian di jenis dokumen | Bandingkan ejaannya dengan **Placeholder untuk Word**; tempel ulang sebagai teks biasa, atau buat isiannya (**Jadikan isian**) |
 | *Catatan perubahan wajib diisi...* | Catatan Perubahan kosong | Tulis apa yang berubah dibanding versi sebelumnya |
-| *paragraf {{RUANG_LINGKUP_LIST}} harus diformat sebagai numbered list Word...* | Paragraf ruang lingkup bukan list bernomor | Pilih paragraf itu, klik Numbering di Word |
+| *paragraf {{RUANG_LINGKUP_LIST}} harus diformat sebagai numbered list Word...*, atau *paragraf {{KODE}} harus diformat sebagai numbered list Word...* | Paragraf ruang lingkup atau daftar poin bukan list bernomor | Pilih paragraf itu, klik Numbering di Word |
+| *placeholder per baris ... tersebar di N paragraf...* | Placeholder satu grup berulang (mis. termin) ditulis di beberapa paragraf | Satukan semua placeholder per baris grup itu di satu paragraf |
 | *uji coba pembentukan dokumen gagal: ...* | File tidak bisa diisi, mis. placeholder tersisa | Baca rincian setelah titik dua; periksa placeholder yang disebut |
 | *uji coba konversi PDF gagal: ...* | File tidak bisa diubah ke PDF | Buka dan simpan ulang file di Word (format `.docx`, bukan `.doc`), lalu unggah lagi |
 | *template ini memakai format lama yang tidak didukung lagi...* | Versi format lama dipratinjau atau diaktifkan | Pakai atau unggah versi yang lebih baru |

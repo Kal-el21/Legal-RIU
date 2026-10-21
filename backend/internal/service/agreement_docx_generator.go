@@ -44,6 +44,20 @@ type GenerateOptions struct {
 	Draft bool
 }
 
+// IsianDokumen: nilai placeholder dan paragraf berulang, dibentuk placeholderValues.
+type IsianDokumen struct {
+	Nilai map[string]string
+	Ulang []ParagrafUlang
+}
+
+// ParagrafUlang: setiap paragraf yang memuat salah satu Token diulang sekali per
+// Baris, dan token di tiap salinan diganti nilai barisnya. Tanpa baris, paragraf
+// tercetak sekali dengan "-".
+type ParagrafUlang struct {
+	Token []string
+	Baris []map[string]string
+}
+
 // watermarkDraft adalah watermark Word "DRAFT" dari template asli tim legal
 // (VML PowerPlusWaterMarkObject), yang terbukti dirender LibreOffice. Dua %d
 // membuat id bentuknya unik per header.
@@ -70,7 +84,7 @@ var (
 	firstHeaderRefRE   = regexp.MustCompile(`<w:headerReference\b[^>]*w:type="first"`)
 )
 
-func (g *AgreementGenerator) Generate(template []byte, values map[string]string, opt GenerateOptions) ([]byte, string, error) {
+func (g *AgreementGenerator) Generate(template []byte, isi IsianDokumen, opt GenerateOptions) ([]byte, string, error) {
 	if len(template) == 0 {
 		return nil, "", errors.New("template dokumen tidak ditemukan")
 	}
@@ -126,15 +140,17 @@ func (g *AgreementGenerator) Generate(template []byte, values map[string]string,
 		if strings.HasPrefix(f.Name, "word/") && strings.HasSuffix(f.Name, ".xml") {
 			text := string(data)
 			if f.Name == "word/document.xml" {
-				text = expandScopeParagraphs(text, values["RUANG_LINGKUP"])
+				text = expandScopeParagraphs(text, isi.Nilai["RUANG_LINGKUP"])
+				for _, u := range isi.Ulang {
+					text = ulangParagraf(text, u)
+				}
 			}
-			for key, val := range values {
-				for {
-					next := replaceAcrossWordRuns(text, "{{"+key+"}}", wordValue(val))
-					if next == text {
-						break
-					}
-					text = next
+			for key, val := range isi.Nilai {
+				// Dibatasi sebanyak kemunculannya, jadi isian yang memuat teks
+				// placeholder-nya sendiri tidak diganti berulang tanpa henti.
+				needle := "{{" + key + "}}"
+				for range strings.Count(paragraphText(text), needle) {
+					text = replaceAcrossWordRuns(text, needle, wordValue(val))
 				}
 			}
 			if opt.Draft && strings.HasPrefix(f.Name, "word/header") {
@@ -242,41 +258,76 @@ func paragraphText(paragraph string) string {
 	return b.String()
 }
 
-func transformParagraph(xmlText string, predicate func(string) bool, transform func(string) string) string {
-	for _, loc := range wordParagraphRE.FindAllStringIndex(xmlText, -1) {
-		paragraph := xmlText[loc[0]:loc[1]]
-		if !predicate(paragraphText(paragraph)) {
-			continue
-		}
-		updated := transform(paragraph)
-		if updated != paragraph {
-			return xmlText[:loc[0]] + updated + xmlText[loc[1]:]
+var (
+	paraIDRE   = regexp.MustCompile(`\s+w14:(?:paraId|textId)="[^"]*"`)
+	bookmarkRE = regexp.MustCompile(`<w:bookmark(?:Start|End)\b[^>]*/>`)
+)
+
+// paragrafBerisi: paragraf yang teksnya memuat salah satu token u.
+func paragrafBerisi(paragraph string, u ParagrafUlang) bool {
+	teks := paragraphText(paragraph)
+	for _, t := range u.Token {
+		if strings.Contains(teks, "{{"+t+"}}") {
+			return true
 		}
 	}
-	return xmlText
+	return false
 }
 
+// ulangParagraf mengulang setiap paragraf yang memuat token u sekali per baris.
+// Penggantian tiap token dibatasi sebanyak kemunculannya di paragraf asli, jadi
+// isian yang kebetulan berisi teks placeholder tidak diganti berulang tanpa henti.
+func ulangParagraf(xmlText string, u ParagrafUlang) string {
+	baris := u.Baris
+	if len(baris) == 0 {
+		kosong := map[string]string{}
+		for _, t := range u.Token {
+			kosong[t] = "-"
+		}
+		baris = []map[string]string{kosong}
+	}
+	var out strings.Builder
+	akhir := 0
+	for _, loc := range wordParagraphRE.FindAllStringIndex(xmlText, -1) {
+		paragraph := xmlText[loc[0]:loc[1]]
+		if !paragrafBerisi(paragraph, u) {
+			continue
+		}
+		teks := paragraphText(paragraph)
+		// Salinan tidak boleh berbagi id paragraf Word.
+		paragraph = paraIDRE.ReplaceAllString(paragraph, "")
+		out.WriteString(xmlText[akhir:loc[0]])
+		for i, b := range baris {
+			salinan := paragraph
+			if i > 0 {
+				// Id bookmark Word harus unik; bookmark tetap di salinan pertama.
+				salinan = bookmarkRE.ReplaceAllString(salinan, "")
+			}
+			for t, v := range b {
+				for range strings.Count(teks, "{{"+t+"}}") {
+					salinan = replaceAcrossWordRuns(salinan, "{{"+t+"}}", wordValue(v))
+				}
+			}
+			out.WriteString(salinan)
+		}
+		akhir = loc[1]
+	}
+	out.WriteString(xmlText[akhir:])
+	return out.String()
+}
+
+// expandScopeParagraphs: {{RUANG_LINGKUP_LIST}} versi template sebelum PR 10, satu
+// paragraf per baris isian ruang lingkup (textarea).
 func expandScopeParagraphs(xmlText, raw string) string {
-	items := make([]string, 0)
+	const token = "RUANG_LINGKUP_LIST"
+	u := ParagrafUlang{Token: []string{token}}
 	for _, line := range strings.Split(strings.ReplaceAll(raw, "\r\n", "\n"), "\n") {
 		line = strings.TrimSpace(scopePrefixRE.ReplaceAllString(line, ""))
 		if line != "" && line != "-" {
-			items = append(items, line)
+			u.Baris = append(u.Baris, map[string]string{token: line})
 		}
 	}
-	if len(items) == 0 {
-		items = append(items, "-")
-	}
-	return transformParagraph(xmlText, func(text string) bool {
-		return strings.Contains(text, "{{RUANG_LINGKUP_LIST}}")
-	}, func(paragraph string) string {
-		paragraph = regexp.MustCompile(`\s+w14:(?:paraId|textId)="[^"]*"`).ReplaceAllString(paragraph, "")
-		var out strings.Builder
-		for _, item := range items {
-			out.WriteString(replaceAcrossWordRuns(paragraph, "{{RUANG_LINGKUP_LIST}}", wordValue(item)))
-		}
-		return out.String()
-	})
+	return ulangParagraf(xmlText, u)
 }
 
 func replaceAcrossWordRuns(xmlText, needle, replacement string) string {
@@ -414,9 +465,30 @@ var wordTableRE = regexp.MustCompile(`(?s)<w:tbl>.*?</w:tbl>`)
 // kosong di dalam tabel (mis. tempat tanda tangan basah) disengaja dan tidak
 // dihitung.
 func paragrafKosongTerpanjang(docx []byte) (int, string, error) {
+	doc, e := isiDokumenXML(docx)
+	if e != nil {
+		return 0, "", e
+	}
+	run, longest, before := 0, 0, ""
+	for _, paragraph := range wordParagraphRE.FindAllString(wordTableRE.ReplaceAllString(doc, ""), -1) {
+		text := strings.TrimSpace(paragraphText(paragraph))
+		if text == "" {
+			run++
+			continue
+		}
+		if run > longest {
+			longest, before = run, text
+		}
+		run = 0
+	}
+	return longest, before, nil
+}
+
+// isiDokumenXML membaca word/document.xml.
+func isiDokumenXML(docx []byte) (string, error) {
 	r, e := zip.NewReader(bytes.NewReader(docx), int64(len(docx)))
 	if e != nil {
-		return 0, "", errors.New("file bukan DOCX yang valid")
+		return "", errors.New("file bukan DOCX yang valid")
 	}
 	for _, f := range r.File {
 		if f.Name != "word/document.xml" {
@@ -424,28 +496,47 @@ func paragrafKosongTerpanjang(docx []byte) (int, string, error) {
 		}
 		src, e := f.Open()
 		if e != nil {
-			return 0, "", e
+			return "", e
 		}
 		b, e := io.ReadAll(src)
 		src.Close()
-		if e != nil {
-			return 0, "", e
-		}
-		run, longest, before := 0, 0, ""
-		for _, paragraph := range wordParagraphRE.FindAllString(wordTableRE.ReplaceAllString(string(b), ""), -1) {
-			text := strings.TrimSpace(paragraphText(paragraph))
-			if text == "" {
-				run++
+		return string(b), e
+	}
+	return "", errors.New("isi dokumen (word/document.xml) tidak ditemukan")
+}
+
+// periksaParagrafUlang: paragraf field daftar harus numbered list Word supaya
+// poinnya bernomor, dan placeholder per baris satu grup harus berada di satu
+// paragraf. Paragraf itulah yang diulang; placeholder di paragraf lain akan
+// tercetak sebagai blok tersendiri, tidak berselang-seling per baris.
+func periksaParagrafUlang(docx []byte, sections []AgreementSectionDefinition) error {
+	doc, e := isiDokumenXML(docx)
+	if e != nil {
+		return e
+	}
+	paragraphs := wordParagraphRE.FindAllString(doc, -1)
+	for _, s := range sections {
+		for _, f := range s.Fields {
+			if f.Type != "list" && f.Type != "group" {
 				continue
 			}
-			if run > longest {
-				longest, before = run, text
+			u := paragrafUlang(f, nil)
+			kena := 0
+			for _, p := range paragraphs {
+				if !paragrafBerisi(p, u) {
+					continue
+				}
+				kena++
+				if f.Type == "list" && !strings.Contains(p, "<w:numPr>") {
+					return fmt.Errorf("paragraf {{%s}} harus diformat sebagai numbered list Word agar poin %s bernomor", u.Token[0], f.Label)
+				}
 			}
-			run = 0
+			if f.Type == "group" && kena > 1 {
+				return fmt.Errorf("placeholder per baris %s tersebar di %d paragraf; tulis semuanya dalam satu paragraf, yang diulang sekali per baris", f.Label, kena)
+			}
 		}
-		return longest, before, nil
 	}
-	return 0, "", errors.New("isi dokumen (word/document.xml) tidak ditemukan")
+	return nil
 }
 
 func scopeParagraphIsNumbered(xmlText string) bool {

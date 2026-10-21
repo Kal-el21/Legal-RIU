@@ -19,8 +19,12 @@ type AgreementFieldDefinition struct {
 	Label    string `json:"label"`
 	Type     string `json:"type"`
 	Required bool   `json:"required"`
-	// Options: pilihan untuk tipe select.
+	// Options: pilihan untuk tipe select; saran isian untuk tipe text.
 	Options []string `json:"options,omitempty"`
+	// Fields: sub-field tipe group, diisi sekali per baris.
+	Fields []AgreementFieldDefinition `json:"fields,omitempty"`
+	// SplitOf: kode field uang yang dibagi ke baris grup menurut persennya (termin).
+	SplitOf string `json:"split_of,omitempty"`
 }
 type AgreementSectionDefinition struct {
 	Title  string                     `json:"title"`
@@ -87,22 +91,31 @@ func templateSections(tpl *entity.AgreementTemplate) ([]AgreementSectionDefiniti
 	return sections, nil
 }
 
+// validateAgreementForm memeriksa isian terhadap definisi field. Isian daftar dan
+// grup sekaligus dirapikan di data: poin kosong dibuang, dan grup yang membagi
+// nilai dihitung ulang (bagiNilaiGrup), jadi persen terakhir dan nilai rupiah dari
+// browser tidak dipercaya begitu saja.
 func validateAgreementForm(sections []AgreementSectionDefinition, data map[string]interface{}) error {
 	ada := map[string]bool{}
 	for _, s := range sections {
 		for _, f := range s.Fields {
 			ada[f.Name] = true
-			v := strings.TrimSpace(valueString(data[f.Name]))
-			if f.Required && v == "" {
-				return errors.New(f.Label + " wajib diisi")
+			var e error
+			switch f.Type {
+			case "list":
+				e = periksaDaftar(f, data)
+			case "group":
+				e = periksaGrup(f, data)
+			default:
+				e = periksaIsian(f, f.Label, data[f.Name])
 			}
-			if f.Type == "select" && v != "" && !slices.Contains(f.Options, v) {
-				return errors.New(f.Label + " harus salah satu pilihan yang tersedia")
+			if e != nil {
+				return e
 			}
 		}
 	}
 	// Aturan di bawah terikat pada field tertentu, jadi hanya berlaku untuk jenis
-	// yang punya field itu (PKS). Aturan termin diganti aturan grup di PR 10.
+	// yang punya field itu: versi PKS sebelum PR 10, dengan termin 1 dan 2 (D1).
 	if ada["jangka_waktu_mulai"] && ada["jangka_waktu_selesai"] {
 		start, end := valueString(data["jangka_waktu_mulai"]), valueString(data["jangka_waktu_selesai"])
 		if start != "" && end != "" && end < start {
@@ -123,6 +136,111 @@ func validateAgreementForm(sections []AgreementSectionDefinition, data map[strin
 	}
 	return nil
 }
+
+func periksaIsian(f AgreementFieldDefinition, label string, raw interface{}) error {
+	v := strings.TrimSpace(valueString(raw))
+	if f.Required && v == "" {
+		return errors.New(label + " wajib diisi")
+	}
+	if f.Type == "select" && v != "" && !slices.Contains(f.Options, v) {
+		return errors.New(label + " harus salah satu pilihan yang tersedia")
+	}
+	return nil
+}
+
+// barisIsian membaca isian daftar atau grup (array JSON); isian kosong menjadi
+// daftar kosong.
+func barisIsian(raw interface{}) ([]interface{}, bool) {
+	if raw == nil {
+		return nil, true
+	}
+	v, ok := raw.([]interface{})
+	return v, ok
+}
+
+func periksaDaftar(f AgreementFieldDefinition, data map[string]interface{}) error {
+	baris, ok := barisIsian(data[f.Name])
+	if !ok {
+		return errors.New(f.Label + " harus berupa daftar poin")
+	}
+	poin := []interface{}{}
+	for _, b := range baris {
+		if v := strings.TrimSpace(valueString(b)); v != "" {
+			poin = append(poin, v)
+		}
+	}
+	if f.Required && len(poin) == 0 {
+		return errors.New(f.Label + " wajib diisi minimal satu poin")
+	}
+	if _, ada := data[f.Name]; ada {
+		data[f.Name] = poin
+	}
+	return nil
+}
+
+func periksaGrup(f AgreementFieldDefinition, data map[string]interface{}) error {
+	baris, ok := barisIsian(data[f.Name])
+	if !ok {
+		return errors.New(f.Label + " tidak valid")
+	}
+	for i, b := range baris {
+		if _, ok := b.(map[string]interface{}); !ok {
+			return fmt.Errorf("%s baris %d tidak valid", f.Label, i+1)
+		}
+	}
+	if f.Required && len(baris) == 0 {
+		return errors.New(f.Label + " wajib diisi minimal satu baris")
+	}
+	if e := bagiNilaiGrup(f, data); e != nil {
+		return e
+	}
+	for i, b := range baris {
+		for _, sub := range f.Fields {
+			if e := periksaIsian(sub, fmt.Sprintf("%s %d: %s", f.Label, i+1, sub.Label), b.(map[string]interface{})[sub.Name]); e != nil {
+				return e
+			}
+		}
+	}
+	return nil
+}
+
+// subBagi: kode sub-field persen dan sub-field uang pada grup yang membagi nilai.
+func subBagi(f AgreementFieldDefinition) (persen, nilai string) {
+	for _, sub := range f.Fields {
+		switch {
+		case sub.Type == "percent" && persen == "":
+			persen = sub.Name
+		case sub.Type == "money" && nilai == "":
+			nilai = sub.Name
+		}
+	}
+	return persen, nilai
+}
+
+// bagiNilaiGrup mengisi ulang persen dan nilai rupiah setiap baris grup yang
+// membagi nilai, dengan bagiTermin (keputusan K5 dan D5). Baris grup harus sudah
+// diperiksa berbentuk objek.
+func bagiNilaiGrup(f AgreementFieldDefinition, data map[string]interface{}) error {
+	if f.SplitOf == "" {
+		return nil
+	}
+	baris, _ := barisIsian(data[f.Name])
+	persen, nilai := subBagi(f)
+	p := make([]float64, len(baris))
+	for i, b := range baris {
+		p[i] = valueFloat(b.(map[string]interface{})[persen])
+	}
+	hasil, e := bagiTermin(valueInt64(data[f.SplitOf]), p)
+	if e != nil {
+		return fmt.Errorf("%s: %w", f.Label, e)
+	}
+	for i, b := range baris {
+		b.(map[string]interface{})[persen] = hasil[i].Persen
+		b.(map[string]interface{})[nilai] = hasil[i].Nilai
+	}
+	return nil
+}
+
 func valueString(v interface{}) string {
 	if v == nil {
 		return ""

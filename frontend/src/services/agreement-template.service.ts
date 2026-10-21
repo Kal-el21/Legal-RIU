@@ -7,7 +7,12 @@ export interface AgreementFieldDef {
   label: string
   type: string
   required: boolean
+  // Pilihan tipe select, atau saran isian tipe text.
   options?: string[]
+  // Sub-field tipe group (mis. termin), diisi sekali per baris.
+  fields?: AgreementFieldDef[]
+  // Kode field uang yang dibagi ke baris grup menurut persennya.
+  split_of?: string
 }
 
 export interface AgreementSectionDef {
@@ -30,6 +35,8 @@ export interface AgreementTemplate {
   effective_date?: string
   activated_at?: string
   created_at?: string
+  // Kosong untuk template bawaan aplikasi (dipasang sistem).
+  uploaded_by?: string
   uploader?: { full_name?: string }
   running_documents: number
 }

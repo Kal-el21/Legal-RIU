@@ -34,6 +34,27 @@ describe('pindahkanIsian', () => {
     expect(hasil.baru).toEqual(['nilai'])
   })
 
+  it('memindahkan daftar dan grup; draf ruang lingkup teks lama menjadi isian baru', () => {
+    const termin = (sub: string[]) => ({ name: 'termin', label: 'Termin', type: 'group', required: true, fields: sub.map((s) => teks(s)) })
+    const v1: SectionDef[] = [{ title: 'Pekerjaan', fields: [{ name: 'ruang_lingkup', label: 'Ruang Lingkup', type: 'textarea', required: true }] }]
+    const v2: SectionDef[] = [{ title: 'Pekerjaan', fields: [{ name: 'ruang_lingkup', label: 'Ruang Lingkup', type: 'list', required: true }, termin(['persen', 'syarat'])] }]
+    const pindah = pindahkanIsian({ ruang_lingkup: 'a\nb' }, v1, v2)
+    expect(pindah.isian).toEqual({})
+    expect(pindah.baru).toEqual(['ruang_lingkup', 'termin'])
+
+    const isi = { ruang_lingkup: ['a', 'b'], termin: [{ persen: '30', syarat: 'x' }] }
+    expect(pindahkanIsian(isi, v2, v2)).toEqual({ isian: isi, baru: [], dihapus: [] })
+    // Isian yang bentuknya tidak cocok dengan jenis field-nya (draf teks untuk field daftar) dibuang.
+    expect(pindahkanIsian({ ruang_lingkup: 'a', termin: ['x'] }, v2, v2)).toEqual({ isian: {}, baru: ['ruang_lingkup', 'termin'], dihapus: [] })
+    // Sub-field grup berubah: baris lama bisa tidak cocok, jadi isiannya dibuang.
+    const v3: SectionDef[] = [{ title: 'Pekerjaan', fields: [v2[0].fields[0], termin(['persen', 'nilai', 'syarat'])] }]
+    expect(pindahkanIsian(isi, v2, v3)).toEqual({ isian: { ruang_lingkup: ['a', 'b'] }, baru: ['termin'], dihapus: [] })
+    // Daftar terisi yang dihapus disebut; daftar berisi poin kosong tidak.
+    const v4: SectionDef[] = [{ title: 'Pekerjaan', fields: [] }]
+    expect(pindahkanIsian(isi, v2, v4).dihapus).toEqual(['Ruang Lingkup', 'Termin'])
+    expect(pindahkanIsian({ ruang_lingkup: [' '], termin: [{ syarat: '' }] }, v2, v4).dihapus).toEqual([])
+  })
+
   it('membuang pilihan yang tidak ada lagi di daftar pilihan', () => {
     const pilih = (options: string[]): SectionDef[] => [{ title: 'Mitra', fields: [{ name: 'jenis', label: 'Jenis', type: 'select', required: true, options }] }]
     expect(pindahkanIsian({ jenis: 'Koperasi' }, pilih(['Koperasi', 'PT']), pilih(['PT'])).baru).toEqual(['jenis'])

@@ -10,7 +10,7 @@ func TestSupportedPlaceholderTokens(t *testing.T) {
 	for _, token := range SupportedPlaceholderTokens(bagianPKS(t)) {
 		tokens[token] = true
 	}
-	for _, want := range []string{"{{NOMOR_PIHAK_PERTAMA}}", "{{NILAI_KONTRAK_TERBILANG}}", "{{DAFTAR_LAMPIRAN}}", scopeListPlaceholder} {
+	for _, want := range []string{"{{NOMOR_PIHAK_PERTAMA}}", "{{NILAI_KONTRAK_TERBILANG}}", "{{DAFTAR_LAMPIRAN}}", "{{RUANG_LINGKUP}}", "{{TERMIN_URUTAN}}"} {
 		if !tokens[want] {
 			t.Fatalf("token %s harus termasuk yang didukung", want)
 		}
@@ -18,7 +18,7 @@ func TestSupportedPlaceholderTokens(t *testing.T) {
 }
 
 func TestValidateTemplatePlaceholders(t *testing.T) {
-	if err := validateTemplatePlaceholders([]string{"{{NILAI_KONTRAK}}", scopeListPlaceholder}, bagianPKS(t)); err != nil {
+	if err := validateTemplatePlaceholders([]string{"{{NILAI_KONTRAK}}", "{{TERMIN_NILAI_TERBILANG}}"}, bagianPKS(t)); err != nil {
 		t.Fatalf("token yang dikenal tidak boleh ditolak: %v", err)
 	}
 	err := validateTemplatePlaceholders([]string{"{{NILAI_KONTRAK}}", "{{DENDA_KETERLAMBATAN}}"}, bagianPKS(t))
