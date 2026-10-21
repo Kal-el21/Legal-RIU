@@ -23,6 +23,19 @@ type AgreementCompanyMaster struct {
 	IsActive                 bool   `gorm:"not null;default:true;index" json:"is_active"`
 }
 
+// AgreementSignatory adalah penandatangan Pihak Pertama untuk satu rentang nilai
+// kontrak (PR 11). MaxValue nil berarti tak terbatas. Batas bawah tidak disimpan:
+// diturunkan dari batas baris sebelumnya, jadi rentang tidak bisa tumpang tindih atau
+// berlubang. IsDefault dipakai jenis dokumen tanpa nilai utama.
+type AgreementSignatory struct {
+	Base
+	Name      string `gorm:"size:255;not null" json:"name"`
+	Position  string `gorm:"size:255;not null" json:"position"`
+	MaxValue  *int64 `json:"max_value"`
+	IsDefault bool   `gorm:"not null;default:false" json:"is_default"`
+	IsActive  bool   `gorm:"not null;default:true" json:"is_active"`
+}
+
 // AgreementType adalah jenis dokumen perjanjian (mis. PKS). Fields di sini adalah
 // field kerja yang sedang disusun Admin; pengajuan tidak membacanya. Saat versi
 // template dibuat, field ini disalin ke versi itu (AgreementTemplate.Fields), dan
@@ -95,9 +108,21 @@ type AgreementDocument struct {
 	// OldTemplate diisi untuk approver kalau pengajuan berjalan masih memakai versi
 	// template lama; tidak disimpan.
 	OldTemplate *TemplateLama `gorm:"-" json:"old_template,omitempty"`
+	// SignatorySuggestion: penandatangan Pihak Pertama usulan untuk approver, menurut
+	// nilai utama dan Daftar Penandatangan terbaru; dihitung saat dibaca (PR 11, P2).
+	SignatorySuggestion *UsulanPenandatangan `gorm:"-" json:"signatory_suggestion,omitempty"`
 }
 
 // TemplateLama: versi template pengajuan dibanding versi aktif jenisnya (PR 9 tahap 9.7).
+// UsulanPenandatangan: Value adalah nilai utama pengajuan (kosong untuk jenis tanpa
+// nilai utama). ID kosong kalau tidak ada penandatangan yang cocok.
+type UsulanPenandatangan struct {
+	ID       *uuid.UUID `json:"id"`
+	Name     string     `json:"name"`
+	Position string     `json:"position"`
+	Value    *int64     `json:"value"`
+}
+
 type TemplateLama struct {
 	Version       int        `json:"version"`
 	ActiveVersion int        `json:"active_version"`

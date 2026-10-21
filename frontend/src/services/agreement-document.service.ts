@@ -1,10 +1,11 @@
 import api from './api'
 import axios from 'axios'
+import type { Penandatangan, UsulanPenandatangan } from '@/lib/penandatangan'
 export interface AgreementField {name:string;label:string;type:string;required:boolean;options?:string[];fields?:AgreementField[];split_of?:string}
 export interface AgreementSchema {code:string;name:string;template_id:string;template_version:number;sections:{title:string;fields:AgreementField[]}[]}
 // Penanda untuk approver: pengajuan berjalan masih memakai versi template lama.
 export interface OldTemplate {version:number;active_version:number;active_note:string;activated_at?:string;activated_by:string}
-export interface AgreementDocument {id:string;ticket_number:string;document_type_code:string;template_id?:string;form_data:Record<string,unknown>;old_template?:OldTemplate;agreement_number:string;status:string;approver_note?:string;attachments?:{id:string;file_name:string}[];generated_file_name?:string;created_at?:string;user?:{full_name?:string}}
+export interface AgreementDocument {id:string;ticket_number:string;document_type_code:string;template_id?:string;form_data:Record<string,unknown>;old_template?:OldTemplate;signatory_suggestion?:UsulanPenandatangan|null;agreement_number:string;status:string;approver_note?:string;attachments?:{id:string;file_name:string}[];generated_file_name?:string;created_at?:string;user?:{full_name?:string}}
 const data=<T>(r:{data:{data:T}})=>r.data.data
 
 async function fileError(reason: unknown, fallback: string): Promise<Error> {
@@ -61,6 +62,12 @@ export const agreementService={
     }
   },
  fileUrl:(base:string,id:string,kind:'preview'|'pdf'|'docx')=>`${api.defaults.baseURL}${base}/agreement-documents/${id}/${kind}`,
- master:()=>api.get('/admin/agreement-company-master').then(r=>data<Record<string,string>>(r)),
+ // Baca master Pihak Pertama lewat alamat peran: /admin untuk ADMIN, /legal untuk approver LEGAL.
+ master:(base='/admin')=>api.get(`${base}/agreement-company-master`).then(r=>data<Record<string,string>>(r)),
  saveMaster:(v:Record<string,string>)=>api.put('/admin/agreement-company-master',v),
+ // Daftar Penandatangan (PR 11): dibaca ADMIN dan approver LEGAL, diubah hanya ADMIN.
+ signatories:(base='/admin')=>api.get(`${base}/agreement-signatories`).then(r=>data<Penandatangan[]>(r)),
+ createSignatory:(v:Omit<Penandatangan,'id'|'is_active'>)=>api.post('/admin/agreement-signatories',v).then(r=>data<Penandatangan>(r)),
+ updateSignatory:(id:string,v:Omit<Penandatangan,'id'>)=>api.put(`/admin/agreement-signatories/${id}`,v).then(r=>data<Penandatangan>(r)),
+ deleteSignatory:(id:string)=>api.delete(`/admin/agreement-signatories/${id}`),
 }

@@ -113,6 +113,13 @@ biasa dipakai. Pengaju bisa memilih saran atau mengetik sendiri.
 Template PKS sebelum Oktober 2026 memakai `{{RUANG_LINGKUP_LIST}}` untuk ruang lingkup bertipe Teks panjang (satu
 poin per baris); versi lama itu tetap jalan, tetapi template baru sebaiknya memakai Daftar poin.
 
+**Nilai utama.** Centang **Nilai utama** pada isian uang yang menjadi nilai kontrak (di PKS: Nilai Kontrak). Nilai ini
+memilih penandatangan Pihak Pertama dari Daftar Penandatangan (menu Pihak Pertama): penandatangan dengan batas
+terkecil yang masih lebih besar atau sama dengan nilai kontrak. Hanya satu isian per jenis, hanya isian uang di luar
+grup. Jenis perjanjian tanpa Nilai utama memakai penandatangan bertanda Default. Seperti perubahan isian lain, tanda ini
+baru dipakai pengajuan setelah ada versi template baru yang diaktifkan. Placeholder penandatangan tetap
+`{{PIHAK_PERTAMA_PEJABAT}}` dan `{{PIHAK_PERTAMA_JABATAN}}`.
+
 ## 4. Pindah ke halaman baru
 
 Gunakan **pemisah halaman**, jangan menekan Enter berulang kali:

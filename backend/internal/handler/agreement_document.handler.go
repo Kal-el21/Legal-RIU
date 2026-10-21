@@ -8,6 +8,7 @@ import (
 	"log"
 	"github.com/gin-gonic/gin"
 	"legal-riu-portal/internal/dto"
+	"legal-riu-portal/internal/entity"
 	"legal-riu-portal/internal/middleware"
 	"legal-riu-portal/internal/service"
 	"legal-riu-portal/internal/utils"
@@ -139,10 +140,15 @@ func (h *AgreementDocumentHandler) UpdateMeta(c *gin.Context) {
 		utils.BadRequest(c, "Data tidak valid", e.Error())
 		return
 	}
-	v, e := h.svc.UpdateMeta(c.Param("id"), req)
+	v, ganti, e := h.svc.UpdateMeta(c.Param("id"), req)
 	if e != nil {
 		utils.BadRequest(c, e.Error(), nil)
 		return
+	}
+	// Approver mengganti penandatangan usulan (PR 11, P3).
+	if ganti != nil {
+		desc := "Penandatangan Pihak Pertama " + v.TicketNumber + " diganti approver"
+		middleware.SetAuditContextWithValues(c, entity.ActionSignatoryChange, "agreement_document", v.ID.String(), &ganti.Usulan, &ganti.Pilihan, &desc)
 	}
 	utils.OK(c, "Metadata diperbarui", v)
 }
@@ -242,6 +248,78 @@ func (h *AgreementDocumentHandler) GetMaster(c *gin.Context) {
 	}
 	utils.OK(c, "Success", v)
 }
+func (h *AgreementDocumentHandler) ListSignatories(c *gin.Context) {
+	v, e := h.svc.ListSignatories()
+	if e != nil {
+		utils.BadRequest(c, e.Error(), nil)
+		return
+	}
+	utils.OK(c, "Success", v)
+}
+
+// auditPenandatangan mencatat perubahan Daftar Penandatangan: daftar ini menentukan
+// siapa yang menandatangani perjanjian.
+func auditPenandatangan(c *gin.Context, id string, lama, baru *entity.AgreementSignatory, desc string) {
+	var sebelum, sesudah *string
+	if lama != nil {
+		v := service.RingkasPenandatangan(lama)
+		sebelum = &v
+	}
+	if baru != nil {
+		v := service.RingkasPenandatangan(baru)
+		sesudah = &v
+	}
+	middleware.SetAuditContextWithValues(c, entity.ActionSignatoryChange, "agreement_signatory", id, sebelum, sesudah, &desc)
+}
+
+func (h *AgreementDocumentHandler) CreateSignatory(c *gin.Context) {
+	var req dto.AgreementSignatoryRequest
+	if e := c.ShouldBindJSON(&req); e != nil {
+		utils.BadRequest(c, "Data tidak valid", e.Error())
+		return
+	}
+	v, e := h.svc.CreateSignatory(req)
+	if e != nil {
+		utils.BadRequest(c, e.Error(), nil)
+		return
+	}
+	auditPenandatangan(c, v.ID.String(), nil, v, "Penandatangan ditambah ke Daftar Penandatangan")
+	utils.Created(c, "Penandatangan ditambahkan", v)
+}
+
+func (h *AgreementDocumentHandler) UpdateSignatory(c *gin.Context) {
+	var req dto.AgreementSignatoryRequest
+	if e := c.ShouldBindJSON(&req); e != nil {
+		utils.BadRequest(c, "Data tidak valid", e.Error())
+		return
+	}
+	lama, v, e := h.svc.UpdateSignatory(c.Param("id"), req)
+	if errors.Is(e, service.ErrPenandatanganTidakAda) {
+		utils.NotFound(c, e.Error())
+		return
+	}
+	if e != nil {
+		utils.BadRequest(c, e.Error(), nil)
+		return
+	}
+	auditPenandatangan(c, v.ID.String(), lama, v, "Penandatangan di Daftar Penandatangan diubah")
+	utils.OK(c, "Penandatangan diperbarui", v)
+}
+
+func (h *AgreementDocumentHandler) DeleteSignatory(c *gin.Context) {
+	v, e := h.svc.DeleteSignatory(c.Param("id"))
+	if errors.Is(e, service.ErrPenandatanganTidakAda) {
+		utils.NotFound(c, e.Error())
+		return
+	}
+	if e != nil {
+		utils.BadRequest(c, e.Error(), nil)
+		return
+	}
+	auditPenandatangan(c, v.ID.String(), v, nil, "Penandatangan dihapus dari Daftar Penandatangan")
+	utils.OK(c, "Penandatangan dihapus", nil)
+}
+
 func (h *AgreementDocumentHandler) UpdateMaster(c *gin.Context) {
 	var req dto.AgreementCompanyMasterRequest
 	if e := c.ShouldBindJSON(&req); e != nil {

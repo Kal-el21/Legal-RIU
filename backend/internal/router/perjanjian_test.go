@@ -199,14 +199,16 @@ func TestMasterPerjanjian(t *testing.T) {
 	// Dikembalikan setelah tes, karena pratinjau dan persetujuan memakai data ini.
 	t.Cleanup(func() { panggil(t, admin, http.MethodPut, alamat, awal) })
 
+	// Sejak PR 11 penandatangan diatur di Daftar Penandatangan: Data Perusahaan disimpan
+	// tanpa kolom penandatangan lama, dan kolom itu tidak ikut berubah.
 	baru := map[string]any{
-		"name": "PT Tes Master", "address": "Jl. Master No. 2",
-		"default_signatory_name": "Andi", "default_signatory_position": "Direktur Utama", "default_signing_place": "Jakarta",
+		"name": "PT Tes Master", "address": "Jl. Master No. 2", "default_signing_place": "Jakarta",
+		"default_signatory_name": "Diabaikan",
 	}
 	harapKode(t, panggil(t, admin, http.MethodPut, alamat, baru), http.StatusOK, "mengubah master")
 	var sesudah map[string]any
 	isiData(t, panggil(t, admin, http.MethodGet, alamat, nil), &sesudah)
-	if sesudah["name"] != "PT Tes Master" || sesudah["default_signatory_name"] != "Andi" {
+	if sesudah["name"] != "PT Tes Master" || sesudah["default_signatory_name"] != awal["default_signatory_name"] {
 		t.Errorf("master setelah diubah: %v", sesudah)
 	}
 
@@ -390,6 +392,33 @@ func TestLampiranPerjanjian(t *testing.T) {
 	if len(p.Attachments) != 2 || putaran[1] != 1 || putaran[2] != 1 {
 		t.Errorf("lampiran setelah ajukan ulang: %+v", p.Attachments)
 	}
+}
+
+// Approver LEGAL membaca master Pihak Pertama untuk isian awal persetujuan (nomor,
+// tempat, penandatangan). Sebelumnya alamatnya hanya di /admin, jadi LEGAL ditolak
+// 403 dan isian awalnya kosong. Mengubah master tetap hanya ADMIN.
+func TestMasterUntukApprover(t *testing.T) {
+	admin := masukPeran(t, entity.RoleAdmin)
+	legal := masukPeran(t, entity.RoleLegal)
+	user := masukPeran(t, entity.RoleUser)
+	type master struct {
+		Name                 string `json:"name"`
+		DefaultSignatoryName string `json:"default_signatory_name"`
+	}
+	baca := func(token, awalan string) master {
+		t.Helper()
+		w := panggil(t, token, http.MethodGet, "/api/v1"+awalan+"/agreement-company-master", nil)
+		harapKode(t, w, http.StatusOK, awalan+" membaca master Pihak Pertama")
+		var m master
+		isiData(t, w, &m)
+		return m
+	}
+	diAdmin, diLegal := baca(admin, "/admin"), baca(legal, "/legal")
+	if diLegal.Name == "" || diLegal != diAdmin {
+		t.Errorf("master untuk LEGAL %+v, harus sama dengan untuk ADMIN %+v", diLegal, diAdmin)
+	}
+	harapKode(t, panggil(t, user, http.MethodGet, "/api/v1/legal/agreement-company-master", nil), http.StatusForbidden, "USER membaca master lewat alamat approver")
+	harapKode(t, panggil(t, legal, http.MethodPut, "/api/v1/admin/agreement-company-master", map[string]any{"name": "Diubah LEGAL"}), http.StatusForbidden, "LEGAL mengubah master")
 }
 
 // Satu lampiran kosong (0 byte, mis. unduhan yang gagal) di antara lampiran lain
@@ -664,6 +693,9 @@ func jalankanSeedTemplate(t *testing.T) {
 		if err := seed.SeedAgreementTypes(dbTes); err != nil {
 			t.Fatalf("seed jenis dokumen putaran %d: %v", i, err)
 		}
+		if err := seed.TandaiNilaiUtamaPKS(dbTes); err != nil {
+			t.Fatalf("tandai nilai utama putaran %d: %v", i, err)
+		}
 	}
 }
 
@@ -697,6 +729,17 @@ func fieldPR9(t *testing.T) string {
 		t.Fatal(err)
 	}
 	return string(skema.Sections)
+}
+
+// fieldSesudahDeploy1: definisi field PR 9 seperti tersimpan di server sesudah Deploy 1,
+// yaitu sebelum tanda nilai utama PR 11 ada.
+func fieldSesudahDeploy1(t *testing.T) string {
+	t.Helper()
+	tanpaTanda := strings.Replace(fieldPR9(t), `,"primary_value":true`, "", 1)
+	if tanpaTanda == fieldPR9(t) {
+		t.Fatal("tanda nilai utama tidak ditemukan di form-schema.json PR 9")
+	}
+	return tanpaTanda
 }
 
 // pasangVersiPR9 menambah versi template bawaan PR 8 (termin 1 dan 2) seperti yang

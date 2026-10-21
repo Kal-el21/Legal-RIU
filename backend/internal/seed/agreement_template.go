@@ -213,6 +213,70 @@ func SeedAgreementTypes(db *gorm.DB) error {
 		Update("fields", pr9).Error
 }
 
+// TandaiNilaiUtamaPKS menandai nilai_kontrak sebagai nilai utama (PR 11, keputusan P1)
+// di isian kerja PKS dan setiap versi template PKS yang belum punya tanda. Hanya tanda
+// itu yang ditambahkan; isian pengajuan dan isi dokumen tidak berubah. Definisi yang
+// sudah bertanda (di field mana pun) atau tanpa nilai_kontrak bertipe uang dibiarkan,
+// jadi aman dijalankan berulang.
+func TandaiNilaiUtamaPKS(db *gorm.DB) error {
+	tandai := func(raw json.RawMessage) (json.RawMessage, bool) {
+		var bagian []map[string]any
+		if len(raw) == 0 || json.Unmarshal(raw, &bagian) != nil {
+			return nil, false
+		}
+		var sasaran map[string]any
+		for _, b := range bagian {
+			fields, _ := b["fields"].([]any)
+			for _, x := range fields {
+				f, _ := x.(map[string]any)
+				if f["primary_value"] == true {
+					return nil, false
+				}
+				if f["name"] == "nilai_kontrak" && f["type"] == "money" {
+					sasaran = f
+				}
+			}
+		}
+		if sasaran == nil {
+			return nil, false
+		}
+		sasaran["primary_value"] = true
+		out, e := json.Marshal(bagian)
+		return out, e == nil
+	}
+
+	n := 0
+	var jenis []entity.AgreementType
+	if e := db.Where("code = ?", agreementTemplateCode).Find(&jenis).Error; e != nil {
+		return e
+	}
+	for _, j := range jenis {
+		if out, ok := tandai(j.Fields); ok {
+			if e := db.Model(&entity.AgreementType{}).Where("id = ?", j.ID).UpdateColumn("fields", out).Error; e != nil {
+				return e
+			}
+			n++
+		}
+	}
+	var versi []entity.AgreementTemplate
+	if e := db.Select("id", "fields").Where("code = ?", agreementTemplateCode).Find(&versi).Error; e != nil {
+		return e
+	}
+	for _, v := range versi {
+		// UpdateColumn: isi versi lain tidak berubah, jadi waktu ubahnya juga tidak.
+		if out, ok := tandai(v.Fields); ok {
+			if e := db.Model(&entity.AgreementTemplate{}).Where("id = ?", v.ID).UpdateColumn("fields", out).Error; e != nil {
+				return e
+			}
+			n++
+		}
+	}
+	if n > 0 {
+		log.Printf("Nilai utama ditandai pada nilai_kontrak di %d definisi isian PKS (isian kerja dan versi template)", n)
+	}
+	return nil
+}
+
 // backfillAgreementDocumentTemplate mengarahkan dokumen tanpa template ke versi 1,
 // karena itulah template yang sesungguhnya dipakai saat dokumen tersebut dibuat.
 func backfillAgreementDocumentTemplate(db *gorm.DB) error {

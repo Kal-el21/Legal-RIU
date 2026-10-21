@@ -507,6 +507,9 @@ func TestValidasiField(t *testing.T) {
 		{"BagiTanpaPersen", map[string]any{"code": kode, "name": "Uji", "fields": field(uang, grup("nilai_kontrak", nilai, teks("syarat")))}, "tepat satu sub-field persen dan satu sub-field uang"},
 		{"BentrokTurunanGrup", map[string]any{"code": kode, "name": "Uji", "fields": field(grup("", persen), teks("termin_persen_terbilang"))}, "{{TERMIN_PERSEN_TERBILANG}}"},
 		{"BentrokJumlahGrup", map[string]any{"code": kode, "name": "Uji", "fields": field(teks("termin_jumlah"), grup("", teks("syarat")))}, "{{TERMIN_JUMLAH}}"},
+		{"NilaiUtamaBukanUang", map[string]any{"code": kode, "name": "Uji", "fields": field(map[string]any{"name": "nama", "label": "Nama", "type": "text", "primary_value": true})}, "Nilai utama hanya untuk field uang: NAMA"},
+		{"DuaNilaiUtama", map[string]any{"code": kode, "name": "Uji", "fields": field(map[string]any{"name": "nilai_kontrak", "label": "Nilai", "type": "money", "primary_value": true}, map[string]any{"name": "nilai_denda", "label": "Denda", "type": "money", "primary_value": true})}, "Nilai utama hanya boleh satu field: NILAI_KONTRAK dan NILAI_DENDA"},
+		{"NilaiUtamaDiSubField", map[string]any{"code": kode, "name": "Uji", "fields": field(grup("", map[string]any{"name": "nilai", "label": "Nilai", "type": "money", "primary_value": true}))}, "Sub-field TERMIN_NILAI tidak bisa menjadi nilai utama"},
 	} {
 		t.Run(c.nama, func(t *testing.T) {
 			w := panggil(t, admin, http.MethodPost, alamatJenis, c.isi)

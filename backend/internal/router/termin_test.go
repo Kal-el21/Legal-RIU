@@ -79,7 +79,7 @@ func sesudahDeploy1(t *testing.T, kerja string) (versiPR9 string, berjalan perja
 	})
 	eksekusi(t, "UPDATE agreement_templates SET checksum = 'bawaan-pr10-uji' WHERE id IN ?", bawaan)
 	eksekusi(t, "UPDATE agreement_templates SET status = 'ARCHIVED' WHERE code = 'PKS' AND status = 'ACTIVE'")
-	versiPR9 = pasangVersiPR9(t, string(entity.TemplateStatusActive), fieldPR9(t))
+	versiPR9 = pasangVersiPR9(t, string(entity.TemplateStatusActive), fieldSesudahDeploy1(t))
 	eksekusi(t, "UPDATE agreement_types SET fields = CAST(? AS jsonb) WHERE code = 'PKS'", kerja)
 	berjalan = buatPerjanjian(t, user, formPerjanjianPR9())
 	return versiPR9, berjalan, user
@@ -100,7 +100,7 @@ func isiPengajuanDB(t *testing.T, id string) string {
 // yang berjalan di versi PR 8 tetap di versinya dengan isian yang sama, dan
 // tetap bisa dipratinjau dan disetujui (keputusan D1).
 func TestMigrasiTermin(t *testing.T) {
-	versiPR9, berjalan, user := sesudahDeploy1(t, fieldPR9(t))
+	versiPR9, berjalan, user := sesudahDeploy1(t, fieldSesudahDeploy1(t))
 	isiSebelum := isiPengajuanDB(t, berjalan.ID)
 
 	jalankanSeedTemplate(t)
@@ -119,8 +119,9 @@ func TestMigrasiTermin(t *testing.T) {
 	if v := templateDB(t, versiPR9); v.Status != string(entity.TemplateStatusArchived) {
 		t.Errorf("versi PR 8 berstatus %s, harus ARCHIVED", v.Status)
 	}
-	if f := fieldTemplate(t, versiPR9); !strings.Contains(f, "termin_1_persen") {
-		t.Errorf("field versi PR 8 berubah: %s", f)
+	// Deploy 2 juga memuat PR 11: versi PR 8 hanya mendapat tanda nilai utama (keputusan P1).
+	if f := fieldTemplate(t, versiPR9); !strings.Contains(f, "termin_1_persen") || !samaJSON(t, f, fieldPR9(t)) {
+		t.Errorf("field versi PR 8 berubah selain tanda nilai utama: %s", f)
 	}
 	if id, _ := templatePengajuan(t, berjalan.ID); id != versiPR9 {
 		t.Errorf("pengajuan berjalan pindah ke %s, harus tetap di versi PR 8", id)
@@ -150,12 +151,11 @@ func TestMigrasiTermin(t *testing.T) {
 // dipasang. Template bawaan baru terpasang sebagai Draft dengan definisinya
 // sendiri, dan versi yang aktif tetap aktif (keputusan D3).
 func TestIsianKerjaSaatBawaanBaru(t *testing.T) {
-	kerja := strings.Replace(fieldPR9(t), `"label":"Nama Perusahaan"`, `"label":"Nama Mitra"`, 1)
-	if kerja == fieldPR9(t) {
+	kerja := strings.Replace(fieldSesudahDeploy1(t), `"label":"Nama Perusahaan"`, `"label":"Nama Mitra"`, 1)
+	if kerja == fieldSesudahDeploy1(t) {
 		t.Fatal("label uji tidak ditemukan di field PR 9")
 	}
 	versiPR9, _, _ := sesudahDeploy1(t, kerja)
-	sebelum := fieldJenis(t, "PKS")
 
 	jalankanSeedTemplate(t)
 
@@ -169,7 +169,9 @@ func TestIsianKerjaSaatBawaanBaru(t *testing.T) {
 	if s := templateDB(t, versiPR9).Status; s != string(entity.TemplateStatusActive) {
 		t.Errorf("versi aktif berstatus %s setelah seed, harus tetap ACTIVE", s)
 	}
-	if k := fieldJenis(t, "PKS"); k != sebelum || !strings.Contains(k, "Nama Mitra") {
+	// Isian kerja Admin tidak ditimpa; hanya tanda nilai utama PR 11 yang ditambahkan.
+	harap := strings.Replace(fieldPR9(t), `"label":"Nama Perusahaan"`, `"label":"Nama Mitra"`, 1)
+	if k := fieldJenis(t, "PKS"); !samaJSON(t, k, harap) {
 		t.Errorf("field kerja yang diubah Admin tertimpa:\n%s", k)
 	}
 }

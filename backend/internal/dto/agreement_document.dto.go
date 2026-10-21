@@ -32,9 +32,12 @@ type AgreementListQuery struct {
 }
 
 type AgreementMetaRequest struct {
-	AgreementNumber           *string `json:"agreement_number"`
-	SigningPlace              *string `json:"signing_place"`
-	SigningDate               *string `json:"signing_date"`
+	AgreementNumber *string `json:"agreement_number"`
+	SigningPlace    *string `json:"signing_place"`
+	SigningDate     *string `json:"signing_date"`
+	// PartyOneSignatoryID: pilihan dari Daftar Penandatangan; kosong ("") untuk
+	// Lainnya, dengan nama dan jabatan diketik di dua isian berikutnya (PR 11, P3).
+	PartyOneSignatoryID       *string `json:"party_one_signatory_id"`
 	PartyOneSignatoryName     *string `json:"party_one_signatory_name"`
 	PartyOneSignatoryPosition *string `json:"party_one_signatory_position"`
 	Pic                       *string `json:"pic"`
@@ -48,16 +51,26 @@ type AgreementStatusRequest struct {
 }
 
 type AgreementCompanyMasterRequest struct {
-	Name                     string `json:"name" binding:"required"`
-	Address                  string `json:"address" binding:"required"`
-	NPWP                     string `json:"npwp"`
-	Phone                    string `json:"phone"`
-	Email                    string `json:"email"`
-	PIC                      string `json:"pic"`
-	DefaultSignatoryName     string `json:"default_signatory_name" binding:"required"`
-	DefaultSignatoryPosition string `json:"default_signatory_position" binding:"required"`
-	DefaultSigningPlace      string `json:"default_signing_place" binding:"required"`
-	DefaultAgreementNumber   string `json:"default_agreement_number"`
+	Name    string `json:"name" binding:"required"`
+	Address string `json:"address" binding:"required"`
+	NPWP    string `json:"npwp"`
+	Phone   string `json:"phone"`
+	Email   string `json:"email"`
+	PIC     string `json:"pic"`
+	// Penandatangan diatur di Daftar Penandatangan sejak PR 11; kolom penandatangan
+	// lama di master tidak lagi diubah lewat sini.
+	DefaultSigningPlace    string `json:"default_signing_place" binding:"required"`
+	DefaultAgreementNumber string `json:"default_agreement_number"`
+}
+
+// AgreementSignatoryRequest: satu baris Daftar Penandatangan. MaxValue nil berarti
+// tak terbatas. IsActive hanya dipakai saat mengubah; penandatangan baru selalu aktif.
+type AgreementSignatoryRequest struct {
+	Name      string `json:"name"`
+	Position  string `json:"position"`
+	MaxValue  *int64 `json:"max_value"`
+	IsDefault bool   `json:"is_default"`
+	IsActive  *bool  `json:"is_active"`
 }
 
 type AgreementTypeResponse struct {

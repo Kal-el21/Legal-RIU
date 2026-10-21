@@ -504,6 +504,7 @@ func RunAllMigrationsAndSeeds(db *gorm.DB, store *storage.MinIOClient) error {
 		&entity.DocumentType{},
 		&entity.LegalMaterial{},
 		&entity.AgreementCompanyMaster{},
+		&entity.AgreementSignatory{},
 		&entity.AgreementType{},
 		&entity.AgreementTemplate{},
 		&entity.AgreementDocument{},
@@ -595,6 +596,9 @@ func RunAllMigrationsAndSeeds(db *gorm.DB, store *storage.MinIOClient) error {
 	if err := SeedAgreementCompanyMaster(db); err != nil {
 		return err
 	}
+	if err := SeedAgreementSignatories(db); err != nil {
+		return err
+	}
 	// store bernilai nil pada seeder admin yang tidak terhubung ke object
 	// storage; template bawaan didaftarkan saat API boot.
 	if store != nil {
@@ -603,6 +607,10 @@ func RunAllMigrationsAndSeeds(db *gorm.DB, store *storage.MinIOClient) error {
 		}
 	}
 	if err := SeedAgreementTypes(db); err != nil {
+		return err
+	}
+	// Sesudah seed jenis dan template: versi baru dan versi tanpa field sudah terisi.
+	if err := TandaiNilaiUtamaPKS(db); err != nil {
 		return err
 	}
 	if err := BackfillLegalCaseDefaults(db); err != nil {

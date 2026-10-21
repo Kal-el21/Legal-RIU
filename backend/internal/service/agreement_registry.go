@@ -25,6 +25,9 @@ type AgreementFieldDefinition struct {
 	Fields []AgreementFieldDefinition `json:"fields,omitempty"`
 	// SplitOf: kode field uang yang dibagi ke baris grup menurut persennya (termin).
 	SplitOf string `json:"split_of,omitempty"`
+	// PrimaryValue: field uang yang menjadi nilai kontrak untuk memilih penandatangan
+	// Pihak Pertama (PR 11, keputusan P1). Paling banyak satu per jenis dokumen.
+	PrimaryValue bool `json:"primary_value,omitempty"`
 }
 type AgreementSectionDefinition struct {
 	Title  string                     `json:"title"`

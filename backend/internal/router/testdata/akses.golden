@@ -1,5 +1,6 @@
 # Peran yang lolos pengaman tiap endpoint. Tanda - berarti tidak ada.
 # Dibuat oleh: go test ./internal/router -run TestFotoHakAkses -update
+DELETE /api/v1/admin/agreement-signatories/:id: ADMIN
 DELETE /api/v1/admin/agreement-templates/:id: ADMIN
 DELETE /api/v1/admin/case-categories/:id: ADMIN
 DELETE /api/v1/admin/case-types/:id: ADMIN
@@ -48,6 +49,7 @@ GET /api/v1/admin/agreement-documents/:id/docx: ADMIN
 GET /api/v1/admin/agreement-documents/:id/pdf: ADMIN
 GET /api/v1/admin/agreement-documents/:id/preview: ADMIN
 GET /api/v1/admin/agreement-documents/:id/schema: ADMIN
+GET /api/v1/admin/agreement-signatories: ADMIN
 GET /api/v1/admin/agreement-templates: ADMIN
 GET /api/v1/admin/agreement-templates/:id: ADMIN
 GET /api/v1/admin/agreement-templates/:id/download: ADMIN
@@ -167,6 +169,7 @@ GET /api/v1/legal-opinions: USER
 GET /api/v1/legal-opinions/:id: USER
 GET /api/v1/legal-opinions/:id/pdf: USER
 GET /api/v1/legal-opinions/download: USER
+GET /api/v1/legal/agreement-company-master: LEGAL
 GET /api/v1/legal/agreement-documents: LEGAL
 GET /api/v1/legal/agreement-documents/:id: LEGAL
 GET /api/v1/legal/agreement-documents/:id/attachments/:attachmentId: LEGAL
@@ -174,6 +177,7 @@ GET /api/v1/legal/agreement-documents/:id/docx: LEGAL
 GET /api/v1/legal/agreement-documents/:id/pdf: LEGAL
 GET /api/v1/legal/agreement-documents/:id/preview: LEGAL
 GET /api/v1/legal/agreement-documents/:id/schema: LEGAL
+GET /api/v1/legal/agreement-signatories: LEGAL
 GET /api/v1/legal/agreement-templates: LEGAL
 GET /api/v1/legal/agreement-templates/:id: LEGAL
 GET /api/v1/legal/agreement-templates/:id/download: LEGAL
@@ -225,6 +229,7 @@ PATCH /api/v1/legal/legal-opinions/:id/status: LEGAL
 PATCH /api/v1/legal/review-documents/:id/status: LEGAL
 PATCH /api/v1/notifications/read: ADMIN LEGAL USER
 PATCH /api/v1/notifications/read-all: ADMIN LEGAL USER
+POST /api/v1/admin/agreement-signatories: ADMIN
 POST /api/v1/admin/agreement-templates: ADMIN
 POST /api/v1/admin/agreement-templates/:id/activate: ADMIN
 POST /api/v1/admin/agreement-templates/new-version: ADMIN
@@ -304,6 +309,7 @@ POST /api/v1/legal/review-documents/:id/result: LEGAL
 POST /api/v1/review-documents: USER
 POST /api/v1/review-documents/:id/resubmit: USER
 PUT /api/v1/admin/agreement-company-master: ADMIN
+PUT /api/v1/admin/agreement-signatories/:id: ADMIN
 PUT /api/v1/admin/agreement-types/:code: ADMIN
 PUT /api/v1/admin/case-categories/:id: ADMIN
 PUT /api/v1/admin/case-types/:id: ADMIN

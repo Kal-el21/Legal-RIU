@@ -119,6 +119,7 @@ func rapikanField(in []AgreementSectionDefinition) ([]AgreementSectionDefinition
 	}
 	dipakai := map[string]bool{}
 	uang := map[string]bool{}
+	utama := ""
 	out := make([]AgreementSectionDefinition, 0, len(in))
 	for i, s := range in {
 		title := strings.TrimSpace(s.Title)
@@ -133,6 +134,16 @@ func rapikanField(in []AgreementSectionDefinition) ([]AgreementSectionDefinition
 			}
 			kode := strings.ToUpper(f.Name)
 			uang[f.Name] = f.Type == "money"
+			// Nilai utama memilih penandatangan Pihak Pertama (PR 11, keputusan P1).
+			if f.PrimaryValue {
+				if f.Type != "money" {
+					return nil, fmt.Errorf("Nilai utama hanya untuk field uang: %s", kode)
+				}
+				if utama != "" {
+					return nil, fmt.Errorf("Nilai utama hanya boleh satu field: %s dan %s", utama, kode)
+				}
+				utama = kode
+			}
 			if f.Type == "group" {
 				if len(f.Fields) == 0 {
 					return nil, fmt.Errorf("Grup %s harus punya minimal satu sub-field", kode)
@@ -145,6 +156,9 @@ func rapikanField(in []AgreementSectionDefinition) ([]AgreementSectionDefinition
 					}
 					if g.Type == "list" || g.Type == "group" {
 						return nil, fmt.Errorf("Sub-field %s_%s tidak boleh bertipe daftar atau grup", kode, strings.ToUpper(sub[j].Name))
+					}
+					if g.PrimaryValue {
+						return nil, fmt.Errorf("Sub-field %s_%s tidak bisa menjadi nilai utama; tandai field uang di luar grup", kode, strings.ToUpper(sub[j].Name))
 					}
 				}
 				f.Fields = sub
