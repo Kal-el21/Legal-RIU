@@ -1,4 +1,5 @@
 import api from './api'
+import { namaDariHeader } from '@/lib/nama-unduhan'
 import { useAuthStore } from '@/store/auth.store'
 import type { ApiResponse, CaseChronology, Cedant, Company, Division, LegalCase, PaginatedData, Regency, CaseType, CaseCategory, PurposeType, ImportResult, ParentChangePreview, ParentChangeResult } from '@/types'
 
@@ -292,12 +293,7 @@ export const legalCaseService = {
       responseType: 'blob',
     })
 
-    const contentDisposition = res.headers['content-disposition']
-    let filename = path.split('/').pop() || 'download'
-    if (contentDisposition) {
-      const match = contentDisposition.match(/filename="?([^"]+)"?/i)
-      if (match) filename = match[1]
-    }
+    const filename = namaDariHeader(res.headers['content-disposition'], path.split('/').pop() || 'download')
 
     return { blob: res.data, filename }
   },
@@ -413,12 +409,7 @@ export const legalCaseService = {
       responseType: 'blob',
     })
 
-    const contentDisposition = res.headers['content-disposition']
-    let filename = `legal-case-${id}.pdf`
-    if (contentDisposition) {
-      const match = contentDisposition.match(/filename="?([^"]+)"?/i)
-      if (match) filename = match[1]
-    }
+    const filename = namaDariHeader(res.headers['content-disposition'], `legal-case-${id}.pdf`)
 
     return { blob: res.data, filename }
   },

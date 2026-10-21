@@ -1,4 +1,5 @@
 import api from './api'
+import { namaDariHeader } from '@/lib/nama-unduhan'
 import { useAuthStore } from '@/store/auth.store'
 import type { ApiResponse, LegalOpinion, PaginatedData } from '@/types'
 
@@ -79,12 +80,7 @@ export const legalOpinionService = {
       responseType: 'blob',
     })
 
-    const contentDisposition = res.headers['content-disposition']
-    let filename = 'download'
-    if (contentDisposition) {
-      const match = contentDisposition.match(/filename="?([^"]+)"?/i)
-      if (match) filename = match[1]
-    }
+    const filename = namaDariHeader(res.headers['content-disposition'], 'download')
 
     return { blob: res.data, filename }
   },
@@ -105,12 +101,7 @@ export const legalOpinionService = {
       responseType: 'blob',
     })
 
-    const contentDisposition = res.headers['content-disposition']
-    let filename = `legal-opinion-${id}.pdf`
-    if (contentDisposition) {
-      const match = contentDisposition.match(/filename="?([^"]+)"?/i)
-      if (match) filename = match[1]
-    }
+    const filename = namaDariHeader(res.headers['content-disposition'], `legal-opinion-${id}.pdf`)
 
     return { blob: res.data, filename }
   },
