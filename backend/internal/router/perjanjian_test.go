@@ -359,17 +359,18 @@ func TestLampiranPerjanjian(t *testing.T) {
 	kolom := map[string]string{"data": string(data)}
 	isiA, isiB := []byte("penawaran"), []byte("penawaran revisi")
 
-	w := panggilForm(t, pemilik, http.MethodPost, urlPerjanjian(""), kolom, berkas{"attachments", "penawaran.pdf", isiA})
+	w := panggilForm(t, pemilik, http.MethodPost, urlPerjanjian(""), kolom, berkas{"attachments", "Penawaran Mitra é.pdf", isiA})
 	harapKode(t, w, http.StatusCreated, "membuat perjanjian dengan lampiran")
 	var p perjanjian
 	isiData(t, w, &p)
-	if len(p.Attachments) != 1 || p.Attachments[0].FileName != "penawaran.pdf" || p.Attachments[0].UploadRound != 1 {
+	if len(p.Attachments) != 1 || p.Attachments[0].FileName != "Penawaran Mitra é.pdf" || p.Attachments[0].UploadRound != 1 {
 		t.Fatalf("lampiran setelah dibuat: %+v", p.Attachments)
 	}
 
 	lampiran := "/attachments/" + p.Attachments[0].ID
 	w = panggil(t, pemilik, http.MethodGet, urlPerjanjian("", "/", p.ID, lampiran), nil)
 	harapKode(t, w, http.StatusOK, "pemilik mengunduh lampiran")
+	harapNamaUnduhan(t, w, p.TicketNumber+"_Lampiran_Penawaran Mitra é.pdf", "pemilik mengunduh lampiran")
 	if !bytes.Equal(w.Body.Bytes(), isiA) {
 		t.Errorf("isi lampiran yang diunduh berbeda: %q", w.Body)
 	}
@@ -501,8 +502,10 @@ func TestPersetujuanPerjanjian(t *testing.T) {
 	if !bytes.HasPrefix(w.Body.Bytes(), []byte("%PDF")) {
 		t.Error("file akhir bukan PDF")
 	}
+	harapNamaUnduhan(t, w, p.TicketNumber+"_PKS_PT Mitra Tes.pdf", "PDF akhir")
 	w = panggil(t, legal, http.MethodGet, urlPerjanjian("/legal", "/", p.ID, "/docx"), nil)
 	harapKode(t, w, http.StatusOK, "LEGAL mengunduh DOCX akhir")
+	harapNamaUnduhan(t, w, p.TicketNumber+"_PKS_PT Mitra Tes.docx", "DOCX akhir")
 	if !bytes.HasPrefix(w.Body.Bytes(), []byte("PK")) {
 		t.Error("file akhir bukan DOCX")
 	}

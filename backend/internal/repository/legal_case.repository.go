@@ -59,6 +59,7 @@ type LegalCaseRepository interface {
 	FindCaseCategoryByID(id uuid.UUID) (*entity.CaseCategory, error)
 	FindCompanyByID(id uuid.UUID) (*entity.Company, error)
 	CaseFileRegistered(filePath string, companyID *uuid.UUID) (bool, error)
+	NamaFilePerkara(filePath string) (tiket, jenis, keterangan string)
 }
 
 type legalCaseRepository struct {
@@ -299,10 +300,7 @@ func (r *legalCaseRepository) FindDivisionByID(id uuid.UUID) (*entity.Division, 
 // kronologi sebuah perkara. companyID nil berarti perkara perusahaan mana pun;
 // selain itu perkaranya harus milik perusahaan tersebut.
 func (r *legalCaseRepository) CaseFileRegistered(filePath string, companyID *uuid.UUID) (bool, error) {
-	// Lampiran kronologi disimpan sebagai array JSON di satu kolom teks, jadi
-	// dicari sebagai elemen utuh. Karakter pola LIKE di path dinetralkan.
-	polos := strings.NewReplacer("\\", "\\\\", "%", "\\%", "_", "\\_").Replace(filePath)
-	punyaLampiran := r.db.Model(&entity.CaseChronology{}).Select("case_id").Where("documents LIKE ?", "%\""+polos+"\"%")
+	punyaLampiran := r.db.Model(&entity.CaseChronology{}).Select("case_id").Where("documents LIKE ?", polaLampiranKronologi(filePath))
 
 	query := r.db.Model(&entity.LegalCase{}).
 		Where("document_link = ? OR photo = ? OR id IN (?)", filePath, filePath, punyaLampiran)
@@ -312,6 +310,46 @@ func (r *legalCaseRepository) CaseFileRegistered(filePath string, companyID *uui
 	var total int64
 	err := query.Count(&total).Error
 	return total > 0, err
+}
+
+// polaLampiranKronologi: pola LIKE untuk mencari satu path lampiran kronologi. Lampiran
+// disimpan sebagai array JSON di satu kolom teks, jadi dicari sebagai elemen utuh.
+// Karakter pola LIKE di path dinetralkan.
+func polaLampiranKronologi(filePath string) string {
+	polos := strings.NewReplacer("\\", "\\\\", "%", "\\%", "_", "\\_").Replace(filePath)
+	return "%\"" + polos + "\"%"
+}
+
+// NamaFilePerkara mengembalikan bahan nama unduhan file perkara: nomor perkara, jenis file
+// (Dokumen, Foto, atau Kronologi), dan keterangannya: nama asli dari Repositori Dokumen untuk
+// dokumen dan foto, atau tanggal agenda untuk lampiran kronologi (nama aslinya tidak tersimpan).
+// Semuanya kosong kalau path tidak terdaftar.
+func (r *legalCaseRepository) NamaFilePerkara(filePath string) (tiket, jenis, keterangan string) {
+	var lc entity.LegalCase
+	if r.db.Select("ticket_number", "document_link", "photo").Where("document_link = ? OR photo = ?", filePath, filePath).Take(&lc).Error == nil {
+		jenis = "Dokumen"
+		if lc.Photo == filePath {
+			jenis = "Foto"
+		}
+		var nama []string
+		r.db.Model(&entity.RepositoryDocument{}).Where("file_path = ?", filePath).Order("updated_at DESC").Limit(1).Pluck("file_name", &nama)
+		if len(nama) > 0 {
+			keterangan = nama[0]
+		}
+		return lc.TicketNumber, jenis, keterangan
+	}
+	var k struct {
+		TicketNumber string
+		AgendaDate   time.Time
+	}
+	r.db.Table("case_chronologies AS k").Select("c.ticket_number, k.agenda_date").
+		Joins("JOIN legal_cases c ON c.id = k.case_id AND c.deleted_at IS NULL").
+		Where("k.deleted_at IS NULL AND k.documents LIKE ?", polaLampiranKronologi(filePath)).
+		Limit(1).Scan(&k)
+	if k.AgendaDate.IsZero() {
+		return "", "", ""
+	}
+	return k.TicketNumber, "Kronologi", k.AgendaDate.Format("2006-01-02")
 }
 
 func (r *legalCaseRepository) FindCompanyByID(id uuid.UUID) (*entity.Company, error) {

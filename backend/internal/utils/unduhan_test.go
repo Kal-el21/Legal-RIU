@@ -6,6 +6,23 @@ import (
 	"testing"
 )
 
+func TestNamaUnduhan(t *testing.T) {
+	kasus := []struct {
+		bagian []string
+		harap  string
+	}{
+		{[]string{"LO-202610-0003", "Lampiran", "Surat Penawaran.pdf"}, "LO-202610-0003_Lampiran_Surat Penawaran.pdf"},
+		{[]string{"PK-202610-0001", "PKS", " "}, "PK-202610-0001_PKS"},
+		{[]string{"", "Perkara"}, "Perkara"},
+		{nil, ""},
+	}
+	for _, k := range kasus {
+		if got := NamaUnduhan(k.bagian...); got != k.harap {
+			t.Errorf("NamaUnduhan(%q) = %q, mau %q", k.bagian, got, k.harap)
+		}
+	}
+}
+
 func TestHeaderUnduhan(t *testing.T) {
 	kasus := []struct {
 		nama, header, hasil string
@@ -16,7 +33,7 @@ func TestHeaderUnduhan(t *testing.T) {
 		{"Résumé Mitra.pdf", "attachment; filename*=utf-8''R%C3%A9sum%C3%A9%20Mitra.pdf", "Résumé Mitra.pdf"},
 		{"契約書.docx", "attachment; filename*=utf-8''%E5%A5%91%E7%B4%84%E6%9B%B8.docx", "契約書.docx"},
 		{"../../etc/passwd", "attachment; filename=.._.._etc_passwd", ".._.._etc_passwd"},
-		{`C:\data\a.pdf`, `attachment; filename="C:_data_a.pdf"`,"C:_data_a.pdf"},
+		{`C:\data\a.pdf`, `attachment; filename="C:_data_a.pdf"`, "C:_data_a.pdf"},
 		{"a.pdf\r\nSet-Cookie: x=1", `attachment; filename="a.pdfSet-Cookie: x=1"`, "a.pdfSet-Cookie: x=1"},
 		{"", "attachment; filename=unduhan", "unduhan"},
 		{"  ../ ", "attachment; filename=unduhan", "unduhan"},

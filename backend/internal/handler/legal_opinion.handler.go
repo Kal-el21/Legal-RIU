@@ -5,7 +5,6 @@ import (
 	"errors"
 	"mime/multipart"
 	"strconv"
-	"strings"
 
 	"legal-riu-portal/internal/dto"
 	"legal-riu-portal/internal/entity"
@@ -201,7 +200,7 @@ func (h *LegalOpinionHandler) Download(c *gin.Context) {
 	}
 
 	role := middleware.RoleWithAllAccess(c, "legal_opinion.view.all")
-	obj, err := h.svc.DownloadFile(filePath, middleware.GetUserID(c), role)
+	obj, fileName, err := h.svc.DownloadFile(filePath, middleware.GetUserID(c), role)
 	if errors.Is(err, service.ErrFileNotFound) {
 		utils.NotFound(c, "File tidak ditemukan")
 		return
@@ -212,8 +211,6 @@ func (h *LegalOpinionHandler) Download(c *gin.Context) {
 	}
 	defer obj.Close()
 
-	parts := strings.Split(filePath, "/")
-	fileName := parts[len(parts)-1]
 
 	c.DataFromReader(-1, -1, "application/octet-stream", obj, map[string]string{
 		"Content-Disposition": utils.HeaderUnduhan("attachment", fileName),
@@ -272,6 +269,6 @@ func (h *LegalOpinionHandler) GeneratePDF(c *gin.Context) {
 	}
 
 	c.DataFromReader(-1, -1, "application/pdf", bytes.NewReader(pdfData), map[string]string{
-		"Content-Disposition": utils.HeaderUnduhan("attachment", "legal-opinion-"+lo.TicketNumber+".pdf"),
+		"Content-Disposition": utils.HeaderUnduhan("attachment", utils.NamaUnduhan(lo.TicketNumber, "Legal-Opinion")+".pdf"),
 	})
 }

@@ -20,7 +20,7 @@ type LegalOpinionRepository interface {
 	AddAttachment(att *entity.LegalOpinionAttachment) error
 	GetLatestUploadRound(loID uuid.UUID) (int, error)
 	AddResult(result *entity.LegalOpinionResult) error
-	FindIDByFilePath(path string) (uuid.UUID, error)
+	FindFileByPath(path string) (id uuid.UUID, fileName string, isResult bool, err error)
 }
 
 type legalOpinionRepository struct {
@@ -114,16 +114,17 @@ func (r *legalOpinionRepository) AddResult(result *entity.LegalOpinionResult) er
 	return r.db.Create(result).Error
 }
 
-// FindIDByFilePath mengembalikan pengajuan pemilik sebuah file, dari lampiran
-// maupun hasil kajiannya. File yang tidak terdaftar di modul ini tidak ditemukan.
-func (r *legalOpinionRepository) FindIDByFilePath(path string) (uuid.UUID, error) {
+// FindFileByPath mengembalikan pengajuan pemilik sebuah file beserta nama aslinya, dari
+// lampiran (isResult false) maupun hasil kajiannya (isResult true). File yang tidak
+// terdaftar di modul ini tidak ditemukan.
+func (r *legalOpinionRepository) FindFileByPath(path string) (uuid.UUID, string, bool, error) {
 	var att entity.LegalOpinionAttachment
 	if err := r.db.Where("file_path = ?", path).First(&att).Error; err == nil {
-		return att.LegalOpinionID, nil
+		return att.LegalOpinionID, att.FileName, false, nil
 	}
 	var res entity.LegalOpinionResult
 	if err := r.db.Where("file_path = ?", path).First(&res).Error; err != nil {
-		return uuid.Nil, err
+		return uuid.Nil, "", false, err
 	}
-	return res.LegalOpinionID, nil
+	return res.LegalOpinionID, res.FileName, true, nil
 }

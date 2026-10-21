@@ -5,9 +5,22 @@ import (
 	"strings"
 )
 
+// NamaUnduhan menyusun nama file unduhan dari bagian-bagiannya, dipisah "_"; bagian kosong
+// dilewati. Contoh: NamaUnduhan("LO-202610-0003", "Lampiran", "Surat.pdf") menjadi
+// "LO-202610-0003_Lampiran_Surat.pdf".
+func NamaUnduhan(bagian ...string) string {
+	isi := make([]string, 0, len(bagian))
+	for _, b := range bagian {
+		if b = strings.TrimSpace(b); b != "" {
+			isi = append(isi, b)
+		}
+	}
+	return strings.Join(isi, "_")
+}
+
 // HeaderUnduhan membentuk isi header Content-Disposition yang aman untuk nama file apa pun.
 // jenis: "attachment" (diunduh) atau "inline" (dibuka di browser).
-// Spasi dan tanda petik dikutip, huruf non-Latin ditulis sebagai filename*=utf-8''...,
+// Spasi dan tanda petik dikutip, huruf non-Latin ditulis dalam bentuk filename* (RFC 5987),
 // pemisah folder diganti "_" dan karakter kontrol dibuang, jadi nama tidak bisa membawa path
 // atau menyisipkan header lain.
 func HeaderUnduhan(jenis, nama string) string {

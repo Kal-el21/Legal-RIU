@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"errors"
 	"mime/multipart"
-	"path/filepath"
 	"strconv"
 
 	"legal-riu-portal/internal/dto"
@@ -292,7 +291,7 @@ func (h *LegalCaseHandler) ViewFile(c *gin.Context) {
 	defer obj.Close()
 
 	c.DataFromReader(-1, -1, contentType, obj, map[string]string{
-		"Content-Disposition": utils.HeaderUnduhan("inline", filepath.Base(filePath)),
+		"Content-Disposition": utils.HeaderUnduhan("inline", h.svc.FileName(filePath)),
 	})
 }
 
@@ -407,7 +406,7 @@ func (h *LegalCaseHandler) Download(c *gin.Context) {
 	defer obj.Close()
 
 	c.DataFromReader(-1, -1, "application/octet-stream", obj, map[string]string{
-		"Content-Disposition": utils.HeaderUnduhan("attachment", filepath.Base(filePath)),
+		"Content-Disposition": utils.HeaderUnduhan("attachment", h.svc.FileName(filePath)),
 	})
 }
 
@@ -670,6 +669,6 @@ func (h *LegalCaseHandler) GeneratePDF(c *gin.Context) {
 	}
 
 	c.DataFromReader(-1, -1, "application/pdf", bytes.NewReader(pdfData), map[string]string{
-		"Content-Disposition": utils.HeaderUnduhan("attachment", "legal-case-"+lc.ID+".pdf"),
+		"Content-Disposition": utils.HeaderUnduhan("attachment", utils.NamaUnduhan(lc.TicketNumber, "Perkara")+".pdf"),
 	})
 }
