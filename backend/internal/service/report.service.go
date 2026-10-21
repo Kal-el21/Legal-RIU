@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"legal-riu-portal/internal/dto"
+	"legal-riu-portal/internal/entity"
 
 	"gorm.io/gorm"
 )
@@ -93,7 +94,7 @@ func (s *reportService) GetLegalOpinionReport(filter dto.ReportFilter) (*dto.Rep
 		return nil, errors.New("group_by tidak valid")
 	}
 
-	query := s.db.Table("legal_opinions")
+	query := s.db.Table("legal_opinions").Where("legal_opinions.status <> ?", entity.StatusDraft)
 
 	if filter.DateFrom != nil {
 		query = query.Where("legal_opinions.created_at >= ?", *filter.DateFrom)
@@ -137,7 +138,7 @@ func (s *reportService) GetDocumentReviewReport(filter dto.ReportFilter) (*dto.R
 		return nil, errors.New("group_by tidak valid")
 	}
 
-	query := s.db.Table("document_reviews")
+	query := s.db.Table("document_reviews").Where("document_reviews.status <> ?", entity.StatusDraft)
 
 	if filter.DateFrom != nil {
 		query = query.Where("document_reviews.created_at >= ?", *filter.DateFrom)

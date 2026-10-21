@@ -198,8 +198,9 @@ func (s *agreementDocumentService) Create(userID string, req dto.CreateAgreement
 	return s.repo.FindByID(doc.ID)
 }
 func (s *agreementDocumentService) GetAll(userID string, all bool, q dto.AgreementListQuery) ([]entity.AgreementDocument, int64, error) {
+	// ?status=DRAFT selalu hanya memuat draf milik sendiri (PR Draf).
 	var owner *uuid.UUID
-	if !all {
+	if !all || q.Status == string(entity.StatusDraft) {
 		id, e := uuid.Parse(userID)
 		if e != nil {
 			return nil, 0, errors.New("user tidak valid")
@@ -270,7 +271,8 @@ func (s *agreementDocumentService) GetByID(id, userID string, all bool) (*entity
 	if e != nil {
 		return nil, ErrPengajuanTidakAda
 	}
-	if !all && d.UserID.String() != userID {
+	// Draf hanya untuk pemiliknya, juga bagi approver (PR Draf).
+	if (!all || d.Status == entity.StatusDraft) && d.UserID.String() != userID {
 		return nil, ErrPengajuanTidakAda
 	}
 	return d, nil
@@ -355,7 +357,7 @@ func (s *agreementDocumentService) UpdateMeta(id string, req dto.AgreementMetaRe
 		return nil, nil, errors.New("ID tidak valid")
 	}
 	d, e := s.repo.FindByID(uid)
-	if e != nil {
+	if e != nil || d.Status == entity.StatusDraft {
 		return nil, nil, errors.New("pengajuan tidak ditemukan")
 	}
 	if d.Status == entity.StatusCompleted || d.Status == entity.StatusRejected {
@@ -419,7 +421,7 @@ func (s *agreementDocumentService) UpdateStatus(ctx context.Context, id, approve
 		return nil, errors.New("approver tidak valid")
 	}
 	d, e := s.repo.FindByID(uid)
-	if e != nil {
+	if e != nil || d.Status == entity.StatusDraft {
 		return nil, errors.New("pengajuan tidak ditemukan")
 	}
 	target := entity.SubmissionStatus(req.Status)

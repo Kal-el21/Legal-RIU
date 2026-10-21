@@ -102,16 +102,18 @@ func (s *documentReviewService) GetByID(id string, userID string, role string) (
 		return nil, errors.New("pengajuan tidak ditemukan")
 	}
 
-	if !canAccessAllSubmissions(role) && dr.UserID.String() != userID {
+	// Draf hanya untuk pemiliknya, juga bagi yang boleh melihat semua pengajuan (PR Draf).
+	if (!canAccessAllSubmissions(role) || dr.Status == entity.StatusDraft) && dr.UserID.String() != userID {
 		return nil, errors.New("pengajuan tidak ditemukan")
 	}
 
 	return dr, nil
 }
 
+// GetAll: ?status=DRAFT selalu hanya memuat draf milik sendiri (PR Draf).
 func (s *documentReviewService) GetAll(userID string, role string, query dto.DocumentReviewListQuery) ([]entity.DocumentReview, int64, error) {
 	var filterUserID *uuid.UUID
-	if !canAccessAllSubmissions(role) {
+	if !canAccessAllSubmissions(role) || query.Status == string(entity.StatusDraft) {
 		uid, err := parseUUID(userID)
 		if err != nil {
 			return nil, 0, errors.New("user tidak valid")
@@ -196,7 +198,7 @@ func (s *documentReviewService) UpdateStatus(id string, req dto.UpdateStatusRequ
 	}
 
 	dr, err := s.repo.FindByID(uid)
-	if err != nil {
+	if err != nil || dr.Status == entity.StatusDraft {
 		return errors.New("pengajuan tidak ditemukan")
 	}
 
@@ -220,7 +222,7 @@ func (s *documentReviewService) UploadResult(id string, adminID string, req dto.
 
 	// Get current document review to check status
 	dr, err := s.repo.FindByID(uid)
-	if err != nil {
+	if err != nil || dr.Status == entity.StatusDraft {
 		return errors.New("pengajuan tidak ditemukan")
 	}
 

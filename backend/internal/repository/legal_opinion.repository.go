@@ -63,6 +63,8 @@ func (r *legalOpinionRepository) FindAll(userID *uuid.UUID, status string, page,
 	}
 	if status != "" {
 		query = query.Where("status = ?", status)
+	} else {
+		query = query.Scopes(bukanDraf("legal_opinions"))
 	}
 
 	query.Count(&total)

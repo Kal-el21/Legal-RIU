@@ -102,17 +102,19 @@ func (s *legalOpinionService) GetByID(id string, userID string, role string) (*e
 		return nil, errors.New("pengajuan tidak ditemukan")
 	}
 
-	// Regular users can only see their own submissions (BR-001).
-	if !canAccessAllSubmissions(role) && lo.UserID.String() != userID {
+	// Regular users can only see their own submissions (BR-001). Draf hanya untuk
+	// pemiliknya, juga bagi yang boleh melihat semua pengajuan (PR Draf).
+	if (!canAccessAllSubmissions(role) || lo.Status == entity.StatusDraft) && lo.UserID.String() != userID {
 		return nil, errors.New("pengajuan tidak ditemukan")
 	}
 
 	return lo, nil
 }
 
+// GetAll: ?status=DRAFT selalu hanya memuat draf milik sendiri (PR Draf).
 func (s *legalOpinionService) GetAll(userID string, role string, query dto.LegalOpinionListQuery) ([]entity.LegalOpinion, int64, error) {
 	var filterUserID *uuid.UUID
-	if !canAccessAllSubmissions(role) {
+	if !canAccessAllSubmissions(role) || query.Status == string(entity.StatusDraft) {
 		uid, err := parseUUID(userID)
 		if err != nil {
 			return nil, 0, errors.New("user tidak valid")
@@ -201,7 +203,7 @@ func (s *legalOpinionService) UpdateStatus(id string, req dto.UpdateStatusReques
 	}
 
 	lo, err := s.repo.FindByID(uid)
-	if err != nil {
+	if err != nil || lo.Status == entity.StatusDraft {
 		return errors.New("pengajuan tidak ditemukan")
 	}
 
@@ -225,7 +227,7 @@ func (s *legalOpinionService) UploadResult(id string, adminID string, req dto.Up
 
 	// Get current legal opinion to check status
 	lo, err := s.repo.FindByID(uid)
-	if err != nil {
+	if err != nil || lo.Status == entity.StatusDraft {
 		return errors.New("pengajuan tidak ditemukan")
 	}
 

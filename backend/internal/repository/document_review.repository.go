@@ -63,6 +63,8 @@ func (r *documentReviewRepository) FindAll(userID *uuid.UUID, status string, pag
 	}
 	if status != "" {
 		query = query.Where("status = ?", status)
+	} else {
+		query = query.Scopes(bukanDraf("document_reviews"))
 	}
 
 	query.Count(&total)

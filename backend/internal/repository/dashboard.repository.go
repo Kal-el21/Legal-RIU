@@ -43,13 +43,13 @@ func NewDashboardRepository(db *gorm.DB) DashboardRepository {
 
 func (r *dashboardRepository) CountLegalOpinionsByUser(userID uuid.UUID) (int64, error) {
 	var count int64
-	err := r.db.Model(&entity.LegalOpinion{}).Where("user_id = ?", userID).Count(&count).Error
+	err := r.db.Model(&entity.LegalOpinion{}).Scopes(bukanDraf("legal_opinions")).Where("user_id = ?", userID).Count(&count).Error
 	return count, err
 }
 
 func (r *dashboardRepository) CountDocumentReviewsByUser(userID uuid.UUID) (int64, error) {
 	var count int64
-	err := r.db.Model(&entity.DocumentReview{}).Where("user_id = ?", userID).Count(&count).Error
+	err := r.db.Model(&entity.DocumentReview{}).Scopes(bukanDraf("document_reviews")).Where("user_id = ?", userID).Count(&count).Error
 	return count, err
 }
 
@@ -73,13 +73,13 @@ func (r *dashboardRepository) CountAllUsers() (int64, error) {
 
 func (r *dashboardRepository) CountAllLegalOpinions() (int64, error) {
 	var count int64
-	err := r.db.Model(&entity.LegalOpinion{}).Count(&count).Error
+	err := r.db.Model(&entity.LegalOpinion{}).Scopes(bukanDraf("legal_opinions")).Count(&count).Error
 	return count, err
 }
 
 func (r *dashboardRepository) CountAllDocumentReviews() (int64, error) {
 	var count int64
-	err := r.db.Model(&entity.DocumentReview{}).Count(&count).Error
+	err := r.db.Model(&entity.DocumentReview{}).Scopes(bukanDraf("document_reviews")).Count(&count).Error
 	return count, err
 }
 
@@ -97,25 +97,25 @@ func (r *dashboardRepository) CountDocumentReviewsByStatus(status entity.Submiss
 
 func (r *dashboardRepository) RecentLegalOpinionsByUser(userID uuid.UUID, limit int) ([]entity.LegalOpinion, error) {
 	var items []entity.LegalOpinion
-	err := r.db.Where("user_id = ?", userID).Order("created_at DESC").Limit(limit).Find(&items).Error
+	err := r.db.Scopes(bukanDraf("legal_opinions")).Where("user_id = ?", userID).Order("created_at DESC").Limit(limit).Find(&items).Error
 	return items, err
 }
 
 func (r *dashboardRepository) RecentDocumentReviewsByUser(userID uuid.UUID, limit int) ([]entity.DocumentReview, error) {
 	var items []entity.DocumentReview
-	err := r.db.Where("user_id = ?", userID).Order("created_at DESC").Limit(limit).Find(&items).Error
+	err := r.db.Scopes(bukanDraf("document_reviews")).Where("user_id = ?", userID).Order("created_at DESC").Limit(limit).Find(&items).Error
 	return items, err
 }
 
 func (r *dashboardRepository) RecentAllLegalOpinions(limit int) ([]entity.LegalOpinion, error) {
 	var items []entity.LegalOpinion
-	err := r.db.Preload("User").Order("created_at DESC").Limit(limit).Find(&items).Error
+	err := r.db.Scopes(bukanDraf("legal_opinions")).Preload("User").Order("created_at DESC").Limit(limit).Find(&items).Error
 	return items, err
 }
 
 func (r *dashboardRepository) RecentAllDocumentReviews(limit int) ([]entity.DocumentReview, error) {
 	var items []entity.DocumentReview
-	err := r.db.Preload("User").Order("created_at DESC").Limit(limit).Find(&items).Error
+	err := r.db.Scopes(bukanDraf("document_reviews")).Preload("User").Order("created_at DESC").Limit(limit).Find(&items).Error
 	return items, err
 }
 
