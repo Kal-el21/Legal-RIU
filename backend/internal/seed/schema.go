@@ -3,6 +3,7 @@ package seed
 import (
 	"errors"
 	"fmt"
+	"log"
 	"time"
 
 	"legal-riu-portal/internal/entity"
@@ -625,9 +626,38 @@ func RunAllMigrationsAndSeeds(db *gorm.DB, store *storage.MinIOClient) error {
 	if err := SeedNotificationSettings(db); err != nil {
 		return err
 	}
+	if err := RapikanRepositoriKembar(db); err != nil {
+		return err
+	}
 	if err := BackfillRepositoryDocuments(db); err != nil {
 		return err
 	}
 
 	return nil
+}
+
+// RapikanRepositoriKembar menghapus baris Repositori Dokumen yang tersalin ulang setiap
+// server menyala (sebelum PR Draf, BatchUpsert selalu membuat baris baru), lalu memasang
+// indeks unik supaya salinan tidak muncul lagi. Per sumber dan path, yang disisakan baris
+// bernama asli (nama file berbeda dengan nama objek di path); kalau tidak ada, yang paling
+// lama dibuat. Aman dijalankan berulang: tanpa salinan, tidak ada yang dihapus.
+func RapikanRepositoriKembar(db *gorm.DB) error {
+	res := db.Exec(`
+		DELETE FROM repository_documents WHERE id IN (
+			SELECT id FROM (
+				SELECT id, row_number() OVER (
+					PARTITION BY source_type, source_id, file_path
+					ORDER BY (file_name <> regexp_replace(file_path, '^.*/', '')) DESC, created_at, id
+				) AS urut
+				FROM repository_documents
+			) x WHERE urut > 1
+		)`)
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected > 0 {
+		log.Printf("Repositori Dokumen: %d baris salinan dihapus, tersisa satu baris per file", res.RowsAffected)
+	}
+	return db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_repository_documents_sumber
+		ON repository_documents (source_type, source_id, file_path)`).Error
 }

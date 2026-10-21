@@ -291,6 +291,93 @@ func TestRepositoriTanpaPengajuanTerhapus(t *testing.T) {
 	}
 }
 
+// Repositori Dokumen tidak tersalin ulang setiap server menyala, nama asli perkara tidak
+// ditimpa nama objek, dan salinan lama dibersihkan (PR Draf tahap D.1b, keputusan K7).
+func TestRepositoriTidakKembar(t *testing.T) {
+	pemilik := masukPeran(t, entity.RoleUser)
+	legal := masukPeran(t, entity.RoleLegal)
+	jumlah := func(path string) (n int64) {
+		dbTes.Raw("SELECT count(*) FROM repository_documents WHERE file_path = ?", path).Scan(&n)
+		return n
+	}
+	namaDi := func(path string) (nama string) {
+		dbTes.Raw("SELECT file_name FROM repository_documents WHERE file_path = ?", path).Scan(&nama)
+		return nama
+	}
+	backfill := func() {
+		t.Helper()
+		if err := seed.BackfillRepositoryDocuments(dbTes); err != nil {
+			t.Fatalf("backfill: %v", err)
+		}
+	}
+
+	// Lampiran Legal Opinion dan dokumen perkara yang nama aslinya tersimpan saat unggah.
+	lo := semuaModulPengajuan[0].buat(t, pemilik).ID
+	lampiran := "uji-kembar/" + lo + "/a.pdf"
+	if err := dbTes.Create(&entity.LegalOpinionAttachment{LegalOpinionID: uuid.MustParse(lo), FileName: "Surat Asli.pdf", FilePath: lampiran, UploadRound: 1}).Error; err != nil {
+		t.Fatal(err)
+	}
+	perk := buatPerkara(t, legal)
+	dokumen := "legal-cases/documents/case-" + perk.ID + "-uji.pdf"
+	if err := dbTes.Exec("UPDATE legal_cases SET document_link = ? WHERE id = ?", dokumen, perk.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := dbTes.Create(&entity.RepositoryDocument{Title: "Gugatan Asli.pdf", FeatureCode: "case_management", SourceType: "legal_cases",
+		SourceID: perk.ID, FilePath: dokumen, FileName: "Gugatan Asli.pdf", IsActive: true}).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	backfill()
+	backfill()
+	for _, p := range []string{lampiran, dokumen} {
+		if n := jumlah(p); n != 1 {
+			t.Errorf("%s tercatat %d kali sesudah dua kali backfill, harap 1", p, n)
+		}
+	}
+	if got := namaDi(dokumen); got != "Gugatan Asli.pdf" {
+		t.Errorf("nama dokumen perkara sesudah backfill: %q, harap nama aslinya", got)
+	}
+
+	t.Run("SalinanLamaDibersihkan", func(t *testing.T) {
+		var indeks int64
+		dbTes.Raw("SELECT count(*) FROM pg_indexes WHERE indexname = 'idx_repository_documents_sumber'").Scan(&indeks)
+		if indeks != 1 {
+			t.Fatal("indeks unik Repositori Dokumen tidak terpasang saat server menyala")
+		}
+		// Keadaan sebelum D.1b: tanpa indeks unik, dengan salinan bernama objek di kiri-kanan nama asli.
+		if err := dbTes.Exec("DROP INDEX IF EXISTS idx_repository_documents_sumber").Error; err != nil {
+			t.Fatal(err)
+		}
+		salinan := func(nama string) entity.RepositoryDocument {
+			return entity.RepositoryDocument{Title: nama, FeatureCode: "case_management", SourceType: "legal_cases",
+				SourceID: perk.ID, FilePath: dokumen, FileName: nama}
+		}
+		for _, nama := range []string{"case-" + perk.ID + "-uji.pdf", "case-" + perk.ID + "-uji.pdf"} {
+			if err := dbTes.Create(ptr(salinan(nama))).Error; err != nil {
+				t.Fatal(err)
+			}
+		}
+		// Salinan bernama objek dibuat paling dulu, supaya yang disisakan dipilih karena namanya, bukan umurnya.
+		if err := dbTes.Exec("UPDATE repository_documents SET created_at = created_at - interval '1 day' WHERE file_path = ? AND file_name <> 'Gugatan Asli.pdf'", dokumen).Error; err != nil {
+			t.Fatal(err)
+		}
+		if err := seed.RapikanRepositoriKembar(dbTes); err != nil {
+			t.Fatalf("merapikan: %v", err)
+		}
+		if n := jumlah(dokumen); n != 1 {
+			t.Errorf("sesudah dirapikan %s tercatat %d kali, harap 1", dokumen, n)
+		}
+		if got := namaDi(dokumen); got != "Gugatan Asli.pdf" {
+			t.Errorf("baris yang disisakan bernama %q, harap yang bernama asli", got)
+		}
+		if err := dbTes.Create(ptr(salinan("lagi.pdf"))).Error; err == nil {
+			t.Error("salinan baru diterima; indeks unik tidak terpasang")
+		}
+	})
+}
+
+func ptr[T any](v T) *T { return &v }
+
 func statusDi(t *testing.T, tabel, id string) string {
 	t.Helper()
 	var s string
