@@ -44,6 +44,7 @@ type LegalCaseService interface {
 	ImportChronologies(scope *uuid.UUID, caseID string, file *multipart.FileHeader) (*dto.ImportResult, error)
 	GenerateChronologyTemplate() (*bytes.Buffer, error)
 	ViewFile(scope *uuid.UUID, filePath string) (*minio.Object, string, error)
+	FileName(filePath string) string
 
 	ListRegencies(search string, limit int) ([]dto.RegencyResponse, error)
 	CreateRegency(req dto.CreateRegencyRequest) (*dto.RegencyResponse, error)
@@ -431,6 +432,23 @@ func (s *legalCaseService) DownloadFile(scope *uuid.UUID, filePath string) (*min
 		return nil, err
 	}
 	return s.storage.GetFileObject(context.Background(), filePath)
+}
+
+// FileName: nama unduhan file perkara, mis. LC-202610-0001_Dokumen_gugatan.pdf atau
+// LC-202610-0001_Kronologi_2026-10-05.pdf. Hanya dipanggil sesudah DownloadFile atau
+// ViewFile memeriksa hak aksesnya.
+func (s *legalCaseService) FileName(filePath string) string {
+	tiket, jenis, ket := s.repo.NamaFilePerkara(filePath)
+	switch jenis {
+	case "":
+		return filepath.Base(filePath)
+	case "Kronologi":
+		return utils.NamaUnduhan(tiket, jenis, ket) + filepath.Ext(filePath)
+	}
+	if ket == "" {
+		ket = filepath.Base(filePath)
+	}
+	return utils.NamaUnduhan(tiket, jenis, ket)
 }
 
 func (s *legalCaseService) ListRegencies(search string, limit int) ([]dto.RegencyResponse, error) {

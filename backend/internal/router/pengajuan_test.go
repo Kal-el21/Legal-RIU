@@ -22,11 +22,12 @@ type modulPengajuan struct {
 	kolomJudul string            // kolom yang diubah di tes ubah
 	kolom      map[string]string // isi form yang sah
 	pdfPemilik bool              // USER punya route PDF sendiri (hanya Legal Opinion)
+	namaPDF    string            // bagian nama file PDF ringkasan sesudah nomor tiket
 }
 
 var semuaModulPengajuan = []modulPengajuan{
 	{
-		nama: "LegalOpinion", tabel: "legal_opinions", alamat: "/legal-opinions", kolomJudul: "title", pdfPemilik: true,
+		nama: "LegalOpinion", tabel: "legal_opinions", alamat: "/legal-opinions", kolomJudul: "title", pdfPemilik: true, namaPDF: "Legal-Opinion",
 		kolom: map[string]string{
 			"requestor_name": "Budi", "requestor_position": "Staff", "requestor_division": "Divisi Tes",
 			"requestor_email": "budi@example.com", "requestor_phone": "08123456789",
@@ -35,7 +36,7 @@ var semuaModulPengajuan = []modulPengajuan{
 		},
 	},
 	{
-		nama: "ReviewDocument", tabel: "document_reviews", alamat: "/review-documents", kolomJudul: "document_name",
+		nama: "ReviewDocument", tabel: "document_reviews", alamat: "/review-documents", kolomJudul: "document_name", namaPDF: "Review-Document",
 		kolom: map[string]string{
 			"requestor_name": "Budi", "requestor_position": "Staff", "requestor_division": "Divisi Tes",
 			"requestor_email": "budi@example.com", "requestor_phone": "08123456789",
@@ -111,10 +112,12 @@ func (m modulPengajuan) adaDiDaftar(t *testing.T, token, awalan, id string) bool
 	return false
 }
 
-func (m modulPengajuan) unduh(t *testing.T, token, path string) []byte {
+// unduh mengambil file dan memeriksa nama unduhannya.
+func (m modulPengajuan) unduh(t *testing.T, token, path, nama string) []byte {
 	t.Helper()
 	w := panggil(t, token, http.MethodGet, m.url("", "/download?path=", url.QueryEscape(path)), nil)
 	harapKode(t, w, http.StatusOK, "mengunduh "+path)
+	harapNamaUnduhan(t, w, nama, "mengunduh "+path)
 	return w.Body.Bytes()
 }
 
@@ -209,6 +212,7 @@ func TestAlurPengajuan(t *testing.T) {
 				if !bytes.HasPrefix(w.Body.Bytes(), []byte("%PDF")) {
 					t.Errorf("jawaban PDF%s bukan PDF", k.awalan)
 				}
+				harapNamaUnduhan(t, w, p.TicketNumber+"_"+m.namaPDF+".pdf", "PDF"+k.awalan)
 			}
 
 			// Kolom wajib yang kosong ditolak.
@@ -254,11 +258,11 @@ func TestBerkasPengajuan(t *testing.T) {
 		t.Run(m.nama, func(t *testing.T) {
 			isiA, isiB, isiHasil := []byte("lampiran pertama"), []byte("lampiran kedua"), []byte("hasil kajian")
 
-			p := m.buat(t, pemilik, berkas{"attachments", "lampiran.pdf", isiA})
-			if len(p.Attachments) != 1 || p.Attachments[0].UploadRound != 1 || p.Attachments[0].FileName != "lampiran.pdf" {
+			p := m.buat(t, pemilik, berkas{"attachments", "Surat Penawaran Résumé.pdf", isiA})
+			if len(p.Attachments) != 1 || p.Attachments[0].UploadRound != 1 || p.Attachments[0].FileName != "Surat Penawaran Résumé.pdf" {
 				t.Fatalf("lampiran setelah dibuat: %+v", p.Attachments)
 			}
-			if got := m.unduh(t, pemilik, p.Attachments[0].FilePath); !bytes.Equal(got, isiA) {
+			if got := m.unduh(t, pemilik, p.Attachments[0].FilePath, p.TicketNumber+"_Lampiran_Surat Penawaran Résumé.pdf"); !bytes.Equal(got, isiA) {
 				t.Errorf("isi lampiran yang diunduh berbeda: %q", got)
 			}
 
@@ -286,7 +290,7 @@ func TestBerkasPengajuan(t *testing.T) {
 			if p.Status != "COMPLETED" || len(p.Results) != 1 || p.Results[0].Notes != "sudah dikaji" {
 				t.Fatalf("setelah unggah hasil: status %q, hasil %+v", p.Status, p.Results)
 			}
-			if got := m.unduh(t, pemilik, p.Results[0].FilePath); !bytes.Equal(got, isiHasil) {
+			if got := m.unduh(t, pemilik, p.Results[0].FilePath, p.TicketNumber+"_Hasil_hasil.pdf"); !bytes.Equal(got, isiHasil) {
 				t.Errorf("isi hasil yang diunduh berbeda: %q", got)
 			}
 		})

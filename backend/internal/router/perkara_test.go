@@ -294,6 +294,7 @@ func TestAlurPerkara(t *testing.T) {
 			if !bytes.HasPrefix(w.Body.Bytes(), []byte("%PDF")) {
 				t.Errorf("jawaban %s bukan PDF", k.alamat)
 			}
+			harapNamaUnduhan(t, w, p.TicketNumber+"_Perkara.pdf", "PDF perkara "+k.alamat)
 		}
 	})
 
@@ -400,10 +401,11 @@ func TestBerkasPerkara(t *testing.T) {
 	alamat := perkaraLegal + "/" + p.ID
 	isiDok, isiFoto, isiLampiran := []byte("dokumen perkara"), []byte("foto perkara"), []byte("lampiran kronologi")
 
-	unduh := func(jalur, path string) *bytes.Buffer {
+	unduh := func(jalur, path, nama string) *bytes.Buffer {
 		t.Helper()
 		w := panggil(t, legal, http.MethodGet, perkaraLegal+jalur+"?path="+url.QueryEscape(path), nil)
 		harapKode(t, w, http.StatusOK, "mengambil "+path)
+		harapNamaUnduhan(t, w, nama, "mengambil "+path)
 		return w.Body
 	}
 
@@ -414,7 +416,7 @@ func TestBerkasPerkara(t *testing.T) {
 	if !strings.HasPrefix(p.DocumentLink, "legal-cases/documents/") {
 		t.Fatalf("alamat dokumen: %q", p.DocumentLink)
 	}
-	if got := unduh("/download", p.DocumentLink); !bytes.Equal(got.Bytes(), isiDok) {
+	if got := unduh("/download", p.DocumentLink, p.TicketNumber+"_Dokumen_gugatan.pdf"); !bytes.Equal(got.Bytes(), isiDok) {
 		t.Errorf("isi dokumen yang diunduh berbeda: %q", got)
 	}
 	harapKode(t, panggilForm(t, legal, http.MethodPost, alamat+"/upload-document", nil, berkas{"document", "program.exe", []byte("x")}), http.StatusBadRequest, "unggah dokumen .exe")
@@ -428,7 +430,7 @@ func TestBerkasPerkara(t *testing.T) {
 	w = panggilForm(t, legal, http.MethodPost, alamat+"/photo", nil, berkas{"photo", "sidang.png", isiFoto})
 	harapKode(t, w, http.StatusOK, "unggah foto")
 	isiData(t, w, &p)
-	if got := unduh("/file", p.Photo); !bytes.Equal(got.Bytes(), isiFoto) {
+	if got := unduh("/file", p.Photo, p.TicketNumber+"_Foto_sidang.png"); !bytes.Equal(got.Bytes(), isiFoto) {
 		t.Errorf("isi foto yang dilihat berbeda: %q", got)
 	}
 	harapKode(t, panggil(t, legal, http.MethodDelete, alamat+"/photo", nil), http.StatusOK, "hapus foto")
@@ -451,7 +453,7 @@ func TestBerkasPerkara(t *testing.T) {
 	if len(k.Documents) != 1 {
 		t.Fatalf("lampiran kronologi: %+v", k.Documents)
 	}
-	if got := unduh("/download", k.Documents[0]); !bytes.Equal(got.Bytes(), isiLampiran) {
+	if got := unduh("/download", k.Documents[0], p.TicketNumber+"_Kronologi_2026-10-05.pdf"); !bytes.Equal(got.Bytes(), isiLampiran) {
 		t.Errorf("isi lampiran kronologi berbeda: %q", got)
 	}
 

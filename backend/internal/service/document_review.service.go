@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"mime/multipart"
+	"path"
 
 	"legal-riu-portal/internal/dto"
 	"legal-riu-portal/internal/entity"
@@ -25,7 +26,7 @@ type DocumentReviewService interface {
 	Resubmit(id string, userID string, files []*multipart.FileHeader) (*entity.DocumentReview, error)
 	UpdateStatus(id string, req dto.UpdateStatusRequest) error
 	UploadResult(id string, adminID string, req dto.UploadResultRequest, file *multipart.FileHeader) error
-	DownloadFile(filePath, userID, role string) (*minio.Object, error)
+	DownloadFile(filePath, userID, role string) (*minio.Object, string, error)
 
 	GeneratePDF(id string) ([]byte, error)
 }
@@ -252,16 +253,26 @@ func (s *documentReviewService) UploadResult(id string, adminID string, req dto.
 
 // DownloadFile hanya melayani file yang terdaftar sebagai lampiran atau hasil
 // kajian pengajuan modul ini, dan hanya untuk yang boleh melihat pengajuannya.
-// Path lain, termasuk file modul lain, dijawab ErrFileNotFound.
-func (s *documentReviewService) DownloadFile(filePath, userID, role string) (*minio.Object, error) {
-	id, err := s.repo.FindIDByFilePath(filePath)
+// Path lain, termasuk file modul lain, dijawab ErrFileNotFound. Nama unduhannya
+// <tiket>_Lampiran_<nama asli> atau <tiket>_Hasil_<nama asli>.
+func (s *documentReviewService) DownloadFile(filePath, userID, role string) (*minio.Object, string, error) {
+	id, nama, hasil, err := s.repo.FindFileByPath(filePath)
 	if err != nil {
-		return nil, ErrFileNotFound
+		return nil, "", ErrFileNotFound
 	}
-	if _, err := s.GetByID(id.String(), userID, role); err != nil {
-		return nil, ErrFileNotFound
+	p, err := s.GetByID(id.String(), userID, role)
+	if err != nil {
+		return nil, "", ErrFileNotFound
 	}
-	return s.storage.GetFileObject(context.Background(), filePath)
+	jenis := "Lampiran"
+	if hasil {
+		jenis = "Hasil"
+	}
+	if nama == "" {
+		nama = path.Base(filePath)
+	}
+	obj, err := s.storage.GetFileObject(context.Background(), filePath)
+	return obj, utils.NamaUnduhan(p.TicketNumber, jenis, nama), err
 }
 
 func (s *documentReviewService) uploadAttachments(drID uuid.UUID, files []*multipart.FileHeader, round int) error {

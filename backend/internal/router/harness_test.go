@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"mime"
 	"mime/multipart"
 	"net"
 	"net/http"
@@ -301,6 +302,16 @@ func harapKode(t testing.TB, w *httptest.ResponseRecorder, kode int, konteks str
 }
 
 // isiData membaca kolom "data" dari jawaban API ke dalam tujuan.
+// harapNamaUnduhan memeriksa nama file di header Content-Disposition, dibaca dengan aturan
+// yang sama dengan browser (bentuk filename* untuk huruf non-Latin).
+func harapNamaUnduhan(t testing.TB, w *httptest.ResponseRecorder, harap, konteks string) {
+	t.Helper()
+	h := w.Header().Get("Content-Disposition")
+	if _, p, err := mime.ParseMediaType(h); err != nil || p["filename"] != harap {
+		t.Errorf("%s: nama unduhan dari %q (%v), harap %q", konteks, h, err, harap)
+	}
+}
+
 func isiData(t testing.TB, w *httptest.ResponseRecorder, tujuan any) {
 	t.Helper()
 	var amplop struct {

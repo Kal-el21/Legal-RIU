@@ -20,7 +20,7 @@ type DocumentReviewRepository interface {
 	AddAttachment(att *entity.DocumentReviewAttachment) error
 	GetLatestUploadRound(drID uuid.UUID) (int, error)
 	AddResult(result *entity.DocumentReviewResult) error
-	FindIDByFilePath(path string) (uuid.UUID, error)
+	FindFileByPath(path string) (id uuid.UUID, fileName string, isResult bool, err error)
 }
 
 type documentReviewRepository struct {
@@ -114,16 +114,17 @@ func (r *documentReviewRepository) AddResult(result *entity.DocumentReviewResult
 	return r.db.Create(result).Error
 }
 
-// FindIDByFilePath mengembalikan pengajuan pemilik sebuah file, dari lampiran
-// maupun hasil kajiannya. File yang tidak terdaftar di modul ini tidak ditemukan.
-func (r *documentReviewRepository) FindIDByFilePath(path string) (uuid.UUID, error) {
+// FindFileByPath mengembalikan pengajuan pemilik sebuah file beserta nama aslinya, dari
+// lampiran (isResult false) maupun hasil kajiannya (isResult true). File yang tidak
+// terdaftar di modul ini tidak ditemukan.
+func (r *documentReviewRepository) FindFileByPath(path string) (uuid.UUID, string, bool, error) {
 	var att entity.DocumentReviewAttachment
 	if err := r.db.Where("file_path = ?", path).First(&att).Error; err == nil {
-		return att.DocumentReviewID, nil
+		return att.DocumentReviewID, att.FileName, false, nil
 	}
 	var res entity.DocumentReviewResult
 	if err := r.db.Where("file_path = ?", path).First(&res).Error; err != nil {
-		return uuid.Nil, err
+		return uuid.Nil, "", false, err
 	}
-	return res.DocumentReviewID, nil
+	return res.DocumentReviewID, res.FileName, true, nil
 }

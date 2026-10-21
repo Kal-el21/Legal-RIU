@@ -504,7 +504,7 @@ func (s *agreementDocumentService) approve(ctx context.Context, d *entity.Agreem
 	}
 	snap, _ := json.Marshal(snapshot)
 	now := time.Now()
-	ok, e := s.repo.Complete(d.ID, entity.StatusUnderReview, map[string]interface{}{"status": entity.StatusCompleted, "status_updated_at": now, "party_one_snapshot": snap, "generated_docx_path": base + ".docx", "generated_pdf_path": base + ".pdf", "generated_file_name": "perjanjian-" + d.TicketNumber, "template_id": tpl.ID, "template_checksum": checksum, "approved_by": aid, "approved_at": now, "approver_note": ""})
+	ok, e := s.repo.Complete(d.ID, entity.StatusUnderReview, map[string]interface{}{"status": entity.StatusCompleted, "status_updated_at": now, "party_one_snapshot": snap, "generated_docx_path": base + ".docx", "generated_pdf_path": base + ".pdf", "generated_file_name": namaPerjanjian(d), "template_id": tpl.ID, "template_checksum": checksum, "approved_by": aid, "approved_at": now, "approver_note": ""})
 	if e != nil || !ok {
 		s.storage.DeleteFile(ctx, base+".docx")
 		s.storage.DeleteFile(ctx, base+".pdf")
@@ -646,7 +646,17 @@ func (s *agreementDocumentService) GetGeneratedFile(id, userID string, all bool,
 	if e != nil {
 		return nil, "", errors.New("dokumen final tidak tersedia")
 	}
-	return obj, d.GeneratedFileName + ext, e
+	// Dihitung dari pengajuannya, bukan dari generated_file_name, supaya perjanjian yang
+	// disetujui sebelum PR 12 ikut mendapat nama baru.
+	return obj, namaPerjanjian(d) + ext, e
+}
+
+// namaPerjanjian: nama unduhan perjanjian final, <tiket>_<kode jenis>_<nama pihak kedua>.
+// Jenis yang tidak punya isian pihak_kedua_nama cukup <tiket>_<kode jenis> (PR 12, N1).
+func namaPerjanjian(d *entity.AgreementDocument) string {
+	data, _ := decodeForm(d.FormData)
+	pihak, _ := data["pihak_kedua_nama"].(string)
+	return utils.NamaUnduhan(d.TicketNumber, d.DocumentTypeCode, pihak)
 }
 func (s *agreementDocumentService) GetAttachment(id, attachmentID, userID string, all bool) (*minio.Object, string, string, error) {
 	d, e := s.GetByID(id, userID, all)
@@ -662,7 +672,7 @@ func (s *agreementDocumentService) GetAttachment(id, attachmentID, userID string
 		return nil, "", "", errors.New("attachment tidak ditemukan")
 	}
 	obj, e := s.storage.GetFileObject(context.Background(), a.FilePath)
-	return obj, a.FileName, a.MIMEType, e
+	return obj, utils.NamaUnduhan(d.TicketNumber, "Lampiran", a.FileName), a.MIMEType, e
 }
 func (s *agreementDocumentService) GetMaster() (*entity.AgreementCompanyMaster, error) {
 	return s.repo.GetActiveMaster()

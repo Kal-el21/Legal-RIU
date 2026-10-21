@@ -1,4 +1,5 @@
 import api from './api'
+import { namaDariHeader } from '@/lib/nama-unduhan'
 import type { ApiResponse, RepositoryDocument } from '@/types'
 
 export const documentRepositoryService = {
@@ -14,12 +15,7 @@ export const documentRepositoryService = {
     const res = await api.get(`/document-repositories/${id}/download`, {
       responseType: 'blob',
     })
-    const contentDisposition = res.headers['content-disposition']
-    let filename = 'download'
-    if (contentDisposition) {
-      const match = contentDisposition.match(/filename="?([^"]+)"?/i)
-      if (match) filename = match[1]
-    }
+    const filename = namaDariHeader(res.headers['content-disposition'], 'download')
     return { blob: res.data, filename }
   },
 }
