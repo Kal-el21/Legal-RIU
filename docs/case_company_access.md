@@ -239,6 +239,11 @@ Dokumen yang tidak boleh dilihat dijawab "tidak ditemukan". Dokumen dari sumber
 yang tidak dikenali aturan di atas tidak ditampilkan ke siapa pun, jadi modul
 baru yang mengirim file ke repositori harus menambahkan aturannya lebih dulu.
 
+File masuk repositori saat diunggah, dan tidak tampil lagi saat file itu diganti
+atau dihapus, atau saat pengajuan atau perkaranya dihapus. Draf tidak masuk sampai
+dikirim. Saat server menyala, backfill mencocokkan ulang repositori dengan data
+yang ada, sebagai jaring pengaman.
+
 Rujukan kode: `DocumentAccess` di
 `backend/internal/repository/document_repository.repository.go` (saringannya)
 dan `access()` di `backend/internal/handler/document_repository.handler.go`
