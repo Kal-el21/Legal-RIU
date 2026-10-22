@@ -343,7 +343,9 @@ func TestRujukanPerkara(t *testing.T) {
 
 		// Impor: nama yang sudah ada dan nama kosong dilaporkan, sisanya masuk.
 		csv := "name,description\nCedant Impor A,satu\nCedant Rujukan Baru,sudah ada\n,tanpa nama\n"
-		w = panggilForm(t, legal, http.MethodPost, alamat+"/import", nil, berkas{"file", "cedant.csv", []byte(csv)})
+		harapSatuAuditBaru(t, "cedant", entity.ActionFileUpload, uuid.Nil.String(), "impor cedant", func() {
+			w = panggilForm(t, legal, http.MethodPost, alamat+"/import", nil, berkas{"file", "cedant.csv", []byte(csv)})
+		})
 		harapKode(t, w, http.StatusOK, "impor cedant")
 		var hasil hasilImpor
 		isiData(t, w, &hasil)

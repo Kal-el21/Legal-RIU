@@ -1,8 +1,10 @@
 package router
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -43,6 +45,24 @@ func harapAuditBaru(t *testing.T, id string, sebelum int, aksi entity.AuditActio
 		t.Errorf("%s: aksi %s, keterangan %q; harap %s yang memuat %q", konteks, b.Action, ket, aksi, memuat)
 	}
 	return b
+}
+
+// jumlahAudit: banyaknya baris audit untuk satu jenis entitas, aksi, dan ID entitas. Baris
+// impor Excel memakai ID kosong (uuid.Nil).
+func jumlahAudit(t *testing.T, jenis string, aksi entity.AuditAction, id string) int64 {
+	t.Helper()
+	return hitungBaris(t, "SELECT COUNT(*) FROM audit_logs WHERE entity_type = ? AND action = ? AND entity_id = ?", jenis, aksi, id)
+}
+
+// harapSatuAuditBaru menjalankan aksi lalu memeriksa bahwa tepat satu baris audit baru tercatat
+// untuk jenis entitas, aksi, dan ID itu (PR A tahap A.1b).
+func harapSatuAuditBaru(t *testing.T, jenis string, aksi entity.AuditAction, id, konteks string, jalankan func()) {
+	t.Helper()
+	sebelum := jumlahAudit(t, jenis, aksi, id)
+	jalankan()
+	if n := jumlahAudit(t, jenis, aksi, id) - sebelum; n != 1 {
+		t.Errorf("%s: %d baris audit %s %s baru, harap 1", konteks, n, jenis, aksi)
+	}
 }
 
 // Setiap aksi pada pengajuan perjanjian tercatat di audit log seperti Legal Opinion dan
@@ -105,4 +125,26 @@ func TestAuditPerjanjian(t *testing.T) {
 		isiData(t, w, &terkirim)
 		harapAuditBaru(t, d.ID, 0, entity.ActionUserUpdate, terkirim.TicketNumber+" dikirim dari draf", "kirim draf")
 	})
+}
+
+// Login lewat proxy (nginx) dengan X-Forwarded-For berisi beberapa alamat tetap tercatat, dengan
+// alamat pengguna saja. Dulu seluruh isi header disimpan, lebih panjang dari kolom ip_address
+// (45 karakter), sehingga baris login gagal tersimpan tanpa galat (PR A tahap A.1b).
+func TestLoginLewatProxyTercatat(t *testing.T) {
+	const surel = "tes-login-proxy@example.com"
+	userKhusus(t, surel)
+	var idUser string
+	dbTes.Raw("SELECT id::text FROM users WHERE email = ?", surel).Scan(&idUser)
+
+	isi, _ := json.Marshal(map[string]string{"email": surel, "password": sandiTes})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewReader(isi))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Forwarded-For", "203.0.113.7, 10.10.10.11, 10.10.10.12, 10.10.10.13, 10.10.10.14")
+	harapKode(t, kirim(t, "", req), http.StatusOK, "login lewat proxy")
+
+	var ip []string
+	dbTes.Raw("SELECT ip_address FROM audit_logs WHERE action = ? AND entity_id = ?", entity.ActionLogin, idUser).Scan(&ip)
+	if len(ip) != 1 || ip[0] != "203.0.113.7" {
+		t.Errorf("baris login lewat proxy: %v, harap satu baris dengan IP 203.0.113.7", ip)
+	}
 }

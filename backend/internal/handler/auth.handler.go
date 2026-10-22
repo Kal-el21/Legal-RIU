@@ -24,13 +24,6 @@ func NewAuthHandler(authService service.AuthService, cfg *config.Config, auditLo
 	return &AuthHandler{authService: authService, cfg: cfg, auditLogSvc: auditLogSvc}
 }
 
-func getClientIP(c *gin.Context) string {
-	if forwarded := c.GetHeader("X-Forwarded-For"); forwarded != "" {
-		return forwarded
-	}
-	return c.ClientIP()
-}
-
 func getUserAgent(c *gin.Context) string {
 	return c.GetHeader("User-Agent")
 }
@@ -69,7 +62,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	ip := getClientIP(c)
+	ip := c.ClientIP()
 	ua := getUserAgent(c)
 	res, err := h.authService.Login(req, &ip, &ua)
 	if err != nil {
@@ -248,7 +241,7 @@ func (h *AuthHandler) LDAPLogin(c *gin.Context) {
 		return
 	}
 
-	ip := getClientIP(c)
+	ip := c.ClientIP()
 	ua := getUserAgent(c)
 
 	res, err := h.authService.LDAPLogin(req, &ip, &ua)

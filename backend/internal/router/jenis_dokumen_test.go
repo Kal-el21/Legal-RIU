@@ -435,6 +435,10 @@ func TestJenisDokumenHanyaAdmin(t *testing.T) {
 	harapKode(t, w, http.StatusCreated, "ADMIN membuat jenis dokumen")
 	var j jenisDokumen
 	isiData(t, w, &j)
+	idJenis := idJenisDokumen(t, kode)
+	if n := jumlahAudit(t, "agreement_type", entity.ActionUserUpdate, idJenis); n != 1 {
+		t.Errorf("audit membuat jenis dokumen: %d baris, harap 1", n)
+	}
 	if j.Code != kode || !j.IsActive || len(j.Fields) != 1 || j.Fields[0].Fields[0].Name != "nama_mitra" || j.Fields[0].Fields[0].Label != "Nama Mitra" {
 		t.Errorf("jenis baru (kode huruf besar, nama field huruf kecil, label dirapikan): %+v", j)
 	}
@@ -454,6 +458,9 @@ func TestJenisDokumenHanyaAdmin(t *testing.T) {
 	// Mengubah tanpa mengirim field tidak mengosongkan field yang tersimpan.
 	w = panggil(t, admin, http.MethodPut, alamatJenis+"/"+kode, map[string]any{"name": "Perjanjian Uji Diubah", "is_active": false})
 	harapKode(t, w, http.StatusOK, "ADMIN menonaktifkan jenis dokumen")
+	if n := jumlahAudit(t, "agreement_type", entity.ActionUserUpdate, idJenis); n != 2 {
+		t.Errorf("audit membuat dan mengubah jenis dokumen: %d baris, harap 2", n)
+	}
 	isiData(t, w, &j)
 	if j.Name != "Perjanjian Uji Diubah" || j.IsActive || len(j.Fields) != 1 {
 		t.Errorf("jenis setelah diubah tanpa field: %+v", j)
@@ -625,6 +632,13 @@ func TestTemplateDicocokkanDenganField(t *testing.T) {
 			t.Errorf("peringatan deretan Enter kosong: %v", hasil.Validation.Warnings)
 		}
 		harapKode(t, panggil(t, admin, http.MethodPost, alamatKelolaTemplate+"/"+hasil.Template.ID+"/activate", nil), http.StatusOK, "mengaktifkan versi pertama")
+		// Audit log (PR A tahap A.1b): unggah dan aktifkan dulu diam-diam tidak tercatat.
+		if n := jumlahAudit(t, "agreement_template", entity.ActionFileUpload, hasil.Template.ID); n != 1 {
+			t.Errorf("audit unggah template: %d baris, harap 1", n)
+		}
+		if n := jumlahAudit(t, "agreement_template", entity.ActionStatusChange, hasil.Template.ID); n != 1 {
+			t.Errorf("audit aktifkan template: %d baris, harap 1", n)
+		}
 		if id := isiPengajuan(t, user, kode, nil)["template_id"]; id != hasil.Template.ID {
 			t.Errorf("form jenis baru memakai template %v, harus %s", id, hasil.Template.ID)
 		}
@@ -1004,4 +1018,15 @@ func TestTempatTandaTanganSaatPersetujuan(t *testing.T) {
 		harapKode(t, panggil(t, legal, http.MethodPatch, urlPerjanjian("/legal", "/", p.ID, "/meta"), map[string]string{"signing_place": "Bandung"}), http.StatusOK, "approver mengisi tempat")
 		statusPerjanjian(t, legal, p.ID, "COMPLETED", "", http.StatusOK)
 	})
+}
+
+// idJenisDokumen: ID jenis dokumen dari kodenya, untuk mencocokkan baris audit log.
+func idJenisDokumen(t *testing.T, kode string) string {
+	t.Helper()
+	var id string
+	dbTes.Raw("SELECT id::text FROM agreement_types WHERE code = ?", kode).Scan(&id)
+	if id == "" {
+		t.Fatalf("jenis dokumen %s tidak ada di database", kode)
+	}
+	return id
 }
