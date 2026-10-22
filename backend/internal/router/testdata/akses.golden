@@ -42,6 +42,7 @@ DELETE /api/v1/legal/legal-cases/:id/photo: LEGAL
 DELETE /api/v1/legal/legal-cases/cedants/:id: LEGAL
 DELETE /api/v1/legal/materials/:id: LEGAL
 DELETE /api/v1/review-documents/:id: USER
+DELETE /api/v1/review-documents/:id/attachments/:attachmentId: USER
 GET /api/v1/admin/agreement-company-master: ADMIN
 GET /api/v1/admin/agreement-documents: ADMIN
 GET /api/v1/admin/agreement-documents/:id: ADMIN
@@ -311,6 +312,8 @@ POST /api/v1/legal/materials: LEGAL
 POST /api/v1/legal/review-documents/:id/result: LEGAL
 POST /api/v1/review-documents: USER
 POST /api/v1/review-documents/:id/resubmit: USER
+POST /api/v1/review-documents/:id/submit: USER
+POST /api/v1/review-documents/drafts: USER
 PUT /api/v1/admin/agreement-company-master: ADMIN
 PUT /api/v1/admin/agreement-signatories/:id: ADMIN
 PUT /api/v1/admin/agreement-types/:code: ADMIN
@@ -345,6 +348,7 @@ PUT /api/v1/legal/legal-cases/:id/chronology/:chronId: LEGAL
 PUT /api/v1/legal/legal-cases/cedants/:id: LEGAL
 PUT /api/v1/legal/materials/:id: LEGAL
 PUT /api/v1/review-documents/:id: USER
+PUT /api/v1/review-documents/:id/draft: USER
 PUT /api/v1/settings/notifications: ADMIN LEGAL LEGAL_AU USER EXTERNAL
 PUT /api/v1/settings/profile: ADMIN LEGAL LEGAL_AU USER EXTERNAL
 PUT /api/v1/settings/two-fa: ADMIN LEGAL LEGAL_AU USER EXTERNAL

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"mime/multipart"
 	"path"
+	"time"
 
 	"legal-riu-portal/internal/dto"
 	"legal-riu-portal/internal/entity"
@@ -29,6 +30,10 @@ type DocumentReviewService interface {
 	DownloadFile(filePath, userID, role string) (*minio.Object, string, error)
 
 	GeneratePDF(id string) ([]byte, error)
+	SaveDraft(userID string, req dto.CreateDocumentReviewRequest, files []*multipart.FileHeader) (*entity.DocumentReview, error)
+	UpdateDraft(id, userID string, req dto.CreateDocumentReviewRequest, files []*multipart.FileHeader) (*entity.DocumentReview, error)
+	DeleteDraftAttachment(id, attachmentID, userID string) error
+	SubmitDraft(id, userID string) (*entity.DocumentReview, error)
 }
 
 type documentReviewService struct {
@@ -57,22 +62,8 @@ func (s *documentReviewService) Create(userID string, req dto.CreateDocumentRevi
 	}
 	ticket := utils.GenerateTicketNumber(utils.PrefixDocumentReview, seq)
 
-	dr := &entity.DocumentReview{
-		TicketNumber:      ticket,
-		UserID:            uid,
-		RequestorName:     req.RequestorName,
-		RequestorPosition: req.RequestorPosition,
-		RequestorDivision: req.RequestorDivision,
-		RequestorEmail:    req.RequestorEmail,
-		RequestorPhone:    req.RequestorPhone,
-		DocumentName:      req.DocumentName,
-		SecondParty:       req.SecondParty,
-		ThirdParty:        req.ThirdParty,
-		DocumentType:      req.DocumentType,
-		DocumentTypeOther: req.DocumentTypeOther,
-		AdditionalNote:    req.AdditionalNote,
-		Status:            entity.StatusSubmitted,
-	}
+	dr := &entity.DocumentReview{TicketNumber: ticket, UserID: uid, Status: entity.StatusSubmitted}
+	isiDocumentReview(dr, req)
 
 	if err := s.repo.Create(dr); err != nil {
 		return nil, errors.New("gagal membuat pengajuan")
@@ -155,6 +146,19 @@ func (s *documentReviewService) Delete(id string, userID string) error {
 	dr, err := s.GetByID(id, userID, string(entity.RoleUser))
 	if err != nil {
 		return err
+	}
+
+	// Draf dihapus permanen beserta lampirannya (PR Draf).
+	if dr.Status == entity.StatusDraft {
+		paths := make([]string, 0, len(dr.Attachments))
+		for _, a := range dr.Attachments {
+			paths = append(paths, a.FilePath)
+		}
+		if err := s.repo.HardDelete(dr.ID); err != nil {
+			return errors.New("gagal menghapus draf")
+		}
+		hapusFileDraf(s.storage, paths)
+		return nil
 	}
 
 	if dr.Status != entity.StatusSubmitted {
@@ -275,6 +279,124 @@ func (s *documentReviewService) DownloadFile(filePath, userID, role string) (*mi
 	}
 	obj, err := s.storage.GetFileObject(context.Background(), filePath)
 	return obj, utils.NamaUnduhan(p.TicketNumber, jenis, nama), err
+}
+
+// ─── Draf (PR Draf) ───────────────────────────────────────────────────────────
+// Sama dengan draf Legal Opinion; pembantu bersamanya ada di helpers.go.
+
+// SaveDraft menyimpan draf baru. Isian boleh belum lengkap; lampiran tetap diperiksa.
+func (s *documentReviewService) SaveDraft(userID string, req dto.CreateDocumentReviewRequest, files []*multipart.FileHeader) (*entity.DocumentReview, error) {
+	uid, err := parseUUID(userID)
+	if err != nil {
+		return nil, errors.New("user tidak valid")
+	}
+	if err := validateFiles(files); err != nil {
+		return nil, err
+	}
+	dr := &entity.DocumentReview{TicketNumber: nomorDraf(), UserID: uid, Status: entity.StatusDraft}
+	isiDocumentReview(dr, req)
+	if err := s.repo.Create(dr); err != nil {
+		return nil, errors.New("gagal menyimpan draf")
+	}
+	if err := s.uploadAttachments(dr.ID, files, 1); err != nil {
+		_ = s.repo.HardDelete(dr.ID)
+		return nil, err
+	}
+	return s.repo.FindByID(dr.ID)
+}
+
+// UpdateDraft mengganti isian draf dan menambah lampiran baru.
+func (s *documentReviewService) UpdateDraft(id, userID string, req dto.CreateDocumentReviewRequest, files []*multipart.FileHeader) (*entity.DocumentReview, error) {
+	dr, err := s.drafMilik(id, userID)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateFiles(files); err != nil {
+		return nil, err
+	}
+	isiDocumentReview(dr, req)
+	if err := s.repo.Update(dr); err != nil {
+		return nil, errors.New("gagal menyimpan draf")
+	}
+	if err := s.uploadAttachments(dr.ID, files, 1); err != nil {
+		return nil, err
+	}
+	return s.repo.FindByID(dr.ID)
+}
+
+// DeleteDraftAttachment menghapus permanen satu lampiran draf beserta filenya.
+func (s *documentReviewService) DeleteDraftAttachment(id, attachmentID, userID string) error {
+	dr, err := s.drafMilik(id, userID)
+	if err != nil {
+		return err
+	}
+	for _, a := range dr.Attachments {
+		if a.ID.String() == attachmentID {
+			if err := s.repo.DeleteAttachment(a.ID); err != nil {
+				return errors.New("gagal menghapus lampiran")
+			}
+			hapusFileDraf(s.storage, []string{a.FilePath})
+			return nil
+		}
+	}
+	return ErrLampiranTidakAda
+}
+
+// SubmitDraft mengirim draf: isian wajib diperiksa seperti pengajuan langsung, lalu
+// draf mendapat nomor tiket, status SUBMITTED, dan tanggal pengajuan saat ini (K2).
+func (s *documentReviewService) SubmitDraft(id, userID string) (*entity.DocumentReview, error) {
+	dr, err := s.drafMilik(id, userID)
+	if err != nil {
+		return nil, err
+	}
+	if !permintaanDocumentReview(dr).Complete() {
+		return nil, ErrIsianBelumLengkap
+	}
+	seq, err := s.repo.NextTicketSequence("RD")
+	if err != nil {
+		return nil, errors.New("gagal generate ticket number")
+	}
+	now := time.Now()
+	dr.TicketNumber = utils.GenerateTicketNumber(utils.PrefixDocumentReview, seq)
+	dr.Status = entity.StatusSubmitted
+	dr.CreatedAt = now
+	dr.StatusUpdatedAt = &now
+	if err := s.repo.Update(dr); err != nil {
+		return nil, errors.New("gagal mengirim draf")
+	}
+	return s.repo.FindByID(dr.ID)
+}
+
+// drafMilik mengambil draf milik pemanggil; selain itu ErrDrafTidakAda.
+func (s *documentReviewService) drafMilik(id, userID string) (*entity.DocumentReview, error) {
+	dr, err := s.GetByID(id, userID, string(entity.RoleUser))
+	if err != nil || dr.Status != entity.StatusDraft {
+		return nil, ErrDrafTidakAda
+	}
+	return dr, nil
+}
+
+func isiDocumentReview(dr *entity.DocumentReview, req dto.CreateDocumentReviewRequest) {
+	dr.RequestorName = req.RequestorName
+	dr.RequestorPosition = req.RequestorPosition
+	dr.RequestorDivision = req.RequestorDivision
+	dr.RequestorEmail = req.RequestorEmail
+	dr.RequestorPhone = req.RequestorPhone
+	dr.DocumentName = req.DocumentName
+	dr.SecondParty = req.SecondParty
+	dr.ThirdParty = req.ThirdParty
+	dr.DocumentType = req.DocumentType
+	dr.DocumentTypeOther = req.DocumentTypeOther
+	dr.AdditionalNote = req.AdditionalNote
+}
+
+func permintaanDocumentReview(dr *entity.DocumentReview) dto.CreateDocumentReviewRequest {
+	return dto.CreateDocumentReviewRequest{
+		RequestorName: dr.RequestorName, RequestorPosition: dr.RequestorPosition, RequestorDivision: dr.RequestorDivision,
+		RequestorEmail: dr.RequestorEmail, RequestorPhone: dr.RequestorPhone, DocumentName: dr.DocumentName,
+		SecondParty: dr.SecondParty, ThirdParty: dr.ThirdParty, DocumentType: dr.DocumentType,
+		DocumentTypeOther: dr.DocumentTypeOther, AdditionalNote: dr.AdditionalNote,
+	}
 }
 
 func (s *documentReviewService) uploadAttachments(drID uuid.UUID, files []*multipart.FileHeader, round int) error {

@@ -382,7 +382,7 @@ func TestRepositoriTidakKembar(t *testing.T) {
 func TestDrafPengajuan(t *testing.T) {
 	pemilik := masukPeran(t, entity.RoleUser)
 	lain := masuk(t, surelUserLain)
-	for _, m := range semuaModulPengajuan[:1] { // Review Dokumen menyusul di tahap D.3
+	for _, m := range semuaModulPengajuan {
 		t.Run(m.nama, func(t *testing.T) { ujiDrafPengajuan(t, m, pemilik, lain) })
 	}
 }

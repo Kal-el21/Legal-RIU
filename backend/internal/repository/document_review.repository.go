@@ -21,6 +21,8 @@ type DocumentReviewRepository interface {
 	GetLatestUploadRound(drID uuid.UUID) (int, error)
 	AddResult(result *entity.DocumentReviewResult) error
 	FindFileByPath(path string) (id uuid.UUID, fileName string, isResult bool, err error)
+	HardDelete(id uuid.UUID) error
+	DeleteAttachment(id uuid.UUID) error
 }
 
 type documentReviewRepository struct {
@@ -67,10 +69,15 @@ func (r *documentReviewRepository) FindAll(userID *uuid.UUID, status string, pag
 		query = query.Scopes(bukanDraf("document_reviews"))
 	}
 
+	// Draf diurutkan menurut terakhir diubah.
+	urutan := "created_at DESC"
+	if status == string(entity.StatusDraft) {
+		urutan = "updated_at DESC"
+	}
 	query.Count(&total)
 	err := query.
 		Preload("User").
-		Order("created_at DESC").
+		Order(urutan).
 		Offset((page - 1) * limit).
 		Limit(limit).
 		Find(&items).Error
@@ -97,6 +104,24 @@ func (r *documentReviewRepository) UpdateStatus(id uuid.UUID, status entity.Subm
 
 func (r *documentReviewRepository) NextTicketSequence(prefix string) (int, error) {
 	return nextTicketSequence(r.db, &entity.DocumentReview{}, prefix)
+}
+
+// HardDelete menghapus permanen pengajuan beserta baris lampiran dan hasilnya. Hanya untuk
+// draf (PR Draf); pengajuan yang sudah dikirim tetap soft delete lewat Delete.
+func (r *documentReviewRepository) HardDelete(id uuid.UUID) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("document_review_id = ?", id).Delete(&entity.DocumentReviewAttachment{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("document_review_id = ?", id).Delete(&entity.DocumentReviewResult{}).Error; err != nil {
+			return err
+		}
+		return tx.Unscoped().Delete(&entity.DocumentReview{}, "id = ?", id).Error
+	})
+}
+
+func (r *documentReviewRepository) DeleteAttachment(id uuid.UUID) error {
+	return r.db.Delete(&entity.DocumentReviewAttachment{}, "id = ?", id).Error
 }
 
 func (r *documentReviewRepository) AddAttachment(att *entity.DocumentReviewAttachment) error {
