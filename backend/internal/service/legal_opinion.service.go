@@ -56,16 +56,12 @@ func (s *legalOpinionService) Create(userID string, req dto.CreateLegalOpinionRe
 		return nil, err
 	}
 
-	seq, err := s.repo.NextTicketSequence("LO")
-	if err != nil {
-		return nil, errors.New("gagal generate ticket number")
-	}
-	ticket := utils.GenerateTicketNumber(utils.PrefixLegalOpinion, seq)
-
-	lo := &entity.LegalOpinion{TicketNumber: ticket, UserID: uid, Status: entity.StatusSubmitted}
+	lo := &entity.LegalOpinion{UserID: uid, Status: entity.StatusSubmitted}
 	isiLegalOpinion(lo, req)
-
-	if err := s.repo.Create(lo); err != nil {
+	if err := denganNomorTiket(utils.PrefixLegalOpinion, s.repo.NextTicketSequence, func(nomor string) error {
+		lo.TicketNumber = nomor
+		return s.repo.Create(lo)
+	}); err != nil {
 		return nil, errors.New("gagal membuat pengajuan")
 	}
 
@@ -371,16 +367,14 @@ func (s *legalOpinionService) SubmitDraft(id, userID string) (*entity.LegalOpini
 	if !permintaanLegalOpinion(lo).Complete() {
 		return nil, ErrIsianBelumLengkap
 	}
-	seq, err := s.repo.NextTicketSequence("LO")
-	if err != nil {
-		return nil, errors.New("gagal generate ticket number")
-	}
 	now := time.Now()
-	lo.TicketNumber = utils.GenerateTicketNumber(utils.PrefixLegalOpinion, seq)
 	lo.Status = entity.StatusSubmitted
 	lo.CreatedAt = now
 	lo.StatusUpdatedAt = &now
-	if err := s.repo.Update(lo); err != nil {
+	if err := denganNomorTiket(utils.PrefixLegalOpinion, s.repo.NextTicketSequence, func(nomor string) error {
+		lo.TicketNumber = nomor
+		return s.repo.Update(lo)
+	}); err != nil {
 		return nil, errors.New("gagal mengirim draf")
 	}
 	return s.repo.FindByID(lo.ID)

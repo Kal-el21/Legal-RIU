@@ -181,12 +181,11 @@ func (s *agreementDocumentService) Create(userID string, req dto.CreateAgreement
 	if e != nil {
 		return nil, e
 	}
-	seq, e := s.repo.NextTicketSequence("PK")
-	if e != nil {
-		return nil, e
-	}
-	doc := &entity.AgreementDocument{TicketNumber: utils.GenerateTicketNumber("PK", seq), UserID: uid, DocumentTypeCode: kode, FormData: raw, AgreementNumber: nil, Status: entity.StatusSubmitted, TemplateID: &tpl.ID, TemplateChecksum: tpl.Checksum}
-	if e = s.repo.Create(doc); e != nil {
+	doc := &entity.AgreementDocument{UserID: uid, DocumentTypeCode: kode, FormData: raw, AgreementNumber: nil, Status: entity.StatusSubmitted, TemplateID: &tpl.ID, TemplateChecksum: tpl.Checksum}
+	if e = denganNomorTiket("PK", s.repo.NextTicketSequence, func(nomor string) error {
+		doc.TicketNumber = nomor
+		return s.repo.Create(doc)
+	}); e != nil {
 		return nil, errors.New("gagal membuat pengajuan")
 	}
 	if e = s.uploadAttachments(doc, uid, files, 1); e != nil {
@@ -444,17 +443,15 @@ func (s *agreementDocumentService) SubmitDraft(id, userID string) (*entity.Agree
 	if e = validateAgreementForm(sections, data); e != nil {
 		return nil, e
 	}
-	seq, e := s.repo.NextTicketSequence("PK")
-	if e != nil {
-		return nil, e
-	}
 	now := time.Now()
-	d.TicketNumber = utils.GenerateTicketNumber("PK", seq)
 	d.Status = entity.StatusSubmitted
 	d.CreatedAt = now
 	d.StatusUpdatedAt = &now
 	d.TemplateChecksum = tpl.Checksum
-	if e = s.repo.Save(d); e != nil {
+	if e = denganNomorTiket("PK", s.repo.NextTicketSequence, func(nomor string) error {
+		d.TicketNumber = nomor
+		return s.repo.Save(d)
+	}); e != nil {
 		return nil, errors.New("gagal mengirim draf")
 	}
 	return s.repo.FindByID(d.ID)

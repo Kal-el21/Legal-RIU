@@ -6,10 +6,14 @@ package router
 
 import (
 	"bytes"
+	"encoding/json"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"legal-riu-portal/internal/entity"
@@ -426,5 +430,55 @@ func TestPengajuanBelumBenar(t *testing.T) {
 
 
 		})
+	}
+}
+
+// Pengajuan yang dibuat bersamaan semuanya berhasil, dengan nomor tiket unik dan berurutan.
+// Nomor diambil di luar transaksi, jadi yang kalah bentrok mengulang dengan nomor berikutnya
+// (PR A tahap A.3). Tanpa pengulangan, sebagian permintaan gagal "gagal membuat pengajuan".
+func TestNomorTiketBersamaan(t *testing.T) {
+	pemilik := masukPeran(t, entity.RoleUser)
+	m := semuaModulPengajuan[0]
+	// Satu permintaan paling banyak kalah sebanyak permintaan lain yang menang lebih dulu, jadi
+	// tiga pengajuan serentak pasti selesai dalam 3 percobaan (batas keputusan A2). Lebih dari itu
+	// bisa gagal walau logikanya benar; logika pengulangannya diuji pasti di TestDenganNomorTiket.
+	const jumlah = 3
+
+	var wg sync.WaitGroup
+	kode := make([]int, jumlah)
+	tiket := make([]string, jumlah)
+	for i := range jumlah {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			w := panggilForm(t, pemilik, http.MethodPost, m.url(""), m.kolom)
+			kode[i] = w.Code
+			if w.Code == http.StatusCreated {
+				var p pengajuan
+				if err := json.Unmarshal(w.Body.Bytes(), &struct{ Data *pengajuan }{&p}); err == nil {
+					tiket[i] = p.TicketNumber
+				}
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	unik := map[string]bool{}
+	for i := range jumlah {
+		if kode[i] != http.StatusCreated || tiket[i] == "" {
+			t.Errorf("pengajuan %d: kode %d, tiket %q", i, kode[i], tiket[i])
+			continue
+		}
+		unik[tiket[i]] = true
+	}
+	if len(unik) != jumlah {
+		t.Errorf("%d nomor tiket unik dari %d pengajuan: %v", len(unik), jumlah, tiket)
+	}
+	// Berurutan tanpa celah.
+	urut := slices.Sorted(maps.Keys(unik))
+	for i := 1; i < len(urut); i++ {
+		if nomorBerikut(t, urut[i-1]) != urut[i] {
+			t.Errorf("ada celah nomor di antara %s dan %s", urut[i-1], urut[i])
+		}
 	}
 }

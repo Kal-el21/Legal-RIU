@@ -56,16 +56,12 @@ func (s *documentReviewService) Create(userID string, req dto.CreateDocumentRevi
 		return nil, err
 	}
 
-	seq, err := s.repo.NextTicketSequence("RD")
-	if err != nil {
-		return nil, errors.New("gagal generate ticket number")
-	}
-	ticket := utils.GenerateTicketNumber(utils.PrefixDocumentReview, seq)
-
-	dr := &entity.DocumentReview{TicketNumber: ticket, UserID: uid, Status: entity.StatusSubmitted}
+	dr := &entity.DocumentReview{UserID: uid, Status: entity.StatusSubmitted}
 	isiDocumentReview(dr, req)
-
-	if err := s.repo.Create(dr); err != nil {
+	if err := denganNomorTiket(utils.PrefixDocumentReview, s.repo.NextTicketSequence, func(nomor string) error {
+		dr.TicketNumber = nomor
+		return s.repo.Create(dr)
+	}); err != nil {
 		return nil, errors.New("gagal membuat pengajuan")
 	}
 
@@ -352,16 +348,14 @@ func (s *documentReviewService) SubmitDraft(id, userID string) (*entity.Document
 	if !permintaanDocumentReview(dr).Complete() {
 		return nil, ErrIsianBelumLengkap
 	}
-	seq, err := s.repo.NextTicketSequence("RD")
-	if err != nil {
-		return nil, errors.New("gagal generate ticket number")
-	}
 	now := time.Now()
-	dr.TicketNumber = utils.GenerateTicketNumber(utils.PrefixDocumentReview, seq)
 	dr.Status = entity.StatusSubmitted
 	dr.CreatedAt = now
 	dr.StatusUpdatedAt = &now
-	if err := s.repo.Update(dr); err != nil {
+	if err := denganNomorTiket(utils.PrefixDocumentReview, s.repo.NextTicketSequence, func(nomor string) error {
+		dr.TicketNumber = nomor
+		return s.repo.Update(dr)
+	}); err != nil {
 		return nil, errors.New("gagal mengirim draf")
 	}
 	return s.repo.FindByID(dr.ID)

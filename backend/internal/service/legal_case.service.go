@@ -97,19 +97,14 @@ func (s *legalCaseService) Create(scope *uuid.UUID, req dto.CreateLegalCaseReque
 		return nil, err
 	}
 
-	seq, err := s.repo.NextTicketSequence("LC")
-	if err != nil {
-		return nil, errors.New("gagal generate ticket number")
-	}
-	ticket := utils.GenerateTicketNumber(utils.PrefixLegalCase, seq)
-
 	legalCase, err := s.buildLegalCase(owner, req)
 	if err != nil {
 		return nil, err
 	}
-	legalCase.TicketNumber = ticket
-
-	if err := s.repo.Create(legalCase); err != nil {
+	if err := denganNomorTiket(utils.PrefixLegalCase, s.repo.NextTicketSequence, func(nomor string) error {
+		legalCase.TicketNumber = nomor
+		return s.repo.Create(legalCase)
+	}); err != nil {
 		return nil, errors.New("gagal membuat kasus hukum")
 	}
 

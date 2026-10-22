@@ -11,6 +11,7 @@ import (
 	"legal-riu-portal/internal/entity"
 	"legal-riu-portal/internal/repository"
 	"legal-riu-portal/internal/storage"
+	"legal-riu-portal/internal/utils"
 
 	"github.com/google/uuid"
 )
@@ -57,6 +58,25 @@ func hapusFileDraf(store *storage.MinIOClient, paths []string) {
 	for _, p := range paths {
 		_ = store.DeleteFile(context.Background(), p)
 	}
+}
+
+// denganNomorTiket memberi nomor tiket berikutnya, lalu menyimpan pengajuan lewat simpan (buat
+// baru atau kirim draf). Nomor diambil dari yang terbesar bulan ini di luar transaksi, jadi dua
+// pengajuan yang disimpan bersamaan bisa mendapat nomor sama, dan yang kalah ditolak indeks unik
+// ticket_number. Kalau itu terjadi, nomor berikutnya diambil dan penyimpanan diulang, maksimal 3
+// kali (PR A tahap A.3, keputusan A2). Galat lain langsung dikembalikan.
+func denganNomorTiket(prefix utils.TicketPrefix, berikut func(string) (int, error), simpan func(nomor string) error) error {
+	var err error
+	for coba := 0; coba < 3; coba++ {
+		var seq int
+		if seq, err = berikut(string(prefix)); err != nil {
+			return err
+		}
+		if err = simpan(utils.GenerateTicketNumber(prefix, seq)); !repository.NomorTiketBentrok(err) {
+			return err
+		}
+	}
+	return err
 }
 
 func parseUUID(id string) (uuid.UUID, error) {
