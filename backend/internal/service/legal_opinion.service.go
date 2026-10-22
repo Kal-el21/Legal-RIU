@@ -39,10 +39,11 @@ type legalOpinionService struct {
 	repo    repository.LegalOpinionRepository
 	storage *storage.MinIOClient
 	pdfSvc  PDFService
+	repoDoc RepositoryDocumentService
 }
 
-func NewLegalOpinionService(repo repository.LegalOpinionRepository, s *storage.MinIOClient) LegalOpinionService {
-	return &legalOpinionService{repo: repo, storage: s, pdfSvc: NewPDFService()}
+func NewLegalOpinionService(repo repository.LegalOpinionRepository, s *storage.MinIOClient, repoDoc RepositoryDocumentService) LegalOpinionService {
+	return &legalOpinionService{repo: repo, storage: s, pdfSvc: NewPDFService(), repoDoc: repoDoc}
 }
 
 func (s *legalOpinionService) Create(userID string, req dto.CreateLegalOpinionRequest, files []*multipart.FileHeader) (*entity.LegalOpinion, error) {
@@ -76,7 +77,7 @@ func (s *legalOpinionService) Create(userID string, req dto.CreateLegalOpinionRe
 		}
 	}
 
-	return s.repo.FindByID(lo.ID)
+	return s.muat(lo.ID)
 }
 
 func (s *legalOpinionService) GetByID(id string, userID string, role string) (*entity.LegalOpinion, error) {
@@ -164,7 +165,11 @@ func (s *legalOpinionService) Delete(id string, userID string) error {
 		return errors.New("pengajuan hanya dapat dihapus saat berstatus SUBMITTED")
 	}
 
-	return s.repo.Delete(lo.ID)
+	if err := s.repo.Delete(lo.ID); err != nil {
+		return err
+	}
+	catatRepositori(lo.ID, s.repoDoc.RemoveSubmission(lo.ID.String()))
+	return nil
 }
 
 func (s *legalOpinionService) Resubmit(id string, userID string, files []*multipart.FileHeader) (*entity.LegalOpinion, error) {
@@ -194,7 +199,7 @@ func (s *legalOpinionService) Resubmit(id string, userID string, files []*multip
 		return nil, errors.New("gagal mengubah status")
 	}
 
-	return s.repo.FindByID(lo.ID)
+	return s.muat(lo.ID)
 }
 
 func (s *legalOpinionService) UpdateStatus(id string, req dto.UpdateStatusRequest) error {
@@ -256,6 +261,7 @@ func (s *legalOpinionService) UploadResult(id string, adminID string, req dto.Up
 		}
 	}
 
+	s.muat(uid) // hasil kajian langsung masuk Repositori Dokumen
 	return nil
 }
 
@@ -377,7 +383,17 @@ func (s *legalOpinionService) SubmitDraft(id, userID string) (*entity.LegalOpini
 	}); err != nil {
 		return nil, errors.New("gagal mengirim draf")
 	}
-	return s.repo.FindByID(lo.ID)
+	return s.muat(lo.ID)
+}
+
+// muat membaca ulang pengajuan sesudah lampiran atau hasilnya bertambah, lalu mencatat
+// semua filenya di Repositori Dokumen (PR A tahap A.4).
+func (s *legalOpinionService) muat(id uuid.UUID) (*entity.LegalOpinion, error) {
+	lo, err := s.repo.FindByID(id)
+	if err == nil {
+		catatRepositori(id, s.repoDoc.SyncLegalOpinion(lo))
+	}
+	return lo, err
 }
 
 // drafMilik mengambil draf milik pemanggil; selain itu ErrDrafTidakAda.

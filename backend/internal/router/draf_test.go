@@ -379,6 +379,109 @@ func TestRepositoriTidakKembar(t *testing.T) {
 	})
 }
 
+// Lampiran dan hasil LO, RD, dan perjanjian langsung masuk Repositori Dokumen tanpa menunggu
+// backfill saat server menyala, dan hilang saat pengajuannya dihapus (PR A tahap A.4).
+// Backfill sesudahnya tidak menambah baris.
+func TestRepositoriLangsungTerisi(t *testing.T) {
+	butuhMinIO(t)
+	pemilik := masukPeran(t, entity.RoleUser)
+	legal := masukPeran(t, entity.RoleLegal)
+	lampiran := func(nama string) berkas { return berkas{"attachments", nama, []byte(nama)} }
+	jumlah := func(id string) (semua, aktif int64) {
+		dbTes.Raw("SELECT count(*), count(*) FILTER (WHERE is_active) FROM repository_documents WHERE source_id = ?", id).Row().Scan(&semua, &aktif)
+		return semua, aktif
+	}
+	harap := func(t *testing.T, id string, n int64, langkah string) {
+		t.Helper()
+		if _, aktif := jumlah(id); aktif != n {
+			t.Errorf("%s: %d file aktif di Repositori Dokumen, harap %d", langkah, aktif, n)
+		}
+	}
+	tanpaKembar := func(t *testing.T, ids ...string) {
+		t.Helper()
+		sebelum := map[string][2]int64{}
+		for _, id := range ids {
+			semua, aktif := jumlah(id)
+			sebelum[id] = [2]int64{semua, aktif}
+		}
+		if err := seed.BackfillRepositoryDocuments(dbTes); err != nil {
+			t.Fatalf("backfill: %v", err)
+		}
+		for _, id := range ids {
+			if semua, aktif := jumlah(id); [2]int64{semua, aktif} != sebelum[id] {
+				t.Errorf("%s sesudah backfill: %d baris (%d aktif), harap %v", id, semua, aktif, sebelum[id])
+			}
+		}
+	}
+
+	for _, m := range semuaModulPengajuan {
+		t.Run(m.nama, func(t *testing.T) {
+			p := m.buat(t, pemilik, lampiran("Lampiran.pdf"))
+			harap(t, p.ID, 1, "dibuat dengan lampiran")
+			m.ubahStatus(t, legal, "/legal", p.ID, "UNDER_REVIEW", "", http.StatusOK)
+			m.ubahStatus(t, legal, "/legal", p.ID, "NEED_REVISION", "lengkapi", http.StatusOK)
+			harapKode(t, panggilForm(t, pemilik, http.MethodPost, m.url("", "/", p.ID, "/resubmit"), nil, lampiran("Revisi.pdf")), http.StatusOK, "ajukan ulang")
+			harap(t, p.ID, 2, "diajukan ulang dengan lampiran")
+			m.ubahStatus(t, legal, "/legal", p.ID, "UNDER_REVIEW", "", http.StatusOK)
+			harapKode(t, panggilForm(t, legal, http.MethodPost, m.url("/legal", "/", p.ID, "/result"),
+				map[string]string{"notes": "selesai"}, berkas{"result", "Hasil.pdf", []byte("hasil")}), http.StatusOK, "unggah hasil")
+			harap(t, p.ID, 3, "hasil diunggah")
+
+			w := panggilForm(t, pemilik, http.MethodPost, m.url("", "/drafts"), m.kolom, lampiran("Draf.pdf"))
+			harapKode(t, w, http.StatusCreated, "simpan draf")
+			var d pengajuan
+			isiData(t, w, &d)
+			harap(t, d.ID, 0, "draf belum dikirim")
+			harapKode(t, panggil(t, pemilik, http.MethodPost, m.url("", "/", d.ID, "/submit"), nil), http.StatusOK, "kirim draf")
+			harap(t, d.ID, 1, "draf dikirim")
+
+			h := m.buat(t, pemilik, lampiran("Hapus.pdf"))
+			harapKode(t, panggil(t, pemilik, http.MethodDelete, m.url("", "/", h.ID), nil), http.StatusOK, "hapus pengajuan")
+			harap(t, h.ID, 0, "pengajuan dihapus")
+
+			tanpaKembar(t, p.ID, d.ID, h.ID)
+		})
+	}
+
+	t.Run("Perjanjian", func(t *testing.T) {
+		data, _ := json.Marshal(isiPengajuan(t, pemilik, "PKS", formPerjanjian()))
+		simpan := func(alamat, nama string) string {
+			t.Helper()
+			w := panggilForm(t, pemilik, http.MethodPost, alamat, map[string]string{"data": string(data)}, lampiran(nama))
+			harapKode(t, w, http.StatusCreated, "menyimpan perjanjian dengan "+nama)
+			var p perjanjian
+			isiData(t, w, &p)
+			return p.ID
+		}
+		p := simpan(urlPerjanjian(""), "Lampiran.pdf")
+		harap(t, p, 1, "dibuat dengan lampiran")
+		statusPerjanjian(t, legal, p, "UNDER_REVIEW", "", http.StatusOK)
+		statusPerjanjian(t, legal, p, "NEED_REVISION", "lengkapi", http.StatusOK)
+		harapKode(t, panggilForm(t, pemilik, http.MethodPost, urlPerjanjian("", "/", p, "/resubmit"), nil, lampiran("Revisi.pdf")), http.StatusOK, "ajukan ulang")
+		harap(t, p, 2, "diajukan ulang dengan lampiran")
+
+		d := simpan(urlPerjanjian("", "/drafts"), "Draf.pdf")
+		harap(t, d, 0, "draf belum dikirim")
+		harapKode(t, panggil(t, pemilik, http.MethodPost, urlPerjanjian("", "/", d, "/submit"), nil), http.StatusOK, "kirim draf")
+		harap(t, d, 1, "draf dikirim")
+
+		h := simpan(urlPerjanjian(""), "Hapus.pdf")
+		harapKode(t, panggil(t, pemilik, http.MethodDelete, urlPerjanjian("", "/", h), nil), http.StatusOK, "hapus perjanjian")
+		harap(t, h, 0, "perjanjian dihapus")
+
+		tanpaKembar(t, p, d, h)
+
+		t.Run("Disetujui", func(t *testing.T) {
+			butuhLibreOffice(t)
+			statusPerjanjian(t, legal, p, "UNDER_REVIEW", "", http.StatusOK)
+			harapKode(t, panggil(t, legal, http.MethodPatch, urlPerjanjian("/legal", "/", p, "/meta"), map[string]string{"signing_date": "2026-10-11"}), http.StatusOK, "mengisi tanggal tanda tangan")
+			statusPerjanjian(t, legal, p, "COMPLETED", "", http.StatusOK)
+			harap(t, p, 4, "disetujui (dua lampiran, DOCX dan PDF final)")
+			tanpaKembar(t, p)
+		})
+	})
+}
+
 // Draf Legal Opinion dan Review Dokumen (PR Draf tahap D.2 dan D.3): simpan sebagian, ubah,
 // kelola lampiran, kirim, hapus, dan akses orang lain.
 func TestDrafPengajuan(t *testing.T) {

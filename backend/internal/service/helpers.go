@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"mime/multipart"
 	"strings"
 
@@ -50,6 +51,14 @@ var (
 // <prefix>-YYYYMM-NNNN, jadi urutan nomor asli tidak terganggu oleh draf yang dibuang.
 func nomorDraf() string {
 	return "DRAF-" + uuid.NewString()
+}
+
+// catatRepositori: sinkron Repositori Dokumen yang gagal hanya ditulis ke log server.
+// Pengajuannya tetap tersimpan, dan backfill saat server menyala melengkapinya.
+func catatRepositori(id uuid.UUID, err error) {
+	if err != nil {
+		log.Printf("Repositori Dokumen untuk pengajuan %s tidak tersinkron: %v", id, err)
+	}
 }
 
 // hapusFileDraf menghapus file draf dari MinIO. Kegagalan diabaikan: barisnya sudah

@@ -57,10 +57,11 @@ type agreementDocumentService struct {
 	templates AgreementTemplateService
 	generator *AgreementGenerator
 	converter DOCXConverter
+	repoDoc   RepositoryDocumentService
 }
 
-func NewAgreementDocumentService(r repository.AgreementDocumentRepository, s *storage.MinIOClient, templates AgreementTemplateService) AgreementDocumentService {
-	return &agreementDocumentService{r, s, templates, NewAgreementGenerator(), DOCXConverter{}}
+func NewAgreementDocumentService(r repository.AgreementDocumentRepository, s *storage.MinIOClient, templates AgreementTemplateService, repoDoc RepositoryDocumentService) AgreementDocumentService {
+	return &agreementDocumentService{r, s, templates, NewAgreementGenerator(), DOCXConverter{}, repoDoc}
 }
 
 // ErrPengajuanTidakAda: pengajuan tidak ada atau bukan milik pengguna.
@@ -192,7 +193,7 @@ func (s *agreementDocumentService) Create(userID string, req dto.CreateAgreement
 		_ = s.repo.Delete(doc.ID)
 		return nil, errors.New("gagal mengunggah lampiran: " + e.Error())
 	}
-	return s.repo.FindByID(doc.ID)
+	return s.muat(doc.ID)
 }
 func (s *agreementDocumentService) GetAll(userID string, all bool, q dto.AgreementListQuery) ([]entity.AgreementDocument, int64, error) {
 	// ?status=DRAFT selalu hanya memuat draf milik sendiri (PR Draf).
@@ -320,7 +321,11 @@ func (s *agreementDocumentService) Delete(id, userID string) error {
 	if d.Status != entity.StatusSubmitted {
 		return errors.New("hanya pengajuan SUBMITTED yang dapat dihapus")
 	}
-	return s.repo.Delete(d.ID)
+	if e = s.repo.Delete(d.ID); e != nil {
+		return e
+	}
+	catatRepositori(d.ID, s.repoDoc.RemoveSubmission(d.ID.String()))
+	return nil
 }
 
 // versiAktif memeriksa versi template yang dikirim form: harus versi aktif jenisnya.
@@ -454,7 +459,17 @@ func (s *agreementDocumentService) SubmitDraft(id, userID string) (*entity.Agree
 	}); e != nil {
 		return nil, errors.New("gagal mengirim draf")
 	}
-	return s.repo.FindByID(d.ID)
+	return s.muat(d.ID)
+}
+
+// muat membaca ulang pengajuan sesudah lampiran atau hasilnya bertambah, lalu mencatat
+// semua filenya di Repositori Dokumen (PR A tahap A.4).
+func (s *agreementDocumentService) muat(id uuid.UUID) (*entity.AgreementDocument, error) {
+	d, err := s.repo.FindByID(id)
+	if err == nil {
+		catatRepositori(id, s.repoDoc.SyncAgreement(d))
+	}
+	return d, err
 }
 
 // drafMilik mengambil draf milik pemanggil; selain itu ErrDrafTidakAda.
@@ -496,7 +511,7 @@ func (s *agreementDocumentService) Resubmit(id, userID string, files []*multipar
 	if e = s.repo.Save(d); e != nil {
 		return nil, e
 	}
-	return s.repo.FindByID(d.ID)
+	return s.muat(d.ID)
 }
 func (s *agreementDocumentService) uploadAttachments(d *entity.AgreementDocument, u uuid.UUID, files []*multipart.FileHeader, round int) error {
 	for _, f := range files {
@@ -676,7 +691,7 @@ func (s *agreementDocumentService) approve(ctx context.Context, d *entity.Agreem
 		}
 		return nil, errors.New("pengajuan sudah diproses approver lain")
 	}
-	return s.repo.FindByID(d.ID)
+	return s.muat(d.ID)
 }
 
 func (s *agreementDocumentService) Preview(ctx context.Context, id, userID string, all bool) ([]byte, error) {

@@ -40,10 +40,11 @@ type documentReviewService struct {
 	repo    repository.DocumentReviewRepository
 	storage *storage.MinIOClient
 	pdfSvc  PDFService
+	repoDoc RepositoryDocumentService
 }
 
-func NewDocumentReviewService(repo repository.DocumentReviewRepository, s *storage.MinIOClient) DocumentReviewService {
-	return &documentReviewService{repo: repo, storage: s, pdfSvc: NewPDFService()}
+func NewDocumentReviewService(repo repository.DocumentReviewRepository, s *storage.MinIOClient, repoDoc RepositoryDocumentService) DocumentReviewService {
+	return &documentReviewService{repo: repo, storage: s, pdfSvc: NewPDFService(), repoDoc: repoDoc}
 }
 
 func (s *documentReviewService) Create(userID string, req dto.CreateDocumentReviewRequest, files []*multipart.FileHeader) (*entity.DocumentReview, error) {
@@ -75,7 +76,7 @@ func (s *documentReviewService) Create(userID string, req dto.CreateDocumentRevi
 		}
 	}
 
-	return s.repo.FindByID(dr.ID)
+	return s.muat(dr.ID)
 }
 
 func (s *documentReviewService) GetByID(id string, userID string, role string) (*entity.DocumentReview, error) {
@@ -161,7 +162,11 @@ func (s *documentReviewService) Delete(id string, userID string) error {
 		return errors.New("pengajuan hanya dapat dihapus saat berstatus SUBMITTED")
 	}
 
-	return s.repo.Delete(dr.ID)
+	if err := s.repo.Delete(dr.ID); err != nil {
+		return err
+	}
+	catatRepositori(dr.ID, s.repoDoc.RemoveSubmission(dr.ID.String()))
+	return nil
 }
 
 func (s *documentReviewService) Resubmit(id string, userID string, files []*multipart.FileHeader) (*entity.DocumentReview, error) {
@@ -188,7 +193,7 @@ func (s *documentReviewService) Resubmit(id string, userID string, files []*mult
 		return nil, errors.New("gagal mengubah status")
 	}
 
-	return s.repo.FindByID(dr.ID)
+	return s.muat(dr.ID)
 }
 
 func (s *documentReviewService) UpdateStatus(id string, req dto.UpdateStatusRequest) error {
@@ -250,6 +255,7 @@ func (s *documentReviewService) UploadResult(id string, adminID string, req dto.
 		}
 	}
 
+	s.muat(uid) // hasil review langsung masuk Repositori Dokumen
 	return nil
 }
 
@@ -358,7 +364,17 @@ func (s *documentReviewService) SubmitDraft(id, userID string) (*entity.Document
 	}); err != nil {
 		return nil, errors.New("gagal mengirim draf")
 	}
-	return s.repo.FindByID(dr.ID)
+	return s.muat(dr.ID)
+}
+
+// muat membaca ulang pengajuan sesudah lampiran atau hasilnya bertambah, lalu mencatat
+// semua filenya di Repositori Dokumen (PR A tahap A.4).
+func (s *documentReviewService) muat(id uuid.UUID) (*entity.DocumentReview, error) {
+	dr, err := s.repo.FindByID(id)
+	if err == nil {
+		catatRepositori(id, s.repoDoc.SyncDocumentReview(dr))
+	}
+	return dr, err
 }
 
 // drafMilik mengambil draf milik pemanggil; selain itu ErrDrafTidakAda.
