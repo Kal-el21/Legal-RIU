@@ -438,6 +438,28 @@ Override types:
    - Redirect to detail page
 ```
 
+### Example 1b: User Menyimpan Draf lalu Mengirimnya
+
+```
+1. Di form pengajuan (mis. /dashboard/legal-opinions/new), user klik "Simpan draf"
+   - Validasi form dilewati; isian boleh belum lengkap
+2. Frontend calls: POST /api/v1/legal-opinions/drafts (multipart, lampiran boleh)
+   - RequirePermission → 'legal_opinion.create.own'
+   - Service → status DRAFT, nomor sementara DRAF-<uuid>, lampiran ke MinIO
+3. Frontend pindah ke /dashboard/legal-opinions/drafts/:draftId
+   - Simpan lagi → PUT /api/v1/legal-opinions/:id/draft (isian diganti, lampiran baru ditambah)
+   - Hapus lampiran → DELETE /api/v1/legal-opinions/:id/attachments/:attachmentId
+4. User klik "Ajukan" → simpan draf terakhir, lalu POST /api/v1/legal-opinions/:id/submit
+   - Validasi penuh (sama dengan pembuatan langsung)
+   - Nomor tiket asli, status SUBMITTED, tanggal pengajuan = waktu kirim
+   - Audit log seperti pembuatan pengajuan
+5. Draf yang dibuang → DELETE /api/v1/legal-opinions/:id (hapus permanen beserta file)
+```
+
+Draf hanya terlihat pemiliknya; daftar approver, dashboard, laporan, notifikasi, dan Repositori Dokumen tidak
+memuatnya. Perjanjian memakai pola yang sama di `/agreement-documents`: draf selalu mengikuti versi template aktif,
+dan versi yang usang dijawab 409 supaya wizard memindahkan isian. Rinciannya di `docs/permission_matrix.md` bagian 2.14.
+
 ### Example 2: LEGAL_AU Updates Case Status
 
 ```

@@ -64,9 +64,9 @@ Setiap fitur memiliki kumpulan aksi default. Admin dapat memberikan/mencabut aks
 |-------------|-------|-----------|
 | `legal_opinion.view.own` | View Own | Melihat legal opinion milik sendiri |
 | `legal_opinion.view.all` | View All | Melihat semua legal opinion |
-| `legal_opinion.create.own` | Create Own | Membuat pengajuan legal opinion |
-| `legal_opinion.update.own` | Edit Own | Mengedit pengajuan milik sendiri |
-| `legal_opinion.delete.own` | Delete Own | Menghapus pengajuan milik sendiri |
+| `legal_opinion.create.own` | Create Own | Membuat pengajuan legal opinion; menyimpan draf baru dan mengirim draf (2.14) |
+| `legal_opinion.update.own` | Edit Own | Mengedit pengajuan milik sendiri; mengubah draf dan menghapus lampirannya (2.14) |
+| `legal_opinion.delete.own` | Delete Own | Menghapus pengajuan milik sendiri; draf dihapus permanen beserta lampirannya |
 | `legal_opinion.resubmit.own` | Resubmit Own | Mengajukan ulang yang ditolak/perlu revisi |
 | `legal_opinion.update_status.all` | Update Status | Mengubah status (review/approve/reject) |
 | `legal_opinion.upload_result.all` | Upload Result | Mengunggah hasil kajian |
@@ -78,9 +78,9 @@ Setiap fitur memiliki kumpulan aksi default. Admin dapat memberikan/mencabut aks
 |-------------|-------|-----------|
 | `document_review.view.own` | View Own | Melihat review dokumen milik sendiri |
 | `document_review.view.all` | View All | Melihat semua review dokumen |
-| `document_review.create.own` | Create Own | Membuat pengajuan review dokumen |
-| `document_review.update.own` | Edit Own | Mengedit pengajuan milik sendiri |
-| `document_review.delete.own` | Delete Own | Menghapus pengajuan milik sendiri |
+| `document_review.create.own` | Create Own | Membuat pengajuan review dokumen; menyimpan draf baru dan mengirim draf (2.14) |
+| `document_review.update.own` | Edit Own | Mengedit pengajuan milik sendiri; mengubah draf dan menghapus lampirannya (2.14) |
+| `document_review.delete.own` | Delete Own | Menghapus pengajuan milik sendiri; draf dihapus permanen beserta lampirannya |
 | `document_review.resubmit.own` | Resubmit Own | Mengajukan ulang yang ditolak/perlu revisi |
 | `document_review.update_status.all` | Update Status | Mengubah status (review/approve/reject) |
 | `document_review.upload_result.all` | Upload Result | Mengunggah hasil review |
@@ -159,9 +159,9 @@ Catatan `agreement_type.manage.all`: hanya ADMIN (keputusan K3, PR 9). Endpoint-
 |-------------|-------|-----------|
 | `agreement_document.view.own` | Perjanjian - Lihat Milik Sendiri | Melihat pengajuan sendiri beserta definisi isian versi templatenya (`GET /agreement-documents/:id/schema`) |
 | `agreement_document.view.all` | Perjanjian - Lihat Semua | Melihat semua pengajuan beserta definisi isian versinya (alamat `/legal` dan `/admin`) |
-| `agreement_document.create.own` | Perjanjian - Buat | Membuat pengajuan dan membentuk pratinjau sebelum dikirim (`POST /agreement-documents/preview-draft`) |
-| `agreement_document.update.own` | Perjanjian - Edit | Mengubah pengajuan sendiri yang masih Diajukan atau Perlu Revisi |
-| `agreement_document.delete.own` | Perjanjian - Hapus | Menghapus pengajuan sendiri yang masih Diajukan |
+| `agreement_document.create.own` | Perjanjian - Buat | Membuat pengajuan dan membentuk pratinjau sebelum dikirim (`POST /agreement-documents/preview-draft`); menyimpan draf baru dan mengirim draf (2.14) |
+| `agreement_document.update.own` | Perjanjian - Edit | Mengubah pengajuan sendiri yang masih Diajukan atau Perlu Revisi; mengubah draf dan menghapus lampirannya (2.14) |
+| `agreement_document.delete.own` | Perjanjian - Hapus | Menghapus pengajuan sendiri yang masih Diajukan; draf dihapus permanen beserta lampirannya |
 | `agreement_document.resubmit.own` | Perjanjian - Ajukan Ulang | Mengajukan ulang pengajuan yang dikembalikan untuk revisi, beserta lampiran baru |
 | `agreement_document.preview.own` | Perjanjian - Preview Sendiri | Pratinjau PDF pengajuan sendiri |
 | `agreement_document.preview.all` | Perjanjian - Preview Semua | Pratinjau PDF semua pengajuan |
@@ -172,6 +172,29 @@ Catatan `agreement_type.manage.all`: hanya ADMIN (keputusan K3, PR 9). Endpoint-
 | `agreement_document.download_pdf.own` | Perjanjian - PDF Sendiri | Mengunduh PDF final pengajuan sendiri |
 | `agreement_document.download_pdf.all` | Perjanjian - Semua PDF | Mengunduh PDF final semua pengajuan |
 | `agreement_document.download_docx.all` | Perjanjian - DOCX | Mengunduh DOCX final |
+
+### 2.14 Draf pengajuan (Legal Opinion, Review Dokumen, Perjanjian)
+
+Draf adalah pengajuan berstatus `DRAFT` yang belum dikirim. **Tidak ada kode permission baru**: alamat draf memakai
+`create.own`, `update.own`, dan `delete.own` modulnya, dan hanya ada di grup USER. Secara bawaan hanya peran USER yang
+punya `create.own`.
+
+| Alamat (contoh Legal Opinion; Review Dokumen di `/review-documents`, Perjanjian di `/agreement-documents`) | Permission | Fungsi |
+|---|---|---|
+| `GET /legal-opinions?status=DRAFT` | `view.own` | Daftar draf milik sendiri |
+| `POST /legal-opinions/drafts` | `create.own` | Simpan draf baru; isian boleh belum lengkap, lampiran boleh |
+| `PUT /legal-opinions/:id/draft` | `update.own` | Ganti isian draf dan tambah lampiran |
+| `DELETE /legal-opinions/:id/attachments/:attachmentId` | `update.own` | Hapus satu lampiran draf (permanen) |
+| `POST /legal-opinions/:id/submit` | `create.own` | Kirim draf: validasi penuh, nomor tiket, status `SUBMITTED` |
+| `DELETE /legal-opinions/:id` | `delete.own` | Untuk draf: hapus permanen beserta lampiran dan filenya |
+
+Aturan akses yang berlaku di backend:
+- Draf hanya terlihat pemiliknya. Pengguna lain, termasuk yang punya `view.all`, mendapat 404 untuk detail, unduhan,
+  PDF, pratinjau, dan skema draf. `?status=DRAFT` selalu hanya memuat draf milik sendiri.
+- Draf tidak muncul di daftar biasa, dashboard, laporan, lonceng notifikasi, maupun Repositori Dokumen.
+- Alamat approver (`update_status.all`, `upload_result.all`, `update_meta.all`) menjawab draf dengan "pengajuan tidak
+  ditemukan".
+- Nomor tiket asli dan tanggal pengajuan baru diberikan saat draf dikirim. Selama draf, nomornya sementara (`DRAF-<uuid>`).
 
 ## 3. Default Permission by Role (Baseline)
 
