@@ -1,4 +1,5 @@
 import api from './api'
+import { formDraf } from '@/lib/draf'
 import { namaDariHeader } from '@/lib/nama-unduhan'
 import { useAuthStore } from '@/store/auth.store'
 import type { ApiResponse, LegalOpinion, PaginatedData } from '@/types'
@@ -64,6 +65,24 @@ export const legalOpinionService = {
 
   delete: async (id: string) => {
     await api.delete(`/legal-opinions/${id}`)
+  },
+
+  // Draf (PR Draf): hanya pemiliknya. Simpan draf tanpa id membuat draf baru.
+  saveDraft: async (data: Omit<CreateLegalOpinionData, 'attachments'>, files: File[] = [], id?: string) => {
+    const form = formDraf(data, files)
+    const res = id
+      ? await api.put<ApiResponse<LegalOpinion>>(`/legal-opinions/${id}/draft`, form)
+      : await api.post<ApiResponse<LegalOpinion>>('/legal-opinions/drafts', form)
+    return res.data.data!
+  },
+
+  deleteDraftAttachment: async (id: string, attachmentId: string) => {
+    await api.delete(`/legal-opinions/${id}/attachments/${attachmentId}`)
+  },
+
+  submitDraft: async (id: string) => {
+    const res = await api.post<ApiResponse<LegalOpinion>>(`/legal-opinions/${id}/submit`)
+    return res.data.data!
   },
 
   resubmit: async (id: string, files?: File[]) => {

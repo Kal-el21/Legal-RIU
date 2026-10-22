@@ -26,6 +26,7 @@ interface SharedLegalOpinionListPageProps {
   description: string
   showCreateButton?: boolean
   createPath?: string
+  draftPath?: string // daftar draf milik sendiri (PR Draf)
   showColumnRequester?: boolean
   linkLabel?: string
   viewPermission?: string
@@ -38,6 +39,7 @@ export default function SharedLegalOpinionListPage({
   description,
   showCreateButton = false,
   createPath,
+  draftPath,
   showColumnRequester = true,
   linkLabel = 'Kelola →',
   viewPermission,
@@ -51,6 +53,8 @@ export default function SharedLegalOpinionListPage({
   const canView = viewPermission ? hasPermission(viewPermission) : true
   const canCreate = createPermission ? hasPermission(createPermission) : false
   const { data, isLoading } = useLegalOpinions({ page, limit: 10, status })
+  const bolehDraf = showCreateButton && canCreate && !!draftPath
+  const { data: drafs } = useLegalOpinions({ status: 'DRAFT', limit: 1 }, bolehDraf)
 
   useEffect(() => {
     if (!canView) {
@@ -66,13 +70,20 @@ export default function SharedLegalOpinionListPage({
             <h1 className="text-2xl font-bold" style={{ color: '#0B2545' }}>{title}</h1>
             <p className="text-sm text-gray-500 mt-0.5">{description}</p>
           </div>
-          {showCreateButton && canCreate && createPath && (
-            <Link to={createPath}>
-              <Button className="flex items-center gap-2 text-white" style={{ background: '#C8102E' }}>
-                <Plus className="w-4 h-4" /> Buat Pengajuan
-              </Button>
-            </Link>
-          )}
+          <div className="flex items-center gap-2">
+            {bolehDraf && (
+              <Link to={draftPath!}>
+                <Button variant="outline">Draf ({drafs?.total ?? 0})</Button>
+              </Link>
+            )}
+            {showCreateButton && canCreate && createPath && (
+              <Link to={createPath}>
+                <Button className="flex items-center gap-2 text-white" style={{ background: '#C8102E' }}>
+                  <Plus className="w-4 h-4" /> Buat Pengajuan
+                </Button>
+              </Link>
+            )}
+          </div>
         </div>
       </div>
 

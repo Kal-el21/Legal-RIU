@@ -8,6 +8,7 @@ export default function LegalOpinionListPage() {
       description="Kelola pengajuan legal opinion Anda"
       showCreateButton={true}
       createPath="/dashboard/legal-opinions/new"
+      draftPath="/dashboard/legal-opinions/drafts"
       showColumnRequester={false}
       linkLabel="Detail →"
       viewPermission="legal_opinion.view.own"

@@ -8,6 +8,7 @@ export default function ReviewDocumentListPage() {
       description="Kelola pengajuan review dokumen Anda"
       showCreateButton={true}
       createPath="/dashboard/review-documents/new"
+      draftPath="/dashboard/review-documents/drafts"
       linkLabel="Detail →"
       viewPermission="document_review.view.own"
       createPermission="document_review.create.own"

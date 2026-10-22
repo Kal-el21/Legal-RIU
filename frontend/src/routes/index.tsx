@@ -20,9 +20,11 @@ import NotificationListPage from '@/components/common/NotificationListPage'
 import LegalOpinionListPage from '@/pages/dashboard/legal-opinions/LegalOpinionListPage'
 import LegalOpinionFormPage from '@/pages/dashboard/legal-opinions/LegalOpinionFormPage'
 import LegalOpinionDetailPage from '@/pages/dashboard/legal-opinions/LegalOpinionDetailPage'
+import LegalOpinionDraftListPage from '@/pages/dashboard/legal-opinions/LegalOpinionDraftListPage'
 import ReviewDocumentListPage from '@/pages/dashboard/review-documents/ReviewDocumentListPage'
 import ReviewDocumentFormPage from '@/pages/dashboard/review-documents/ReviewDocumentFormPage'
 import ReviewDocumentDetailPage from '@/pages/dashboard/review-documents/ReviewDocumentDetailPage'
+import ReviewDocumentDraftListPage from '@/pages/dashboard/review-documents/ReviewDocumentDraftListPage'
 
 import AdminDashboardPage from '@/pages/admin/AdminDashboardPage'
 import UserManagementPage from '@/pages/admin/users/UserManagementPage'
@@ -123,10 +125,14 @@ export const router = createBrowserRouter([
           { path: '/dashboard/notifications', element: <NotificationListPage /> },
           { path: '/dashboard/legal-opinions', element: <LegalOpinionListPage /> },
           { path: '/dashboard/legal-opinions/new', element: <LegalOpinionFormPage /> },
+          { path: '/dashboard/legal-opinions/drafts', element: <LegalOpinionDraftListPage /> },
+          { path: '/dashboard/legal-opinions/drafts/:draftId', element: <LegalOpinionFormPage /> },
           { path: '/dashboard/legal-opinions/:id', element: <LegalOpinionDetailPage /> },
           { path: '/dashboard/legal-opinions/:id/edit', element: <LegalOpinionFormPage /> },
           { path: '/dashboard/review-documents', element: <ReviewDocumentListPage /> },
           { path: '/dashboard/review-documents/new', element: <ReviewDocumentFormPage /> },
+          { path: '/dashboard/review-documents/drafts', element: <ReviewDocumentDraftListPage /> },
+          { path: '/dashboard/review-documents/drafts/:draftId', element: <ReviewDocumentFormPage /> },
           { path: '/dashboard/review-documents/:id', element: <ReviewDocumentDetailPage /> },
           { path: '/dashboard/review-documents/:id/edit', element: <ReviewDocumentFormPage /> },
           { path: '/dashboard/agreement-documents', element: <AgreementDocumentList basePath="/dashboard/agreement-documents" requester /> },

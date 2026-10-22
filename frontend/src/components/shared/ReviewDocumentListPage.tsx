@@ -26,6 +26,7 @@ interface SharedReviewDocumentListPageProps {
   description: string
   showCreateButton?: boolean
   createPath?: string
+  draftPath?: string // daftar draf milik sendiri (PR Draf)
   linkLabel?: string
   viewPermission?: string
   createPermission?: string
@@ -37,6 +38,7 @@ export default function SharedReviewDocumentListPage({
   description,
   showCreateButton = false,
   createPath,
+  draftPath,
   linkLabel = 'Kelola →',
   viewPermission,
   createPermission,
@@ -49,6 +51,8 @@ export default function SharedReviewDocumentListPage({
   const canView = viewPermission ? hasPermission(viewPermission) : true
   const canCreate = createPermission ? hasPermission(createPermission) : false
   const { data, isLoading } = useDocumentReviews({ page, limit: 10, status })
+  const bolehDraf = showCreateButton && canCreate && !!draftPath
+  const { data: drafs } = useDocumentReviews({ status: 'DRAFT', limit: 1 }, bolehDraf)
 
   useEffect(() => {
     if (!canView) {
@@ -64,13 +68,20 @@ export default function SharedReviewDocumentListPage({
             <h1 className="text-2xl font-bold" style={{ color: '#0B2545' }}>{title}</h1>
             <p className="text-sm text-gray-500 mt-0.5">{description}</p>
           </div>
-          {showCreateButton && canCreate && createPath && (
-            <Link to={createPath}>
-              <Button className="flex items-center gap-2 text-white" style={{ background: '#C8102E' }}>
-                <Plus className="w-4 h-4" /> Buat Pengajuan
-              </Button>
-            </Link>
-          )}
+          <div className="flex items-center gap-2">
+            {bolehDraf && (
+              <Link to={draftPath!}>
+                <Button variant="outline">Draf ({drafs?.total ?? 0})</Button>
+              </Link>
+            )}
+            {showCreateButton && canCreate && createPath && (
+              <Link to={createPath}>
+                <Button className="flex items-center gap-2 text-white" style={{ background: '#C8102E' }}>
+                  <Plus className="w-4 h-4" /> Buat Pengajuan
+                </Button>
+              </Link>
+            )}
+          </div>
         </div>
       </div>
 

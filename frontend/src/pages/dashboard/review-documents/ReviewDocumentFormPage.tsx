@@ -15,7 +15,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useCreateDocumentReview, useUpdateDocumentReview, useDocumentReview } from "@/hooks/useDocumentReview";
+import {
+  useCreateDocumentReview, useUpdateDocumentReview, useDocumentReview,
+  useSaveDocumentReviewDraft, useSubmitDocumentReviewDraft, useDeleteDocumentReviewDraftAttachment,
+} from "@/hooks/useDocumentReview";
+import LampiranTersimpan from "@/components/shared/LampiranTersimpan";
 import { useDivisions } from "@/hooks/useLegalCase";
 import { useDocumentTypes } from "@/hooks/useDocumentType";
 import { useAuthStore } from "@/store/auth.store";
@@ -38,8 +42,10 @@ const schema = z.object({
 type FormData = z.infer<typeof schema>;
 
 export default function ReviewDocumentFormPage() {
-  const { id } = useParams();
+  // id: edit pengajuan yang sudah dikirim; draftId: melanjutkan draf (PR Draf).
+  const { id, draftId } = useParams();
   const isEdit = !!id;
+  const isDraft = !!draftId;
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
 
@@ -55,11 +61,14 @@ export default function ReviewDocumentFormPage() {
     if (isEdit && !canEdit) navigate('/dashboard/review-documents');
   }, [canCreate, canEdit, isEdit, navigate]);
 
-  const { data: existing } = useDocumentReview(id ?? "");
+  const { data: existing } = useDocumentReview(id ?? draftId ?? "");
   const { data: divisions = [] } = useDivisions();
   const { data: documentTypes = [] } = useDocumentTypes();
   const createMutation = useCreateDocumentReview();
   const updateMutation = useUpdateDocumentReview();
+  const saveDraftMutation = useSaveDocumentReviewDraft();
+  const submitDraftMutation = useSubmitDocumentReviewDraft();
+  const deleteAttachmentMutation = useDeleteDocumentReviewDraftAttachment();
   const divisionOptions = divisions.map((division) => division.name);
   const documentTypeOptions = documentTypes.filter(dt => dt.is_active).map(dt => dt.label)
 
@@ -67,7 +76,7 @@ export default function ReviewDocumentFormPage() {
     register,
     handleSubmit,
     watch,
-    setValue,
+    getValues,
     reset,
     control,
     formState: { errors },
@@ -84,7 +93,7 @@ export default function ReviewDocumentFormPage() {
   const documentType = watch("document_type");
 
   useEffect(() => {
-    if (existing && isEdit) {
+    if (existing && (isEdit || isDraft)) {
       reset({
         requestor_name: existing.requestor_name,
         requestor_position: existing.requestor_position,
@@ -99,7 +108,12 @@ export default function ReviewDocumentFormPage() {
         additional_note: existing.additional_note ?? "",
       });
     }
-  }, [existing, isEdit, reset]);
+  }, [existing, isEdit, isDraft, reset]);
+
+  // Draf yang sudah dikirim (mis. dari tab lain) dibuka di halaman detailnya.
+  useEffect(() => {
+    if (isDraft && existing && existing.status !== "DRAFT") navigate(`/dashboard/review-documents/${existing.id}`, { replace: true });
+  }, [existing, isDraft, navigate]);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = Array.from(e.target.files ?? []);
@@ -120,16 +134,29 @@ export default function ReviewDocumentFormPage() {
   const removeFile = (index: number) =>
     setFiles((prev) => prev.filter((_, i) => i !== index));
 
+  // Simpan draf: isian boleh belum lengkap, jadi validasi form dilewati.
+  const simpanDraf = async () => {
+    try {
+      const draf = await saveDraftMutation.mutateAsync({ id: draftId, data: getValues(), files });
+      setFiles([]);
+      if (!isDraft) navigate(`/dashboard/review-documents/drafts/${draf.id}`, { replace: true });
+    } catch {
+      // Pesan gagal sudah ditampilkan oleh penanganan mutasi global.
+    }
+  };
+
   const onSubmit = async (data: FormData) => {
     if (isEdit) {
       await updateMutation.mutateAsync({ id: id!, data });
+    } else if (isDraft) {
+      await submitDraftMutation.mutateAsync({ id: draftId!, data, files });
     } else {
       await createMutation.mutateAsync({ ...data, attachments: files });
     }
     navigate("/dashboard/review-documents");
   };
 
-  const isLoading = createMutation.isPending || updateMutation.isPending;
+  const isLoading = createMutation.isPending || updateMutation.isPending || saveDraftMutation.isPending || submitDraftMutation.isPending;
 
   return (
     <div className="p-6 max-w-3xl mx-auto">
@@ -145,7 +172,7 @@ export default function ReviewDocumentFormPage() {
         </Button>
         <div>
           <h1 className="text-2xl font-bold" style={{ color: "#0B2545" }}>
-            {isEdit ? "Edit Review Dokumen" : "Buat Review Dokumen"}
+            {isEdit ? "Edit Review Dokumen" : isDraft ? "Lanjutkan Draf Review Dokumen" : "Buat Review Dokumen"}
           </h1>
           <p className="text-sm text-gray-500">
             Isi formulir pengajuan dengan lengkap dan benar
@@ -262,21 +289,27 @@ export default function ReviewDocumentFormPage() {
             </div>
 
             <Field label="Jenis Dokumen" error={errors.document_type?.message}>
-              <Select
-                onValueChange={(v) => setValue("document_type", v)}
-                defaultValue={existing?.document_type}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Pilih jenis dokumen" />
-                </SelectTrigger>
-                <SelectContent>
-                  {documentTypeOptions.map((t) => (
-                    <SelectItem key={t} value={t}>
-                      {t}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Controller
+                name="document_type"
+                control={control}
+                render={({ field }) => (
+                  <Select onValueChange={field.onChange} value={field.value ?? ""}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Pilih jenis dokumen" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {field.value && !documentTypeOptions.includes(field.value) && (
+                        <SelectItem value={field.value}>{field.value}</SelectItem>
+                      )}
+                      {documentTypeOptions.map((t) => (
+                        <SelectItem key={t} value={t}>
+                          {t}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
             </Field>
 
             {documentType === "Lain-Lain" && (
@@ -316,6 +349,11 @@ export default function ReviewDocumentFormPage() {
             <p className="text-xs text-gray-400 mb-5">
               Format: PDF, DOC, DOCX — Maks. 100 MB per file
             </p>
+            <LampiranTersimpan
+              items={isDraft ? existing?.attachments : undefined}
+              disabled={deleteAttachmentMutation.isPending}
+              onHapus={(attachmentId) => deleteAttachmentMutation.mutate({ id: draftId!, attachmentId })}
+            />
             <label className="flex flex-col items-center justify-center gap-3 p-8 border-2 border-dashed border-gray-200 rounded-xl cursor-pointer hover:border-gray-300 hover:bg-gray-50 transition-colors">
               <Upload className="w-8 h-8 text-gray-400" />
               <div className="text-center">
@@ -380,6 +418,11 @@ export default function ReviewDocumentFormPage() {
           <Button type="button" variant="outline" onClick={() => navigate(-1)}>
             Batal
           </Button>
+          {!isEdit && (
+            <Button type="button" variant="outline" disabled={isLoading} onClick={simpanDraf}>
+              Simpan draf
+            </Button>
+          )}
           <Button
             type="submit"
             disabled={isLoading}
