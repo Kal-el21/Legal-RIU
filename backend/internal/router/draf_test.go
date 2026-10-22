@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"path"
 	"strings"
 	"testing"
 	"time"
@@ -330,9 +331,19 @@ func TestRepositoriTidakKembar(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Foto perkara yang nama aslinya tersimpan saat unggah (SyncCasePhoto, jenis sumber legal_cases_photo).
+	foto := "legal-cases/photos/case-" + perk.ID + "-uji.png"
+	if err := dbTes.Exec("UPDATE legal_cases SET photo = ? WHERE id = ?", foto, perk.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := dbTes.Create(&entity.RepositoryDocument{Title: "Sidang Asli.png", FeatureCode: "case_management", SourceType: "legal_cases_photo",
+		SourceID: perk.ID, FilePath: foto, FileName: "Sidang Asli.png", IsActive: true}).Error; err != nil {
+		t.Fatal(err)
+	}
+
 	backfill()
 	backfill()
-	for _, p := range []string{lampiran, dokumen} {
+	for _, p := range []string{lampiran, dokumen, foto} {
 		if n := jumlah(p); n != 1 {
 			t.Errorf("%s tercatat %d kali sesudah dua kali backfill, harap 1", p, n)
 		}
@@ -340,6 +351,33 @@ func TestRepositoriTidakKembar(t *testing.T) {
 	if got := namaDi(dokumen); got != "Gugatan Asli.pdf" {
 		t.Errorf("nama dokumen perkara sesudah backfill: %q, harap nama aslinya", got)
 	}
+	if got := namaDi(foto); got != "Sidang Asli.png" {
+		t.Errorf("nama foto perkara sesudah backfill: %q, harap nama aslinya", got)
+	}
+
+	// Sebelum PR A tahap A.4b, backfill mencatat foto sebagai legal_cases bernama objek, dan baris
+	// itu yang terbaru, jadi nama unduhan foto kembali ke nama objek.
+	t.Run("FotoBernamaObjekDibersihkan", func(t *testing.T) {
+		if err := dbTes.Create(&entity.RepositoryDocument{Title: path.Base(foto), FeatureCode: "case_management", SourceType: "legal_cases",
+			SourceID: perk.ID, FilePath: foto, FileName: path.Base(foto), IsActive: true}).Error; err != nil {
+			t.Fatal(err)
+		}
+		if err := seed.RapikanFotoPerkara(dbTes); err != nil {
+			t.Fatalf("merapikan foto: %v", err)
+		}
+		backfill()
+		if n := jumlah(foto); n != 1 {
+			t.Errorf("foto tercatat %d kali sesudah dirapikan, harap 1", n)
+		}
+		if got := namaDi(foto); got != "Sidang Asli.png" {
+			t.Errorf("nama foto sesudah dirapikan: %q, harap nama aslinya", got)
+		}
+		var aktif bool
+		dbTes.Raw("SELECT is_active FROM repository_documents WHERE file_path = ?", foto).Scan(&aktif)
+		if !aktif {
+			t.Error("foto bernama asli tidak aktif lagi sesudah backfill")
+		}
+	})
 
 	t.Run("SalinanLamaDibersihkan", func(t *testing.T) {
 		var indeks int64
@@ -479,6 +517,27 @@ func TestRepositoriLangsungTerisi(t *testing.T) {
 			harap(t, p, 4, "disetujui (dua lampiran, DOCX dan PDF final)")
 			tanpaKembar(t, p)
 		})
+	})
+
+	// Perkara sudah tersinkron saat unggah sejak sebelum PR A; PR A tahap A.4b menambah: foto
+	// tidak tersalin ulang oleh backfill, dan berkasnya nonaktif saat perkaranya dihapus.
+	t.Run("Perkara", func(t *testing.T) {
+		perk := buatPerkara(t, legal)
+		alamat := perkaraLegal + "/" + perk.ID
+		harapKode(t, panggilForm(t, legal, http.MethodPost, alamat+"/upload-document", nil, berkas{"document", "Gugatan.pdf", []byte("gugatan")}), http.StatusOK, "unggah dokumen")
+		harapKode(t, panggilForm(t, legal, http.MethodPost, alamat+"/photo", nil, berkas{"photo", "Sidang.png", []byte("foto")}), http.StatusOK, "unggah foto")
+		w := panggilForm(t, legal, http.MethodPost, alamat+"/chronology", map[string]string{"agenda_date": "2026-10-05", "agenda": "Sidang"}, berkas{"files", "Bukti.pdf", []byte("bukti")})
+		harapKode(t, w, http.StatusCreated, "kronologi dengan lampiran")
+		var k kronologi
+		isiData(t, w, &k)
+		harap(t, perk.ID, 2, "dokumen dan foto diunggah")
+		harap(t, k.ID, 1, "lampiran kronologi diunggah")
+		tanpaKembar(t, perk.ID, k.ID)
+
+		harapKode(t, panggil(t, legal, http.MethodDelete, alamat, nil), http.StatusOK, "hapus perkara")
+		harap(t, perk.ID, 0, "perkara dihapus")
+		harap(t, k.ID, 0, "kronologi perkara yang dihapus")
+		tanpaKembar(t, perk.ID, k.ID)
 	})
 }
 

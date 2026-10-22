@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"path"
 	"strings"
 	"time"
 
@@ -321,9 +322,9 @@ func polaLampiranKronologi(filePath string) string {
 }
 
 // NamaFilePerkara mengembalikan bahan nama unduhan file perkara: nomor perkara, jenis file
-// (Dokumen, Foto, atau Kronologi), dan keterangannya: nama asli dari Repositori Dokumen untuk
-// dokumen dan foto, atau tanggal agenda untuk lampiran kronologi (nama aslinya tidak tersimpan).
-// Semuanya kosong kalau path tidak terdaftar.
+// (Dokumen, Foto, atau Kronologi), dan keterangannya: nama asli dari Repositori Dokumen. Lampiran
+// kronologi yang diunggah sebelum PR A tahap A.4b hanya tercatat dengan nama objek, jadi
+// keterangannya tanggal agenda ditambah ekstensi file. Semuanya kosong kalau path tidak terdaftar.
 func (r *legalCaseRepository) NamaFilePerkara(filePath string) (tiket, jenis, keterangan string) {
 	var lc entity.LegalCase
 	if r.db.Select("ticket_number", "document_link", "photo").Where("document_link = ? OR photo = ?", filePath, filePath).Take(&lc).Error == nil {
@@ -349,7 +350,14 @@ func (r *legalCaseRepository) NamaFilePerkara(filePath string) (tiket, jenis, ke
 	if k.AgendaDate.IsZero() {
 		return "", "", ""
 	}
-	return k.TicketNumber, "Kronologi", k.AgendaDate.Format("2006-01-02")
+	var nama []string
+	r.db.Model(&entity.RepositoryDocument{}).
+		Where("source_type = 'case_chronologies' AND file_path = ? AND file_name <> ?", filePath, path.Base(filePath)).
+		Order("updated_at DESC").Limit(1).Pluck("file_name", &nama)
+	if len(nama) > 0 {
+		return k.TicketNumber, "Kronologi", nama[0]
+	}
+	return k.TicketNumber, "Kronologi", k.AgendaDate.Format("2006-01-02") + path.Ext(filePath)
 }
 
 func (r *legalCaseRepository) FindCompanyByID(id uuid.UUID) (*entity.Company, error) {

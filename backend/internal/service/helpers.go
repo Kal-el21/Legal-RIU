@@ -54,10 +54,10 @@ func nomorDraf() string {
 }
 
 // catatRepositori: sinkron Repositori Dokumen yang gagal hanya ditulis ke log server.
-// Pengajuannya tetap tersimpan, dan backfill saat server menyala melengkapinya.
+// Pengajuan atau perkaranya tetap tersimpan, dan backfill saat server menyala melengkapinya.
 func catatRepositori(id uuid.UUID, err error) {
 	if err != nil {
-		log.Printf("Repositori Dokumen untuk pengajuan %s tidak tersinkron: %v", id, err)
+		log.Printf("Repositori Dokumen untuk %s tidak tersinkron: %v", id, err)
 	}
 }
 

@@ -20,7 +20,7 @@ type RepositoryDocumentService interface {
 	DownloadDocument(access repository.DocumentAccess, id string) (*minio.Object, string, error)
 	SyncCaseDocument(caseID string, filePath string, fileName string, fileSize int64) error
 	SyncCasePhoto(caseID string, filePath string, fileName string, fileSize int64) error
-	SyncChronologyDocument(chronID string, caseID string, filePath string) error
+	SyncChronologyDocument(chronID string, caseID string, filePath string, fileName string) error
 	RemoveCaseDocuments(caseID string) error
 	RemoveChronologyDocuments(chronID string) error
 	SyncLegalOpinion(lo *entity.LegalOpinion) error
@@ -133,7 +133,10 @@ func (s *repositoryDocumentService) SyncCasePhoto(caseID string, filePath string
 	return s.repo.UpsertBySource(doc)
 }
 
-func (s *repositoryDocumentService) SyncChronologyDocument(chronID string, caseID string, filePath string) error {
+// SyncChronologyDocument mencatat satu lampiran kronologi. fileName berisi nama asli untuk
+// unggahan baru (PR A tahap A.4b). Untuk lampiran yang sudah ada fileName kosong, dan barisnya
+// hanya diaktifkan lagi supaya nama aslinya tidak tertimpa nama objek.
+func (s *repositoryDocumentService) SyncChronologyDocument(chronID string, caseID string, filePath string, fileName string) error {
 	if filePath == "" {
 		return nil
 	}
@@ -148,6 +151,10 @@ func (s *repositoryDocumentService) SyncChronologyDocument(chronID string, caseI
 		MIMEType:     detectMIME(filePath),
 		IsActive:     true,
 	}
+	if fileName == "" {
+		return s.repo.BatchUpsert([]entity.RepositoryDocument{doc})
+	}
+	doc.Title, doc.FileName = fileName, fileName
 	return s.repo.UpsertBySource(doc)
 }
 

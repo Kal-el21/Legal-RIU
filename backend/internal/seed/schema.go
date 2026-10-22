@@ -629,6 +629,9 @@ func RunAllMigrationsAndSeeds(db *gorm.DB, store *storage.MinIOClient) error {
 	if err := RapikanRepositoriKembar(db); err != nil {
 		return err
 	}
+	if err := RapikanFotoPerkara(db); err != nil {
+		return err
+	}
 	if err := BackfillRepositoryDocuments(db); err != nil {
 		return err
 	}
@@ -660,4 +663,21 @@ func RapikanRepositoriKembar(db *gorm.DB) error {
 	}
 	return db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_repository_documents_sumber
 		ON repository_documents (source_type, source_id, file_path)`).Error
+}
+
+// RapikanFotoPerkara menghapus baris foto perkara yang dicatat backfill dengan jenis sumber
+// legal_cases (sebelum PR A tahap A.4b). Saat unggah foto dicatat sebagai legal_cases_photo
+// dengan nama aslinya, tetapi setiap server menyala baris itu dinonaktifkan dan diganti baris
+// bernama objek, sehingga nama unduhan foto kembali ke nama objek. Sesudah dibersihkan,
+// backfill mengaktifkan lagi baris bernama asli. Aman dijalankan berulang.
+func RapikanFotoPerkara(db *gorm.DB) error {
+	res := db.Exec(`DELETE FROM repository_documents
+		WHERE source_type = 'legal_cases' AND file_path LIKE 'legal-cases/photos/%'`)
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected > 0 {
+		log.Printf("Repositori Dokumen: %d baris foto perkara bernama objek dihapus", res.RowsAffected)
+	}
+	return nil
 }
