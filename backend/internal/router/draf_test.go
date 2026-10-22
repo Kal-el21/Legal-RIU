@@ -1,8 +1,10 @@
 package router
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -441,7 +443,11 @@ func ujiDrafPengajuan(t *testing.T, m modulPengajuan, pemilik, lain string) {
 		t.Fatalf("ubah draf: kode %d, judul %q, lampiran %d", kode, d.judul(), len(d.Attachments))
 	}
 	if !tanpaMinIO {
-		harapKode(t, panggilForm(t, pemilik, http.MethodPut, draf+"/draft", kolom, berkas{"attachments", "program.exe", []byte("x")}), http.StatusBadRequest, "lampiran .exe di draf")
+		// Satu file ditolak: tidak ada lampiran yang ikut tersimpan, termasuk file yang sah.
+		harapKode(t, panggilForm(t, pemilik, http.MethodPut, draf+"/draft", kolom, berkas{"attachments", "Sah.pdf", []byte("sah")}, berkas{"attachments", "program.exe", []byte("x")}), http.StatusBadRequest, "lampiran .exe di draf")
+		if p := m.ambil(t, pemilik, "", d.ID); len(p.Attachments) != len(files) {
+			t.Errorf("lampiran sesudah unggahan ditolak: %d, harap %d", len(p.Attachments), len(files))
+		}
 		dibuang := d.Attachments[0]
 		harapKode(t, panggil(t, pemilik, http.MethodDelete, draf+"/attachments/"+dibuang.ID, nil), http.StatusOK, "hapus lampiran draf")
 		harapKode(t, panggil(t, pemilik, http.MethodDelete, draf+"/attachments/"+dibuang.ID, nil), http.StatusNotFound, "hapus lampiran yang sudah dihapus")
@@ -496,6 +502,145 @@ func ujiDrafPengajuan(t *testing.T, m modulPengajuan, pemilik, lain string) {
 		if _, err := storeTes.GetFileObject(t.Context(), a.FilePath); err == nil {
 			t.Errorf("file draf yang dihapus masih ada di MinIO: %s", a.FilePath)
 		}
+	}
+}
+
+// Draf Perjanjian (PR Draf tahap D.4): draf mengikuti versi aktif jenisnya, isian boleh
+// belum lengkap sampai dikirim, dan lampiran dikelola seperti draf Legal Opinion.
+func TestDrafPerjanjian(t *testing.T) {
+	butuhMinIO(t)
+	pemilik := masukPeran(t, entity.RoleUser)
+	lain := masuk(t, surelUserLain)
+	aktif := isiPengajuan(t, pemilik, "PKS", nil)["template_id"].(string)
+	isi := func(form map[string]any) string {
+		t.Helper()
+		b, err := json.Marshal(map[string]any{"document_type_code": "PKS", "template_id": aktif, "form_data": form})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(b)
+	}
+	simpan := func(token, method, alamat string, form map[string]any, files ...berkas) (perjanjian, *httptest.ResponseRecorder) {
+		t.Helper()
+		w := panggilForm(t, token, method, alamat, map[string]string{"data": isi(form)}, files...)
+		var p perjanjian
+		if w.Code < 300 {
+			isiData(t, w, &p)
+		}
+		return p, w
+	}
+	pathLampiran := func(id string) (p string) {
+		dbTes.Raw("SELECT file_path FROM agreement_attachments WHERE id = ?", id).Scan(&p)
+		return p
+	}
+
+	// Draf sebagian tersimpan, dengan nomor sementara dan versi aktif.
+	d, w := simpan(pemilik, http.MethodPost, urlPerjanjian("", "/drafts"), map[string]any{"pihak_kedua_nama": "PT Draf"})
+	harapKode(t, w, http.StatusCreated, "simpan draf perjanjian")
+	if d.Status != string(entity.StatusDraft) || !strings.HasPrefix(d.TicketNumber, "DRAF-") || d.TemplateID != aktif {
+		t.Fatalf("draf baru: status %q, tiket %q, versi %q (aktif %q)", d.Status, d.TicketNumber, d.TemplateID, aktif)
+	}
+	draf := urlPerjanjian("", "/", d.ID)
+
+	// Versi template lain dijawab 409, sama dengan pembuatan langsung.
+	usang := map[string]string{"data": `{"document_type_code":"PKS","template_id":"` + uuid.NewString() + `","form_data":{}}`}
+	harapKode(t, panggilForm(t, pemilik, http.MethodPost, urlPerjanjian("", "/drafts"), usang), http.StatusConflict, "simpan draf dengan versi usang")
+
+	// Belum lengkap: kirim ditolak.
+	harapKode(t, panggil(t, pemilik, http.MethodPost, draf+"/submit", nil), http.StatusBadRequest, "kirim draf perjanjian belum lengkap")
+
+	// Orang lain tidak bisa menyentuh draf.
+	for nama, kode := range map[string]int{
+		"ubah":           panggilForm(t, lain, http.MethodPut, draf+"/draft", map[string]string{"data": isi(formPerjanjian())}).Code,
+		"kirim":          panggil(t, lain, http.MethodPost, draf+"/submit", nil).Code,
+		"hapus lampiran": panggil(t, lain, http.MethodDelete, draf+"/attachments/"+uuid.NewString(), nil).Code,
+	} {
+		if kode != http.StatusNotFound {
+			t.Errorf("USER lain %s draf perjanjian: dapat %d, harap 404", nama, kode)
+		}
+	}
+	if kode := panggil(t, lain, http.MethodDelete, draf, nil).Code; kode == http.StatusOK {
+		t.Error("USER lain bisa menghapus draf perjanjian")
+	}
+
+	// Lengkapi isian dan kelola lampiran.
+	d, w = simpan(pemilik, http.MethodPut, draf+"/draft", formPerjanjian(),
+		berkas{"attachments", "Penawaran.pdf", []byte("satu")}, berkas{"attachments", "Lain.pdf", []byte("dua")})
+	harapKode(t, w, http.StatusOK, "ubah draf perjanjian")
+	if len(d.Attachments) != 2 || d.FormData["pihak_kedua_nama"] != formPerjanjian()["pihak_kedua_nama"] {
+		t.Fatalf("draf sesudah diubah: lampiran %d, pihak kedua %v", len(d.Attachments), d.FormData["pihak_kedua_nama"])
+	}
+	// Satu file ditolak: tidak ada lampiran yang ikut tersimpan, termasuk file yang sah.
+	_, w = simpan(pemilik, http.MethodPut, draf+"/draft", formPerjanjian(), berkas{"attachments", "Sah.pdf", []byte("sah")}, berkas{"attachments", "program.exe", []byte("x")})
+	harapKode(t, w, http.StatusBadRequest, "lampiran .exe di draf perjanjian")
+	if p := ambilPerjanjian(t, pemilik, "", d.ID); len(p.Attachments) != 2 {
+		t.Errorf("lampiran sesudah unggahan ditolak: %d, harap 2", len(p.Attachments))
+	}
+	dibuang := d.Attachments[0]
+	path := pathLampiran(dibuang.ID)
+	harapKode(t, panggil(t, pemilik, http.MethodDelete, draf+"/attachments/"+dibuang.ID, nil), http.StatusOK, "hapus lampiran draf perjanjian")
+	harapKode(t, panggil(t, pemilik, http.MethodDelete, draf+"/attachments/"+dibuang.ID, nil), http.StatusNotFound, "hapus lampiran yang sudah dihapus")
+	if p := ambilPerjanjian(t, pemilik, "", d.ID); len(p.Attachments) != 1 || p.Attachments[0].ID == dibuang.ID {
+		t.Errorf("lampiran sesudah satu dihapus: %+v", p.Attachments)
+	}
+	if _, err := storeTes.GetFileObject(t.Context(), path); err == nil {
+		t.Errorf("file lampiran yang dihapus masih ada di MinIO: %s", path)
+	}
+
+	// Pratinjau draf memakai versi aktif (butuh LibreOffice).
+	t.Run("Pratinjau", func(t *testing.T) {
+		butuhLibreOffice(t)
+		w := panggil(t, pemilik, http.MethodPost, urlPerjanjian("", "/preview-draft"),
+			map[string]any{"document_type_code": "PKS", "template_id": aktif, "document_id": d.ID, "form_data": formPerjanjian()})
+		harapKode(t, w, http.StatusOK, "pratinjau draf perjanjian")
+	})
+
+	// Versi draf yang sudah tidak aktif saat dikirim: 409, draf tetap draf.
+	if err := dbTes.Exec("UPDATE agreement_documents SET template_id = ? WHERE id = ?", uuid.New(), d.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	harapKode(t, panggil(t, pemilik, http.MethodPost, draf+"/submit", nil), http.StatusConflict, "kirim draf dengan versi usang")
+	if s := statusDi(t, "agreement_documents", d.ID); s != string(entity.StatusDraft) {
+		t.Errorf("status sesudah kirim ditolak: %s", s)
+	}
+	// Disimpan ulang dengan versi aktif (seperti sesudah frontend memindahkan isian), lalu dikirim.
+	_, w = simpan(pemilik, http.MethodPut, draf+"/draft", formPerjanjian())
+	harapKode(t, w, http.StatusOK, "simpan ulang draf dengan versi aktif")
+
+	acuan := buatPerjanjian(t, pemilik, formPerjanjian()).TicketNumber
+	if err := dbTes.Exec("UPDATE agreement_documents SET created_at = created_at - interval '30 days' WHERE id = ?", d.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	sebelumKirim := time.Now().Add(-time.Minute)
+	w = panggil(t, pemilik, http.MethodPost, draf+"/submit", nil)
+	harapKode(t, w, http.StatusOK, "kirim draf perjanjian")
+	var terkirim perjanjian
+	isiData(t, w, &terkirim)
+	if terkirim.Status != string(entity.StatusSubmitted) || terkirim.TicketNumber != nomorBerikut(t, acuan) || len(terkirim.Attachments) != 1 {
+		t.Errorf("draf terkirim: status %q, tiket %q (harap %q), lampiran %d", terkirim.Status, terkirim.TicketNumber, nomorBerikut(t, acuan), len(terkirim.Attachments))
+	}
+	var dibuat time.Time
+	dbTes.Raw("SELECT created_at FROM agreement_documents WHERE id = ?", d.ID).Scan(&dibuat)
+	if dibuat.Before(sebelumKirim) {
+		t.Errorf("tanggal pengajuan %v masih tanggal draf dibuat, harap waktu kirim", dibuat)
+	}
+	if !perjanjianDiDaftar(t, pemilik, "", d.ID) {
+		t.Error("perjanjian dari draf tidak muncul di daftar pemiliknya")
+	}
+	harapKode(t, panggil(t, pemilik, http.MethodPost, draf+"/submit", nil), http.StatusNotFound, "kirim ulang perjanjian")
+
+	// Hapus draf: permanen beserta lampiran dan filenya.
+	h, w := simpan(pemilik, http.MethodPost, urlPerjanjian("", "/drafts"), map[string]any{}, berkas{"attachments", "hapus.pdf", []byte("hapus")})
+	harapKode(t, w, http.StatusCreated, "simpan draf untuk dihapus")
+	pathHapus := pathLampiran(h.Attachments[0].ID)
+	harapKode(t, panggil(t, pemilik, http.MethodDelete, urlPerjanjian("", "/", h.ID), nil), http.StatusOK, "hapus draf perjanjian")
+	var sisa int64
+	dbTes.Raw("SELECT count(*) FROM agreement_documents WHERE id = ?", h.ID).Scan(&sisa)
+	if sisa != 0 {
+		t.Error("draf perjanjian yang dihapus masih ada di database (harus hapus permanen)")
+	}
+	if _, err := storeTes.GetFileObject(t.Context(), pathHapus); err == nil {
+		t.Errorf("file draf perjanjian yang dihapus masih ada di MinIO: %s", pathHapus)
 	}
 }
 

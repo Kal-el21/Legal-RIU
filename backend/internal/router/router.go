@@ -194,6 +194,11 @@ func New(cfg *config.Config, db *gorm.DB, store *storage.MinIOClient) (*gin.Engi
 	userOnly.PUT("/agreement-documents/:id", requirePermission("agreement_document.update.own"), agreementHandler.Update)
 	userOnly.DELETE("/agreement-documents/:id", requirePermission("agreement_document.delete.own"), agreementHandler.Delete)
 	userOnly.POST("/agreement-documents/:id/resubmit", requirePermission("agreement_document.resubmit.own"), agreementHandler.Resubmit)
+	// Draf (PR Draf): hanya pemiliknya; memakai izin yang ada.
+	userOnly.POST("/agreement-documents/drafts", requirePermission("agreement_document.create.own"), agreementHandler.SaveDraft)
+	userOnly.PUT("/agreement-documents/:id/draft", requirePermission("agreement_document.update.own"), agreementHandler.UpdateDraft)
+	userOnly.DELETE("/agreement-documents/:id/attachments/:attachmentId", requirePermission("agreement_document.update.own"), agreementHandler.DeleteDraftAttachment)
+	userOnly.POST("/agreement-documents/:id/submit", requirePermission("agreement_document.create.own"), agreementHandler.SubmitDraft)
 	userOnly.GET("/agreement-documents/:id/preview", requirePermission("agreement_document.preview.own"), agreementHandler.Preview)
 	userOnly.GET("/agreement-documents/:id/pdf", requirePermission("agreement_document.download_pdf.own"), agreementHandler.DownloadPDF)
 	userOnly.GET("/agreement-documents/:id/attachments/:attachmentId", requirePermission("agreement_document.download_attachment.own"), agreementHandler.DownloadAttachment)

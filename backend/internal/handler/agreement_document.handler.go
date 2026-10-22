@@ -49,19 +49,89 @@ func (h *AgreementDocumentHandler) DocumentSchema(c *gin.Context) {
 	}
 	utils.OK(c, "Success", v)
 }
-func (h *AgreementDocumentHandler) Create(c *gin.Context) {
+// bacaPengajuan membaca isi pengajuan perjanjian: multipart (field data berisi JSON,
+// ditambah lampiran di attachments) atau JSON biasa tanpa lampiran.
+func bacaPengajuan(c *gin.Context) (dto.CreateAgreementDocumentRequest, []*multipart.FileHeader, bool) {
 	var req dto.CreateAgreementDocumentRequest
 	var files []*multipart.FileHeader
 	if strings.HasPrefix(c.GetHeader("Content-Type"), "multipart/") {
 		if e := json.Unmarshal([]byte(c.PostForm("data")), &req); e != nil {
 			utils.BadRequest(c, "Data tidak valid", e.Error())
-			return
+			return req, nil, false
 		}
 		if f, _ := c.MultipartForm(); f != nil {
 			files = f.File["attachments"]
 		}
 	} else if e := c.ShouldBindJSON(&req); e != nil {
 		utils.BadRequest(c, "Data tidak valid", e.Error())
+		return req, nil, false
+	}
+	return req, files, true
+}
+
+// jawabGalatDrafPerjanjian: versi template usang (409), draf atau lampiran tidak ada
+// (404), selebihnya 400 seperti alamat perjanjian lain.
+func jawabGalatDrafPerjanjian(c *gin.Context, e error) {
+	switch {
+	case errors.Is(e, service.ErrTemplateUsang):
+		c.JSON(http.StatusConflict, utils.Response{Success: false, Message: e.Error()})
+	case errors.Is(e, service.ErrDrafTidakAda), errors.Is(e, service.ErrLampiranTidakAda):
+		utils.NotFound(c, e.Error())
+	default:
+		utils.BadRequest(c, e.Error(), nil)
+	}
+}
+
+// POST /api/v1/agreement-documents/drafts: simpan draf baru (PR Draf).
+func (h *AgreementDocumentHandler) SaveDraft(c *gin.Context) {
+	req, files, ok := bacaPengajuan(c)
+	if !ok {
+		return
+	}
+	v, e := h.svc.SaveDraft(middleware.GetUserID(c), req, files)
+	if e != nil {
+		jawabGalatDrafPerjanjian(c, e)
+		return
+	}
+	utils.Created(c, "Draf tersimpan", v)
+}
+
+// PUT /api/v1/agreement-documents/:id/draft: ganti isian draf dan tambah lampiran.
+func (h *AgreementDocumentHandler) UpdateDraft(c *gin.Context) {
+	req, files, ok := bacaPengajuan(c)
+	if !ok {
+		return
+	}
+	v, e := h.svc.UpdateDraft(c.Param("id"), middleware.GetUserID(c), req, files)
+	if e != nil {
+		jawabGalatDrafPerjanjian(c, e)
+		return
+	}
+	utils.OK(c, "Draf tersimpan", v)
+}
+
+// DELETE /api/v1/agreement-documents/:id/attachments/:attachmentId: hapus satu lampiran draf.
+func (h *AgreementDocumentHandler) DeleteDraftAttachment(c *gin.Context) {
+	if e := h.svc.DeleteDraftAttachment(c.Param("id"), c.Param("attachmentId"), middleware.GetUserID(c)); e != nil {
+		jawabGalatDrafPerjanjian(c, e)
+		return
+	}
+	utils.OK(c, "Lampiran dihapus", nil)
+}
+
+// POST /api/v1/agreement-documents/:id/submit: kirim draf menjadi pengajuan.
+func (h *AgreementDocumentHandler) SubmitDraft(c *gin.Context) {
+	v, e := h.svc.SubmitDraft(c.Param("id"), middleware.GetUserID(c))
+	if e != nil {
+		jawabGalatDrafPerjanjian(c, e)
+		return
+	}
+	utils.OK(c, "Pengajuan berhasil dikirim", v)
+}
+
+func (h *AgreementDocumentHandler) Create(c *gin.Context) {
+	req, files, ok := bacaPengajuan(c)
+	if !ok {
 		return
 	}
 	v, e := h.svc.Create(middleware.GetUserID(c), req, files)

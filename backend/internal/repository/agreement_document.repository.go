@@ -22,6 +22,8 @@ type AgreementDocumentRepository interface {
 	Save(*entity.AgreementDocument) error
 	AgreementNumberTaken(number string, except uuid.UUID) (bool, error)
 	Delete(uuid.UUID) error
+	HardDelete(uuid.UUID) error
+	DeleteAttachment(uuid.UUID) error
 	AddAttachment(*entity.AgreementAttachment) error
 	FindAttachment(uuid.UUID, uuid.UUID) (*entity.AgreementAttachment, error)
 	LatestUploadRound(uuid.UUID) (int, error)
@@ -100,6 +102,19 @@ func (r *agreementDocumentRepository) AgreementNumberTaken(number string, except
 }
 func (r *agreementDocumentRepository) Delete(id uuid.UUID) error {
 	return r.db.Delete(&entity.AgreementDocument{}, "id = ?", id).Error
+}
+// HardDelete menghapus permanen pengajuan beserta baris lampirannya. Hanya untuk draf
+// (PR Draf); pengajuan yang sudah dikirim tetap soft delete lewat Delete.
+func (r *agreementDocumentRepository) HardDelete(id uuid.UUID) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("agreement_document_id = ?", id).Delete(&entity.AgreementAttachment{}).Error; err != nil {
+			return err
+		}
+		return tx.Unscoped().Delete(&entity.AgreementDocument{}, "id = ?", id).Error
+	})
+}
+func (r *agreementDocumentRepository) DeleteAttachment(id uuid.UUID) error {
+	return r.db.Delete(&entity.AgreementAttachment{}, "id = ?", id).Error
 }
 func (r *agreementDocumentRepository) AddAttachment(v *entity.AgreementAttachment) error {
 	return r.db.Create(v).Error
