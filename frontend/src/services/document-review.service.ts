@@ -1,4 +1,5 @@
 import api from './api'
+import { formDraf } from '@/lib/draf'
 import { namaDariHeader } from '@/lib/nama-unduhan'
 import { useAuthStore } from '@/store/auth.store'
 import type { ApiResponse, DocumentReview, PaginatedData } from '@/types'
@@ -67,6 +68,24 @@ export const documentReviewService = {
 
   delete: async (id: string) => {
     await api.delete(`/review-documents/${id}`)
+  },
+
+  // Draf (PR Draf): hanya pemiliknya. Simpan draf tanpa id membuat draf baru.
+  saveDraft: async (data: Omit<CreateDocumentReviewData, 'attachments'>, files: File[] = [], id?: string) => {
+    const form = formDraf(data, files)
+    const res = id
+      ? await api.put<ApiResponse<DocumentReview>>(`/review-documents/${id}/draft`, form)
+      : await api.post<ApiResponse<DocumentReview>>('/review-documents/drafts', form)
+    return res.data.data!
+  },
+
+  deleteDraftAttachment: async (id: string, attachmentId: string) => {
+    await api.delete(`/review-documents/${id}/attachments/${attachmentId}`)
+  },
+
+  submitDraft: async (id: string) => {
+    const res = await api.post<ApiResponse<DocumentReview>>(`/review-documents/${id}/submit`)
+    return res.data.data!
   },
 
   resubmit: async (id: string, files?: File[]) => {

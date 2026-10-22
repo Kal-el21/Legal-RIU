@@ -114,12 +114,14 @@ export function bacaDraf(userId: string, penyimpanan = browser()): Draf | null {
   }
 }
 
-export function simpanDraf(userId: string, draf: Draf, penyimpanan = browser()) {
-  if (!userId || !penyimpanan) return
-  try {
-    penyimpanan.setItem(kunciDraf(userId), JSON.stringify(draf))
-  } catch {
-    // Penyimpanan penuh atau ditolak; draf tidak disimpan.
+// drafKeServer: isi permintaan untuk menyimpan draf lama di browser (PR 9) sekali sebagai
+// draf di server (PR Draf). Kalau versi templatenya sudah diganti Admin, isian dipindah ke
+// versi aktif lebih dulu; hasil pindahnya ikut dikembalikan untuk pemberitahuan di wizard.
+export function drafKeServer(draf: Draf, aktif: { code: string; template_id: string; sections: SectionDef[] }) {
+  const pindah = draf.template_id === aktif.template_id ? null : pindahkanIsian(draf.isian, draf.sections, aktif.sections)
+  return {
+    permintaan: { document_type_code: aktif.code, template_id: aktif.template_id, form_data: pindah ? pindah.isian : draf.isian },
+    pindah,
   }
 }
 

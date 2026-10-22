@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"mime/multipart"
 	"path"
+	"time"
 
 	"legal-riu-portal/internal/dto"
 	"legal-riu-portal/internal/entity"
@@ -28,6 +29,10 @@ type LegalOpinionService interface {
 	UploadResult(id string, adminID string, req dto.UploadResultRequest, file *multipart.FileHeader) error
 	DownloadFile(filePath, userID, role string) (*minio.Object, string, error)
 	GeneratePDF(id string) ([]byte, error)
+	SaveDraft(userID string, req dto.CreateLegalOpinionRequest, files []*multipart.FileHeader) (*entity.LegalOpinion, error)
+	UpdateDraft(id, userID string, req dto.CreateLegalOpinionRequest, files []*multipart.FileHeader) (*entity.LegalOpinion, error)
+	DeleteDraftAttachment(id, attachmentID, userID string) error
+	SubmitDraft(id, userID string) (*entity.LegalOpinion, error)
 }
 
 type legalOpinionService struct {
@@ -57,21 +62,8 @@ func (s *legalOpinionService) Create(userID string, req dto.CreateLegalOpinionRe
 	}
 	ticket := utils.GenerateTicketNumber(utils.PrefixLegalOpinion, seq)
 
-	lo := &entity.LegalOpinion{
-		TicketNumber:      ticket,
-		UserID:            uid,
-		RequestorName:     req.RequestorName,
-		RequestorPosition: req.RequestorPosition,
-		RequestorDivision: req.RequestorDivision,
-		RequestorEmail:    req.RequestorEmail,
-		RequestorPhone:    req.RequestorPhone,
-		LegalType:         req.LegalType,
-		LegalTypeOther:    req.LegalTypeOther,
-		Title:             req.Title,
-		Chronology:        req.Chronology,
-		Question:          req.Question,
-		Status:            entity.StatusSubmitted,
-	}
+	lo := &entity.LegalOpinion{TicketNumber: ticket, UserID: uid, Status: entity.StatusSubmitted}
+	isiLegalOpinion(lo, req)
 
 	if err := s.repo.Create(lo); err != nil {
 		return nil, errors.New("gagal membuat pengajuan")
@@ -102,17 +94,19 @@ func (s *legalOpinionService) GetByID(id string, userID string, role string) (*e
 		return nil, errors.New("pengajuan tidak ditemukan")
 	}
 
-	// Regular users can only see their own submissions (BR-001).
-	if !canAccessAllSubmissions(role) && lo.UserID.String() != userID {
+	// Regular users can only see their own submissions (BR-001). Draf hanya untuk
+	// pemiliknya, juga bagi yang boleh melihat semua pengajuan (PR Draf).
+	if (!canAccessAllSubmissions(role) || lo.Status == entity.StatusDraft) && lo.UserID.String() != userID {
 		return nil, errors.New("pengajuan tidak ditemukan")
 	}
 
 	return lo, nil
 }
 
+// GetAll: ?status=DRAFT selalu hanya memuat draf milik sendiri (PR Draf).
 func (s *legalOpinionService) GetAll(userID string, role string, query dto.LegalOpinionListQuery) ([]entity.LegalOpinion, int64, error) {
 	var filterUserID *uuid.UUID
-	if !canAccessAllSubmissions(role) {
+	if !canAccessAllSubmissions(role) || query.Status == string(entity.StatusDraft) {
 		uid, err := parseUUID(userID)
 		if err != nil {
 			return nil, 0, errors.New("user tidak valid")
@@ -154,6 +148,19 @@ func (s *legalOpinionService) Delete(id string, userID string) error {
 	lo, err := s.GetByID(id, userID, string(entity.RoleUser))
 	if err != nil {
 		return err
+	}
+
+	// Draf dihapus permanen beserta lampirannya (PR Draf).
+	if lo.Status == entity.StatusDraft {
+		paths := make([]string, 0, len(lo.Attachments))
+		for _, a := range lo.Attachments {
+			paths = append(paths, a.FilePath)
+		}
+		if err := s.repo.HardDelete(lo.ID); err != nil {
+			return errors.New("gagal menghapus draf")
+		}
+		hapusFileDraf(s.storage, paths)
+		return nil
 	}
 
 	// Only deletable when SUBMITTED (BR-005)
@@ -201,7 +208,7 @@ func (s *legalOpinionService) UpdateStatus(id string, req dto.UpdateStatusReques
 	}
 
 	lo, err := s.repo.FindByID(uid)
-	if err != nil {
+	if err != nil || lo.Status == entity.StatusDraft {
 		return errors.New("pengajuan tidak ditemukan")
 	}
 
@@ -225,7 +232,7 @@ func (s *legalOpinionService) UploadResult(id string, adminID string, req dto.Up
 
 	// Get current legal opinion to check status
 	lo, err := s.repo.FindByID(uid)
-	if err != nil {
+	if err != nil || lo.Status == entity.StatusDraft {
 		return errors.New("pengajuan tidak ditemukan")
 	}
 
@@ -292,6 +299,121 @@ func (s *legalOpinionService) GeneratePDF(id string) ([]byte, error) {
 	}
 
 	return s.pdfSvc.GenerateLegalOpinionPDF(lo)
+}
+
+// ─── Draf (PR Draf) ───────────────────────────────────────────────────────────
+
+// SaveDraft menyimpan draf baru. Isian boleh belum lengkap; lampiran tetap diperiksa.
+func (s *legalOpinionService) SaveDraft(userID string, req dto.CreateLegalOpinionRequest, files []*multipart.FileHeader) (*entity.LegalOpinion, error) {
+	uid, err := parseUUID(userID)
+	if err != nil {
+		return nil, errors.New("user tidak valid")
+	}
+	if err := validateFiles(files); err != nil {
+		return nil, err
+	}
+	lo := &entity.LegalOpinion{TicketNumber: nomorDraf(), UserID: uid, Status: entity.StatusDraft}
+	isiLegalOpinion(lo, req)
+	if err := s.repo.Create(lo); err != nil {
+		return nil, errors.New("gagal menyimpan draf")
+	}
+	if err := s.uploadAttachments(lo.ID, files, 1); err != nil {
+		_ = s.repo.HardDelete(lo.ID)
+		return nil, err
+	}
+	return s.repo.FindByID(lo.ID)
+}
+
+// UpdateDraft mengganti isian draf dan menambah lampiran baru.
+func (s *legalOpinionService) UpdateDraft(id, userID string, req dto.CreateLegalOpinionRequest, files []*multipart.FileHeader) (*entity.LegalOpinion, error) {
+	lo, err := s.drafMilik(id, userID)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateFiles(files); err != nil {
+		return nil, err
+	}
+	isiLegalOpinion(lo, req)
+	if err := s.repo.Update(lo); err != nil {
+		return nil, errors.New("gagal menyimpan draf")
+	}
+	if err := s.uploadAttachments(lo.ID, files, 1); err != nil {
+		return nil, err
+	}
+	return s.repo.FindByID(lo.ID)
+}
+
+// DeleteDraftAttachment menghapus permanen satu lampiran draf beserta filenya.
+func (s *legalOpinionService) DeleteDraftAttachment(id, attachmentID, userID string) error {
+	lo, err := s.drafMilik(id, userID)
+	if err != nil {
+		return err
+	}
+	for _, a := range lo.Attachments {
+		if a.ID.String() == attachmentID {
+			if err := s.repo.DeleteAttachment(a.ID); err != nil {
+				return errors.New("gagal menghapus lampiran")
+			}
+			hapusFileDraf(s.storage, []string{a.FilePath})
+			return nil
+		}
+	}
+	return ErrLampiranTidakAda
+}
+
+// SubmitDraft mengirim draf: isian wajib diperiksa seperti pengajuan langsung, lalu
+// draf mendapat nomor tiket, status SUBMITTED, dan tanggal pengajuan saat ini (K2).
+func (s *legalOpinionService) SubmitDraft(id, userID string) (*entity.LegalOpinion, error) {
+	lo, err := s.drafMilik(id, userID)
+	if err != nil {
+		return nil, err
+	}
+	if !permintaanLegalOpinion(lo).Complete() {
+		return nil, ErrIsianBelumLengkap
+	}
+	seq, err := s.repo.NextTicketSequence("LO")
+	if err != nil {
+		return nil, errors.New("gagal generate ticket number")
+	}
+	now := time.Now()
+	lo.TicketNumber = utils.GenerateTicketNumber(utils.PrefixLegalOpinion, seq)
+	lo.Status = entity.StatusSubmitted
+	lo.CreatedAt = now
+	lo.StatusUpdatedAt = &now
+	if err := s.repo.Update(lo); err != nil {
+		return nil, errors.New("gagal mengirim draf")
+	}
+	return s.repo.FindByID(lo.ID)
+}
+
+// drafMilik mengambil draf milik pemanggil; selain itu ErrDrafTidakAda.
+func (s *legalOpinionService) drafMilik(id, userID string) (*entity.LegalOpinion, error) {
+	lo, err := s.GetByID(id, userID, string(entity.RoleUser))
+	if err != nil || lo.Status != entity.StatusDraft {
+		return nil, ErrDrafTidakAda
+	}
+	return lo, nil
+}
+
+func isiLegalOpinion(lo *entity.LegalOpinion, req dto.CreateLegalOpinionRequest) {
+	lo.RequestorName = req.RequestorName
+	lo.RequestorPosition = req.RequestorPosition
+	lo.RequestorDivision = req.RequestorDivision
+	lo.RequestorEmail = req.RequestorEmail
+	lo.RequestorPhone = req.RequestorPhone
+	lo.LegalType = req.LegalType
+	lo.LegalTypeOther = req.LegalTypeOther
+	lo.Title = req.Title
+	lo.Chronology = req.Chronology
+	lo.Question = req.Question
+}
+
+func permintaanLegalOpinion(lo *entity.LegalOpinion) dto.CreateLegalOpinionRequest {
+	return dto.CreateLegalOpinionRequest{
+		RequestorName: lo.RequestorName, RequestorPosition: lo.RequestorPosition, RequestorDivision: lo.RequestorDivision,
+		RequestorEmail: lo.RequestorEmail, RequestorPhone: lo.RequestorPhone, LegalType: lo.LegalType,
+		LegalTypeOther: lo.LegalTypeOther, Title: lo.Title, Chronology: lo.Chronology, Question: lo.Question,
+	}
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

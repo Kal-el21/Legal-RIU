@@ -131,11 +131,12 @@ func (r *agreementTemplateRepository) SaveType(v *entity.AgreementType) error {
 }
 
 // CountRunningDocuments menghitung pengajuan yang belum selesai (bukan Selesai
-// atau Ditolak) yang dikunci ke versi template itu.
+// atau Ditolak) yang dikunci ke versi template itu. Draf tidak dihitung: versinya
+// boleh dihapus, dan draf pindah ke versi aktif saat dikirim (PR Draf).
 func (r *agreementTemplateRepository) CountRunningDocuments(templateID uuid.UUID) (int64, error) {
 	var n int64
 	err := r.db.Model(&entity.AgreementDocument{}).
-		Where("template_id = ? AND status NOT IN ?", templateID, []entity.SubmissionStatus{entity.StatusCompleted, entity.StatusRejected}).
+		Where("template_id = ? AND status NOT IN ?", templateID, []entity.SubmissionStatus{entity.StatusCompleted, entity.StatusRejected, entity.StatusDraft}).
 		Count(&n).Error
 	return n, err
 }

@@ -45,6 +45,7 @@ export function formatFileSize(bytes: number): string {
 
 // ─── Status display helpers ───────────────────────────────────────────────────
 export const STATUS_LABEL: Record<SubmissionStatus, string> = {
+  DRAFT: 'Draf',
   SUBMITTED: 'Diajukan',
   UNDER_REVIEW: 'Sedang Direview',
   NEED_REVISION: 'Perlu Revisi',
@@ -54,6 +55,7 @@ export const STATUS_LABEL: Record<SubmissionStatus, string> = {
 }
 
 export const STATUS_COLOR: Record<SubmissionStatus, string> = {
+  DRAFT: 'bg-gray-100 text-gray-700',
   SUBMITTED: 'bg-blue-100 text-blue-700',
   UNDER_REVIEW: 'bg-yellow-100 text-yellow-700',
   NEED_REVISION: 'bg-orange-100 text-orange-700',

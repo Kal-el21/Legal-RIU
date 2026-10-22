@@ -22,6 +22,8 @@ type AgreementDocumentRepository interface {
 	Save(*entity.AgreementDocument) error
 	AgreementNumberTaken(number string, except uuid.UUID) (bool, error)
 	Delete(uuid.UUID) error
+	HardDelete(uuid.UUID) error
+	DeleteAttachment(uuid.UUID) error
 	AddAttachment(*entity.AgreementAttachment) error
 	FindAttachment(uuid.UUID, uuid.UUID) (*entity.AgreementAttachment, error)
 	LatestUploadRound(uuid.UUID) (int, error)
@@ -59,11 +61,15 @@ func (r *agreementDocumentRepository) FindAll(owner *uuid.UUID, status, dateFrom
 	if owner != nil {
 		q = q.Where("user_id = ?", *owner)
 	}
+	// Kolom disebut dengan tabelnya: saat dicari per nama, tabel users (yang juga punya
+	// status dan created_at) ikut di-join.
 	if status != "" {
-		q = q.Where("status = ?", status)
+		q = q.Where("agreement_documents.status = ?", status)
+	} else {
+		q = q.Scopes(bukanDraf("agreement_documents"))
 	}
 	if dateFrom != "" {
-		q = q.Where("created_at >= ?", dateFrom)
+		q = q.Where("agreement_documents.created_at >= ?", dateFrom)
 	}
 	if search != "" {
 		q = q.Joins("JOIN users u ON u.id = agreement_documents.user_id").Where("u.full_name ILIKE ?", "%"+search+"%")
@@ -73,7 +79,7 @@ func (r *agreementDocumentRepository) FindAll(owner *uuid.UUID, status, dateFrom
 		return nil, 0, err
 	}
 	var items []entity.AgreementDocument
-	err := q.Preload("User").Order("created_at DESC").Offset((page - 1) * limit).Limit(limit).Find(&items).Error
+	err := q.Preload("User").Order("agreement_documents.created_at DESC").Offset((page - 1) * limit).Limit(limit).Find(&items).Error
 	return items, total, err
 }
 // Save menerjemahkan penolakan indeks unik nomor perjanjian, yang tetap bisa
@@ -96,6 +102,19 @@ func (r *agreementDocumentRepository) AgreementNumberTaken(number string, except
 }
 func (r *agreementDocumentRepository) Delete(id uuid.UUID) error {
 	return r.db.Delete(&entity.AgreementDocument{}, "id = ?", id).Error
+}
+// HardDelete menghapus permanen pengajuan beserta baris lampirannya. Hanya untuk draf
+// (PR Draf); pengajuan yang sudah dikirim tetap soft delete lewat Delete.
+func (r *agreementDocumentRepository) HardDelete(id uuid.UUID) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("agreement_document_id = ?", id).Delete(&entity.AgreementAttachment{}).Error; err != nil {
+			return err
+		}
+		return tx.Unscoped().Delete(&entity.AgreementDocument{}, "id = ?", id).Error
+	})
+}
+func (r *agreementDocumentRepository) DeleteAttachment(id uuid.UUID) error {
+	return r.db.Delete(&entity.AgreementAttachment{}, "id = ?", id).Error
 }
 func (r *agreementDocumentRepository) AddAttachment(v *entity.AgreementAttachment) error {
 	return r.db.Create(v).Error

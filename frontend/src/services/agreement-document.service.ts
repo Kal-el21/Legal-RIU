@@ -5,7 +5,7 @@ export interface AgreementField {name:string;label:string;type:string;required:b
 export interface AgreementSchema {code:string;name:string;template_id:string;template_version:number;sections:{title:string;fields:AgreementField[]}[]}
 // Penanda untuk approver: pengajuan berjalan masih memakai versi template lama.
 export interface OldTemplate {version:number;active_version:number;active_note:string;activated_at?:string;activated_by:string}
-export interface AgreementDocument {id:string;ticket_number:string;document_type_code:string;template_id?:string;form_data:Record<string,unknown>;old_template?:OldTemplate;signatory_suggestion?:UsulanPenandatangan|null;agreement_number:string;status:string;approver_note?:string;attachments?:{id:string;file_name:string}[];generated_file_name?:string;created_at?:string;user?:{full_name?:string}}
+export interface AgreementDocument {id:string;ticket_number:string;document_type_code:string;template_id?:string;form_data:Record<string,unknown>;old_template?:OldTemplate;signatory_suggestion?:UsulanPenandatangan|null;agreement_number:string;status:string;approver_note?:string;attachments?:{id:string;file_name:string}[];generated_file_name?:string;created_at?:string;updated_at?:string;user?:{full_name?:string}}
 const data=<T>(r:{data:{data:T}})=>r.data.data
 
 async function fileError(reason: unknown, fallback: string): Promise<Error> {
@@ -46,6 +46,10 @@ export const agreementService={
  create:(payload:unknown,files:File[])=>{const f=new FormData();f.append('data',JSON.stringify(payload));files.forEach(x=>f.append('attachments',x));return api.post('/agreement-documents',f).then(r=>data<AgreementDocument>(r))},
  update:(id:string,form_data:Record<string,unknown>)=>api.put(`/agreement-documents/${id}`,{form_data}),
  remove:(id:string)=>api.delete(`/agreement-documents/${id}`),
+ // Draf (PR Draf): hanya pemiliknya. Tanpa id membuat draf baru.
+ saveDraft:(payload:{document_type_code:string;template_id:string;form_data:Record<string,unknown>},files:File[]=[],id?:string)=>{const f=new FormData();f.append('data',JSON.stringify(payload));files.forEach(x=>f.append('attachments',x));return (id?api.put(`/agreement-documents/${id}/draft`,f):api.post('/agreement-documents/drafts',f)).then(r=>data<AgreementDocument>(r))},
+ deleteDraftAttachment:(id:string,attachmentId:string)=>api.delete(`/agreement-documents/${id}/attachments/${attachmentId}`),
+ submitDraft:(id:string)=>api.post(`/agreement-documents/${id}/submit`).then(r=>data<AgreementDocument>(r)),
  resubmit:(id:string,files:File[])=>{const f=new FormData();files.forEach(x=>f.append('attachments',x));return api.post(`/agreement-documents/${id}/resubmit`,f)},
  meta:(base:string,id:string,payload:unknown)=>api.patch(`${base}/agreement-documents/${id}/meta`,payload),
   status:(base:string,id:string,status:string,note='')=>api.patch(`${base}/agreement-documents/${id}/status`,{status,note}),

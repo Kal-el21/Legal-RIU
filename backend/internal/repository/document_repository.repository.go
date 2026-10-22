@@ -111,14 +111,25 @@ func (r *repositoryDocumentRepository) FindByID(access DocumentAccess, id uuid.U
 	return &doc, nil
 }
 
+// BatchUpsert mencatat file hasil backfill. Baris dengan sumber dan path yang sama hanya
+// diaktifkan kembali, tanpa mengubah isinya, supaya nama asli yang disimpan saat unggah
+// (dokumen dan foto perkara) tidak ditimpa nama objek. File yang belum tercatat dibuat baru.
 func (r *repositoryDocumentRepository) BatchUpsert(docs []entity.RepositoryDocument) error {
 	if len(docs) == 0 {
 		return nil
 	}
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		for _, doc := range docs {
-			if err := tx.Save(&doc).Error; err != nil {
-				return err
+			res := tx.Model(&entity.RepositoryDocument{}).
+				Where("source_type = ? AND source_id = ? AND file_path = ?", doc.SourceType, doc.SourceID, doc.FilePath).
+				Update("is_active", true)
+			if res.Error != nil {
+				return res.Error
+			}
+			if res.RowsAffected == 0 {
+				if err := tx.Create(&doc).Error; err != nil {
+					return err
+				}
 			}
 		}
 		return nil

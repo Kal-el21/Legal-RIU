@@ -18,6 +18,7 @@ DELETE /api/v1/admin/purpose-types/:id: ADMIN
 DELETE /api/v1/admin/regencies/:id: ADMIN
 DELETE /api/v1/admin/users/:id: ADMIN
 DELETE /api/v1/agreement-documents/:id: USER
+DELETE /api/v1/agreement-documents/:id/attachments/:attachmentId: USER
 DELETE /api/v1/external/legal-cases/:id: -
 DELETE /api/v1/external/legal-cases/:id/chronology/:chronId: EXTERNAL
 DELETE /api/v1/external/legal-cases/:id/document: EXTERNAL
@@ -33,6 +34,7 @@ DELETE /api/v1/legal-cases/:id/document: -
 DELETE /api/v1/legal-cases/:id/photo: -
 DELETE /api/v1/legal-cases/cedants/:id: -
 DELETE /api/v1/legal-opinions/:id: USER
+DELETE /api/v1/legal-opinions/:id/attachments/:attachmentId: USER
 DELETE /api/v1/legal/agreement-templates/:id: -
 DELETE /api/v1/legal/legal-cases/:id: LEGAL
 DELETE /api/v1/legal/legal-cases/:id/chronology/:chronId: LEGAL
@@ -41,6 +43,7 @@ DELETE /api/v1/legal/legal-cases/:id/photo: LEGAL
 DELETE /api/v1/legal/legal-cases/cedants/:id: LEGAL
 DELETE /api/v1/legal/materials/:id: LEGAL
 DELETE /api/v1/review-documents/:id: USER
+DELETE /api/v1/review-documents/:id/attachments/:attachmentId: USER
 GET /api/v1/admin/agreement-company-master: ADMIN
 GET /api/v1/admin/agreement-documents: ADMIN
 GET /api/v1/admin/agreement-documents/:id: ADMIN
@@ -266,6 +269,8 @@ POST /api/v1/admin/users: ADMIN
 POST /api/v1/admin/users/:id/reset-password: ADMIN
 POST /api/v1/agreement-documents: USER
 POST /api/v1/agreement-documents/:id/resubmit: USER
+POST /api/v1/agreement-documents/:id/submit: USER
+POST /api/v1/agreement-documents/drafts: USER
 POST /api/v1/agreement-documents/preview-draft: USER
 POST /api/v1/auth/change-password: ADMIN LEGAL LEGAL_AU USER EXTERNAL
 POST /api/v1/external/legal-cases: -
@@ -292,6 +297,8 @@ POST /api/v1/legal-cases/cedants/import: -
 POST /api/v1/legal-cases/regencies/import: -
 POST /api/v1/legal-opinions: USER
 POST /api/v1/legal-opinions/:id/resubmit: USER
+POST /api/v1/legal-opinions/:id/submit: USER
+POST /api/v1/legal-opinions/drafts: USER
 POST /api/v1/legal/agreement-templates: -
 POST /api/v1/legal/agreement-templates/:id/activate: -
 POST /api/v1/legal/agreement-templates/new-version: -
@@ -308,6 +315,8 @@ POST /api/v1/legal/materials: LEGAL
 POST /api/v1/legal/review-documents/:id/result: LEGAL
 POST /api/v1/review-documents: USER
 POST /api/v1/review-documents/:id/resubmit: USER
+POST /api/v1/review-documents/:id/submit: USER
+POST /api/v1/review-documents/drafts: USER
 PUT /api/v1/admin/agreement-company-master: ADMIN
 PUT /api/v1/admin/agreement-signatories/:id: ADMIN
 PUT /api/v1/admin/agreement-types/:code: ADMIN
@@ -327,6 +336,7 @@ PUT /api/v1/admin/regencies/:id: ADMIN
 PUT /api/v1/admin/users/:id: ADMIN
 PUT /api/v1/admin/users/:id/permissions: ADMIN
 PUT /api/v1/agreement-documents/:id: USER
+PUT /api/v1/agreement-documents/:id/draft: USER
 PUT /api/v1/external/legal-cases/:id: -
 PUT /api/v1/external/legal-cases/:id/chronology/:chronId: EXTERNAL
 PUT /api/v1/external/legal-cases/cedants/:id: -
@@ -336,11 +346,13 @@ PUT /api/v1/legal-cases/:id: -
 PUT /api/v1/legal-cases/:id/chronology/:chronId: -
 PUT /api/v1/legal-cases/cedants/:id: -
 PUT /api/v1/legal-opinions/:id: USER
+PUT /api/v1/legal-opinions/:id/draft: USER
 PUT /api/v1/legal/legal-cases/:id: LEGAL
 PUT /api/v1/legal/legal-cases/:id/chronology/:chronId: LEGAL
 PUT /api/v1/legal/legal-cases/cedants/:id: LEGAL
 PUT /api/v1/legal/materials/:id: LEGAL
 PUT /api/v1/review-documents/:id: USER
+PUT /api/v1/review-documents/:id/draft: USER
 PUT /api/v1/settings/notifications: ADMIN LEGAL LEGAL_AU USER EXTERNAL
 PUT /api/v1/settings/profile: ADMIN LEGAL LEGAL_AU USER EXTERNAL
 PUT /api/v1/settings/two-fa: ADMIN LEGAL LEGAL_AU USER EXTERNAL

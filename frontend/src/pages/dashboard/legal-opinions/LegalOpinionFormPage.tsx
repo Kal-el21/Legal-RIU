@@ -9,7 +9,11 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { useCreateLegalOpinion, useUpdateLegalOpinion, useLegalOpinion } from '@/hooks/useLegalOpinion'
+import {
+  useCreateLegalOpinion, useUpdateLegalOpinion, useLegalOpinion,
+  useSaveLegalOpinionDraft, useSubmitLegalOpinionDraft, useDeleteLegalOpinionDraftAttachment,
+} from '@/hooks/useLegalOpinion'
+import LampiranTersimpan from '@/components/shared/LampiranTersimpan'
 import { useDivisions } from '@/hooks/useLegalCase'
 import { useAuthStore } from '@/store/auth.store'
 import { validateFile, formatFileSize } from '@/lib/utils'
@@ -38,8 +42,10 @@ const schema = z.object({
 type FormData = z.infer<typeof schema>
 
 export default function LegalOpinionFormPage() {
-  const { id } = useParams()
+  // id: edit pengajuan yang sudah dikirim; draftId: melanjutkan draf (PR Draf).
+  const { id, draftId } = useParams()
   const isEdit = !!id
+  const isDraft = !!draftId
   const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
 
@@ -55,13 +61,16 @@ export default function LegalOpinionFormPage() {
     if (isEdit && !canEdit) navigate('/dashboard/legal-opinions')
   }, [canCreate, canEdit, isEdit, navigate])
 
-  const { data: existing } = useLegalOpinion(id ?? '')
+  const { data: existing } = useLegalOpinion(id ?? draftId ?? '')
   const { data: divisions = [] } = useDivisions()
   const createMutation = useCreateLegalOpinion()
   const updateMutation = useUpdateLegalOpinion()
+  const saveDraftMutation = useSaveLegalOpinionDraft()
+  const submitDraftMutation = useSubmitLegalOpinionDraft()
+  const deleteAttachmentMutation = useDeleteLegalOpinionDraftAttachment()
   const divisionOptions = divisions.map((division) => division.name)
 
-  const { register, handleSubmit, watch, setValue, reset, control, formState: { errors } } = useForm<FormData>({
+  const { register, handleSubmit, watch, getValues, reset, control, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: {
       requestor_name: user?.full_name ?? '',
@@ -74,7 +83,7 @@ export default function LegalOpinionFormPage() {
   const legalType = watch('legal_type')
 
   useEffect(() => {
-    if (existing && isEdit) {
+    if (existing && (isEdit || isDraft)) {
       reset({
         requestor_name: existing.requestor_name,
         requestor_position: existing.requestor_position,
@@ -88,7 +97,12 @@ export default function LegalOpinionFormPage() {
         question: existing.question,
       })
     }
-  }, [existing, isEdit, reset])
+  }, [existing, isEdit, isDraft, reset])
+
+  // Draf yang sudah dikirim (mis. dari tab lain) dibuka di halaman detailnya.
+  useEffect(() => {
+    if (isDraft && existing && existing.status !== 'DRAFT') navigate(`/dashboard/legal-opinions/${existing.id}`, { replace: true })
+  }, [existing, isDraft, navigate])
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = Array.from(e.target.files ?? [])
@@ -108,16 +122,29 @@ export default function LegalOpinionFormPage() {
 
   const removeFile = (index: number) => setFiles((prev) => prev.filter((_, i) => i !== index))
 
+  // Simpan draf: isian boleh belum lengkap, jadi validasi form dilewati.
+  const simpanDraf = async () => {
+    try {
+      const draf = await saveDraftMutation.mutateAsync({ id: draftId, data: getValues(), files })
+      setFiles([])
+      if (!isDraft) navigate(`/dashboard/legal-opinions/drafts/${draf.id}`, { replace: true })
+    } catch {
+      // Pesan gagal sudah ditampilkan oleh penanganan mutasi global.
+    }
+  }
+
   const onSubmit = async (data: FormData) => {
     if (isEdit) {
       await updateMutation.mutateAsync({ id: id!, data })
+    } else if (isDraft) {
+      await submitDraftMutation.mutateAsync({ id: draftId!, data, files })
     } else {
       await createMutation.mutateAsync({ ...data, attachments: files })
     }
     navigate('/dashboard/legal-opinions')
   }
 
-  const isLoading = createMutation.isPending || updateMutation.isPending
+  const isLoading = createMutation.isPending || updateMutation.isPending || saveDraftMutation.isPending || submitDraftMutation.isPending
 
   return (
     <div className="p-6 max-w-3xl mx-auto">
@@ -128,7 +155,7 @@ export default function LegalOpinionFormPage() {
         </Button>
         <div>
           <h1 className="text-2xl font-bold" style={{ color: '#0B2545' }}>
-            {isEdit ? 'Edit Legal Opinion' : 'Buat Legal Opinion'}
+            {isEdit ? 'Edit Legal Opinion' : isDraft ? 'Lanjutkan Draf Legal Opinion' : 'Buat Legal Opinion'}
           </h1>
           <p className="text-sm text-gray-500">Isi formulir pengajuan dengan lengkap dan benar</p>
         </div>
@@ -176,12 +203,18 @@ export default function LegalOpinionFormPage() {
           <h2 className="text-base font-semibold mb-5" style={{ color: '#0B2545' }}>Detail Permasalahan</h2>
           <div className="space-y-5">
             <Field label="Jenis Kajian Hukum" error={errors.legal_type?.message}>
-              <Select onValueChange={(v) => setValue('legal_type', v)} defaultValue={existing?.legal_type}>
-                <SelectTrigger><SelectValue placeholder="Pilih jenis kajian" /></SelectTrigger>
-                <SelectContent>
-                  {LEGAL_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <Controller
+                name="legal_type"
+                control={control}
+                render={({ field }) => (
+                  <Select onValueChange={field.onChange} value={field.value ?? ''}>
+                    <SelectTrigger><SelectValue placeholder="Pilih jenis kajian" /></SelectTrigger>
+                    <SelectContent>
+                      {LEGAL_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
             </Field>
 
             {legalType === 'Lain-Lain' && (
@@ -209,6 +242,9 @@ export default function LegalOpinionFormPage() {
           <section className="bg-white rounded-2xl border border-gray-100 p-6">
             <h2 className="text-base font-semibold mb-2" style={{ color: '#0B2545' }}>Dokumen Pendukung</h2>
             <p className="text-xs text-gray-400 mb-5">Format: PDF, DOC, DOCX — Maks. 100 MB per file (opsional)</p>
+
+            <LampiranTersimpan items={isDraft ? existing?.attachments : undefined} disabled={deleteAttachmentMutation.isPending}
+              onHapus={(attachmentId) => deleteAttachmentMutation.mutate({ id: draftId!, attachmentId })} />
 
             <label className="flex flex-col items-center justify-center gap-3 p-8 border-2 border-dashed border-gray-200 rounded-xl cursor-pointer hover:border-gray-300 hover:bg-gray-50 transition-colors">
               <Upload className="w-8 h-8 text-gray-400" />
@@ -247,6 +283,9 @@ export default function LegalOpinionFormPage() {
         {/* Submit */}
         <div className="flex gap-3 justify-end">
           <Button type="button" variant="outline" onClick={() => navigate(-1)}>Batal</Button>
+          {!isEdit && (
+            <Button type="button" variant="outline" disabled={isLoading} onClick={simpanDraf}>Simpan draf</Button>
+          )}
           <Button type="submit" disabled={isLoading} className="text-white" style={{ background: '#C8102E' }}>
             {isLoading ? 'Menyimpan...' : isEdit ? 'Simpan Perubahan' : 'Ajukan'}
           </Button>

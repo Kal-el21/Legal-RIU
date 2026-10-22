@@ -91,30 +91,14 @@ func (h *DocumentReviewHandler) Create(c *gin.Context) {
 		return
 	}
 
-	req := dto.CreateDocumentReviewRequest{
-		RequestorName:     c.PostForm("requestor_name"),
-		RequestorPosition: c.PostForm("requestor_position"),
-		RequestorDivision: c.PostForm("requestor_division"),
-		RequestorEmail:    c.PostForm("requestor_email"),
-		RequestorPhone:    c.PostForm("requestor_phone"),
-		DocumentName:      c.PostForm("document_name"),
-		SecondParty:       c.PostForm("second_party"),
-		ThirdParty:        c.PostForm("third_party"),
-		DocumentType:      c.PostForm("document_type"),
-		DocumentTypeOther: c.PostForm("document_type_other"),
-		AdditionalNote:    c.PostForm("additional_note"),
-	}
+	req := formDocumentReview(c)
 
 	if !req.Complete() {
 		utils.BadRequest(c, "Semua field wajib diisi", nil)
 		return
 	}
 
-	var files []*multipart.FileHeader
-	if form := c.Request.MultipartForm; form != nil {
-		files = form.File["attachments"]
-	}
-
+	files := lampiranForm(c)
 	userID := middleware.GetUserID(c)
 	dr, err := h.svc.Create(userID, req, files)
 	if errors.Is(err, service.ErrInvalidFile) {
@@ -132,6 +116,65 @@ func (h *DocumentReviewHandler) Create(c *gin.Context) {
 	}
 	c.Set("audit_description", desc)
 	utils.Created(c, "Pengajuan berhasil dibuat", dr)
+}
+
+// formDocumentReview membaca isian Review Dokumen dari form (multipart atau urlencoded).
+func formDocumentReview(c *gin.Context) dto.CreateDocumentReviewRequest {
+	return dto.CreateDocumentReviewRequest{
+		RequestorName:     c.PostForm("requestor_name"),
+		RequestorPosition: c.PostForm("requestor_position"),
+		RequestorDivision: c.PostForm("requestor_division"),
+		RequestorEmail:    c.PostForm("requestor_email"),
+		RequestorPhone:    c.PostForm("requestor_phone"),
+		DocumentName:      c.PostForm("document_name"),
+		SecondParty:       c.PostForm("second_party"),
+		ThirdParty:        c.PostForm("third_party"),
+		DocumentType:      c.PostForm("document_type"),
+		DocumentTypeOther: c.PostForm("document_type_other"),
+		AdditionalNote:    c.PostForm("additional_note"),
+	}
+}
+
+// POST /api/v1/review-documents/drafts: simpan draf baru; isian boleh belum lengkap (PR Draf).
+func (h *DocumentReviewHandler) SaveDraft(c *gin.Context) {
+	dr, err := h.svc.SaveDraft(middleware.GetUserID(c), formDocumentReview(c), lampiranForm(c))
+	if err != nil {
+		jawabGalatDraf(c, err)
+		return
+	}
+	utils.Created(c, "Draf tersimpan", dr)
+}
+
+// PUT /api/v1/review-documents/:id/draft: ganti isian draf dan tambah lampiran.
+func (h *DocumentReviewHandler) UpdateDraft(c *gin.Context) {
+	dr, err := h.svc.UpdateDraft(c.Param("id"), middleware.GetUserID(c), formDocumentReview(c), lampiranForm(c))
+	if err != nil {
+		jawabGalatDraf(c, err)
+		return
+	}
+	utils.OK(c, "Draf tersimpan", dr)
+}
+
+// DELETE /api/v1/review-documents/:id/attachments/:attachmentId: hapus satu lampiran draf.
+func (h *DocumentReviewHandler) DeleteDraftAttachment(c *gin.Context) {
+	if err := h.svc.DeleteDraftAttachment(c.Param("id"), c.Param("attachmentId"), middleware.GetUserID(c)); err != nil {
+		jawabGalatDraf(c, err)
+		return
+	}
+	utils.OK(c, "Lampiran dihapus", nil)
+}
+
+// POST /api/v1/review-documents/:id/submit: kirim draf menjadi pengajuan.
+func (h *DocumentReviewHandler) SubmitDraft(c *gin.Context) {
+	id := c.Param("id")
+	dr, err := h.svc.SubmitDraft(id, middleware.GetUserID(c))
+	if err != nil {
+		jawabGalatDraf(c, err)
+		return
+	}
+	middleware.SetAuditContext(c, entity.ActionUserUpdate, "document_review", id)
+	c.Set("audit_description", "Document review created from draft")
+	utils.OK(c, "Pengajuan berhasil dikirim", dr)
 }
 
 // PUT /api/v1/review-documents/:id

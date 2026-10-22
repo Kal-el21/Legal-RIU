@@ -4,7 +4,7 @@ import { isAxiosError } from 'axios'
 import { AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, Plus, RefreshCw, Send, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { agreementService, type AgreementDocument, type AgreementSchema } from '@/services/agreement-document.service'
-import { bacaDraf, hapusDraf, isianKosong, pindahkanIsian, simpanDraf, type Baris, type FieldDef, type HasilPindah, type Isian, type Nilai } from '@/lib/agreement-draft'
+import { bacaDraf, drafKeServer, hapusDraf, isianKosong, pindahkanIsian, type Baris, type FieldDef, type HasilPindah, type Isian, type Nilai } from '@/lib/agreement-draft'
 import { angkaSaja, bacaAngka, barisGrup, daftar, dariFormData, kosongDi, periksaLampiran, ribuan, ringkasNilai, rupiah, siapkanIsian, subBagi, teks, tulisAngka } from '@/lib/agreement-isian'
 import { useAuthStore } from '@/store/auth.store'
 import { Button } from '@/components/ui/button'
@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import StatusBadge from '@/components/common/StatusBadge'
+import LampiranTersimpan from '@/components/shared/LampiranTersimpan'
 import type { SubmissionStatus } from '@/types'
 
 // Termin versi PKS sebelum PR 10 (termin 1 dan 2): termin kedua dihitung dari termin
@@ -151,10 +152,11 @@ function InputGrup({ f, baris, galat, ubah }: { f: FieldDef; baris: Baris[]; gal
 
 // Wizard pembuatan dan revisi pengajuan perjanjian (PR 9, keputusan E). Langkah 1
 // "Isi data": satu halaman, satu kartu per bagian isian, lalu lampiran. Langkah 2
-// "Tinjau": ringkasan dan PDF pratinjau sebelum dikirim. Isian pengajuan baru yang
-// belum dikirim disimpan di browser per pengguna, beserta versi templatenya.
+// "Tinjau": ringkasan dan PDF pratinjau sebelum dikirim. Pengajuan yang belum dikirim
+// disimpan sebagai draf di server lewat tombol Simpan draf (PR Draf); draf dibuka di
+// /drafts/:draftId dan selalu mengikuti versi aktif jenisnya.
 export default function AgreementWizard() {
-  const { id } = useParams()
+  const { id, draftId } = useParams()
   const revisi = !!id
   const navigate = useNavigate()
   const userId = useAuthStore((s) => s.user?.id ?? '')
@@ -173,6 +175,7 @@ export default function AgreementWizard() {
   const [galatPratinjau, setGalatPratinjau] = useState('')
   const [memuatPratinjau, setMemuatPratinjau] = useState(false)
   const [mengirim, setMengirim] = useState(false)
+  const [menyimpan, setMenyimpan] = useState(false)
   const urlPratinjau = useRef('')
 
   const sections = useMemo(() => schema?.sections ?? [], [schema])
@@ -205,6 +208,25 @@ export default function AgreementWizard() {
         .catch((e: Error) => setGalat(e.message))
       return
     }
+    if (draftId) {
+      // Skema versi draf bisa sudah dihapus Admin; isian lalu dipindah dengan skema aktif.
+      Promise.all([agreementService.get(draftId), agreementService.types(), agreementService.schemaFor(draftId).catch(() => null)])
+        .then(async ([d, daftar, lama]) => {
+          if (d.status !== 'DRAFT') return navigate(`/dashboard/agreement-documents/${d.id}`, { replace: true })
+          setDoc(d)
+          setTypes(daftar)
+          const s = await agreementService.schema(d.document_type_code)
+          const isianDraf = dariFormData(d.form_data)
+          if (d.template_id === s.template_id) {
+            setSchema(s)
+            setIsian(isianDraf)
+          } else {
+            terapkanPindah(pindahkanIsian(isianDraf, (lama ?? s).sections, s.sections), s, true)
+          }
+        })
+        .catch((e: Error) => setGalat(e.message))
+      return
+    }
     agreementService.types()
       .then(async (daftar) => {
         setTypes(daftar)
@@ -213,19 +235,16 @@ export default function AgreementWizard() {
         if (!code) return
         const s = await agreementService.schema(code)
         if (draf?.code !== code) return setSchema(s)
-        if (draf.template_id === s.template_id) {
-          setSchema(s)
-          setIsian(draf.isian)
-        } else {
-          terapkanPindah(pindahkanIsian(draf.isian, draf.sections, s.sections), s, true)
-        }
+        // Draf lama di browser (PR 9) dipindah sekali ke server, lalu dihapus dari browser.
+        const { permintaan, pindah } = drafKeServer(draf, s)
+        const baru = await agreementService.saveDraft(permintaan)
+        hapusDraf(userId)
+        if (pindah) terapkanPindah(pindah, s, true)
+        toast.info('Draf yang tersimpan di browser ini dipindah ke daftar Draf.')
+        navigate(`/dashboard/agreement-documents/drafts/${baru.id}`, { replace: true })
       })
       .catch((e: Error) => setGalat(e.message))
-  }, [id, userId])
-
-  useEffect(() => {
-    if (!revisi && schema) simpanDraf(userId, { code: schema.code, template_id: schema.template_id, sections: schema.sections, isian })
-  }, [revisi, userId, schema, isian])
+  }, [id, draftId, userId, navigate])
 
   useEffect(() => () => { if (urlPratinjau.current) URL.revokeObjectURL(urlPratinjau.current) }, [])
 
@@ -257,7 +276,7 @@ export default function AgreementWizard() {
         template_id: schema.template_id,
         form_data: kirimIsian,
         attachment_names: files.map((f) => f.name),
-        document_id: id,
+        document_id: id ?? draftId,
       })
       if (urlPratinjau.current) URL.revokeObjectURL(urlPratinjau.current)
       urlPratinjau.current = URL.createObjectURL(blob)
@@ -292,6 +311,36 @@ export default function AgreementWizard() {
     gulirKe(`bagian-${i}`)
   }
 
+  // Simpan draf: isian boleh belum lengkap; lampiran yang dipilih ikut diunggah.
+  // Draf baru langsung dibuka di alamatnya sendiri.
+  const simpanKeDraf = async () => {
+    if (!schema) return
+    setMenyimpan(true)
+    try {
+      const d = await agreementService.saveDraft({ document_type_code: schema.code, template_id: schema.template_id, form_data: kirimIsian }, files, draftId)
+      setFiles([])
+      setDoc(d)
+      toast.success('Draf tersimpan')
+      if (!draftId) navigate(`/dashboard/agreement-documents/drafts/${d.id}`, { replace: true })
+    } catch (e) {
+      if (isAxiosError(e) && e.response?.status === 409) await segarkanVersi()
+      toast.error((e as Error).message || 'Gagal menyimpan draf', { duration: 8000 })
+    } finally {
+      setMenyimpan(false)
+    }
+  }
+
+  const hapusLampiranDraf = async (attachmentId: string) => {
+    if (!draftId) return
+    try {
+      await agreementService.deleteDraftAttachment(draftId, attachmentId)
+      setDoc(await agreementService.get(draftId))
+      toast.success('Lampiran dihapus')
+    } catch (e) {
+      toast.error((e as Error).message || 'Gagal menghapus lampiran')
+    }
+  }
+
   const kirim = async () => {
     if (!schema) return
     setMengirim(true)
@@ -299,9 +348,12 @@ export default function AgreementWizard() {
       if (id) {
         await agreementService.update(id, kirimIsian)
         if (doc?.status === 'NEED_REVISION') await agreementService.resubmit(id, files)
+      } else if (draftId) {
+        // Isian dan lampiran terakhir disimpan ke draf dulu, lalu draf dikirim.
+        await agreementService.saveDraft({ document_type_code: schema.code, template_id: schema.template_id, form_data: kirimIsian }, files, draftId)
+        await agreementService.submitDraft(draftId)
       } else {
         await agreementService.create({ document_type_code: schema.code, template_id: schema.template_id, form_data: kirimIsian }, files)
-        hapusDraf(userId)
       }
       toast.success(revisi ? 'Revisi pengajuan tersimpan' : 'Pengajuan perjanjian terkirim')
       navigate('/dashboard/agreement-documents')
@@ -334,13 +386,13 @@ export default function AgreementWizard() {
       <Button variant="outline" size="icon" onClick={() => navigate(-1)} title="Kembali" aria-label="Kembali" className="mt-0.5 mb-2">
         <ArrowLeft className="w-5 h-5 text-gray-600" />
       </Button>
-      {doc && (
+      {doc && revisi && (
         <div className="flex items-center gap-3 mb-4">
           <span className="text-xs font-mono font-medium bg-gray-100 text-gray-600 px-2 py-1 rounded">{doc.ticket_number}</span>
           <StatusBadge status={doc.status as SubmissionStatus} />
         </div>
       )}
-      <h1 className="text-2xl font-bold mb-5" style={{ color: '#0B2545' }}>{revisi ? 'Revisi' : 'Pengajuan'} {schema?.name ?? 'Perjanjian'}</h1>
+      <h1 className="text-2xl font-bold mb-5" style={{ color: '#0B2545' }}>{revisi ? 'Revisi' : draftId ? 'Draf' : 'Pengajuan'} {schema?.name ?? 'Perjanjian'}</h1>
 
       <ol className="flex flex-wrap gap-2 mb-6" aria-label="Langkah pengajuan">
         {[{ judul: 'Isi data', ke: false }, { judul: 'Tinjau', ke: true }].map((l, k) => (
@@ -427,7 +479,8 @@ export default function AgreementWizard() {
           {schema && (
             <section className="bg-white rounded-2xl border border-gray-100 p-6">
               <h2 className="text-lg font-semibold mb-3" style={{ color: '#0B2545' }}>Lampiran</h2>
-              {!!doc?.attachments?.length && (
+              {draftId && <LampiranTersimpan items={doc?.attachments} onHapus={(a) => void hapusLampiranDraf(a)} />}
+              {revisi && !!doc?.attachments?.length && (
                 <ul className="mb-3 space-y-1 text-sm text-gray-600">
                   {doc.attachments.map((a) => <li key={a.id}>{a.file_name} <span className="text-gray-400">(sudah terlampir)</span></li>)}
                 </ul>
@@ -443,12 +496,13 @@ export default function AgreementWizard() {
                   ))}
                 </ul>
               )}
-              {!revisi && <p className="mt-3 text-xs text-gray-400">File lampiran tidak ikut tersimpan di browser; pilih ulang kalau halaman ditutup sebelum dikirim.</p>}
+              {!revisi && <p className="mt-3 text-xs text-gray-400">Lampiran yang dipilih ikut tersimpan saat Simpan draf.</p>}
             </section>
           )}
 
           {kosong.length > 0 && <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700">Lengkapi dulu: {kosong.join(', ')}.</p>}
-          <div className="flex justify-end">
+          <div className="flex justify-end gap-2">
+            {!revisi && <Button variant="outline" onClick={() => void simpanKeDraf()} disabled={!schema || menyimpan}>{menyimpan ? 'Menyimpan...' : 'Simpan draf'}</Button>}
             <Button onClick={keTinjau} disabled={!schema} className="text-white" style={{ background: '#0B2545' }}>
               Lanjut ke Tinjau <ArrowRight className="w-4 h-4" />
             </Button>
@@ -491,9 +545,12 @@ export default function AgreementWizard() {
             <Button variant="outline" onClick={() => setTinjau(false)}>
               <ArrowLeft className="w-4 h-4" /> Kembali ke Isi data
             </Button>
-            <Button onClick={() => void kirim()} disabled={mengirim} className="flex items-center gap-2 text-white" style={{ background: '#C8102E' }}>
-              <Send className="w-4 h-4" /> {mengirim ? 'Mengirim...' : revisi ? 'Simpan dan Ajukan Ulang' : 'Kirim Pengajuan'}
-            </Button>
+            <div className="flex gap-2">
+              {!revisi && <Button variant="outline" onClick={() => void simpanKeDraf()} disabled={menyimpan || mengirim}>{menyimpan ? 'Menyimpan...' : 'Simpan draf'}</Button>}
+              <Button onClick={() => void kirim()} disabled={mengirim || menyimpan} className="flex items-center gap-2 text-white" style={{ background: '#C8102E' }}>
+                <Send className="w-4 h-4" /> {mengirim ? 'Mengirim...' : revisi ? 'Simpan dan Ajukan Ulang' : 'Kirim Pengajuan'}
+              </Button>
+            </div>
           </div>
         </div>
       )}

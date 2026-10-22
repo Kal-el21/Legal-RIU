@@ -21,6 +21,8 @@ type LegalOpinionRepository interface {
 	GetLatestUploadRound(loID uuid.UUID) (int, error)
 	AddResult(result *entity.LegalOpinionResult) error
 	FindFileByPath(path string) (id uuid.UUID, fileName string, isResult bool, err error)
+	HardDelete(id uuid.UUID) error
+	DeleteAttachment(id uuid.UUID) error
 }
 
 type legalOpinionRepository struct {
@@ -63,12 +65,19 @@ func (r *legalOpinionRepository) FindAll(userID *uuid.UUID, status string, page,
 	}
 	if status != "" {
 		query = query.Where("status = ?", status)
+	} else {
+		query = query.Scopes(bukanDraf("legal_opinions"))
 	}
 
+	// Draf diurutkan menurut terakhir diubah.
+	urutan := "created_at DESC"
+	if status == string(entity.StatusDraft) {
+		urutan = "updated_at DESC"
+	}
 	query.Count(&total)
 	err := query.
 		Preload("User").
-		Order("created_at DESC").
+		Order(urutan).
 		Offset((page - 1) * limit).
 		Limit(limit).
 		Find(&items).Error
@@ -95,6 +104,24 @@ func (r *legalOpinionRepository) UpdateStatus(id uuid.UUID, status entity.Submis
 
 func (r *legalOpinionRepository) NextTicketSequence(prefix string) (int, error) {
 	return nextTicketSequence(r.db, &entity.LegalOpinion{}, prefix)
+}
+
+// HardDelete menghapus permanen pengajuan beserta baris lampiran dan hasilnya. Hanya untuk
+// draf (PR Draf); pengajuan yang sudah dikirim tetap soft delete lewat Delete.
+func (r *legalOpinionRepository) HardDelete(id uuid.UUID) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("legal_opinion_id = ?", id).Delete(&entity.LegalOpinionAttachment{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("legal_opinion_id = ?", id).Delete(&entity.LegalOpinionResult{}).Error; err != nil {
+			return err
+		}
+		return tx.Unscoped().Delete(&entity.LegalOpinion{}, "id = ?", id).Error
+	})
+}
+
+func (r *legalOpinionRepository) DeleteAttachment(id uuid.UUID) error {
+	return r.db.Delete(&entity.LegalOpinionAttachment{}, "id = ?", id).Error
 }
 
 func (r *legalOpinionRepository) AddAttachment(att *entity.LegalOpinionAttachment) error {

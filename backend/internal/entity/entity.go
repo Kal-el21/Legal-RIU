@@ -40,6 +40,8 @@ const (
 	UserActive   UserStatus = "ACTIVE"
 	UserInactive UserStatus = "INACTIVE"
 
+	// StatusDraft: pengajuan yang belum dikirim; hanya terlihat pemiliknya (PR Draf).
+	StatusDraft        SubmissionStatus = "DRAFT"
 	StatusSubmitted    SubmissionStatus = "SUBMITTED"
 	StatusUnderReview  SubmissionStatus = "UNDER_REVIEW"
 	StatusNeedRevision SubmissionStatus = "NEED_REVISION"

@@ -116,6 +116,7 @@ func backfillLegalOpinionAttachments(db *gorm.DB) ([]entity.RepositoryDocument, 
 		SELECT id, legal_opinion_id, file_name, file_path, file_size
 		FROM legal_opinion_attachments
 		WHERE file_path IS NOT NULL AND file_path != ''
+		  AND legal_opinion_id IN (SELECT id FROM legal_opinions WHERE deleted_at IS NULL AND status <> 'DRAFT')
 	`).Scan(&rows).Error; err != nil {
 		return nil, err
 	}
@@ -148,6 +149,7 @@ func backfillLegalOpinionResults(db *gorm.DB) ([]entity.RepositoryDocument, erro
 		SELECT id, legal_opinion_id, file_name, file_path
 		FROM legal_opinion_results
 		WHERE file_path IS NOT NULL AND file_path != ''
+		  AND legal_opinion_id IN (SELECT id FROM legal_opinions WHERE deleted_at IS NULL AND status <> 'DRAFT')
 	`).Scan(&rows).Error; err != nil {
 		return nil, err
 	}
@@ -180,6 +182,7 @@ func backfillDocumentReviewAttachments(db *gorm.DB) ([]entity.RepositoryDocument
 		SELECT id, document_review_id, file_name, file_path, file_size
 		FROM document_review_attachments
 		WHERE file_path IS NOT NULL AND file_path != ''
+		  AND document_review_id IN (SELECT id FROM document_reviews WHERE deleted_at IS NULL AND status <> 'DRAFT')
 	`).Scan(&rows).Error; err != nil {
 		return nil, err
 	}
@@ -212,6 +215,7 @@ func backfillDocumentReviewResults(db *gorm.DB) ([]entity.RepositoryDocument, er
 		SELECT id, document_review_id, file_name, file_path
 		FROM document_review_results
 		WHERE file_path IS NOT NULL AND file_path != ''
+		  AND document_review_id IN (SELECT id FROM document_reviews WHERE deleted_at IS NULL AND status <> 'DRAFT')
 	`).Scan(&rows).Error; err != nil {
 		return nil, err
 	}
@@ -244,6 +248,7 @@ func backfillAgreementAttachments(db *gorm.DB) ([]entity.RepositoryDocument, err
 		SELECT id, agreement_document_id, file_name, file_path, file_size
 		FROM agreement_attachments
 		WHERE file_path IS NOT NULL AND file_path != ''
+		  AND agreement_document_id IN (SELECT id FROM agreement_documents WHERE deleted_at IS NULL AND status <> 'DRAFT')
 	`).Scan(&rows).Error; err != nil {
 		return nil, err
 	}
@@ -275,8 +280,9 @@ func backfillAgreementGeneratedFiles(db *gorm.DB) ([]entity.RepositoryDocument, 
 	if err := db.Raw(`
 		SELECT id, generated_docx_path, generated_pdf_path, generated_file_name
 		FROM agreement_documents
-		WHERE (generated_docx_path IS NOT NULL AND generated_docx_path != '')
-		   OR (generated_pdf_path IS NOT NULL AND generated_pdf_path != '')
+		WHERE deleted_at IS NULL
+		  AND ((generated_docx_path IS NOT NULL AND generated_docx_path != '')
+		   OR (generated_pdf_path IS NOT NULL AND generated_pdf_path != ''))
 	`).Scan(&rows).Error; err != nil {
 		return nil, err
 	}
@@ -319,7 +325,7 @@ func backfillLegalCaseDocuments(db *gorm.DB) ([]entity.RepositoryDocument, error
 	if err := db.Raw(`
 		SELECT id, document_link
 		FROM legal_cases
-		WHERE document_link IS NOT NULL AND document_link != ''
+		WHERE deleted_at IS NULL AND document_link IS NOT NULL AND document_link != ''
 	`).Scan(&rows).Error; err != nil {
 		return nil, err
 	}
@@ -348,7 +354,7 @@ func backfillLegalCasePhotos(db *gorm.DB) ([]entity.RepositoryDocument, error) {
 	if err := db.Raw(`
 		SELECT id, photo
 		FROM legal_cases
-		WHERE photo IS NOT NULL AND photo != ''
+		WHERE deleted_at IS NULL AND photo IS NOT NULL AND photo != ''
 	`).Scan(&rows).Error; err != nil {
 		return nil, err
 	}
@@ -377,7 +383,8 @@ func backfillChronologyDocuments(db *gorm.DB) ([]entity.RepositoryDocument, erro
 	if err := db.Raw(`
 		SELECT id, documents
 		FROM case_chronologies
-		WHERE documents IS NOT NULL AND documents != ''
+		WHERE deleted_at IS NULL AND documents IS NOT NULL AND documents != ''
+		  AND case_id IN (SELECT id FROM legal_cases WHERE deleted_at IS NULL)
 	`).Scan(&rows).Error; err != nil {
 		return nil, err
 	}

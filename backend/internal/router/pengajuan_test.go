@@ -54,6 +54,7 @@ type pengajuan struct {
 	Title        string `json:"title"`
 	DocumentName string `json:"document_name"`
 	Attachments  []struct {
+		ID          string `json:"id"`
 		FileName    string `json:"file_name"`
 		FilePath    string `json:"file_path"`
 		UploadRound int    `json:"upload_round"`

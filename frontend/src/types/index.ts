@@ -4,6 +4,7 @@ export type UserRole = 'USER' | 'ADMIN' | 'LEGAL' | 'EXTERNAL' | 'LEGAL_AU'
 export type UserStatus = 'ACTIVE' | 'INACTIVE'
 
 export type SubmissionStatus =
+  | 'DRAFT'
   | 'SUBMITTED'
   | 'UNDER_REVIEW'
   | 'NEED_REVISION'

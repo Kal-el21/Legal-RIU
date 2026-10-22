@@ -33,6 +33,10 @@ type AgreementDocumentService interface {
 	Update(string, string, dto.UpdateAgreementDocumentRequest) (*entity.AgreementDocument, error)
 	Delete(string, string) error
 	Resubmit(string, string, []*multipart.FileHeader) (*entity.AgreementDocument, error)
+	SaveDraft(userID string, req dto.CreateAgreementDocumentRequest, files []*multipart.FileHeader) (*entity.AgreementDocument, error)
+	UpdateDraft(id, userID string, req dto.CreateAgreementDocumentRequest, files []*multipart.FileHeader) (*entity.AgreementDocument, error)
+	DeleteDraftAttachment(id, attachmentID, userID string) error
+	SubmitDraft(id, userID string) (*entity.AgreementDocument, error)
 	UpdateMeta(string, dto.AgreementMetaRequest) (*entity.AgreementDocument, *PergantianPenandatangan, error)
 	UpdateStatus(context.Context, string, string, dto.AgreementStatusRequest) (*entity.AgreementDocument, error)
 	Preview(context.Context, string, string, bool) ([]byte, error)
@@ -156,15 +160,9 @@ func (s *agreementDocumentService) Create(userID string, req dto.CreateAgreement
 	if e != nil {
 		return nil, errors.New("user tidak valid")
 	}
-	typ, tpl, e := s.templates.ActiveType(req.DocumentTypeCode)
+	kode, tpl, e := s.versiAktif(req.DocumentTypeCode, req.TemplateID)
 	if e != nil {
 		return nil, e
-	}
-	if strings.TrimSpace(req.TemplateID) == "" {
-		return nil, errors.New("versi template wajib disertakan; muat ulang halaman pengajuan")
-	}
-	if req.TemplateID != tpl.ID.String() {
-		return nil, ErrTemplateUsang
 	}
 	sections, e := templateSections(tpl)
 	if e != nil {
@@ -187,7 +185,7 @@ func (s *agreementDocumentService) Create(userID string, req dto.CreateAgreement
 	if e != nil {
 		return nil, e
 	}
-	doc := &entity.AgreementDocument{TicketNumber: utils.GenerateTicketNumber("PK", seq), UserID: uid, DocumentTypeCode: typ.Code, FormData: raw, AgreementNumber: nil, Status: entity.StatusSubmitted, TemplateID: &tpl.ID, TemplateChecksum: tpl.Checksum}
+	doc := &entity.AgreementDocument{TicketNumber: utils.GenerateTicketNumber("PK", seq), UserID: uid, DocumentTypeCode: kode, FormData: raw, AgreementNumber: nil, Status: entity.StatusSubmitted, TemplateID: &tpl.ID, TemplateChecksum: tpl.Checksum}
 	if e = s.repo.Create(doc); e != nil {
 		return nil, errors.New("gagal membuat pengajuan")
 	}
@@ -198,8 +196,9 @@ func (s *agreementDocumentService) Create(userID string, req dto.CreateAgreement
 	return s.repo.FindByID(doc.ID)
 }
 func (s *agreementDocumentService) GetAll(userID string, all bool, q dto.AgreementListQuery) ([]entity.AgreementDocument, int64, error) {
+	// ?status=DRAFT selalu hanya memuat draf milik sendiri (PR Draf).
 	var owner *uuid.UUID
-	if !all {
+	if !all || q.Status == string(entity.StatusDraft) {
 		id, e := uuid.Parse(userID)
 		if e != nil {
 			return nil, 0, errors.New("user tidak valid")
@@ -270,7 +269,8 @@ func (s *agreementDocumentService) GetByID(id, userID string, all bool) (*entity
 	if e != nil {
 		return nil, ErrPengajuanTidakAda
 	}
-	if !all && d.UserID.String() != userID {
+	// Draf hanya untuk pemiliknya, juga bagi approver (PR Draf).
+	if (!all || d.Status == entity.StatusDraft) && d.UserID.String() != userID {
 		return nil, ErrPengajuanTidakAda
 	}
 	return d, nil
@@ -306,10 +306,176 @@ func (s *agreementDocumentService) Delete(id, userID string) error {
 	if e != nil {
 		return e
 	}
+	// Draf dihapus permanen beserta lampirannya (PR Draf).
+	if d.Status == entity.StatusDraft {
+		paths := make([]string, 0, len(d.Attachments))
+		for _, a := range d.Attachments {
+			paths = append(paths, a.FilePath)
+		}
+		if e := s.repo.HardDelete(d.ID); e != nil {
+			return errors.New("gagal menghapus draf")
+		}
+		hapusFileDraf(s.storage, paths)
+		return nil
+	}
 	if d.Status != entity.StatusSubmitted {
 		return errors.New("hanya pengajuan SUBMITTED yang dapat dihapus")
 	}
 	return s.repo.Delete(d.ID)
+}
+
+// versiAktif memeriksa versi template yang dikirim form: harus versi aktif jenisnya.
+// Kalau Admin baru mengaktifkan versi lain, jawabannya ErrTemplateUsang (409) dan
+// frontend memindahkan isian ke versi baru.
+func (s *agreementDocumentService) versiAktif(kode, templateID string) (string, *entity.AgreementTemplate, error) {
+	typ, tpl, e := s.templates.ActiveType(kode)
+	if e != nil {
+		return "", nil, e
+	}
+	if strings.TrimSpace(templateID) == "" {
+		return "", nil, errors.New("versi template wajib disertakan; muat ulang halaman pengajuan")
+	}
+	if templateID != tpl.ID.String() {
+		return "", nil, ErrTemplateUsang
+	}
+	return typ.Code, tpl, nil
+}
+
+// ─── Draf (PR Draf) ───────────────────────────────────────────────────────────
+// Draf selalu mengikuti versi aktif jenisnya: simpan, ubah, dan kirim memeriksa
+// template_id lewat versiAktif. Isian boleh belum lengkap sampai dikirim.
+
+// SaveDraft menyimpan draf baru. Lampiran tetap diperiksa.
+func (s *agreementDocumentService) SaveDraft(userID string, req dto.CreateAgreementDocumentRequest, files []*multipart.FileHeader) (*entity.AgreementDocument, error) {
+	uid, e := uuid.Parse(userID)
+	if e != nil {
+		return nil, errors.New("user tidak valid")
+	}
+	kode, tpl, e := s.versiAktif(req.DocumentTypeCode, req.TemplateID)
+	if e != nil {
+		return nil, e
+	}
+	if e = validateFiles(files); e != nil {
+		return nil, e
+	}
+	raw, e := isianDraf(req.FormData)
+	if e != nil {
+		return nil, e
+	}
+	doc := &entity.AgreementDocument{TicketNumber: nomorDraf(), UserID: uid, DocumentTypeCode: kode, FormData: raw, Status: entity.StatusDraft, TemplateID: &tpl.ID, TemplateChecksum: tpl.Checksum}
+	if e = s.repo.Create(doc); e != nil {
+		return nil, errors.New("gagal menyimpan draf")
+	}
+	if e = s.uploadAttachments(doc, uid, files, 1); e != nil {
+		_ = s.repo.HardDelete(doc.ID)
+		return nil, errors.New("gagal mengunggah lampiran: " + e.Error())
+	}
+	return s.repo.FindByID(doc.ID)
+}
+
+// UpdateDraft mengganti jenis, versi, dan isian draf, lalu menambah lampiran baru.
+func (s *agreementDocumentService) UpdateDraft(id, userID string, req dto.CreateAgreementDocumentRequest, files []*multipart.FileHeader) (*entity.AgreementDocument, error) {
+	d, e := s.drafMilik(id, userID)
+	if e != nil {
+		return nil, e
+	}
+	kode, tpl, e := s.versiAktif(req.DocumentTypeCode, req.TemplateID)
+	if e != nil {
+		return nil, e
+	}
+	if e = validateFiles(files); e != nil {
+		return nil, e
+	}
+	if d.FormData, e = isianDraf(req.FormData); e != nil {
+		return nil, e
+	}
+	d.DocumentTypeCode, d.TemplateID, d.TemplateChecksum = kode, &tpl.ID, tpl.Checksum
+	if e = s.repo.Save(d); e != nil {
+		return nil, errors.New("gagal menyimpan draf")
+	}
+	if e = s.uploadAttachments(d, d.UserID, files, 1); e != nil {
+		return nil, errors.New("gagal mengunggah lampiran: " + e.Error())
+	}
+	return s.repo.FindByID(d.ID)
+}
+
+// DeleteDraftAttachment menghapus permanen satu lampiran draf beserta filenya.
+func (s *agreementDocumentService) DeleteDraftAttachment(id, attachmentID, userID string) error {
+	d, e := s.drafMilik(id, userID)
+	if e != nil {
+		return e
+	}
+	for _, a := range d.Attachments {
+		if a.ID.String() == attachmentID {
+			if e := s.repo.DeleteAttachment(a.ID); e != nil {
+				return errors.New("gagal menghapus lampiran")
+			}
+			hapusFileDraf(s.storage, []string{a.FilePath})
+			return nil
+		}
+	}
+	return ErrLampiranTidakAda
+}
+
+// SubmitDraft mengirim draf: versinya harus versi aktif, isiannya diperiksa sama dengan
+// pembuatan langsung, lalu draf mendapat nomor tiket, status SUBMITTED, dan tanggal
+// pengajuan saat ini (K2).
+func (s *agreementDocumentService) SubmitDraft(id, userID string) (*entity.AgreementDocument, error) {
+	d, e := s.drafMilik(id, userID)
+	if e != nil {
+		return nil, e
+	}
+	if d.TemplateID == nil {
+		return nil, ErrTemplateUsang
+	}
+	_, tpl, e := s.versiAktif(d.DocumentTypeCode, d.TemplateID.String())
+	if e != nil {
+		return nil, e
+	}
+	sections, e := templateSections(tpl)
+	if e != nil {
+		return nil, e
+	}
+	// Dibaca ulang tanpa UseNumber, sama dengan isian yang diterima Create.
+	var data map[string]interface{}
+	if e = json.Unmarshal(d.FormData, &data); e != nil {
+		return nil, e
+	}
+	if e = validateAgreementForm(sections, data); e != nil {
+		return nil, e
+	}
+	seq, e := s.repo.NextTicketSequence("PK")
+	if e != nil {
+		return nil, e
+	}
+	now := time.Now()
+	d.TicketNumber = utils.GenerateTicketNumber("PK", seq)
+	d.Status = entity.StatusSubmitted
+	d.CreatedAt = now
+	d.StatusUpdatedAt = &now
+	d.TemplateChecksum = tpl.Checksum
+	if e = s.repo.Save(d); e != nil {
+		return nil, errors.New("gagal mengirim draf")
+	}
+	return s.repo.FindByID(d.ID)
+}
+
+// drafMilik mengambil draf milik pemanggil; selain itu ErrDrafTidakAda.
+func (s *agreementDocumentService) drafMilik(id, userID string) (*entity.AgreementDocument, error) {
+	d, e := s.GetByID(id, userID, false)
+	if e != nil || d.Status != entity.StatusDraft {
+		return nil, ErrDrafTidakAda
+	}
+	return d, nil
+}
+
+// isianDraf: isian draf siap disimpan. Isian approver yang ikut terkirim dibuang.
+func isianDraf(form map[string]interface{}) (json.RawMessage, error) {
+	if form == nil {
+		form = map[string]interface{}{}
+	}
+	pertahankanIsianApprover(form, nil)
+	return json.Marshal(form)
 }
 func (s *agreementDocumentService) Resubmit(id, userID string, files []*multipart.FileHeader) (*entity.AgreementDocument, error) {
 	d, e := s.GetByID(id, userID, false)
@@ -355,7 +521,7 @@ func (s *agreementDocumentService) UpdateMeta(id string, req dto.AgreementMetaRe
 		return nil, nil, errors.New("ID tidak valid")
 	}
 	d, e := s.repo.FindByID(uid)
-	if e != nil {
+	if e != nil || d.Status == entity.StatusDraft {
 		return nil, nil, errors.New("pengajuan tidak ditemukan")
 	}
 	if d.Status == entity.StatusCompleted || d.Status == entity.StatusRejected {
@@ -419,7 +585,7 @@ func (s *agreementDocumentService) UpdateStatus(ctx context.Context, id, approve
 		return nil, errors.New("approver tidak valid")
 	}
 	d, e := s.repo.FindByID(uid)
-	if e != nil {
+	if e != nil || d.Status == entity.StatusDraft {
 		return nil, errors.New("pengajuan tidak ditemukan")
 	}
 	target := entity.SubmissionStatus(req.Status)
@@ -573,15 +739,22 @@ func (s *agreementDocumentService) PreviewDraft(ctx context.Context, userID stri
 		if e != nil {
 			return nil, e
 		}
-		if d.Status != entity.StatusSubmitted && d.Status != entity.StatusNeedRevision {
+		switch {
+		case d.Status == entity.StatusDraft:
+			// Draf mengikuti versi aktif jenisnya (PR Draf); lampirannya ikut di Daftar Lampiran.
+			if _, tpl, e = s.versiAktif(req.DocumentTypeCode, req.TemplateID); e != nil {
+				return nil, e
+			}
+		case d.Status != entity.StatusSubmitted && d.Status != entity.StatusNeedRevision:
 			return nil, errors.New("pengajuan tidak dapat diubah pada status ini")
-		}
-		// Revisi tetap memakai versi yang dikunci pengajuan itu.
-		if d.TemplateID == nil || d.TemplateID.String() != req.TemplateID {
-			return nil, ErrTemplateUsang
-		}
-		if tpl, e = s.templates.Get(req.TemplateID); e != nil {
-			return nil, e
+		default:
+			// Revisi tetap memakai versi yang dikunci pengajuan itu.
+			if d.TemplateID == nil || d.TemplateID.String() != req.TemplateID {
+				return nil, ErrTemplateUsang
+			}
+			if tpl, e = s.templates.Get(req.TemplateID); e != nil {
+				return nil, e
+			}
 		}
 		doc = d
 	} else {

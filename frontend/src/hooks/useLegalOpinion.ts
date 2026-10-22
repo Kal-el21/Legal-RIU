@@ -7,10 +7,11 @@ const KEYS = {
   detail: (id: string) => [...KEYS.all, 'detail', id] as const,
 }
 
-export function useLegalOpinions(params?: { page?: number; limit?: number; status?: string }) {
+export function useLegalOpinions(params?: { page?: number; limit?: number; status?: string }, enabled = true) {
   return useQuery({
     queryKey: KEYS.list(params),
     queryFn: () => legalOpinionService.getAll(params),
+    enabled,
   })
 }
 
@@ -95,5 +96,40 @@ export function useLegalUpdateStatus() {
 export function useAdminDownloadPDF() {
   return useMutation({
     mutationFn: (id: string) => legalOpinionService.adminDownloadPDF(id),
+  })
+}
+
+// ─── Draf (PR Draf) ───
+
+export function useSaveLegalOpinionDraft() {
+  const qc = useQueryClient()
+  return useMutation({
+    meta: { success: 'Draf tersimpan' },
+    mutationFn: ({ id, data, files }: { id?: string; data: Omit<CreateLegalOpinionData, 'attachments'>; files?: File[] }) =>
+      legalOpinionService.saveDraft(data, files, id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: KEYS.all }),
+  })
+}
+
+// Mengirim draf: isian terakhir dan lampiran baru disimpan dulu, lalu dikirim.
+export function useSubmitLegalOpinionDraft() {
+  const qc = useQueryClient()
+  return useMutation({
+    meta: { success: 'Legal opinion berhasil diajukan' },
+    mutationFn: async ({ id, data, files }: { id: string; data: Omit<CreateLegalOpinionData, 'attachments'>; files?: File[] }) => {
+      await legalOpinionService.saveDraft(data, files, id)
+      return legalOpinionService.submitDraft(id)
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: KEYS.all }),
+  })
+}
+
+export function useDeleteLegalOpinionDraftAttachment() {
+  const qc = useQueryClient()
+  return useMutation({
+    meta: { success: 'Lampiran dihapus' },
+    mutationFn: ({ id, attachmentId }: { id: string; attachmentId: string }) =>
+      legalOpinionService.deleteDraftAttachment(id, attachmentId),
+    onSuccess: (_, { id }) => qc.invalidateQueries({ queryKey: KEYS.detail(id) }),
   })
 }
