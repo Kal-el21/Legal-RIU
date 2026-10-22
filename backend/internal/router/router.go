@@ -167,6 +167,11 @@ func New(cfg *config.Config, db *gorm.DB, store *storage.MinIOClient) (*gin.Engi
 	userOnly.PUT("/legal-opinions/:id", requirePermission("legal_opinion.update.own"), loHandler.Update)
 	userOnly.DELETE("/legal-opinions/:id", requirePermission("legal_opinion.delete.own"), loHandler.Delete)
 	userOnly.POST("/legal-opinions/:id/resubmit", requirePermission("legal_opinion.resubmit.own"), loHandler.Resubmit)
+	// Draf (PR Draf): hanya pemiliknya; memakai izin yang ada.
+	userOnly.POST("/legal-opinions/drafts", requirePermission("legal_opinion.create.own"), loHandler.SaveDraft)
+	userOnly.PUT("/legal-opinions/:id/draft", requirePermission("legal_opinion.update.own"), loHandler.UpdateDraft)
+	userOnly.DELETE("/legal-opinions/:id/attachments/:attachmentId", requirePermission("legal_opinion.update.own"), loHandler.DeleteDraftAttachment)
+	userOnly.POST("/legal-opinions/:id/submit", requirePermission("legal_opinion.create.own"), loHandler.SubmitDraft)
 
 	// Review documents
 	userOnly.GET("/review-documents/download", requirePermission("document_review.download.all", "document_review.view.own", "document_review.view.all"), drHandler.Download)

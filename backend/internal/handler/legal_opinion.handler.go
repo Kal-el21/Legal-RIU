@@ -94,31 +94,14 @@ func (h *LegalOpinionHandler) Create(c *gin.Context) {
 		return
 	}
 
-	// Bind dari form fields
-	req := dto.CreateLegalOpinionRequest{
-		RequestorName:     c.PostForm("requestor_name"),
-		RequestorPosition: c.PostForm("requestor_position"),
-		RequestorDivision: c.PostForm("requestor_division"),
-		RequestorEmail:    c.PostForm("requestor_email"),
-		RequestorPhone:    c.PostForm("requestor_phone"),
-		LegalType:         c.PostForm("legal_type"),
-		LegalTypeOther:    c.PostForm("legal_type_other"),
-		Title:             c.PostForm("title"),
-		Chronology:        c.PostForm("chronology"),
-		Question:          c.PostForm("question"),
-	}
+	req := formLegalOpinion(c)
 
 	if !req.Complete() {
 		utils.BadRequest(c, "Semua field wajib diisi", nil)
 		return
 	}
 
-	// Get files
-	var files []*multipart.FileHeader
-	if form := c.Request.MultipartForm; form != nil {
-		files = form.File["attachments"]
-	}
-
+	files := lampiranForm(c)
 	userID := middleware.GetUserID(c)
 	lo, err := h.svc.Create(userID, req, files)
 	if errors.Is(err, service.ErrInvalidFile) {
@@ -136,6 +119,85 @@ func (h *LegalOpinionHandler) Create(c *gin.Context) {
 	}
 	c.Set("audit_description", desc)
 	utils.Created(c, "Pengajuan berhasil dibuat", lo)
+}
+
+// formLegalOpinion membaca isian Legal Opinion dari form (multipart atau urlencoded).
+func formLegalOpinion(c *gin.Context) dto.CreateLegalOpinionRequest {
+	return dto.CreateLegalOpinionRequest{
+		RequestorName:     c.PostForm("requestor_name"),
+		RequestorPosition: c.PostForm("requestor_position"),
+		RequestorDivision: c.PostForm("requestor_division"),
+		RequestorEmail:    c.PostForm("requestor_email"),
+		RequestorPhone:    c.PostForm("requestor_phone"),
+		LegalType:         c.PostForm("legal_type"),
+		LegalTypeOther:    c.PostForm("legal_type_other"),
+		Title:             c.PostForm("title"),
+		Chronology:        c.PostForm("chronology"),
+		Question:          c.PostForm("question"),
+	}
+}
+
+// lampiranForm: file di field attachments; kosong kalau permintaan bukan multipart.
+func lampiranForm(c *gin.Context) []*multipart.FileHeader {
+	if form, _ := c.MultipartForm(); form != nil {
+		return form.File["attachments"]
+	}
+	return nil
+}
+
+// jawabGalatDraf menerjemahkan galat alamat draf: tidak ada (404), isian atau lampiran
+// ditolak (400), selebihnya 500.
+func jawabGalatDraf(c *gin.Context, err error) {
+	switch {
+	case errors.Is(err, service.ErrDrafTidakAda), errors.Is(err, service.ErrLampiranTidakAda):
+		utils.NotFound(c, err.Error())
+	case errors.Is(err, service.ErrInvalidFile), errors.Is(err, service.ErrIsianBelumLengkap):
+		utils.BadRequest(c, err.Error(), nil)
+	default:
+		utils.InternalError(c, err.Error())
+	}
+}
+
+// POST /api/v1/legal-opinions/drafts: simpan draf baru; isian boleh belum lengkap (PR Draf).
+func (h *LegalOpinionHandler) SaveDraft(c *gin.Context) {
+	lo, err := h.svc.SaveDraft(middleware.GetUserID(c), formLegalOpinion(c), lampiranForm(c))
+	if err != nil {
+		jawabGalatDraf(c, err)
+		return
+	}
+	utils.Created(c, "Draf tersimpan", lo)
+}
+
+// PUT /api/v1/legal-opinions/:id/draft: ganti isian draf dan tambah lampiran.
+func (h *LegalOpinionHandler) UpdateDraft(c *gin.Context) {
+	lo, err := h.svc.UpdateDraft(c.Param("id"), middleware.GetUserID(c), formLegalOpinion(c), lampiranForm(c))
+	if err != nil {
+		jawabGalatDraf(c, err)
+		return
+	}
+	utils.OK(c, "Draf tersimpan", lo)
+}
+
+// DELETE /api/v1/legal-opinions/:id/attachments/:attachmentId: hapus satu lampiran draf.
+func (h *LegalOpinionHandler) DeleteDraftAttachment(c *gin.Context) {
+	if err := h.svc.DeleteDraftAttachment(c.Param("id"), c.Param("attachmentId"), middleware.GetUserID(c)); err != nil {
+		jawabGalatDraf(c, err)
+		return
+	}
+	utils.OK(c, "Lampiran dihapus", nil)
+}
+
+// POST /api/v1/legal-opinions/:id/submit: kirim draf menjadi pengajuan.
+func (h *LegalOpinionHandler) SubmitDraft(c *gin.Context) {
+	id := c.Param("id")
+	lo, err := h.svc.SubmitDraft(id, middleware.GetUserID(c))
+	if err != nil {
+		jawabGalatDraf(c, err)
+		return
+	}
+	middleware.SetAuditContext(c, entity.ActionUserUpdate, "legal_opinion", id)
+	c.Set("audit_description", "Legal opinion created from draft")
+	utils.OK(c, "Pengajuan berhasil dikirim", lo)
 }
 
 // PUT /api/v1/legal-opinions/:id

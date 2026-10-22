@@ -1,6 +1,7 @@
 package router
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 	"testing"
@@ -374,6 +375,139 @@ func TestRepositoriTidakKembar(t *testing.T) {
 			t.Error("salinan baru diterima; indeks unik tidak terpasang")
 		}
 	})
+}
+
+// Draf Legal Opinion dan Review Dokumen (PR Draf tahap D.2 dan D.3): simpan sebagian, ubah,
+// kelola lampiran, kirim, hapus, dan akses orang lain.
+func TestDrafPengajuan(t *testing.T) {
+	pemilik := masukPeran(t, entity.RoleUser)
+	lain := masuk(t, surelUserLain)
+	for _, m := range semuaModulPengajuan[:1] { // Review Dokumen menyusul di tahap D.3
+		t.Run(m.nama, func(t *testing.T) { ujiDrafPengajuan(t, m, pemilik, lain) })
+	}
+}
+
+func ujiDrafPengajuan(t *testing.T, m modulPengajuan, pemilik, lain string) {
+	simpan := func(token, method, alamat string, kolom map[string]string, files ...berkas) (pengajuan, int) {
+		t.Helper()
+		w := panggilForm(t, token, method, alamat, kolom, files...)
+		var p pengajuan
+		if w.Code < 300 {
+			isiData(t, w, &p)
+		}
+		return p, w.Code
+	}
+
+	// Draf tanpa isian wajib tersimpan, dengan nomor sementara.
+	d, kode := simpan(pemilik, http.MethodPost, m.url("", "/drafts"), map[string]string{m.kolomJudul: "Draf awal"})
+	if kode != http.StatusCreated || d.Status != string(entity.StatusDraft) || !strings.HasPrefix(d.TicketNumber, "DRAF-") {
+		t.Fatalf("simpan draf: kode %d, status %q, tiket %q", kode, d.Status, d.TicketNumber)
+	}
+	draf := m.url("", "/", d.ID)
+
+	// Mengirim draf yang belum lengkap ditolak dengan pesan yang sama seperti pembuatan langsung.
+	w := panggil(t, pemilik, http.MethodPost, draf+"/submit", nil)
+	harapKode(t, w, http.StatusBadRequest, "kirim draf belum lengkap")
+	if !strings.Contains(w.Body.String(), "Semua field wajib diisi") {
+		t.Errorf("pesan kirim draf belum lengkap: %s", w.Body)
+	}
+
+	// Orang lain tidak bisa menyentuh draf.
+	for nama, w := range map[string]int{
+		"ubah":           panggilForm(t, lain, http.MethodPut, draf+"/draft", m.kolom).Code,
+		"kirim":          panggil(t, lain, http.MethodPost, draf+"/submit", nil).Code,
+		"hapus lampiran": panggil(t, lain, http.MethodDelete, draf+"/attachments/"+uuid.NewString(), nil).Code,
+	} {
+		if w != http.StatusNotFound {
+			t.Errorf("USER lain %s draf: dapat %d, harap 404", nama, w)
+		}
+	}
+	if kode := panggil(t, lain, http.MethodDelete, draf, nil).Code; kode == http.StatusOK {
+		t.Error("USER lain bisa menghapus draf")
+	}
+
+	// Lengkapi isian; lampiran diunggah dan dihapus satu per satu (butuh MinIO).
+	kolom := map[string]string{}
+	for k, v := range m.kolom {
+		kolom[k] = v
+	}
+	kolom[m.kolomJudul] = "Judul lengkap"
+	var files []berkas
+	if !tanpaMinIO {
+		files = []berkas{{"attachments", "Pertama.pdf", []byte("satu")}, {"attachments", "Kedua.pdf", []byte("dua")}}
+	}
+	d, kode = simpan(pemilik, http.MethodPut, draf+"/draft", kolom, files...)
+	if kode != http.StatusOK || d.judul() != "Judul lengkap" || len(d.Attachments) != len(files) {
+		t.Fatalf("ubah draf: kode %d, judul %q, lampiran %d", kode, d.judul(), len(d.Attachments))
+	}
+	if !tanpaMinIO {
+		harapKode(t, panggilForm(t, pemilik, http.MethodPut, draf+"/draft", kolom, berkas{"attachments", "program.exe", []byte("x")}), http.StatusBadRequest, "lampiran .exe di draf")
+		dibuang := d.Attachments[0]
+		harapKode(t, panggil(t, pemilik, http.MethodDelete, draf+"/attachments/"+dibuang.ID, nil), http.StatusOK, "hapus lampiran draf")
+		harapKode(t, panggil(t, pemilik, http.MethodDelete, draf+"/attachments/"+dibuang.ID, nil), http.StatusNotFound, "hapus lampiran yang sudah dihapus")
+		if p := m.ambil(t, pemilik, "", d.ID); len(p.Attachments) != 1 || p.Attachments[0].ID == dibuang.ID {
+			t.Errorf("lampiran sesudah satu dihapus: %+v", p.Attachments)
+		}
+		if _, err := storeTes.GetFileObject(t.Context(), dibuang.FilePath); err == nil {
+			t.Errorf("file lampiran yang dihapus masih ada di MinIO: %s", dibuang.FilePath)
+		}
+	}
+
+	// Kirim: nomor asli berikutnya, tanpa celah dari draf; tanggal pengajuan menjadi waktu kirim (K2).
+	acuan := m.buat(t, pemilik).TicketNumber
+	buang, _ := simpan(pemilik, http.MethodPost, m.url("", "/drafts"), map[string]string{})
+	harapKode(t, panggil(t, pemilik, http.MethodDelete, m.url("", "/", buang.ID), nil), http.StatusOK, "hapus draf kosong")
+	if err := dbTes.Exec("UPDATE "+m.tabel+" SET created_at = created_at - interval '30 days' WHERE id = ?", d.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	sebelumKirim := time.Now().Add(-time.Minute)
+	w = panggil(t, pemilik, http.MethodPost, draf+"/submit", nil)
+	harapKode(t, w, http.StatusOK, "kirim draf")
+	var terkirim pengajuan
+	isiData(t, w, &terkirim)
+	if terkirim.Status != string(entity.StatusSubmitted) || terkirim.TicketNumber != nomorBerikut(t, acuan) {
+		t.Errorf("draf terkirim: status %q, tiket %q, harap %q", terkirim.Status, terkirim.TicketNumber, nomorBerikut(t, acuan))
+	}
+	var dibuat time.Time
+	dbTes.Raw("SELECT created_at FROM "+m.tabel+" WHERE id = ?", d.ID).Scan(&dibuat)
+	if dibuat.Before(sebelumKirim) {
+		t.Errorf("tanggal pengajuan %v masih tanggal draf dibuat, harap waktu kirim", dibuat)
+	}
+	if !m.adaDiDaftar(t, pemilik, "", d.ID) {
+		t.Error("pengajuan dari draf tidak muncul di daftar pemiliknya")
+	}
+	// Sesudah dikirim, alamat draf tidak berlaku lagi.
+	harapKode(t, panggil(t, pemilik, http.MethodPost, draf+"/submit", nil), http.StatusNotFound, "kirim ulang pengajuan")
+	harapKode(t, panggilForm(t, pemilik, http.MethodPut, draf+"/draft", kolom), http.StatusNotFound, "ubah pengajuan lewat alamat draf")
+
+	// Hapus draf: permanen beserta lampiran dan filenya.
+	var hapusFiles []berkas
+	if !tanpaMinIO {
+		hapusFiles = []berkas{{"attachments", "hapus.pdf", []byte("hapus")}}
+	}
+	h, _ := simpan(pemilik, http.MethodPost, m.url("", "/drafts"), map[string]string{}, hapusFiles...)
+	harapKode(t, panggil(t, pemilik, http.MethodDelete, m.url("", "/", h.ID), nil), http.StatusOK, "hapus draf")
+	var sisa int64
+	dbTes.Raw("SELECT count(*) FROM "+m.tabel+" WHERE id = ?", h.ID).Scan(&sisa)
+	if sisa != 0 {
+		t.Error("draf yang dihapus masih ada di database (harus hapus permanen)")
+	}
+	for _, a := range h.Attachments {
+		if _, err := storeTes.GetFileObject(t.Context(), a.FilePath); err == nil {
+			t.Errorf("file draf yang dihapus masih ada di MinIO: %s", a.FilePath)
+		}
+	}
+}
+
+// nomorBerikut: nomor tiket sesudah tiket itu di bulan yang sama, mis. LO-202610-0007 -> LO-202610-0008.
+func nomorBerikut(t *testing.T, tiket string) string {
+	t.Helper()
+	i := strings.LastIndex(tiket, "-")
+	var n int
+	if _, err := fmt.Sscanf(tiket[i+1:], "%d", &n); err != nil {
+		t.Fatalf("nomor tiket %q: %v", tiket, err)
+	}
+	return fmt.Sprintf("%s-%04d", tiket[:i], n+1)
 }
 
 func ptr[T any](v T) *T { return &v }

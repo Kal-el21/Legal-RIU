@@ -33,6 +33,7 @@ DELETE /api/v1/legal-cases/:id/document: -
 DELETE /api/v1/legal-cases/:id/photo: -
 DELETE /api/v1/legal-cases/cedants/:id: -
 DELETE /api/v1/legal-opinions/:id: USER
+DELETE /api/v1/legal-opinions/:id/attachments/:attachmentId: USER
 DELETE /api/v1/legal/agreement-templates/:id: -
 DELETE /api/v1/legal/legal-cases/:id: LEGAL
 DELETE /api/v1/legal/legal-cases/:id/chronology/:chronId: LEGAL
@@ -292,6 +293,8 @@ POST /api/v1/legal-cases/cedants/import: -
 POST /api/v1/legal-cases/regencies/import: -
 POST /api/v1/legal-opinions: USER
 POST /api/v1/legal-opinions/:id/resubmit: USER
+POST /api/v1/legal-opinions/:id/submit: USER
+POST /api/v1/legal-opinions/drafts: USER
 POST /api/v1/legal/agreement-templates: -
 POST /api/v1/legal/agreement-templates/:id/activate: -
 POST /api/v1/legal/agreement-templates/new-version: -
@@ -336,6 +339,7 @@ PUT /api/v1/legal-cases/:id: -
 PUT /api/v1/legal-cases/:id/chronology/:chronId: -
 PUT /api/v1/legal-cases/cedants/:id: -
 PUT /api/v1/legal-opinions/:id: USER
+PUT /api/v1/legal-opinions/:id/draft: USER
 PUT /api/v1/legal/legal-cases/:id: LEGAL
 PUT /api/v1/legal/legal-cases/:id/chronology/:chronId: LEGAL
 PUT /api/v1/legal/legal-cases/cedants/:id: LEGAL

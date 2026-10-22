@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"mime/multipart"
@@ -34,6 +35,29 @@ func validateFiles(files []*multipart.FileHeader) error {
 // tidak ada di penyimpanan. Nilainya sama dengan storage.ErrNotFound supaya
 // ketiganya tertangkap oleh satu pemeriksaan errors.Is.
 var ErrFileNotFound = storage.ErrNotFound
+
+// Galat alamat draf (PR Draf). ErrDrafTidakAda dan ErrLampiranTidakAda dijawab 404:
+// draf tidak ada, bukan milik pemanggil, atau pengajuannya sudah dikirim.
+// ErrIsianBelumLengkap dijawab 400 dengan pesan yang sama seperti saat membuat pengajuan.
+var (
+	ErrDrafTidakAda      = errors.New("draf tidak ditemukan")
+	ErrLampiranTidakAda  = errors.New("lampiran tidak ditemukan")
+	ErrIsianBelumLengkap = errors.New("Semua field wajib diisi")
+)
+
+// nomorDraf: nomor tiket sementara untuk draf (keputusan K1). Polanya tidak cocok dengan
+// <prefix>-YYYYMM-NNNN, jadi urutan nomor asli tidak terganggu oleh draf yang dibuang.
+func nomorDraf() string {
+	return "DRAF-" + uuid.NewString()
+}
+
+// hapusFileDraf menghapus file draf dari MinIO. Kegagalan diabaikan: barisnya sudah
+// terhapus, jadi file yang tertinggal tidak bisa diunduh siapa pun.
+func hapusFileDraf(store *storage.MinIOClient, paths []string) {
+	for _, p := range paths {
+		_ = store.DeleteFile(context.Background(), p)
+	}
+}
 
 func parseUUID(id string) (uuid.UUID, error) {
 	return uuid.Parse(id)
