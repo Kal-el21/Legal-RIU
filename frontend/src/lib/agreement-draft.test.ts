@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { bacaDraf, hapusDraf, isianKosong, pindahkanIsian, simpanDraf, type SectionDef } from './agreement-draft'
+import { bacaDraf, drafKeServer, hapusDraf, isianKosong, pindahkanIsian, type SectionDef } from './agreement-draft'
 
 const teks = (name: string, label = name, required = false) => ({ name, label, type: 'text', required })
 
@@ -70,27 +70,44 @@ describe('isianKosong', () => {
   })
 })
 
-describe('draf per pengguna', () => {
-  const penyimpanan = () => {
-    const isi = new Map<string, string>()
-    return { getItem: (k: string) => isi.get(k) ?? null, setItem: (k: string, v: string) => void isi.set(k, v), removeItem: (k: string) => void isi.delete(k) }
+describe('draf lama di browser', () => {
+  // Draf PR 9 hanya dibaca untuk dipindah sekali ke server (PR Draf); tes menulisnya langsung.
+  const penyimpanan = (isi: Record<string, string> = {}) => {
+    const m = new Map(Object.entries(isi))
+    return { getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => void m.set(k, v), removeItem: (k: string) => void m.delete(k) }
   }
-  const draf = (nama: string) => ({ code: 'PKS', template_id: 'v1', sections: [], isian: { nama_mitra: nama } })
+  const draf = (nama: string) => JSON.stringify({ code: 'PKS', template_id: 'v1', sections: [], isian: { nama_mitra: nama } })
 
   it('draf pengguna lain di browser yang sama tidak terbuka', () => {
-    const p = penyimpanan()
-    simpanDraf('user-a', draf('PT A'), p)
-    simpanDraf('user-b', draf('PT B'), p)
+    const p = penyimpanan({ 'alea-draf-perjanjian:user-a': draf('PT A'), 'alea-draf-perjanjian:user-b': draf('PT B') })
     expect(bacaDraf('user-a', p)?.isian.nama_mitra).toBe('PT A')
-    expect(bacaDraf('user-b', p)?.isian.nama_mitra).toBe('PT B')
     hapusDraf('user-a', p)
     expect(bacaDraf('user-a', p)).toBeNull()
     expect(bacaDraf('user-b', p)?.isian.nama_mitra).toBe('PT B')
   })
 
-  it('tanpa pengguna tidak menyimpan apa pun', () => {
-    const p = penyimpanan()
-    simpanDraf('', draf('PT A'), p)
-    expect(bacaDraf('', p)).toBeNull()
+  it('tanpa pengguna atau isi rusak tidak membaca apa pun', () => {
+    expect(bacaDraf('', penyimpanan({ 'alea-draf-perjanjian:': draf('PT A') }))).toBeNull()
+    expect(bacaDraf('user-a', penyimpanan({ 'alea-draf-perjanjian:user-a': '{rusak' }))).toBeNull()
+  })
+})
+
+describe('drafKeServer', () => {
+  const bagian = (...fields: { name: string; label: string; type: string; required?: boolean }[]) => [{ title: 'Data', fields: fields.map((f) => ({ required: false, ...f })) }]
+  const lama = { code: 'PKS', template_id: 'v1', sections: bagian({ name: 'nama', label: 'Nama', type: 'text' }, { name: 'kota', label: 'Kota', type: 'text' }), isian: { nama: 'PT A', kota: 'Jakarta' } }
+
+  it('versi sama: isian dikirim apa adanya dengan versi aktif', () => {
+    const { permintaan, pindah } = drafKeServer(lama, { code: 'PKS', template_id: 'v1', sections: lama.sections })
+    expect(pindah).toBeNull()
+    expect(permintaan).toEqual({ document_type_code: 'PKS', template_id: 'v1', form_data: { nama: 'PT A', kota: 'Jakarta' } })
+  })
+
+  it('versi diganti: isian dipindah ke field versi aktif, dan yang hilang serta yang baru dilaporkan', () => {
+    const aktif = { code: 'PKS', template_id: 'v2', sections: bagian({ name: 'nama', label: 'Nama', type: 'text' }, { name: 'npwp', label: 'NPWP', type: 'text', required: true }) }
+    const { permintaan, pindah } = drafKeServer(lama, aktif)
+    expect(permintaan.template_id).toBe('v2')
+    expect(permintaan.form_data).toEqual({ nama: 'PT A' })
+    expect(pindah?.baru).toEqual(['npwp'])
+    expect(pindah?.dihapus).toEqual(['Kota'])
   })
 })

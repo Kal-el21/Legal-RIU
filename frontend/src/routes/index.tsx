@@ -25,6 +25,7 @@ import ReviewDocumentListPage from '@/pages/dashboard/review-documents/ReviewDoc
 import ReviewDocumentFormPage from '@/pages/dashboard/review-documents/ReviewDocumentFormPage'
 import ReviewDocumentDetailPage from '@/pages/dashboard/review-documents/ReviewDocumentDetailPage'
 import ReviewDocumentDraftListPage from '@/pages/dashboard/review-documents/ReviewDocumentDraftListPage'
+import AgreementDraftListPage from '@/pages/dashboard/agreement-documents/AgreementDraftListPage'
 
 import AdminDashboardPage from '@/pages/admin/AdminDashboardPage'
 import UserManagementPage from '@/pages/admin/users/UserManagementPage'
@@ -137,6 +138,8 @@ export const router = createBrowserRouter([
           { path: '/dashboard/review-documents/:id/edit', element: <ReviewDocumentFormPage /> },
           { path: '/dashboard/agreement-documents', element: <AgreementDocumentList basePath="/dashboard/agreement-documents" requester /> },
           { path: '/dashboard/agreement-documents/new', element: <AgreementWizard /> },
+          { path: '/dashboard/agreement-documents/drafts', element: <AgreementDraftListPage /> },
+          { path: '/dashboard/agreement-documents/drafts/:draftId', element: <AgreementWizard /> },
           { path: '/dashboard/agreement-documents/:id', element: <AgreementDocumentDetail /> },
           { path: '/dashboard/agreement-documents/:id/edit', element: <AgreementWizard /> },
           { path: '/dashboard/repository-documents', element: <ErrorBoundary><UserRepositoryDocumentListPage /></ErrorBoundary> },

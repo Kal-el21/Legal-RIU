@@ -16,10 +16,16 @@ export default function AgreementDocumentList({ basePath, apiBase = '', requeste
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('ALL')
   const [dateFrom, setDateFrom] = useState('')
+  const [jumlahDraf, setJumlahDraf] = useState(0)
 
   useEffect(() => {
     void agreementService.list(apiBase, { search, status: status === 'ALL' ? '' : status, date_from: dateFrom }).then(setItems)
   }, [apiBase, search, status, dateFrom])
+
+  // Draf milik sendiri (PR Draf); daftar draf menampilkan sampai 100.
+  useEffect(() => {
+    if (requester) void agreementService.list('', { status: 'DRAFT', limit: 100 }).then((d) => setJumlahDraf(d.length))
+  }, [requester])
 
   return <div className="p-6 max-w-7xl mx-auto">
     <div className="flex items-center justify-between mb-6">
@@ -27,7 +33,10 @@ export default function AgreementDocumentList({ basePath, apiBase = '', requeste
         <h1 className="text-2xl font-bold" style={{ color: '#0B2545' }}>Dokumen Perjanjian</h1>
         <p className="text-sm text-gray-500 mt-0.5">Pengajuan dan pembuatan dokumen perjanjian</p>
       </div>
-      {requester && <Link to={`${basePath}/new`}><Button className="flex items-center gap-2 text-white transition hover:brightness-95" style={{ background: '#C8102E' }}><Plus className="w-4 h-4" /> Pengajuan Baru</Button></Link>}
+      {requester && <div className="flex items-center gap-2">
+        <Link to={`${basePath}/drafts`}><Button variant="outline">Draf ({jumlahDraf})</Button></Link>
+        <Link to={`${basePath}/new`}><Button className="flex items-center gap-2 text-white transition hover:brightness-95" style={{ background: '#C8102E' }}><Plus className="w-4 h-4" /> Pengajuan Baru</Button></Link>
+      </div>}
     </div>
 
     <section className="mb-5 rounded-2xl border border-gray-100 bg-white p-4">
