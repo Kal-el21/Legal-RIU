@@ -1,51 +1,115 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
-import { Search, Filter, X, History } from 'lucide-react'
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import {
+  ArrowRight, Building2, FilePlus2, FileX2, History, LogIn, LogOut, PenLine, Pencil, RefreshCw, Search, ShieldCheck, Trash2, X,
+  type LucideIcon,
+} from 'lucide-react'
 import { auditLogService } from '@/services/audit-log.service'
 import { cn } from '@/lib/utils'
-import type { AuditLog, AuditAction } from '@/types'
+import {
+  AKSI, jamWIB, kelompokPerHari, labelAksi, labelEntitas, labelPeran, nadaAksi, perbandingan, PILIHAN_ENTITAS, pisahCatatan, tautanData,
+  type NadaAksi,
+} from '@/lib/audit'
+import type { AuditAction, AuditLog } from '@/types'
 import { useAuthStore } from '@/store/auth.store'
 import { getRoleHome } from '@/routes/role-home'
 import { Button } from '@/components/ui/button'
 
-const ACTION_COLORS: Record<AuditAction, { bg: string; text: string }> = {
-  STATUS_CHANGE: { bg: '#FEF3C7', text: '#92400E' },
-  FILE_UPLOAD:   { bg: '#D1FAE5', text: '#065F46' },
-  USER_UPDATE:   { bg: '#DBEAFE', text: '#1E40AF' },
-  LOGIN:         { bg: '#E0E7FF', text: '#3730A3' },
-  LOGOUT:        { bg: '#EDE9FE', text: '#5B21B6' },
-  DELETE:        { bg: '#FEE2E2', text: '#991B1B' },
-  FILE_DELETE:   { bg: '#FEE2E2', text: '#991B1B' },
-  PERMISSION_UPDATE: { bg: '#ECFDF5', text: '#047857' },
-  PARENT_CHANGE: { bg: '#FCE7F3', text: '#9D174D' },
-  SIGNATORY_CHANGE: { bg: '#FFEDD5', text: '#9A3412' },
+const IKON: Record<AuditAction, LucideIcon> = {
+  STATUS_CHANGE: RefreshCw,
+  FILE_UPLOAD: FilePlus2,
+  USER_UPDATE: Pencil,
+  LOGIN: LogIn,
+  LOGOUT: LogOut,
+  DELETE: Trash2,
+  FILE_DELETE: FileX2,
+  PERMISSION_UPDATE: ShieldCheck,
+  PARENT_CHANGE: Building2,
+  SIGNATORY_CHANGE: PenLine,
 }
 
-function Badge({ action, className }: { action: AuditAction; className?: string }) {
-  const colors = ACTION_COLORS[action] || { bg: '#F3F4F6', text: '#374151' }
+const WARNA: Record<NadaAksi, string> = {
+  biru: 'bg-blue-50 text-blue-700',
+  hijau: 'bg-green-50 text-green-700',
+  abu: 'bg-gray-100 text-gray-700',
+  merah: 'bg-red-50 text-red-700',
+  ungu: 'bg-purple-50 text-purple-700',
+  kuning: 'bg-amber-50 text-amber-800',
+  teal: 'bg-teal-50 text-teal-700',
+}
+
+const SARINGAN = ['action', 'entity_type', 'user_id', 'pelaku', 'search', 'date_from', 'date_to'] as const
+const PER_HALAMAN = 20
+
+// useTunda: nilai yang baru berubah sesudah pengguna berhenti mengetik.
+function useTunda<T>(nilai: T, ms = 400): T {
+  const [tunda, setTunda] = useState(nilai)
+  useEffect(() => {
+    const t = setTimeout(() => setTunda(nilai), ms)
+    return () => clearTimeout(t)
+  }, [nilai, ms])
+  return tunda
+}
+
+const kelasIsian = 'w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20'
+
+// Kartu satu baris audit: jam, aksi, keterangan, catatan approver, perubahan nilai, pelaku, dan tautan ke data.
+function BarisAudit({ log, panel }: { log: AuditLog; panel: string }) {
+  const Ikon = IKON[log.action] ?? Pencil
+  const { keterangan, catatan } = pisahCatatan(log.description)
+  const banding = perbandingan(log)
+  const tautan = tautanData(log, panel)
+  const perangkat = [log.ip_address, log.user_agent].filter(Boolean).join(' · ')
+
   return (
-    <span className={cn('inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium', className)}
-      style={{ background: colors.bg, color: colors.text }}>
-      {action.replace('_', ' ')}
-    </span>
+    <li className="flex gap-4 px-5 py-4">
+      <time dateTime={log.created_at} className="w-11 shrink-0 pt-1 text-xs tabular-nums text-gray-500">{jamWIB(log.created_at)}</time>
+      <span className={cn('mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full', WARNA[nadaAksi(log.action)])} aria-hidden="true">
+        <Ikon className="h-3.5 w-3.5" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+          <span className={cn('rounded-full px-2 py-0.5 text-xs font-medium', WARNA[nadaAksi(log.action)])}>{labelAksi(log.action)}</span>
+          <span className="text-gray-500">{labelEntitas(log.entity_type)}</span>
+        </p>
+        {keterangan && <p className="mt-1 break-words text-sm text-gray-900">{keterangan}</p>}
+        {catatan && (
+          <blockquote className="mt-2 rounded-r-lg border-l-4 border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-700">
+            <span className="sr-only">Catatan: </span>{catatan}
+          </blockquote>
+        )}
+        {banding && (
+          <p className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs">
+            {banding.lama && <del className="text-gray-500">{banding.lama}</del>}
+            {banding.lama && <ArrowRight className="h-3 w-3 text-gray-400" aria-label="menjadi" />}
+            {banding.baru && <ins className="font-medium text-gray-900 no-underline">{banding.baru}</ins>}
+          </p>
+        )}
+        <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-600">
+          <span>
+            {log.user?.full_name ?? 'Pengguna tidak dikenal'}
+            {log.user?.role && <span className="text-gray-400"> · {labelPeran(log.user.role)}</span>}
+          </span>
+          {tautan && (
+            <Link to={tautan} className="inline-flex items-center gap-1 font-medium text-[#0B2545] hover:underline">
+              Buka data <ArrowRight className="h-3 w-3" aria-hidden="true" />
+            </Link>
+          )}
+        </p>
+        {perangkat && <p className="mt-1 truncate text-[11px] text-gray-400" title={perangkat}>{perangkat}</p>}
+      </div>
+    </li>
   )
 }
 
 export default function AuditLogPage() {
   const navigate = useNavigate()
+  const { pathname } = useLocation()
   const hasPermission = useAuthStore((state) => state.hasPermission)
   const role = useAuthStore((state) => state.user?.role)
-
-  const [page, setPage] = useState(1)
-  const [filters, setFilters] = useState({
-    action: '',
-    entity_type: '',
-    search: '',
-    date_from: '',
-    date_to: '',
-  })
-  const [showFilters, setShowFilters] = useState(false)
+  const [params, setParams] = useSearchParams()
+  const panel = '/' + pathname.split('/')[1]
 
   useEffect(() => {
     if (!hasPermission('audit_log.view')) {
@@ -53,239 +117,186 @@ export default function AuditLogPage() {
     }
   }, [hasPermission, navigate, role])
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['audit-logs', page, filters],
-    queryFn: () => auditLogService.getAll({
-      ...filters,
-      page,
-      limit: 20,
-    }),
+  // Saringan disimpan di URL supaya tampilan yang sama bisa dibagikan lewat tautan.
+  const ubah = useCallback((isi: Record<string, string>) => {
+    setParams((lama) => {
+      const baru = new URLSearchParams(lama)
+      for (const [k, v] of Object.entries(isi)) {
+        if (v) baru.set(k, v)
+        else baru.delete(k)
+      }
+      if (!('page' in isi)) baru.delete('page')
+      return baru
+    }, { replace: true })
+  }, [setParams])
+
+  const [cari, setCari] = useState(params.get('search') ?? '')
+  const cariTunda = useTunda(cari)
+  useEffect(() => {
+    setParams((lama) => {
+      if ((lama.get('search') ?? '') === cariTunda) return lama
+      const baru = new URLSearchParams(lama)
+      if (cariTunda) baru.set('search', cariTunda)
+      else baru.delete('search')
+      baru.delete('page')
+      return baru
+    }, { replace: true })
+  }, [cariTunda, setParams])
+
+  const [cariPelaku, setCariPelaku] = useState('')
+  const cariPelakuTunda = useTunda(cariPelaku.trim(), 300)
+  const { data: calonPelaku = [] } = useQuery({
+    queryKey: ['audit-actors', panel, cariPelakuTunda],
+    queryFn: () => auditLogService.getActors(cariPelakuTunda),
+    enabled: cariPelakuTunda.length >= 2,
   })
 
-  const items = data?.items || []
+  const page = Math.max(1, Number(params.get('page')) || 1)
+  const saringan = Object.fromEntries(SARINGAN.filter((k) => k !== 'pelaku').map((k) => [k, params.get(k) ?? '']))
+  const adaSaringan = SARINGAN.some((k) => params.get(k))
+
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ['audit-logs', panel, page, saringan],
+    queryFn: () => auditLogService.getAll({ ...saringan, page, limit: PER_HALAMAN }),
+  })
+
+  const items = data?.items ?? []
   const totalPages = data?.total_pages || 1
-  const total = data?.total || 0
+  const total = data?.total ?? 0
+  const hari = kelompokPerHari(items)
 
-  const updateFilter = (key: string, value: string) => {
-    setFilters(prev => ({ ...prev, [key]: value }))
-    setPage(1)
+  const hapusSaringan = () => {
+    setCari('')
+    setCariPelaku('')
+    setParams(new URLSearchParams(), { replace: true })
   }
-
-  const clearFilters = () => {
-    setFilters({ action: '', entity_type: '', search: '', date_from: '', date_to: '' })
-    setPage(1)
-  }
-
-  const hasActiveFilters = useMemo(() => {
-    return Object.values(filters).some(v => v !== '')
-  }, [filters])
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold" style={{ color: '#0B2545' }}>Audit Log</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Riwayat aktivitas dan perubahan sistem</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className={cn('flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-colors')}
-            style={{ background: showFilters ? '#0B2545' : '#F3F4F6', color: showFilters ? 'white' : '#374151' }}
-          >
-            <Filter className="w-4 h-4" />
-            Filter
-          </button>
-        </div>
+    <div className="p-6 max-w-5xl mx-auto space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold" style={{ color: '#0B2545' }}>Audit Log</h1>
+        <p className="text-sm text-gray-500 mt-0.5">Siapa melakukan apa, dan kapan</p>
       </div>
 
-      {showFilters && (
-        <div className="bg-white rounded-2xl border border-gray-100 p-5 space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold" style={{ color: '#0B2545' }}>Filter Pencarian</h3>
-            {hasActiveFilters && (
-              <Button variant="outline" size="xs" onClick={clearFilters} className="text-red-600 hover:bg-red-50 hover:text-red-700">
-                <X className="w-3 h-3" /> Hapus filter
-              </Button>
-            )}
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div>
-              <label className="text-xs text-gray-500 mb-1 block">Aksi</label>
-              <select
-                value={filters.action}
-                onChange={(e) => updateFilter('action', e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20"
-                style={{ borderColor: '#E5E7EB' }}
-              >
-                <option value="">Semua aksi</option>
-                <option value="STATUS_CHANGE">Status Change</option>
-                <option value="FILE_UPLOAD">File Upload</option>
-                <option value="USER_UPDATE">User Update</option>
-                <option value="LOGIN">Login</option>
-                <option value="LOGOUT">Logout</option>
-                <option value="DELETE">Delete</option>
-                <option value="FILE_DELETE">File Delete</option>
-                <option value="PERMISSION_UPDATE">Permission Update</option>
-                <option value="PARENT_CHANGE">Ganti Induk</option>
-                <option value="SIGNATORY_CHANGE">Penandatangan</option>
-              </select>
-            </div>
-            <div>
-              <label className="text-xs text-gray-500 mb-1 block">Entity Type</label>
+      <section aria-label="Saringan" className="bg-white rounded-2xl border border-gray-100 p-5 space-y-4">
+        <div className="relative">
+          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" aria-hidden="true" />
+          <input
+            type="search"
+            value={cari}
+            onChange={(e) => setCari(e.target.value)}
+            placeholder="Cari keterangan, nilai, atau nama pelaku..."
+            aria-label="Cari"
+            className={cn(kelasIsian, 'pl-9')}
+          />
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <label className="block">
+            <span className="text-xs text-gray-500 mb-1 block">Aksi</span>
+            <select value={params.get('action') ?? ''} onChange={(e) => ubah({ action: e.target.value })} className={kelasIsian}>
+              <option value="">Semua aksi</option>
+              {Object.entries(AKSI).map(([value, a]) => <option key={value} value={value}>{a.label}</option>)}
+            </select>
+          </label>
+          <label className="block">
+            <span className="text-xs text-gray-500 mb-1 block">Jenis data</span>
+            <select value={params.get('entity_type') ?? ''} onChange={(e) => ubah({ entity_type: e.target.value })} className={kelasIsian}>
+              <option value="">Semua jenis</option>
+              {PILIHAN_ENTITAS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+            </select>
+          </label>
+          <label className="block">
+            <span className="text-xs text-gray-500 mb-1 block">Dari tanggal</span>
+            <input type="date" value={params.get('date_from') ?? ''} onChange={(e) => ubah({ date_from: e.target.value })} className={kelasIsian} />
+          </label>
+          <label className="block">
+            <span className="text-xs text-gray-500 mb-1 block">Sampai tanggal</span>
+            <input type="date" value={params.get('date_to') ?? ''} onChange={(e) => ubah({ date_to: e.target.value })} className={kelasIsian} />
+          </label>
+        </div>
+        <div className="flex flex-wrap items-start gap-3">
+          {params.get('user_id') ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-[#0B2545] py-1 pl-3 pr-1.5 text-xs font-medium text-white">
+              Pelaku: {params.get('pelaku') ?? 'dipilih'}
+              <button type="button" onClick={() => ubah({ user_id: '', pelaku: '' })} aria-label="Hapus saringan pelaku" className="rounded-full p-0.5 hover:bg-white/20">
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ) : (
+            <div className="relative w-full sm:w-72">
               <input
-                type="text"
-                value={filters.entity_type}
-                onChange={(e) => updateFilter('entity_type', e.target.value)}
-                placeholder="Contoh: legal_opinion"
-                className="w-full px-3 py-2 rounded-lg border text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20"
-                style={{ borderColor: '#E5E7EB' }}
+                type="search"
+                value={cariPelaku}
+                onChange={(e) => setCariPelaku(e.target.value)}
+                placeholder="Saring pelaku (ketik nama atau surel)..."
+                aria-label="Saring pelaku"
+                className={kelasIsian}
               />
+              {cariPelakuTunda.length >= 2 && cariPelaku.trim() && (
+                <ul className="absolute z-10 mt-1 w-full overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg">
+                  {calonPelaku.length === 0 ? (
+                    <li className="px-3 py-2 text-xs text-gray-500">Tidak ada pelaku yang cocok</li>
+                  ) : calonPelaku.map((p) => (
+                    <li key={p.id}>
+                      <button
+                        type="button"
+                        onClick={() => { ubah({ user_id: p.id, pelaku: p.full_name }); setCariPelaku('') }}
+                        className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50"
+                      >
+                        <span className="block text-gray-900">{p.full_name}</span>
+                        <span className="block text-xs text-gray-500">{p.email} · {labelPeran(p.role)}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
-            <div>
-              <label className="text-xs text-gray-500 mb-1 block">Dari Tanggal</label>
-              <input
-                type="date"
-                value={filters.date_from}
-                onChange={(e) => updateFilter('date_from', e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20"
-                style={{ borderColor: '#E5E7EB' }}
-              />
-            </div>
-            <div>
-              <label className="text-xs text-gray-500 mb-1 block">Sampai Tanggal</label>
-              <input
-                type="date"
-                value={filters.date_to}
-                onChange={(e) => updateFilter('date_to', e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20"
-                style={{ borderColor: '#E5E7EB' }}
-              />
-            </div>
-          </div>
-          <div className="pt-1">
-            <div className="relative">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input
-                type="text"
-                value={filters.search}
-                onChange={(e) => updateFilter('search', e.target.value)}
-                placeholder="Cari deskripsi, old value, atau new value..."
-                className="w-full pl-9 pr-4 py-2 rounded-lg border text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20"
-                style={{ borderColor: '#E5E7EB' }}
-              />
-            </div>
-          </div>
+          )}
+          {adaSaringan && (
+            <Button variant="outline" size="sm" onClick={hapusSaringan} className="text-red-600 hover:bg-red-50 hover:text-red-700">
+              <X className="w-3 h-3" /> Hapus semua saringan
+            </Button>
+          )}
+        </div>
+      </section>
+
+      {isLoading ? (
+        <p className="py-12 text-center text-sm text-gray-400">Memuat data...</p>
+      ) : isError ? (
+        <p role="alert" className="py-12 text-center text-sm text-red-600">Audit log gagal dimuat. Muat ulang halaman ini.</p>
+      ) : items.length === 0 ? (
+        <div className="py-12 text-center">
+          <History className="w-10 h-10 text-gray-300 mx-auto mb-2" aria-hidden="true" />
+          <p className="text-sm text-gray-500">{adaSaringan ? 'Tidak ada aktivitas yang cocok dengan saringan' : 'Belum ada aktivitas'}</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {hari.map((h) => (
+            <section key={h.tanggal} aria-labelledby={`hari-${h.tanggal}`} className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+              <h2 id={`hari-${h.tanggal}`} className="flex items-baseline justify-between border-b border-gray-100 px-5 py-3 text-sm font-semibold" style={{ color: '#0B2545' }}>
+                {h.label}
+                <span className="text-xs font-normal text-gray-400">{h.items.length} aktivitas</span>
+              </h2>
+              <ul className="divide-y divide-gray-50">
+                {h.items.map((log) => <BarisAudit key={log.id} log={log} panel={panel} />)}
+              </ul>
+            </section>
+          ))}
         </div>
       )}
 
-      <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-gray-50" style={{ background: '#F9FAFB' }}>
-                <th className="text-left px-6 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">Timestamp</th>
-                <th className="text-left px-6 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">User</th>
-                <th className="text-left px-6 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">Aksi</th>
-                <th className="text-left px-6 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">Entity</th>
-                <th className="text-left px-6 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">Perubahan</th>
-                <th className="text-left px-6 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">IP Address</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {isLoading ? (
-                <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center">
-                    <div className="flex flex-col items-center gap-2">
-                      <div className="w-8 h-8 rounded-full border-2 border-red-500 border-t-transparent animate-spin" />
-                      <p className="text-sm text-gray-400">Memuat data...</p>
-                    </div>
-                  </td>
-                </tr>
-              ) : items.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center">
-                    <History className="w-10 h-10 text-gray-300 mx-auto mb-2" />
-                    <p className="text-sm text-gray-400">Belum ada aktivitas audit log</p>
-                  </td>
-                </tr>
-              ) : (
-                items.map((log: AuditLog) => (
-                  <tr key={log.id} className="hover:bg-gray-50/50 transition-colors">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">
-                        {new Date(log.created_at).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
-                      </div>
-                      <div className="text-xs text-gray-400">
-                        {new Date(log.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="text-sm text-gray-900">{log.user?.full_name || '-'}</div>
-                      <div className="text-xs text-gray-400">{log.user?.email || '-'}</div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <Badge action={log.action} />
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="text-sm text-gray-600">{log.entity_type}</div>
-                      <div className="text-xs text-gray-400 font-mono">{log.entity_id.slice(0, 8)}...</div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="text-xs text-gray-600 max-w-[200px]">
-                        {log.old_value && (
-                          <span className="line-through text-gray-400 mr-1">{log.old_value.length > 30 ? log.old_value.slice(0, 30) + '...' : log.old_value}</span>
-                        )}
-                        {(log.old_value && log.new_value) && (
-                          <span className="text-gray-400 mx-1">→</span>
-                        )}
-                        {log.new_value && (
-                          <span className="text-gray-900 font-medium">{log.new_value.length > 30 ? log.new_value.slice(0, 30) + '...' : log.new_value}</span>
-                        )}
-                        {!log.old_value && !log.new_value && log.description && (
-                          <span className="text-gray-600">{log.description.length > 50 ? log.description.slice(0, 50) + '...' : log.description}</span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="text-xs text-gray-500 font-mono">{log.ip_address}</span>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {totalPages > 1 && (
-          <div className="px-6 py-4 border-t border-gray-50 flex items-center justify-between">
-            <p className="text-xs text-gray-500">
-              Menampilkan {(page - 1) * 20 + 1} - {Math.min(page * 20, total)} dari {total} aktivitas
-            </p>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setPage(p => Math.max(1, p - 1))}
-                disabled={page === 1}
-                className="px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-200 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
-                style={{ color: '#0B2545' }}
-              >
-                Sebelumnya
-              </button>
-              <span className="text-xs text-gray-500">
-                Halaman {page} dari {totalPages}
-              </span>
-              <button
-                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                disabled={page === totalPages}
-                className="px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-200 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
-                style={{ color: '#0B2545' }}
-              >
-                Selanjutnya
-              </button>
-            </div>
+      {totalPages > 1 && (
+        <nav aria-label="Halaman" className="flex items-center justify-between">
+          <p className="text-xs text-gray-500">
+            Menampilkan {(page - 1) * PER_HALAMAN + 1} - {Math.min(page * PER_HALAMAN, total)} dari {total} aktivitas
+          </p>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" disabled={page === 1} onClick={() => ubah({ page: String(page - 1) })}>Sebelumnya</Button>
+            <span className="text-xs text-gray-500">Halaman {page} dari {totalPages}</span>
+            <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => ubah({ page: String(page + 1) })}>Selanjutnya</Button>
           </div>
-        )}
-      </div>
+        </nav>
+      )}
     </div>
   )
 }

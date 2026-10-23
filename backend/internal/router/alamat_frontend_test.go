@@ -87,7 +87,7 @@ var pengecualianAlamat = []pengecualian{
 	{"*", "/legal-au/cases*", "LEGAL_AU", "Legal AU belum punya alamat ubah dan hapus perkara serta tambah cedant", false},
 	{"*", "/external/legal-opinions*", "EXTERNAL", "Legal Opinion External belum punya alamat di backend", false},
 	{"*", "/external/review-documents*", "EXTERNAL", "Review Dokumen External belum punya alamat di backend", false},
-	{"GET", "/admin/audit-logs", "USER EXTERNAL", "Audit Log USER dan EXTERNAL belum punya alamat sendiri", false},
+	{"GET", "/admin/audit-logs*", "USER EXTERNAL", "Audit Log USER dan EXTERNAL belum punya alamat sendiri (daftar dan daftar pelaku)", false},
 	{"*", "/admin/materials*", "USER EXTERNAL", "USER dan EXTERNAL belum punya alamat tulis Materi Legal", false},
 	{"GET", "/reports/*", "USER EXTERNAL", "Laporan USER dan EXTERNAL belum punya alamat di backend", false},
 	{"GET", "/case-types", "USER", "form perkara USER (hanya lewat override) memuat rujukan yang tidak menerima USER", false},
