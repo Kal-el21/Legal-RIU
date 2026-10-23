@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"legal-riu-portal/internal/dto"
 	"legal-riu-portal/internal/entity"
 	"legal-riu-portal/internal/middleware"
@@ -195,6 +196,17 @@ func (h *AgreementDocumentHandler) GetByID(c *gin.Context) {
 	log.Printf("[agreement] GetByID OK id=%s status=%s", c.Param("id"), v.Status)
 	utils.OK(c, "Success", v)
 }
+// BolehBuka: pemeriksa akses riwayat (PR Audit Log tahap L.4), sama dengan GetByID.
+func (h *AgreementDocumentHandler) BolehBuka(c *gin.Context) (uuid.UUID, bool) {
+	all := middleware.RoleWithAllAccess(c, "agreement_document.view.all") != "USER"
+	d, e := h.svc.GetByID(c.Param("id"), middleware.GetUserID(c), all)
+	if e != nil {
+		utils.NotFound(c, e.Error())
+		return uuid.Nil, false
+	}
+	return d.ID, true
+}
+
 func (h *AgreementDocumentHandler) Update(c *gin.Context) {
 	var req dto.UpdateAgreementDocumentRequest
 	if e := c.ShouldBindJSON(&req); e != nil {

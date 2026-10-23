@@ -12,6 +12,7 @@ import (
 	"legal-riu-portal/internal/utils"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 type LegalOpinionHandler struct {
@@ -64,6 +65,17 @@ func (h *LegalOpinionHandler) GetByID(c *gin.Context) {
 		return
 	}
 	utils.OK(c, "Success", lo)
+}
+
+// BolehBuka: pemeriksa akses riwayat (PR Audit Log tahap L.4), sama dengan GetByID: pengajuan
+// orang lain dan draf orang lain dijawab 404.
+func (h *LegalOpinionHandler) BolehBuka(c *gin.Context) (uuid.UUID, bool) {
+	lo, err := h.svc.GetByID(c.Param("id"), middleware.GetUserID(c), middleware.RoleWithAllAccess(c, "legal_opinion.view.all"))
+	if err != nil {
+		utils.NotFound(c, err.Error())
+		return uuid.Nil, false
+	}
+	return lo.ID, true
 }
 
 // POST /api/v1/legal-opinions

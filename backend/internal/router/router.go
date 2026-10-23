@@ -164,6 +164,7 @@ func New(cfg *config.Config, db *gorm.DB, store *storage.MinIOClient) (*gin.Engi
 	userOnly.GET("/legal-opinions", requirePermission("legal_opinion.view.own", "legal_opinion.view.all"), loHandler.GetAll)
 	userOnly.POST("/legal-opinions", requirePermission("legal_opinion.create.own"), loHandler.Create)
 	userOnly.GET("/legal-opinions/:id", requirePermission("legal_opinion.view.own", "legal_opinion.view.all"), loHandler.GetByID)
+	userOnly.GET("/legal-opinions/:id/history", requirePermission("legal_opinion.view.own", "legal_opinion.view.all"), auditLogHandler.Riwayat("legal_opinion", loHandler.BolehBuka))
 	userOnly.PUT("/legal-opinions/:id", requirePermission("legal_opinion.update.own"), loHandler.Update)
 	userOnly.DELETE("/legal-opinions/:id", requirePermission("legal_opinion.delete.own"), loHandler.Delete)
 	userOnly.POST("/legal-opinions/:id/resubmit", requirePermission("legal_opinion.resubmit.own"), loHandler.Resubmit)
@@ -178,6 +179,7 @@ func New(cfg *config.Config, db *gorm.DB, store *storage.MinIOClient) (*gin.Engi
 	userOnly.GET("/review-documents", requirePermission("document_review.view.own", "document_review.view.all"), drHandler.GetAll)
 	userOnly.POST("/review-documents", requirePermission("document_review.create.own"), drHandler.Create)
 	userOnly.GET("/review-documents/:id", requirePermission("document_review.view.own", "document_review.view.all"), drHandler.GetByID)
+	userOnly.GET("/review-documents/:id/history", requirePermission("document_review.view.own", "document_review.view.all"), auditLogHandler.Riwayat("document_review", drHandler.BolehBuka))
 	userOnly.PUT("/review-documents/:id", requirePermission("document_review.update.own"), drHandler.Update)
 	userOnly.DELETE("/review-documents/:id", requirePermission("document_review.delete.own"), drHandler.Delete)
 	userOnly.POST("/review-documents/:id/resubmit", requirePermission("document_review.resubmit.own"), drHandler.Resubmit)
@@ -190,6 +192,7 @@ func New(cfg *config.Config, db *gorm.DB, store *storage.MinIOClient) (*gin.Engi
 	userOnly.POST("/agreement-documents", requirePermission("agreement_document.create.own"), agreementHandler.Create)
 	userOnly.POST("/agreement-documents/preview-draft", requirePermission("agreement_document.create.own"), agreementHandler.PreviewDraft)
 	userOnly.GET("/agreement-documents/:id", requirePermission("agreement_document.view.own"), agreementHandler.GetByID)
+	userOnly.GET("/agreement-documents/:id/history", requirePermission("agreement_document.view.own"), auditLogHandler.Riwayat("agreement_document", agreementHandler.BolehBuka))
 	userOnly.GET("/agreement-documents/:id/schema", requirePermission("agreement_document.view.own"), agreementHandler.DocumentSchema)
 	userOnly.PUT("/agreement-documents/:id", requirePermission("agreement_document.update.own"), agreementHandler.Update)
 	userOnly.DELETE("/agreement-documents/:id", requirePermission("agreement_document.delete.own"), agreementHandler.Delete)
@@ -203,7 +206,7 @@ func New(cfg *config.Config, db *gorm.DB, store *storage.MinIOClient) (*gin.Engi
 	userOnly.GET("/agreement-documents/:id/pdf", requirePermission("agreement_document.download_pdf.own"), agreementHandler.DownloadPDF)
 	userOnly.GET("/agreement-documents/:id/attachments/:attachmentId", requirePermission("agreement_document.download_attachment.own"), agreementHandler.DownloadAttachment)
 
-	registerLegalCaseRoutes(userOnly, legalCaseHandler, requirePermission)
+	registerLegalCaseRoutes(userOnly, legalCaseHandler, auditLogHandler, requirePermission)
 
 	// ── Admin only ─────────────────────────────────────────────────────────────
 	admin := api.Group("/admin")
@@ -215,11 +218,13 @@ func New(cfg *config.Config, db *gorm.DB, store *storage.MinIOClient) (*gin.Engi
 	admin.GET("/legal-opinions/download", loHandler.Download)
 	admin.GET("/legal-opinions", loHandler.GetAll)
 	admin.GET("/legal-opinions/:id", loHandler.GetByID)
+	admin.GET("/legal-opinions/:id/history", auditLogHandler.Riwayat("legal_opinion", loHandler.BolehBuka))
 	admin.GET("/review-documents/download", drHandler.Download)
 	admin.GET("/review-documents", drHandler.GetAll)
 	admin.GET("/review-documents/:id", drHandler.GetByID)
+	admin.GET("/review-documents/:id/history", auditLogHandler.Riwayat("document_review", drHandler.BolehBuka))
 
-	registerLegalCaseRoutes(admin, legalCaseHandler, requirePermission)
+	registerLegalCaseRoutes(admin, legalCaseHandler, auditLogHandler, requirePermission)
 
 	admin.GET("/divisions", divisionHandler.GetAll)
 	admin.POST("/divisions", divisionHandler.Create)
@@ -297,6 +302,7 @@ func New(cfg *config.Config, db *gorm.DB, store *storage.MinIOClient) (*gin.Engi
 	admin.GET("/review-documents/:id/pdf", requirePermission("document_review.view.all"), drHandler.GeneratePDF)
 	admin.GET("/agreement-documents", requirePermission("agreement_document.view.all"), agreementHandler.GetAll)
 	admin.GET("/agreement-documents/:id", requirePermission("agreement_document.view.all"), agreementHandler.GetByID)
+	admin.GET("/agreement-documents/:id/history", requirePermission("agreement_document.view.all"), auditLogHandler.Riwayat("agreement_document", agreementHandler.BolehBuka))
 	admin.GET("/agreement-documents/:id/schema", requirePermission("agreement_document.view.all"), agreementHandler.DocumentSchema)
 	admin.PATCH("/agreement-documents/:id/meta", requirePermission("agreement_document.update_meta.all"), agreementHandler.UpdateMeta)
 	admin.PATCH("/agreement-documents/:id/status", requirePermission("agreement_document.update_status.all"), agreementHandler.UpdateStatus)
@@ -344,12 +350,14 @@ func New(cfg *config.Config, db *gorm.DB, store *storage.MinIOClient) (*gin.Engi
 	legal.GET("/legal-opinions/download", requirePermission("legal_opinion.download.all", "legal_opinion.view.all"), loHandler.Download)
 	legal.GET("/legal-opinions", requirePermission("legal_opinion.view.all"), loHandler.GetAll)
 	legal.GET("/legal-opinions/:id", requirePermission("legal_opinion.view.all"), loHandler.GetByID)
+	legal.GET("/legal-opinions/:id/history", requirePermission("legal_opinion.view.all"), auditLogHandler.Riwayat("legal_opinion", loHandler.BolehBuka))
 	legal.PATCH("/legal-opinions/:id/status", requirePermission("legal_opinion.update_status.all"), loHandler.AdminUpdateStatus)
 	legal.POST("/legal-opinions/:id/result", requirePermission("legal_opinion.upload_result.all"), loHandler.AdminUploadResult)
 	legal.GET("/legal-opinions/:id/pdf", requirePermission("legal_opinion.download.all", "legal_opinion.view.all"), loHandler.GeneratePDF)
 	legal.GET("/review-documents/download", requirePermission("document_review.download.all", "document_review.view.all"), drHandler.Download)
 	legal.GET("/review-documents", requirePermission("document_review.view.all"), drHandler.GetAll)
 	legal.GET("/review-documents/:id", requirePermission("document_review.view.all"), drHandler.GetByID)
+	legal.GET("/review-documents/:id/history", requirePermission("document_review.view.all"), auditLogHandler.Riwayat("document_review", drHandler.BolehBuka))
 	legal.PATCH("/review-documents/:id/status", requirePermission("document_review.update_status.all"), drHandler.AdminUpdateStatus)
 	legal.POST("/review-documents/:id/result", requirePermission("document_review.upload_result.all"), drHandler.AdminUploadResult)
 	legal.GET("/review-documents/:id/pdf", requirePermission("document_review.view.all"), drHandler.GeneratePDF)
@@ -358,6 +366,7 @@ func New(cfg *config.Config, db *gorm.DB, store *storage.MinIOClient) (*gin.Engi
 	legal.GET("/agreement-signatories", requirePermission("agreement_company_master.view.all"), agreementHandler.ListSignatories)
 	legal.GET("/agreement-documents", requirePermission("agreement_document.view.all"), agreementHandler.GetAll)
 	legal.GET("/agreement-documents/:id", requirePermission("agreement_document.view.all"), agreementHandler.GetByID)
+	legal.GET("/agreement-documents/:id/history", requirePermission("agreement_document.view.all"), auditLogHandler.Riwayat("agreement_document", agreementHandler.BolehBuka))
 	legal.GET("/agreement-documents/:id/schema", requirePermission("agreement_document.view.all"), agreementHandler.DocumentSchema)
 	legal.PATCH("/agreement-documents/:id/meta", requirePermission("agreement_document.update_meta.all"), agreementHandler.UpdateMeta)
 	legal.PATCH("/agreement-documents/:id/status", requirePermission("agreement_document.update_status.all"), agreementHandler.UpdateStatus)
@@ -367,7 +376,7 @@ func New(cfg *config.Config, db *gorm.DB, store *storage.MinIOClient) (*gin.Engi
 	legal.GET("/agreement-documents/:id/attachments/:attachmentId", requirePermission("agreement_document.download_attachment.all"), agreementHandler.DownloadAttachment)
 	registerAgreementTemplateRoutes(legal, requirePermission, agreementTemplateHandler)
 
-	registerLegalCaseRoutes(legal, legalCaseHandler, requirePermission)
+	registerLegalCaseRoutes(legal, legalCaseHandler, auditLogHandler, requirePermission)
 
 	legal.GET("/audit-logs", requirePermission("audit_log.view"), auditLogHandler.GetAll)
 	legal.GET("/audit-logs/actors", requirePermission("audit_log.view"), auditLogHandler.GetActors)
@@ -392,6 +401,7 @@ func New(cfg *config.Config, db *gorm.DB, store *storage.MinIOClient) (*gin.Engi
 	legalAU.GET("/cases/regencies", requirePermission("case_management.view", "case_management.create"), legalCaseHandler.ListRegencies)
 	legalAU.GET("/cases/cedants", requirePermission("case_management.view", "case_management.create"), legalCaseHandler.ListCedants)
 	legalAU.GET("/cases/:id", requirePermission("case_management.view"), legalCaseHandler.GetByID)
+	legalAU.GET("/cases/:id/history", requirePermission("case_management.view"), auditLogHandler.Riwayat("legal_case", legalCaseHandler.BolehBuka))
 	legalAU.PATCH("/cases/:id/status", requirePermission("case_management.update_status"), legalCaseHandler.UpdateStatus)
 	legalAU.POST("/cases/:id/chronology", requirePermission("case_management.manage_chronology"), legalCaseHandler.CreateChronology)
 	legalAU.PUT("/cases/:id/chronology/:chronId", requirePermission("case_management.manage_chronology"), legalCaseHandler.UpdateChronology)
@@ -416,7 +426,7 @@ func New(cfg *config.Config, db *gorm.DB, store *storage.MinIOClient) (*gin.Engi
 	external := api.Group("/external")
 	external.Use(middleware.AuthMiddleware(cfg, userRepo), middleware.PermissionContextMiddleware(permissionSvc), middleware.RoleMiddleware("EXTERNAL"), middleware.AuditMiddleware(auditLogSvc), middleware.CSRFProtection())
 
-	registerLegalCaseRoutes(external, legalCaseHandler, requirePermission)
+	registerLegalCaseRoutes(external, legalCaseHandler, auditLogHandler, requirePermission)
 
 	// ── Public materials ──────────────────────────────────────────────────────
 	protectedMaterials := api.Group("")
@@ -439,7 +449,7 @@ func registerAgreementTemplateRoutes(group *gin.RouterGroup, requirePermission f
 	group.DELETE("/agreement-templates/:id", requirePermission("agreement_template.manage.all"), h.Delete)
 }
 
-func registerLegalCaseRoutes(group *gin.RouterGroup, legalCaseHandler *handler.LegalCaseHandler, requirePermission func(...string) gin.HandlerFunc) {
+func registerLegalCaseRoutes(group *gin.RouterGroup, legalCaseHandler *handler.LegalCaseHandler, auditLogHandler *handler.AuditLogHandler, requirePermission func(...string) gin.HandlerFunc) {
 	group.GET("/legal-cases/regencies", requirePermission("case_management.view", "case_management.create"), legalCaseHandler.ListRegencies)
 	group.GET("/legal-cases/cedants", requirePermission("case_management.view", "case_management.create"), legalCaseHandler.ListCedants)
 	group.POST("/legal-cases/cedants", requirePermission("case_management.manage_reference"), legalCaseHandler.CreateCedant)
@@ -454,6 +464,7 @@ func registerLegalCaseRoutes(group *gin.RouterGroup, legalCaseHandler *handler.L
 	group.GET("/legal-cases", requirePermission("case_management.view"), legalCaseHandler.GetAll)
 	group.POST("/legal-cases", requirePermission("case_management.create"), legalCaseHandler.Create)
 	group.GET("/legal-cases/:id", requirePermission("case_management.view"), legalCaseHandler.GetByID)
+	group.GET("/legal-cases/:id/history", requirePermission("case_management.view"), auditLogHandler.Riwayat("legal_case", legalCaseHandler.BolehBuka))
 	group.PUT("/legal-cases/:id", requirePermission("case_management.update"), legalCaseHandler.Update)
 	group.DELETE("/legal-cases/:id", requirePermission("case_management.delete"), legalCaseHandler.Delete)
 	group.POST("/legal-cases/:id/upload-document", requirePermission("case_management.manage_document"), legalCaseHandler.UploadDocument)

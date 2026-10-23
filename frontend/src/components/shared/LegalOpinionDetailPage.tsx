@@ -5,6 +5,7 @@ import StatusBadge from '@/components/common/StatusBadge'
 import { useLegalOpinion } from '@/hooks/useLegalOpinion'
 import { legalOpinionService } from '@/services/legal-opinion.service'
 import { formatDateTime, formatFileSize } from '@/lib/utils'
+import RiwayatAktivitas from '@/components/shared/RiwayatAktivitas'
 import type { UseMutationResult } from '@tanstack/react-query'
 import type { SubmissionStatus } from '@/types'
 
@@ -167,6 +168,10 @@ export default function SharedLegalOpinionDetailPage({
 
           {children}
         </div>
+      </div>
+
+      <div className="mt-5">
+        <RiwayatAktivitas kunci={['legal_opinion', id!]} ambil={() => legalOpinionService.history(id!)} />
       </div>
     </div>
   )

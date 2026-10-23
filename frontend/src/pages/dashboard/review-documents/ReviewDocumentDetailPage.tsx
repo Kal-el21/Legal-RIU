@@ -6,6 +6,7 @@ import StatusBadge from '@/components/common/StatusBadge'
 import { useDocumentReview, useDeleteDocumentReview, useResubmitDocumentReview } from '@/hooks/useDocumentReview'
 import { useAuthStore } from '@/store/auth.store'
 import { formatDateTime, formatFileSize, pilahLampiran } from '@/lib/utils'
+import RiwayatAktivitas from '@/components/shared/RiwayatAktivitas'
 import { documentReviewService } from '@/services/document-review.service'
 import type { SubmissionStatus } from '@/types'
 
@@ -212,6 +213,10 @@ export default function ReviewDocumentDetailPage() {
             )}
           </div>
         )}
+      </div>
+
+      <div className="mt-5">
+        <RiwayatAktivitas kunci={['document_review', id!]} ambil={() => documentReviewService.history(id!)} />
       </div>
     </div>
   )

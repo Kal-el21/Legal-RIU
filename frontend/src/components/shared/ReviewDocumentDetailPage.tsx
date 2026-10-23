@@ -5,6 +5,7 @@ import StatusBadge from '@/components/common/StatusBadge'
 import { useDocumentReview } from '@/hooks/useDocumentReview'
 import { documentReviewService } from '@/services/document-review.service'
 import { formatDateTime, formatFileSize } from '@/lib/utils'
+import RiwayatAktivitas from '@/components/shared/RiwayatAktivitas'
 import type { UseMutationResult } from '@tanstack/react-query'
 import type { SubmissionStatus } from '@/types'
 
@@ -168,6 +169,10 @@ export default function SharedReviewDocumentDetailPage({
 
           {children}
         </div>
+      </div>
+
+      <div className="mt-5">
+        <RiwayatAktivitas kunci={['document_review', id!]} ambil={() => documentReviewService.history(id!)} />
       </div>
     </div>
   )

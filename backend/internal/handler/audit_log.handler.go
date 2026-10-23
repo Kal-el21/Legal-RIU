@@ -8,6 +8,7 @@ import (
 
 	"legal-riu-portal/internal/dto"
 	"legal-riu-portal/internal/entity"
+	"legal-riu-portal/internal/middleware"
 	"legal-riu-portal/internal/repository"
 	"legal-riu-portal/internal/service"
 	"legal-riu-portal/internal/utils"
@@ -155,6 +156,37 @@ func (h *AuditLogHandler) GetAll(c *gin.Context) {
 	}
 
 	utils.OK(c, "Success", response)
+}
+
+// batasRiwayat: baris terbanyak di riwayat satu data.
+const batasRiwayat = 200
+
+// Riwayat: GET /<modul>/:id/history, riwayat aktivitas satu data, terbaru di atas (PR Audit Log
+// tahap L.4). bolehBuka memeriksa akses dengan aturan halaman detail modulnya dan sudah menjawab
+// kalau tidak boleh, jadi siapa pun yang tidak boleh membuka datanya mendapat jawaban yang sama
+// dengan detail (keputusan L3). IP dan user agent hanya untuk yang punya audit_log.view (L7).
+func (h *AuditLogHandler) Riwayat(jenis string, bolehBuka func(*gin.Context) (uuid.UUID, bool)) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id, ok := bolehBuka(c)
+		if !ok {
+			return
+		}
+		items, err := h.auditLogRepo.GetByEntity(jenis, id, batasRiwayat)
+		if err != nil {
+			utils.InternalError(c, "gagal memuat riwayat")
+			return
+		}
+		auditor := middleware.HasPermission(c, "audit_log.view")
+		hasil := make([]dto.AuditLogResponse, 0, len(items))
+		for i := range items {
+			r := toAuditLogResponse(&items[i])
+			if !auditor {
+				r.IPAddress, r.UserAgent = "", ""
+			}
+			hasil = append(hasil, r)
+		}
+		utils.OK(c, "Success", hasil)
+	}
 }
 
 // GET /api/v1/admin/audit-logs/actors?q= dan /legal/...: pelaku untuk saringan Audit Log,

@@ -108,6 +108,26 @@ func (h *LegalCaseHandler) GetByID(c *gin.Context) {
 	utils.OK(c, "Success", legalCase)
 }
 
+// BolehBuka: pemeriksa akses riwayat (PR Audit Log tahap L.4), sama dengan GetByID, termasuk
+// batasan perusahaan Legal AU.
+func (h *LegalCaseHandler) BolehBuka(c *gin.Context) (uuid.UUID, bool) {
+	scope, ok := h.companyScope(c)
+	if !ok {
+		return uuid.Nil, false
+	}
+	legalCase, err := h.svc.GetByID(scope, c.Param("id"))
+	if err != nil {
+		utils.NotFound(c, err.Error())
+		return uuid.Nil, false
+	}
+	id, err := uuid.Parse(legalCase.ID)
+	if err != nil {
+		utils.NotFound(c, "kasus hukum tidak ditemukan")
+		return uuid.Nil, false
+	}
+	return id, true
+}
+
 func (h *LegalCaseHandler) Create(c *gin.Context) {
 	scope, ok := h.companyScope(c)
 	if !ok {

@@ -12,6 +12,7 @@ import (
 	"legal-riu-portal/internal/utils"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 type DocumentReviewHandler struct {
@@ -64,6 +65,17 @@ func (h *DocumentReviewHandler) GetByID(c *gin.Context) {
 		return
 	}
 	utils.OK(c, "Success", dr)
+}
+
+// BolehBuka: pemeriksa akses riwayat (PR Audit Log tahap L.4), sama dengan GetByID: pengajuan
+// orang lain dan draf orang lain dijawab 404.
+func (h *DocumentReviewHandler) BolehBuka(c *gin.Context) (uuid.UUID, bool) {
+	dr, err := h.svc.GetByID(c.Param("id"), middleware.GetUserID(c), middleware.RoleWithAllAccess(c, "document_review.view.all"))
+	if err != nil {
+		utils.NotFound(c, err.Error())
+		return uuid.Nil, false
+	}
+	return dr.ID, true
 }
 
 // POST /api/v1/review-documents

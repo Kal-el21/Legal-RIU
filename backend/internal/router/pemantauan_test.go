@@ -667,6 +667,91 @@ func TestAuditLogSaringan(t *testing.T) {
 	})
 }
 
+
+// Riwayat per data di halaman detail (PR Audit Log tahap L.4): yang boleh membuka detail melihat
+// riwayatnya, terbaru di atas; yang tidak boleh mendapat jawaban yang sama dengan detail; IP hanya
+// untuk yang punya audit_log.view (keputusan L3 dan L7).
+func TestRiwayatPerData(t *testing.T) {
+	pemilik := masukPeran(t, entity.RoleUser)
+	lain := masuk(t, surelUserLain)
+	legal := masukPeran(t, entity.RoleLegal)
+	admin := masukPeran(t, entity.RoleAdmin)
+	type baris struct {
+		Action    string `json:"action"`
+		EntityID  string `json:"entity_id"`
+		IPAddress string `json:"ip_address"`
+		UserAgent string `json:"user_agent"`
+	}
+	riwayat := func(t *testing.T, token, alamat string, kode int) []baris {
+		t.Helper()
+		w := panggil(t, token, http.MethodGet, alamat, nil)
+		harapKode(t, w, kode, alamat)
+		var r []baris
+		if kode == http.StatusOK {
+			isiData(t, w, &r)
+		}
+		return r
+	}
+	// periksa: baris milik data itu, aksi terbaru di atas, dan IP terisi hanya untuk auditor.
+	periksa := func(t *testing.T, r []baris, id, aksiTerbaru string, auditor bool) {
+		t.Helper()
+		if len(r) < 2 || r[0].Action != aksiTerbaru {
+			t.Fatalf("riwayat %s: %+v, harap minimal 2 baris dengan %s paling atas", id, r, aksiTerbaru)
+		}
+		for _, b := range r {
+			if b.EntityID != id {
+				t.Errorf("riwayat %s memuat baris data lain: %+v", id, b)
+			}
+			if (b.IPAddress != "") != auditor {
+				t.Errorf("riwayat %s: IP %q untuk auditor=%v", id, b.IPAddress, auditor)
+			}
+		}
+	}
+
+	for _, m := range semuaModulPengajuan {
+		t.Run(m.nama, func(t *testing.T) {
+			p := m.buat(t, pemilik)
+			m.ubahStatus(t, legal, "/legal", p.ID, "UNDER_REVIEW", "", http.StatusOK)
+			periksa(t, riwayat(t, pemilik, m.url("", "/", p.ID, "/history"), http.StatusOK), p.ID, "STATUS_CHANGE", false)
+			periksa(t, riwayat(t, legal, m.url("/legal", "/", p.ID, "/history"), http.StatusOK), p.ID, "STATUS_CHANGE", true)
+			periksa(t, riwayat(t, admin, m.url("/admin", "/", p.ID, "/history"), http.StatusOK), p.ID, "STATUS_CHANGE", true)
+			riwayat(t, lain, m.url("", "/", p.ID, "/history"), http.StatusNotFound)
+			for _, id := range []string{uuid.NewString(), "bukan-uuid"} {
+				riwayat(t, legal, m.url("/legal", "/", id, "/history"), http.StatusNotFound)
+			}
+
+			// Draf hanya untuk pemiliknya, juga riwayatnya.
+			d := m.buat(t, pemilik)
+			jadikanDraf(t, m.tabel, d.ID)
+			riwayat(t, pemilik, m.url("", "/", d.ID, "/history"), http.StatusOK)
+			riwayat(t, legal, m.url("/legal", "/", d.ID, "/history"), http.StatusNotFound)
+		})
+	}
+
+	t.Run("Perjanjian", func(t *testing.T) {
+		butuhMinIO(t)
+		p := buatPerjanjian(t, pemilik, formPerjanjian())
+		statusPerjanjian(t, legal, p.ID, "UNDER_REVIEW", "", http.StatusOK)
+		periksa(t, riwayat(t, pemilik, urlPerjanjian("", "/", p.ID, "/history"), http.StatusOK), p.ID, "STATUS_CHANGE", false)
+		periksa(t, riwayat(t, legal, urlPerjanjian("/legal", "/", p.ID, "/history"), http.StatusOK), p.ID, "STATUS_CHANGE", true)
+		periksa(t, riwayat(t, admin, urlPerjanjian("/admin", "/", p.ID, "/history"), http.StatusOK), p.ID, "STATUS_CHANGE", true)
+		riwayat(t, lain, urlPerjanjian("", "/", p.ID, "/history"), http.StatusNotFound)
+	})
+
+	t.Run("Perkara", func(t *testing.T) {
+		perk := buatPerkara(t, legal)
+		harapKode(t, panggil(t, masukPeran(t, entity.RoleLegalAU), http.MethodPatch, perkaraLegalAU+"/"+perk.ID+"/status",
+			map[string]string{"current_status": "Banding"}), http.StatusOK, "Legal AU mengubah status")
+		periksa(t, riwayat(t, legal, perkaraLegal+"/"+perk.ID+"/history", http.StatusOK), perk.ID, "STATUS_CHANGE", true)
+		periksa(t, riwayat(t, admin, perkaraAdmin+"/"+perk.ID+"/history", http.StatusOK), perk.ID, "STATUS_CHANGE", true)
+		periksa(t, riwayat(t, masukPeran(t, entity.RoleLegalAU), perkaraLegalAU+"/"+perk.ID+"/history", http.StatusOK), perk.ID, "STATUS_CHANGE", false)
+		periksa(t, riwayat(t, masukPeran(t, entity.RoleExternal), perkaraExternal+"/"+perk.ID+"/history", http.StatusOK), perk.ID, "STATUS_CHANGE", false)
+		// USER tidak punya izin melihat perkara.
+		riwayat(t, pemilik, "/api/v1/legal-cases/"+perk.ID+"/history", http.StatusForbidden)
+		riwayat(t, legal, perkaraLegal+"/"+uuid.NewString()+"/history", http.StatusNotFound)
+	})
+}
+
 // File yang tercatat di database tetapi tidak ada di penyimpanan dijawab 404.
 // MinIO baru melapor "tidak ada" saat isi file dibaca; sebelumnya jawaban 200
 // sudah telanjur terkirim dan browser menyimpan file 0 KB.
