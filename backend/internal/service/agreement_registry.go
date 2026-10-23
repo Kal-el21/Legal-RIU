@@ -244,6 +244,66 @@ func bagiNilaiGrup(f AgreementFieldDefinition, data map[string]interface{}) erro
 	return nil
 }
 
+// ── Rincian perubahan untuk audit log (PR Audit Log tahap L.3b, keputusan L8) ──
+
+// rincianIsian membandingkan isian pengajuan lama dan baru menurut definisi template:
+// "Label: lama → baru" per isian yang berubah. Isian daftar dan grup (ruang lingkup, termin)
+// cukup "Label diubah", supaya keterangan tetap terbaca.
+func rincianIsian(sections []AgreementSectionDefinition, lama, baru map[string]interface{}) []string {
+	var hasil []string
+	for _, s := range sections {
+		for _, f := range s.Fields {
+			label := f.Label
+			if label == "" {
+				label = f.Name
+			}
+			if f.Type == "list" || f.Type == "group" {
+				if bentukDaftar(lama[f.Name]) != bentukDaftar(baru[f.Name]) {
+					hasil = append(hasil, label+" diubah")
+				}
+				continue
+			}
+			if r, ok := rincianNilai(label, f.Type, lama[f.Name], baru[f.Name]); ok {
+				hasil = append(hasil, r)
+			}
+		}
+	}
+	return hasil
+}
+
+// rincianNilai: "Label: lama → baru" kalau tampilan nilainya berbeda.
+func rincianNilai(label, tipe string, lama, baru interface{}) (string, bool) {
+	l, b := tampilIsian(tipe, lama), tampilIsian(tipe, baru)
+	return label + ": " + l + " → " + b, l != b
+}
+
+// tampilIsian: nilai isian seperti yang dibaca orang, dipotong 100 karakter.
+func tampilIsian(tipe string, v interface{}) string {
+	s := strings.TrimSpace(valueString(v))
+	if s == "" {
+		return "(kosong)"
+	}
+	switch tipe {
+	case "money":
+		s = rupiah(valueInt64(v))
+	case "date":
+		s = indoDate(s)
+	}
+	if r := []rune(s); len(r) > 100 {
+		s = string(r[:100]) + "…"
+	}
+	return s
+}
+
+// bentukDaftar: bentuk pembanding isian daftar dan grup; kosong, null, dan [] dianggap sama.
+func bentukDaftar(v interface{}) string {
+	b, _ := json.Marshal(v)
+	if s := string(b); s != "null" && s != "[]" {
+		return s
+	}
+	return ""
+}
+
 func valueString(v interface{}) string {
 	if v == nil {
 		return ""

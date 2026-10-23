@@ -197,15 +197,17 @@ type PergantianPenandatangan struct{ Usulan, Pilihan string }
 // pilihPenandatanganApprover menerapkan pilihan penandatangan dari data persetujuan
 // ke isian (P3): penandatangan dari Daftar (harus aktif), atau Lainnya dengan nama dan
 // jabatan yang diketik. Pergantian dikembalikan hanya kalau pilihannya berubah dan
-// bukan usulan, supaya yang tercatat di audit log hanya penggantian usulan.
-func (s *agreementDocumentService) pilihPenandatanganApprover(d *entity.AgreementDocument, data map[string]interface{}, req dto.AgreementMetaRequest) (*PergantianPenandatangan, error) {
+// bukan usulan, supaya yang tercatat di audit log hanya penggantian usulan. Penandatangan yang
+// berubah tanpa dianggap pergantian (kembali ke usulan) dikembalikan sebagai rincian audit
+// "Penandatangan Pihak Pertama: lama → baru" (PR Audit Log tahap L.3b).
+func (s *agreementDocumentService) pilihPenandatanganApprover(d *entity.AgreementDocument, data map[string]interface{}, req dto.AgreementMetaRequest) (*PergantianPenandatangan, string, error) {
 	sections, e := s.sectionsFor(d)
 	if e != nil {
-		return nil, e
+		return nil, "", e
 	}
 	daftar, e := s.repo.ListSignatories()
 	if e != nil {
-		return nil, e
+		return nil, "", e
 	}
 	sebelum, _ := penandatanganDipakai(daftar, sections, data)
 	id := ""
@@ -218,7 +220,7 @@ func (s *agreementDocumentService) pilihPenandatanganApprover(d *entity.Agreemen
 			aktif = aktif || (p.ID.String() == id && p.IsActive)
 		}
 		if !aktif {
-			return nil, errors.New("Penandatangan tidak ditemukan atau nonaktif di Daftar Penandatangan")
+			return nil, "", errors.New("Penandatangan tidak ditemukan atau nonaktif di Daftar Penandatangan")
 		}
 		data[isianPenandatanganID] = id
 		delete(data, isianPejabat)
@@ -231,17 +233,21 @@ func (s *agreementDocumentService) pilihPenandatanganApprover(d *entity.Agreemen
 		setOptional(data, isianJabatan, req.PartyOneSignatoryPosition)
 	}
 	sesudah, _ := penandatanganDipakai(daftar, sections, data)
-	if sesudah == sebelum || sesudah.Sumber == "usulan" {
-		return nil, nil
+	if sesudah == sebelum {
+		return nil, "", nil
+	}
+	rincian := "Penandatangan Pihak Pertama: " + sebelum.String() + " → " + sesudah.String()
+	if sesudah.Sumber == "usulan" {
+		return nil, rincian, nil
 	}
 	usulan := PenandatanganDipakai{}
 	if p := usulanPenandatangan(daftar, sections, data); p != nil {
 		usulan = PenandatanganDipakai{ID: p.ID.String(), Nama: p.Name, Jabatan: p.Position, Sumber: "usulan"}
 	}
 	if sesudah.Sumber == "daftar" && sesudah.ID == usulan.ID {
-		return nil, nil
+		return nil, rincian, nil
 	}
-	return &PergantianPenandatangan{Usulan: usulan.String(), Pilihan: sesudah.String()}, nil
+	return &PergantianPenandatangan{Usulan: usulan.String(), Pilihan: sesudah.String()}, "", nil
 }
 
 // pihakPertama: data Pihak Pertama untuk dokumen (partyOneSnapshot), dengan

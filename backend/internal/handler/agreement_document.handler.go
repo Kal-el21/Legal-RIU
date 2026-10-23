@@ -155,6 +155,14 @@ func auditPerjanjian(c *gin.Context, aksi entity.AuditAction, id, keterangan str
 	middleware.SetAuditContextWithValues(c, aksi, "agreement_document", id, nil, nil, &keterangan)
 }
 
+// keteranganRincian: "diubah: <rincian>" atau "disimpan tanpa perubahan" untuk audit log.
+func keteranganRincian(rincian []string) string {
+	if len(rincian) == 0 {
+		return "disimpan tanpa perubahan"
+	}
+	return "diubah: " + strings.Join(rincian, "; ")
+}
+
 func denganLampiran(files []*multipart.FileHeader) string {
 	if len(files) == 0 {
 		return ""
@@ -193,12 +201,12 @@ func (h *AgreementDocumentHandler) Update(c *gin.Context) {
 		utils.BadRequest(c, "Data tidak valid", e.Error())
 		return
 	}
-	v, e := h.svc.Update(c.Param("id"), middleware.GetUserID(c), req)
+	v, rincian, e := h.svc.Update(c.Param("id"), middleware.GetUserID(c), req)
 	if e != nil {
 		utils.BadRequest(c, e.Error(), nil)
 		return
 	}
-	auditPerjanjian(c, entity.ActionUserUpdate, v.ID.String(), "Isian pengajuan perjanjian "+v.TicketNumber+" diubah")
+	auditPerjanjian(c, entity.ActionUserUpdate, v.ID.String(), "Isian pengajuan perjanjian "+v.TicketNumber+" "+keteranganRincian(rincian))
 	utils.OK(c, "Pengajuan diperbarui", v)
 }
 func (h *AgreementDocumentHandler) Delete(c *gin.Context) {
@@ -229,18 +237,23 @@ func (h *AgreementDocumentHandler) UpdateMeta(c *gin.Context) {
 		utils.BadRequest(c, "Data tidak valid", e.Error())
 		return
 	}
-	v, ganti, e := h.svc.UpdateMeta(c.Param("id"), req)
+	v, ganti, rincian, e := h.svc.UpdateMeta(c.Param("id"), req)
 	if e != nil {
 		utils.BadRequest(c, e.Error(), nil)
 		return
 	}
 	// Satu permintaan hanya menghasilkan satu baris audit: pergantian penandatangan usulan
 	// (PR 11, P3) dicatat dengan aksinya sendiri, selebihnya sebagai perubahan data persetujuan.
+	// Keterangan menyebut setiap data yang berubah (PR Audit Log tahap L.3b), juga di baris
+	// pergantian penandatangan, supaya perubahan lain di permintaan yang sama tidak hilang.
 	if ganti != nil {
 		desc := "Penandatangan Pihak Pertama " + v.TicketNumber + " diganti approver"
+		if len(rincian) > 0 {
+			desc += "; data persetujuan: " + strings.Join(rincian, "; ")
+		}
 		middleware.SetAuditContextWithValues(c, entity.ActionSignatoryChange, "agreement_document", v.ID.String(), &ganti.Usulan, &ganti.Pilihan, &desc)
 	} else {
-		auditPerjanjian(c, entity.ActionUserUpdate, v.ID.String(), "Data persetujuan perjanjian "+v.TicketNumber+" diubah")
+		auditPerjanjian(c, entity.ActionUserUpdate, v.ID.String(), "Data persetujuan perjanjian "+v.TicketNumber+" "+keteranganRincian(rincian))
 	}
 	utils.OK(c, "Metadata diperbarui", v)
 }
