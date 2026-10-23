@@ -323,7 +323,7 @@ Modul yang dipakai beberapa peran memilih prefix endpoint lewat fungsi route bas
 export function getRoleHome(role?: UserRole) {
   if (role === 'ADMIN') return '/admin'
   if (role === 'LEGAL') return '/legal'
-  if (role === 'LEGAL_AU') return '/legal-au'
+  if (role === 'LEGAL_AU') return '/legal-au/cases'
   if (role === 'EXTERNAL') return '/external/legal-cases'
   return '/dashboard'
 }

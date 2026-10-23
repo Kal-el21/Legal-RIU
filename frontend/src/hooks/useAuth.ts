@@ -1,5 +1,6 @@
 import { useMutation } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
+import { getRoleHome } from '@/routes/role-home'
 import { authService } from '@/services/auth.service'
 import { useAuthStore } from '@/store/auth.store'
 import type { LoginRequest } from '@/types'
@@ -18,17 +19,7 @@ export function useLogin() {
         : authService.ldapLogin({ username: data.email, password: data.password }),
     onSuccess: (res) => {
       setAuth(res.user, res.permissions ?? [])
-      if (res.user.role === 'ADMIN') {
-        navigate('/admin')
-      } else if (res.user.role === 'LEGAL') {
-        navigate('/legal')
-      } else if (res.user.role === 'LEGAL_AU') {
-        navigate('/legal-au')
-      } else if (res.user.role === 'EXTERNAL') {
-        navigate('/external/legal-cases')
-      } else {
-        navigate('/dashboard')
-      }
+      navigate(getRoleHome(res.user.role))
     },
   })
 }

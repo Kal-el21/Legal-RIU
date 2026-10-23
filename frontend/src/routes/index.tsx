@@ -1,4 +1,4 @@
-import { createBrowserRouter } from 'react-router-dom'
+import { createBrowserRouter, Navigate } from 'react-router-dom'
 import { GuestRoute, PrivateRoute, UserRoute, AdminRoute, LegalRoute, LegalAURoute, ExternalRoute } from './guards'
 
 import PublicLayout from '@/layouts/PublicLayout'
@@ -233,7 +233,8 @@ export const router = createBrowserRouter([
       {
         element: <LegalAULayout />,
         children: [
-          { path: '/legal-au', element: <LegalAUCaseListPage /> },
+          // Alamat lama halaman awal Legal AU; menu Manajemen Kasus memakai /legal-au/cases (PR B tahap B.5).
+          { path: '/legal-au', element: <Navigate to="/legal-au/cases" replace /> },
           { path: '/legal-au/cases', element: <LegalAUCaseListPage /> },
           { path: '/legal-au/cases/new', element: <LegalAUCaseFormPage /> },
           { path: '/legal-au/cases/:id', element: <LegalAUCaseDetailPage /> },
