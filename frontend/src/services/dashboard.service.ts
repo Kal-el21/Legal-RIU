@@ -45,16 +45,6 @@ export const dashboardService = {
     return res.data.data
   },
 
-  getExternalStats: async (): Promise<AdminDashboardStats> => {
-    const res = await api.get<ApiResponse<AdminDashboardStats>>('/external/dashboard/stats')
-    return res.data.data!
-  },
-
-  getExternalRecent: async (): Promise<{ legal_opinions: LegalOpinion[]; document_reviews: DocumentReview[] }> => {
-    const res = await api.get('/external/dashboard/recent')
-    return res.data.data
-  },
-
   getReminders: async (params?: ReminderParams): Promise<RemindersResponse> => {
     const res = await api.get<ApiResponse<RemindersResponse>>('/notifications', { params })
     return res.data.data!

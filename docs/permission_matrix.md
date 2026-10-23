@@ -42,7 +42,6 @@ Setiap fitur memiliki kumpulan aksi default. Admin dapat memberikan/mencabut aks
 | `dashboard.user.view` | View User Dashboard | Melihat dashboard user |
 | `dashboard.legal.view` | View Legal Dashboard | Melihat dashboard legal |
 | `dashboard.admin.view` | View Admin Dashboard | Melihat dashboard admin |
-| `dashboard.external.view` | View External Dashboard | Melihat dashboard external |
 
 ### 2.2 Case Management
 | Action Code | Label | Keterangan |
@@ -205,7 +204,6 @@ Tabel ini menunjukkan permission default yang dimiliki setiap role **sebelum ove
 | **Dashboard** | View User Dashboard | ✅ | ❌ | ❌ | ✅ | ❌ |
 | | View Legal Dashboard | ✅ | ✅ | ❌ | ❌ | ❌ |
 | | View Admin Dashboard | ✅ | ❌ | ❌ | ❌ | ❌ |
-| | View External Dashboard | ✅ | ❌ | ❌ | ❌ | ✅ |
 | **Case Management** | View | ✅ | ✅ | ✅ | ❌ | ✅ |
 | | Create | ✅ | ✅ | ✅ | ❌ | ❌ |
 | | Edit | ✅ | ✅ | ❌ | ❌ | ❌ |
@@ -478,7 +476,6 @@ Bagian ini menjelaskan status implementasi permission untuk setiap fitur, termas
 | User Dashboard | ✅ | `dashboard.user.view` |
 | Legal Dashboard | ✅ | `dashboard.legal.view` |
 | Admin Dashboard | ✅ | `dashboard.admin.view` |
-| External Dashboard | ✅ | `dashboard.external.view` |
 | **Kekurangan / Belum Ada** | | |
 | `dashboard.legal_au.view` | ⚠️ | Belum ada. LEGAL_AU saat ini tidak memiliki dashboard khusus; home-nya langsung ke list case. |
 | `dashboard.export` | ⚠️ | Belum ada export data dashboard (misal: export statistik). |

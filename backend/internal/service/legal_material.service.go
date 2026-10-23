@@ -177,11 +177,3 @@ func toLegalMaterialResponse(material *entity.LegalMaterial) dto.LegalMaterialRe
 		UpdatedAt: material.UpdatedAt,
 	}
 }
-
-func toLegalMaterialResponseList(materials []entity.LegalMaterial) []dto.LegalMaterialResponse {
-	resp := make([]dto.LegalMaterialResponse, 0, len(materials))
-	for i := range materials {
-		resp = append(resp, toLegalMaterialResponse(&materials[i]))
-	}
-	return resp
-}
