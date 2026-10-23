@@ -363,7 +363,7 @@ func backfillLegalCasePhotos(db *gorm.DB) ([]entity.RepositoryDocument, error) {
 		docs = append(docs, entity.RepositoryDocument{
 			Title:        filepath.Base(r.Photo),
 			FeatureCode:  "case_management",
-			SourceType:   "legal_cases",
+			SourceType:   "legal_cases_photo", // sama dengan saat unggah (SyncCasePhoto), PR A tahap A.4b
 			SourceID:     r.ID.String(),
 			UploaderType: "requester",
 			FilePath:     r.Photo,

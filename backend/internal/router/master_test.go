@@ -28,6 +28,7 @@ type masterData struct {
 	kolomWajib  string         // kolom yang dihapus untuk menguji validasi
 	csvImpor    string         // satu baris sah dan satu baris tanpa kolom wajib
 	kolomDiubah string         // kolom yang nilainya dicek setelah diubah
+	entitas     string         // entity_type di audit log; kosong kalau master ini tidak dicatat
 }
 
 var semuaMaster = []masterData{
@@ -38,31 +39,31 @@ var semuaMaster = []masterData{
 		csvImpor: "name,description\nDivisi Impor,dari impor\n,tanpa nama\n",
 	},
 	{
-		nama: "Perusahaan", alamat: "/companies", kolomWajib: "email_domain", kolomDiubah: "name",
+		nama: "Perusahaan", alamat: "/companies", kolomWajib: "email_domain", kolomDiubah: "name", entitas: "company",
 		buat:     map[string]any{"name": "PT Uji", "email_domain": "uji.example", "is_internal": true},
 		ubah:     map[string]any{"name": "PT Uji Diubah", "email_domain": "uji.example", "is_internal": true},
 		csvImpor: "name,email_domain\nPT Impor,impor.example\nPT Tanpa Domain,\n",
 	},
 	{
-		nama: "TujuanPembuatan", alamat: "/purpose-types", kolomWajib: "name", kolomDiubah: "name",
+		nama: "TujuanPembuatan", alamat: "/purpose-types", kolomWajib: "name", kolomDiubah: "name", entitas: "purpose_type",
 		buat:     map[string]any{"name": "Tujuan Uji", "description": "awal"},
 		ubah:     map[string]any{"name": "Tujuan Uji Diubah", "description": "akhir", "is_active": true},
 		csvImpor: "name,description\nTujuan Impor,dari impor\n,tanpa nama\n",
 	},
 	{
-		nama: "JenisKasus", alamat: "/case-types", kolomWajib: "label", kolomDiubah: "label",
+		nama: "JenisKasus", alamat: "/case-types", kolomWajib: "label", kolomDiubah: "label", entitas: "case_type",
 		buat:     map[string]any{"code": "UJI", "label": "Jenis Uji", "is_active": true},
 		ubah:     map[string]any{"code": "UJI", "label": "Jenis Uji Diubah", "is_active": true},
 		csvImpor: "code,label\nIMPOR,Jenis Impor\nTANPA-LABEL,\n",
 	},
 	{
-		nama: "KategoriKasus", alamat: "/case-categories", kolomWajib: "label", kolomDiubah: "label",
+		nama: "KategoriKasus", alamat: "/case-categories", kolomWajib: "label", kolomDiubah: "label", entitas: "case_category",
 		buat:     map[string]any{"code": "UJI", "label": "Kategori Uji", "is_active": true},
 		ubah:     map[string]any{"code": "UJI", "label": "Kategori Uji Diubah", "is_active": true},
 		csvImpor: "code,label\nIMPOR,Kategori Impor\nTANPA-LABEL,\n",
 	},
 	{
-		nama: "JenisDokumen", alamat: "/document-types", kolomWajib: "label", kolomDiubah: "label",
+		nama: "JenisDokumen", alamat: "/document-types", kolomWajib: "label", kolomDiubah: "label", entitas: "document_type",
 		buat:     map[string]any{"name": "jenis_uji", "label": "Jenis Dokumen Uji"},
 		ubah:     map[string]any{"name": "jenis_uji", "label": "Jenis Dokumen Uji Diubah", "is_active": true},
 		csvImpor: "name,label\njenis_impor,Jenis Dokumen Impor\ntanpa_label,\n",
@@ -121,6 +122,17 @@ func TestMasterData(t *testing.T) {
 			if id == "" {
 				t.Fatalf("jawaban membuat tidak memuat id: %s", w.Body)
 			}
+			// Audit log (PR A tahap A.1b): ID bertipe uuid.UUID dulu diam-diam tidak tercatat.
+			harapAudit := func(aksi entity.AuditAction, idEntitas string, harap int64, konteks string) {
+				t.Helper()
+				if m.entitas == "" {
+					return
+				}
+				if n := jumlahAudit(t, m.entitas, aksi, idEntitas); n != harap {
+					t.Errorf("audit %s %s untuk %s: %d baris, harap %d", m.entitas, aksi, konteks, n, harap)
+				}
+			}
+			harapAudit(entity.ActionUserUpdate, id, 1, "membuat")
 
 			kurang := map[string]any{}
 			for k, v := range m.buat {
@@ -145,8 +157,13 @@ func TestMasterData(t *testing.T) {
 			if sesudah[m.kolomDiubah] != m.ubah[m.kolomDiubah] {
 				t.Errorf("%s setelah diubah: %v", m.kolomDiubah, sesudah[m.kolomDiubah])
 			}
+			harapAudit(entity.ActionUserUpdate, id, 2, "membuat dan mengubah")
 
-			// Impor: baris yang sah masuk, baris tanpa kolom wajib dilaporkan.
+			// Impor: baris yang sah masuk, baris tanpa kolom wajib dilaporkan. Dicatat dengan ID kosong.
+			imporSebelum := int64(0)
+			if m.entitas != "" {
+				imporSebelum = jumlahAudit(t, m.entitas, entity.ActionFileUpload, uuid.Nil.String())
+			}
 			w = panggilForm(t, admin, http.MethodPost, alamat+"/import", nil, berkas{"file", "impor.csv", []byte(m.csvImpor)})
 			harapKode(t, w, http.StatusOK, "impor")
 			var hasil hasilImpor
@@ -154,6 +171,7 @@ func TestMasterData(t *testing.T) {
 			if hasil.Imported != 1 || len(hasil.Errors) != 1 || hasil.Errors[0].Row != 3 {
 				t.Errorf("hasil impor: %+v", hasil)
 			}
+			harapAudit(entity.ActionFileUpload, uuid.Nil.String(), imporSebelum+1, "impor")
 			w = panggil(t, admin, http.MethodGet, alamat+"/import/template", nil)
 			harapKode(t, w, http.StatusOK, "unduh template impor")
 			if !bytes.HasPrefix(w.Body.Bytes(), []byte("PK")) {
@@ -162,6 +180,7 @@ func TestMasterData(t *testing.T) {
 
 			harapKode(t, panggil(t, admin, http.MethodDelete, alamat+"/"+id, nil), http.StatusOK, "menghapus")
 			harapKode(t, panggil(t, admin, http.MethodGet, alamat+"/"+id, nil), http.StatusNotFound, "detail setelah dihapus")
+			harapAudit(entity.ActionDelete, id, 1, "menghapus")
 		})
 	}
 }
@@ -235,6 +254,9 @@ func TestMateriHukum(t *testing.T) {
 		Title string `json:"title"`
 	}
 	isiData(t, w, &m)
+	if n := jumlahAudit(t, "legal_material", entity.ActionUserUpdate, m.ID); n != 1 {
+		t.Errorf("audit membuat materi: %d baris, harap 1", n)
+	}
 	harapKode(t, panggil(t, legal, http.MethodPost, kelola, map[string]string{"title": "Tanpa isi"}), http.StatusBadRequest, "materi tanpa isi")
 
 	// USER membaca lewat alamat umum.
@@ -246,13 +268,18 @@ func TestMateriHukum(t *testing.T) {
 	harapKode(t, panggil(t, user, http.MethodGet, baca+"/"+m.ID, nil), http.StatusOK, "USER membaca materi")
 
 	harapKode(t, panggil(t, legal, http.MethodPut, kelola+"/"+m.ID, map[string]string{"title": "Materi Uji Diubah", "content": "<p>isi baru</p>"}), http.StatusOK, "mengubah materi")
+	if n := jumlahAudit(t, "legal_material", entity.ActionUserUpdate, m.ID); n != 2 {
+		t.Errorf("audit membuat dan mengubah materi: %d baris, harap 2", n)
+	}
 	isiData(t, panggil(t, user, http.MethodGet, baca+"/"+m.ID, nil), &m)
 	if m.Title != "Materi Uji Diubah" {
 		t.Errorf("judul setelah diubah: %q", m.Title)
 	}
 
-	w = panggilForm(t, admin, http.MethodPost, "/api/v1/admin/materials/import", nil,
-		berkas{"file", "materi.csv", []byte("title,excerpt,content\nMateri Impor,ringkas,isi impor\n,tanpa judul,isi\n")})
+	harapSatuAuditBaru(t, "legal_material", entity.ActionFileUpload, uuid.Nil.String(), "impor materi", func() {
+		w = panggilForm(t, admin, http.MethodPost, "/api/v1/admin/materials/import", nil,
+			berkas{"file", "materi.csv", []byte("title,excerpt,content\nMateri Impor,ringkas,isi impor\n,tanpa judul,isi\n")})
+	})
 	harapKode(t, w, http.StatusOK, "impor materi")
 	var hasil hasilImpor
 	isiData(t, w, &hasil)

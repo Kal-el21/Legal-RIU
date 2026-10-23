@@ -40,7 +40,8 @@ func (s *reportService) GetLegalCaseReport(filter dto.ReportFilter) (*dto.Report
 		return nil, errors.New("group_by tidak valid")
 	}
 
-	query := s.db.Table("legal_cases")
+	// db.Table melewati penyaring soft delete GORM, jadi data terhapus disaring di sini (PR A tahap A.2).
+	query := s.db.Table("legal_cases").Where("legal_cases.deleted_at IS NULL")
 
 	if filter.DateFrom != nil {
 		query = query.Where("case_date >= ?", *filter.DateFrom)
@@ -94,7 +95,7 @@ func (s *reportService) GetLegalOpinionReport(filter dto.ReportFilter) (*dto.Rep
 		return nil, errors.New("group_by tidak valid")
 	}
 
-	query := s.db.Table("legal_opinions").Where("legal_opinions.status <> ?", entity.StatusDraft)
+	query := s.db.Table("legal_opinions").Where("legal_opinions.deleted_at IS NULL AND legal_opinions.status <> ?", entity.StatusDraft)
 
 	if filter.DateFrom != nil {
 		query = query.Where("legal_opinions.created_at >= ?", *filter.DateFrom)
@@ -138,7 +139,7 @@ func (s *reportService) GetDocumentReviewReport(filter dto.ReportFilter) (*dto.R
 		return nil, errors.New("group_by tidak valid")
 	}
 
-	query := s.db.Table("document_reviews").Where("document_reviews.status <> ?", entity.StatusDraft)
+	query := s.db.Table("document_reviews").Where("document_reviews.deleted_at IS NULL AND document_reviews.status <> ?", entity.StatusDraft)
 
 	if filter.DateFrom != nil {
 		query = query.Where("document_reviews.created_at >= ?", *filter.DateFrom)

@@ -771,3 +771,45 @@ func TestRepositoriDokumenMengikutiSumber(t *testing.T) {
 		}
 	}
 }
+
+// Laporan Legal Opinion, Review Dokumen, dan perkara tidak menghitung data yang sudah dihapus.
+// Ketiganya memakai db.Table, yang melewati penyaring soft delete GORM (PR A tahap A.2).
+func TestLaporanTanpaDataTerhapus(t *testing.T) {
+	legal := masukPeran(t, entity.RoleLegal)
+	user := masukPeran(t, entity.RoleUser)
+	jumlahLaporan := func(laporan string) float64 {
+		t.Helper()
+		w := panggil(t, legal, http.MethodGet, "/api/v1/legal/reports/"+laporan+"?group_by=status", nil)
+		harapKode(t, w, http.StatusOK, "laporan "+laporan)
+		var g grafik
+		isiData(t, w, &g)
+		return g.jumlah()
+	}
+	kasus := []struct {
+		laporan string
+		buat    func() (hapus string, token string)
+	}{
+		{"legal-opinions", func() (string, string) {
+			return semuaModulPengajuan[0].url("", "/", semuaModulPengajuan[0].buat(t, user).ID), user
+		}},
+		{"document-reviews", func() (string, string) {
+			return semuaModulPengajuan[1].url("", "/", semuaModulPengajuan[1].buat(t, user).ID), user
+		}},
+		{"legal-cases", func() (string, string) {
+			return perkaraLegal + "/" + buatPerkara(t, legal).ID, legal
+		}},
+	}
+	for _, k := range kasus {
+		t.Run(k.laporan, func(t *testing.T) {
+			sebelum := jumlahLaporan(k.laporan)
+			alamat, token := k.buat()
+			if got := jumlahLaporan(k.laporan); got != sebelum+1 {
+				t.Fatalf("laporan sesudah satu data baru: %v, harap %v", got, sebelum+1)
+			}
+			harapKode(t, panggil(t, token, http.MethodDelete, alamat, nil), http.StatusOK, "menghapus")
+			if got := jumlahLaporan(k.laporan); got != sebelum {
+				t.Errorf("laporan sesudah datanya dihapus: %v, harap %v", got, sebelum)
+			}
+		})
+	}
+}

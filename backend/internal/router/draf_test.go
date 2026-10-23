@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"path"
 	"strings"
 	"testing"
 	"time"
@@ -330,9 +331,19 @@ func TestRepositoriTidakKembar(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Foto perkara yang nama aslinya tersimpan saat unggah (SyncCasePhoto, jenis sumber legal_cases_photo).
+	foto := "legal-cases/photos/case-" + perk.ID + "-uji.png"
+	if err := dbTes.Exec("UPDATE legal_cases SET photo = ? WHERE id = ?", foto, perk.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := dbTes.Create(&entity.RepositoryDocument{Title: "Sidang Asli.png", FeatureCode: "case_management", SourceType: "legal_cases_photo",
+		SourceID: perk.ID, FilePath: foto, FileName: "Sidang Asli.png", IsActive: true}).Error; err != nil {
+		t.Fatal(err)
+	}
+
 	backfill()
 	backfill()
-	for _, p := range []string{lampiran, dokumen} {
+	for _, p := range []string{lampiran, dokumen, foto} {
 		if n := jumlah(p); n != 1 {
 			t.Errorf("%s tercatat %d kali sesudah dua kali backfill, harap 1", p, n)
 		}
@@ -340,6 +351,33 @@ func TestRepositoriTidakKembar(t *testing.T) {
 	if got := namaDi(dokumen); got != "Gugatan Asli.pdf" {
 		t.Errorf("nama dokumen perkara sesudah backfill: %q, harap nama aslinya", got)
 	}
+	if got := namaDi(foto); got != "Sidang Asli.png" {
+		t.Errorf("nama foto perkara sesudah backfill: %q, harap nama aslinya", got)
+	}
+
+	// Sebelum PR A tahap A.4b, backfill mencatat foto sebagai legal_cases bernama objek, dan baris
+	// itu yang terbaru, jadi nama unduhan foto kembali ke nama objek.
+	t.Run("FotoBernamaObjekDibersihkan", func(t *testing.T) {
+		if err := dbTes.Create(&entity.RepositoryDocument{Title: path.Base(foto), FeatureCode: "case_management", SourceType: "legal_cases",
+			SourceID: perk.ID, FilePath: foto, FileName: path.Base(foto), IsActive: true}).Error; err != nil {
+			t.Fatal(err)
+		}
+		if err := seed.RapikanFotoPerkara(dbTes); err != nil {
+			t.Fatalf("merapikan foto: %v", err)
+		}
+		backfill()
+		if n := jumlah(foto); n != 1 {
+			t.Errorf("foto tercatat %d kali sesudah dirapikan, harap 1", n)
+		}
+		if got := namaDi(foto); got != "Sidang Asli.png" {
+			t.Errorf("nama foto sesudah dirapikan: %q, harap nama aslinya", got)
+		}
+		var aktif bool
+		dbTes.Raw("SELECT is_active FROM repository_documents WHERE file_path = ?", foto).Scan(&aktif)
+		if !aktif {
+			t.Error("foto bernama asli tidak aktif lagi sesudah backfill")
+		}
+	})
 
 	t.Run("SalinanLamaDibersihkan", func(t *testing.T) {
 		var indeks int64
@@ -376,6 +414,130 @@ func TestRepositoriTidakKembar(t *testing.T) {
 		if err := dbTes.Create(ptr(salinan("lagi.pdf"))).Error; err == nil {
 			t.Error("salinan baru diterima; indeks unik tidak terpasang")
 		}
+	})
+}
+
+// Lampiran dan hasil LO, RD, dan perjanjian langsung masuk Repositori Dokumen tanpa menunggu
+// backfill saat server menyala, dan hilang saat pengajuannya dihapus (PR A tahap A.4).
+// Backfill sesudahnya tidak menambah baris.
+func TestRepositoriLangsungTerisi(t *testing.T) {
+	butuhMinIO(t)
+	pemilik := masukPeran(t, entity.RoleUser)
+	legal := masukPeran(t, entity.RoleLegal)
+	lampiran := func(nama string) berkas { return berkas{"attachments", nama, []byte(nama)} }
+	jumlah := func(id string) (semua, aktif int64) {
+		dbTes.Raw("SELECT count(*), count(*) FILTER (WHERE is_active) FROM repository_documents WHERE source_id = ?", id).Row().Scan(&semua, &aktif)
+		return semua, aktif
+	}
+	harap := func(t *testing.T, id string, n int64, langkah string) {
+		t.Helper()
+		if _, aktif := jumlah(id); aktif != n {
+			t.Errorf("%s: %d file aktif di Repositori Dokumen, harap %d", langkah, aktif, n)
+		}
+	}
+	tanpaKembar := func(t *testing.T, ids ...string) {
+		t.Helper()
+		sebelum := map[string][2]int64{}
+		for _, id := range ids {
+			semua, aktif := jumlah(id)
+			sebelum[id] = [2]int64{semua, aktif}
+		}
+		if err := seed.BackfillRepositoryDocuments(dbTes); err != nil {
+			t.Fatalf("backfill: %v", err)
+		}
+		for _, id := range ids {
+			if semua, aktif := jumlah(id); [2]int64{semua, aktif} != sebelum[id] {
+				t.Errorf("%s sesudah backfill: %d baris (%d aktif), harap %v", id, semua, aktif, sebelum[id])
+			}
+		}
+	}
+
+	for _, m := range semuaModulPengajuan {
+		t.Run(m.nama, func(t *testing.T) {
+			p := m.buat(t, pemilik, lampiran("Lampiran.pdf"))
+			harap(t, p.ID, 1, "dibuat dengan lampiran")
+			m.ubahStatus(t, legal, "/legal", p.ID, "UNDER_REVIEW", "", http.StatusOK)
+			m.ubahStatus(t, legal, "/legal", p.ID, "NEED_REVISION", "lengkapi", http.StatusOK)
+			harapKode(t, panggilForm(t, pemilik, http.MethodPost, m.url("", "/", p.ID, "/resubmit"), nil, lampiran("Revisi.pdf")), http.StatusOK, "ajukan ulang")
+			harap(t, p.ID, 2, "diajukan ulang dengan lampiran")
+			m.ubahStatus(t, legal, "/legal", p.ID, "UNDER_REVIEW", "", http.StatusOK)
+			harapKode(t, panggilForm(t, legal, http.MethodPost, m.url("/legal", "/", p.ID, "/result"),
+				map[string]string{"notes": "selesai"}, berkas{"result", "Hasil.pdf", []byte("hasil")}), http.StatusOK, "unggah hasil")
+			harap(t, p.ID, 3, "hasil diunggah")
+
+			w := panggilForm(t, pemilik, http.MethodPost, m.url("", "/drafts"), m.kolom, lampiran("Draf.pdf"))
+			harapKode(t, w, http.StatusCreated, "simpan draf")
+			var d pengajuan
+			isiData(t, w, &d)
+			harap(t, d.ID, 0, "draf belum dikirim")
+			harapKode(t, panggil(t, pemilik, http.MethodPost, m.url("", "/", d.ID, "/submit"), nil), http.StatusOK, "kirim draf")
+			harap(t, d.ID, 1, "draf dikirim")
+
+			h := m.buat(t, pemilik, lampiran("Hapus.pdf"))
+			harapKode(t, panggil(t, pemilik, http.MethodDelete, m.url("", "/", h.ID), nil), http.StatusOK, "hapus pengajuan")
+			harap(t, h.ID, 0, "pengajuan dihapus")
+
+			tanpaKembar(t, p.ID, d.ID, h.ID)
+		})
+	}
+
+	t.Run("Perjanjian", func(t *testing.T) {
+		data, _ := json.Marshal(isiPengajuan(t, pemilik, "PKS", formPerjanjian()))
+		simpan := func(alamat, nama string) string {
+			t.Helper()
+			w := panggilForm(t, pemilik, http.MethodPost, alamat, map[string]string{"data": string(data)}, lampiran(nama))
+			harapKode(t, w, http.StatusCreated, "menyimpan perjanjian dengan "+nama)
+			var p perjanjian
+			isiData(t, w, &p)
+			return p.ID
+		}
+		p := simpan(urlPerjanjian(""), "Lampiran.pdf")
+		harap(t, p, 1, "dibuat dengan lampiran")
+		statusPerjanjian(t, legal, p, "UNDER_REVIEW", "", http.StatusOK)
+		statusPerjanjian(t, legal, p, "NEED_REVISION", "lengkapi", http.StatusOK)
+		harapKode(t, panggilForm(t, pemilik, http.MethodPost, urlPerjanjian("", "/", p, "/resubmit"), nil, lampiran("Revisi.pdf")), http.StatusOK, "ajukan ulang")
+		harap(t, p, 2, "diajukan ulang dengan lampiran")
+
+		d := simpan(urlPerjanjian("", "/drafts"), "Draf.pdf")
+		harap(t, d, 0, "draf belum dikirim")
+		harapKode(t, panggil(t, pemilik, http.MethodPost, urlPerjanjian("", "/", d, "/submit"), nil), http.StatusOK, "kirim draf")
+		harap(t, d, 1, "draf dikirim")
+
+		h := simpan(urlPerjanjian(""), "Hapus.pdf")
+		harapKode(t, panggil(t, pemilik, http.MethodDelete, urlPerjanjian("", "/", h), nil), http.StatusOK, "hapus perjanjian")
+		harap(t, h, 0, "perjanjian dihapus")
+
+		tanpaKembar(t, p, d, h)
+
+		t.Run("Disetujui", func(t *testing.T) {
+			butuhLibreOffice(t)
+			statusPerjanjian(t, legal, p, "UNDER_REVIEW", "", http.StatusOK)
+			harapKode(t, panggil(t, legal, http.MethodPatch, urlPerjanjian("/legal", "/", p, "/meta"), map[string]string{"signing_date": "2026-10-11"}), http.StatusOK, "mengisi tanggal tanda tangan")
+			statusPerjanjian(t, legal, p, "COMPLETED", "", http.StatusOK)
+			harap(t, p, 4, "disetujui (dua lampiran, DOCX dan PDF final)")
+			tanpaKembar(t, p)
+		})
+	})
+
+	// Perkara sudah tersinkron saat unggah sejak sebelum PR A; PR A tahap A.4b menambah: foto
+	// tidak tersalin ulang oleh backfill, dan berkasnya nonaktif saat perkaranya dihapus.
+	t.Run("Perkara", func(t *testing.T) {
+		perk := buatPerkara(t, legal)
+		alamat := perkaraLegal + "/" + perk.ID
+		harapKode(t, panggilForm(t, legal, http.MethodPost, alamat+"/upload-document", nil, berkas{"document", "Gugatan.pdf", []byte("gugatan")}), http.StatusOK, "unggah dokumen")
+		harapKode(t, panggilForm(t, legal, http.MethodPost, alamat+"/photo", nil, berkas{"photo", "Sidang.png", []byte("foto")}), http.StatusOK, "unggah foto")
+		w := panggilForm(t, legal, http.MethodPost, alamat+"/chronology", map[string]string{"agenda_date": "2026-10-05", "agenda": "Sidang"}, berkas{"files", "Bukti.pdf", []byte("bukti")})
+		harapKode(t, w, http.StatusCreated, "kronologi dengan lampiran")
+		var k kronologi
+		isiData(t, w, &k)
+		harap(t, perk.ID, 2, "dokumen dan foto diunggah")
+		harap(t, k.ID, 1, "lampiran kronologi diunggah")
+		tanpaKembar(t, perk.ID, k.ID)
+
+		harapKode(t, panggil(t, legal, http.MethodDelete, alamat, nil), http.StatusOK, "hapus perkara")
+		harap(t, perk.ID, 0, "perkara dihapus")
+		harap(t, k.ID, 0, "kronologi perkara yang dihapus")
+		tanpaKembar(t, perk.ID, k.ID)
 	})
 }
 

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"github.com/gin-gonic/gin"
 	"legal-riu-portal/internal/dto"
@@ -126,6 +127,7 @@ func (h *AgreementDocumentHandler) SubmitDraft(c *gin.Context) {
 		jawabGalatDrafPerjanjian(c, e)
 		return
 	}
+	auditPerjanjian(c, entity.ActionUserUpdate, v.ID.String(), "Pengajuan perjanjian "+v.TicketNumber+" dikirim dari draf")
 	utils.OK(c, "Pengajuan berhasil dikirim", v)
 }
 
@@ -143,7 +145,21 @@ func (h *AgreementDocumentHandler) Create(c *gin.Context) {
 		utils.BadRequest(c, e.Error(), nil)
 		return
 	}
+	auditPerjanjian(c, entity.ActionUserUpdate, v.ID.String(), "Pengajuan perjanjian "+v.TicketNumber+" dibuat"+denganLampiran(files))
 	utils.Created(c, "Pengajuan berhasil dibuat", v)
+}
+
+// auditPerjanjian mencatat satu aksi pada pengajuan perjanjian di audit log (ditulis
+// AuditMiddleware sesudah handler selesai). Keterangannya tampil di halaman Audit Log.
+func auditPerjanjian(c *gin.Context, aksi entity.AuditAction, id, keterangan string) {
+	middleware.SetAuditContextWithValues(c, aksi, "agreement_document", id, nil, nil, &keterangan)
+}
+
+func denganLampiran(files []*multipart.FileHeader) string {
+	if len(files) == 0 {
+		return ""
+	}
+	return fmt.Sprintf(" dengan %d lampiran", len(files))
 }
 func (h *AgreementDocumentHandler) GetAll(c *gin.Context) {
 	var q dto.AgreementListQuery
@@ -182,6 +198,7 @@ func (h *AgreementDocumentHandler) Update(c *gin.Context) {
 		utils.BadRequest(c, e.Error(), nil)
 		return
 	}
+	auditPerjanjian(c, entity.ActionUserUpdate, v.ID.String(), "Isian pengajuan perjanjian "+v.TicketNumber+" diubah")
 	utils.OK(c, "Pengajuan diperbarui", v)
 }
 func (h *AgreementDocumentHandler) Delete(c *gin.Context) {
@@ -189,6 +206,8 @@ func (h *AgreementDocumentHandler) Delete(c *gin.Context) {
 		utils.BadRequest(c, e.Error(), nil)
 		return
 	}
+	// Termasuk hapus draf, sama dengan Legal Opinion dan Review Dokumen.
+	auditPerjanjian(c, entity.ActionDelete, c.Param("id"), "Pengajuan perjanjian dihapus")
 	utils.OK(c, "Pengajuan dihapus", nil)
 }
 func (h *AgreementDocumentHandler) Resubmit(c *gin.Context) {
@@ -201,6 +220,7 @@ func (h *AgreementDocumentHandler) Resubmit(c *gin.Context) {
 		utils.BadRequest(c, e.Error(), nil)
 		return
 	}
+	auditPerjanjian(c, entity.ActionUserUpdate, v.ID.String(), "Pengajuan perjanjian "+v.TicketNumber+" diajukan ulang"+denganLampiran(files))
 	utils.OK(c, "Pengajuan dikirim ulang", v)
 }
 func (h *AgreementDocumentHandler) UpdateMeta(c *gin.Context) {
@@ -214,10 +234,13 @@ func (h *AgreementDocumentHandler) UpdateMeta(c *gin.Context) {
 		utils.BadRequest(c, e.Error(), nil)
 		return
 	}
-	// Approver mengganti penandatangan usulan (PR 11, P3).
+	// Satu permintaan hanya menghasilkan satu baris audit: pergantian penandatangan usulan
+	// (PR 11, P3) dicatat dengan aksinya sendiri, selebihnya sebagai perubahan data persetujuan.
 	if ganti != nil {
 		desc := "Penandatangan Pihak Pertama " + v.TicketNumber + " diganti approver"
 		middleware.SetAuditContextWithValues(c, entity.ActionSignatoryChange, "agreement_document", v.ID.String(), &ganti.Usulan, &ganti.Pilihan, &desc)
+	} else {
+		auditPerjanjian(c, entity.ActionUserUpdate, v.ID.String(), "Data persetujuan perjanjian "+v.TicketNumber+" diubah")
 	}
 	utils.OK(c, "Metadata diperbarui", v)
 }
@@ -227,11 +250,23 @@ func (h *AgreementDocumentHandler) UpdateStatus(c *gin.Context) {
 		utils.BadRequest(c, "Data tidak valid", e.Error())
 		return
 	}
+	// Status lama dibaca dulu untuk audit log; pengajuan yang tidak bisa dibaca ditolak
+	// UpdateStatus dengan pesannya sendiri.
+	var lama string
+	if d, e := h.svc.GetByID(c.Param("id"), middleware.GetUserID(c), true); e == nil {
+		lama = string(d.Status)
+	}
 	v, e := h.svc.UpdateStatus(c, c.Param("id"), middleware.GetUserID(c), req)
 	if e != nil {
 		utils.BadRequest(c, e.Error(), nil)
 		return
 	}
+	baru := string(v.Status)
+	desc := "Status perjanjian " + v.TicketNumber + " diubah dari " + lama + " ke " + baru
+	if strings.TrimSpace(req.Note) != "" {
+		desc += ". Catatan: " + strings.TrimSpace(req.Note)
+	}
+	middleware.SetAuditContextWithValues(c, entity.ActionStatusChange, "agreement_document", v.ID.String(), &lama, &baru, &desc)
 	utils.OK(c, "Status diperbarui", v)
 }
 func (h *AgreementDocumentHandler) Preview(c *gin.Context) {

@@ -1,10 +1,21 @@
 package repository
 
 import (
+	"errors"
+	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 )
+
+// NomorTiketBentrok: penyimpanan ditolak karena nomor tiket sudah dipakai pengajuan lain
+// (indeks unik idx_<tabel>_ticket_number). Penolakan indeks unik lain, mis. nomor
+// perjanjian, tidak termasuk.
+func NomorTiketBentrok(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505" && strings.Contains(pgErr.ConstraintName, "ticket_number")
+}
 
 // nextTicketSequence mengembalikan nomor urut tiket berikutnya untuk sebuah
 // awalan di bulan berjalan, mis. 3 kalau LO-202610-0002 adalah yang terbesar.

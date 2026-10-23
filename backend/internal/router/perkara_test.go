@@ -343,7 +343,9 @@ func TestRujukanPerkara(t *testing.T) {
 
 		// Impor: nama yang sudah ada dan nama kosong dilaporkan, sisanya masuk.
 		csv := "name,description\nCedant Impor A,satu\nCedant Rujukan Baru,sudah ada\n,tanpa nama\n"
-		w = panggilForm(t, legal, http.MethodPost, alamat+"/import", nil, berkas{"file", "cedant.csv", []byte(csv)})
+		harapSatuAuditBaru(t, "cedant", entity.ActionFileUpload, uuid.Nil.String(), "impor cedant", func() {
+			w = panggilForm(t, legal, http.MethodPost, alamat+"/import", nil, berkas{"file", "cedant.csv", []byte(csv)})
+		})
 		harapKode(t, w, http.StatusOK, "impor cedant")
 		var hasil hasilImpor
 		isiData(t, w, &hasil)
@@ -453,9 +455,26 @@ func TestBerkasPerkara(t *testing.T) {
 	if len(k.Documents) != 1 {
 		t.Fatalf("lampiran kronologi: %+v", k.Documents)
 	}
-	if got := unduh("/download", k.Documents[0], p.TicketNumber+"_Kronologi_2026-10-05.pdf"); !bytes.Equal(got.Bytes(), isiLampiran) {
+	if got := unduh("/download", k.Documents[0], p.TicketNumber+"_Kronologi_bukti.pdf"); !bytes.Equal(got.Bytes(), isiLampiran) {
 		t.Errorf("isi lampiran kronologi berbeda: %q", got)
 	}
+	// Mengubah kronologi: nama asli lampiran yang dipertahankan tetap dipakai, dan lampiran
+	// tambahan juga bernama asli (PR A tahap A.4b).
+	w = panggilForm(t, legal, http.MethodPut, alamat+"/chronology/"+k.ID,
+		map[string]string{"agenda_date": "2026-10-05", "agenda": "Sidang bukti diubah", "documents": k.Documents[0]}, berkas{"files", "tambahan.pdf", []byte("tambahan")})
+	harapKode(t, w, http.StatusOK, "ubah kronologi dengan lampiran tambahan")
+	var diubah kronologi
+	isiData(t, w, &diubah)
+	if len(diubah.Documents) != 2 || diubah.Documents[0] != k.Documents[0] {
+		t.Fatalf("lampiran sesudah kronologi diubah: %+v", diubah.Documents)
+	}
+	unduh("/download", k.Documents[0], p.TicketNumber+"_Kronologi_bukti.pdf")
+	unduh("/download", diubah.Documents[1], p.TicketNumber+"_Kronologi_tambahan.pdf")
+	// Lampiran yang diunggah sebelum nama aslinya disimpan hanya tercatat dengan nama objek.
+	if err := dbTes.Exec("UPDATE repository_documents SET file_name = regexp_replace(file_path, '^.*/', '') WHERE file_path = ?", k.Documents[0]).Error; err != nil {
+		t.Fatal(err)
+	}
+	unduh("/download", k.Documents[0], p.TicketNumber+"_Kronologi_2026-10-05.pdf")
 
 	// Alamat file di luar folder perkara ditolak.
 	for _, jalur := range []string{"/download", "/file"} {

@@ -97,19 +97,14 @@ func (s *legalCaseService) Create(scope *uuid.UUID, req dto.CreateLegalCaseReque
 		return nil, err
 	}
 
-	seq, err := s.repo.NextTicketSequence("LC")
-	if err != nil {
-		return nil, errors.New("gagal generate ticket number")
-	}
-	ticket := utils.GenerateTicketNumber(utils.PrefixLegalCase, seq)
-
 	legalCase, err := s.buildLegalCase(owner, req)
 	if err != nil {
 		return nil, err
 	}
-	legalCase.TicketNumber = ticket
-
-	if err := s.repo.Create(legalCase); err != nil {
+	if err := denganNomorTiket(utils.PrefixLegalCase, s.repo.NextTicketSequence, func(nomor string) error {
+		legalCase.TicketNumber = nomor
+		return s.repo.Create(legalCase)
+	}); err != nil {
 		return nil, errors.New("gagal membuat kasus hukum")
 	}
 
@@ -275,8 +270,15 @@ func (s *legalCaseService) Delete(scope *uuid.UUID, id string) error {
 		return err
 	}
 	uid := legalCase.ID
+	kronologi, _ := s.repo.ListChronologies(uid)
 	if err := s.repo.Delete(uid); err != nil {
 		return errors.New("gagal menghapus kasus hukum")
+	}
+	// Dokumen, foto, dan lampiran kronologi perkara yang dihapus tidak tampil lagi di
+	// Repositori Dokumen (PR A tahap A.4b).
+	catatRepositori(uid, s.repoDocSvc.RemoveCaseDocuments(uid.String()))
+	for _, k := range kronologi {
+		catatRepositori(k.ID, s.repoDocSvc.RemoveChronologyDocuments(k.ID.String()))
 	}
 	return nil
 }
@@ -313,7 +315,7 @@ func (s *legalCaseService) CreateChronology(scope *uuid.UUID, caseID string, req
 	}
 
 	documents := append([]string{}, req.Documents...)
-	uploaded, err := s.uploadChronologyDocuments(caseID, files)
+	uploaded, namaAsli, err := s.uploadChronologyDocuments(caseID, files)
 	if err != nil {
 		return nil, err
 	}
@@ -337,7 +339,7 @@ func (s *legalCaseService) CreateChronology(scope *uuid.UUID, caseID string, req
 	}
 
 	for _, path := range documents {
-		_ = s.repoDocSvc.SyncChronologyDocument(chronology.ID.String(), caseID, path)
+		_ = s.repoDocSvc.SyncChronologyDocument(chronology.ID.String(), caseID, path, namaAsli[path])
 	}
 
 	response := toCaseChronologyResponse(chronology)
@@ -368,7 +370,7 @@ func (s *legalCaseService) UpdateChronology(scope *uuid.UUID, caseID string, chr
 	}
 
 	documents := append([]string{}, req.Documents...)
-	uploaded, err := s.uploadChronologyDocuments(caseID, files)
+	uploaded, namaAsli, err := s.uploadChronologyDocuments(caseID, files)
 	if err != nil {
 		return nil, err
 	}
@@ -393,7 +395,7 @@ func (s *legalCaseService) UpdateChronology(scope *uuid.UUID, caseID string, chr
 		if path == "" {
 			continue
 		}
-		_ = s.repoDocSvc.SyncChronologyDocument(chronology.ID.String(), caseID, path)
+		_ = s.repoDocSvc.SyncChronologyDocument(chronology.ID.String(), caseID, path, namaAsli[path])
 	}
 
 	response := toCaseChronologyResponse(chronology)
@@ -434,16 +436,14 @@ func (s *legalCaseService) DownloadFile(scope *uuid.UUID, filePath string) (*min
 	return s.storage.GetFileObject(context.Background(), filePath)
 }
 
-// FileName: nama unduhan file perkara, mis. LC-202610-0001_Dokumen_gugatan.pdf atau
-// LC-202610-0001_Kronologi_2026-10-05.pdf. Hanya dipanggil sesudah DownloadFile atau
-// ViewFile memeriksa hak aksesnya.
+// FileName: nama unduhan file perkara, mis. LC-202610-0001_Dokumen_gugatan.pdf,
+// LC-202610-0001_Kronologi_bukti.pdf, atau LC-202610-0001_Kronologi_2026-10-05.pdf untuk
+// lampiran kronologi yang diunggah sebelum nama aslinya disimpan. Hanya dipanggil sesudah
+// DownloadFile atau ViewFile memeriksa hak aksesnya.
 func (s *legalCaseService) FileName(filePath string) string {
 	tiket, jenis, ket := s.repo.NamaFilePerkara(filePath)
-	switch jenis {
-	case "":
+	if jenis == "" {
 		return filepath.Base(filePath)
-	case "Kronologi":
-		return utils.NamaUnduhan(tiket, jenis, ket) + filepath.Ext(filePath)
 	}
 	if ket == "" {
 		ket = filepath.Base(filePath)
@@ -935,23 +935,27 @@ func (s *legalCaseService) buildLegalCase(companyID *uuid.UUID, req dto.CreateLe
 	return legalCase, nil
 }
 
-func (s *legalCaseService) uploadChronologyDocuments(caseID string, files []*multipart.FileHeader) ([]string, error) {
+// uploadChronologyDocuments mengunggah lampiran kronologi dan mengembalikan path-nya,
+// beserta nama asli tiap path untuk Repositori Dokumen dan nama unduhan (PR A tahap A.4b).
+func (s *legalCaseService) uploadChronologyDocuments(caseID string, files []*multipart.FileHeader) ([]string, map[string]string, error) {
 	if len(files) == 0 {
-		return nil, nil
+		return nil, nil, nil
 	}
 
 	paths := make([]string, 0, len(files))
+	namaAsli := make(map[string]string, len(files))
 	for _, file := range files {
 		objectPath, _, err := s.storage.UploadFile(context.Background(), "legal-cases/chronologies", file, fmt.Sprintf("case-%s-chron", caseID))
 		if err != nil {
 			for _, path := range paths {
 				_ = s.storage.DeleteFile(context.Background(), path)
 			}
-			return nil, errors.New("gagal mengupload dokumen: " + file.Filename)
+			return nil, nil, errors.New("gagal mengupload dokumen: " + file.Filename)
 		}
 		paths = append(paths, objectPath)
+		namaAsli[objectPath] = file.Filename
 	}
-	return paths, nil
+	return paths, namaAsli, nil
 }
 
 func parseRequiredDate(value string) (time.Time, error) {

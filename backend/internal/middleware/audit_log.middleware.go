@@ -1,6 +1,9 @@
 package middleware
 
 import (
+	"fmt"
+	"log"
+
 	"legal-riu-portal/internal/entity"
 	"legal-riu-portal/internal/service"
 
@@ -18,22 +21,45 @@ func AuditMiddleware(auditLogSvc service.AuditLogService) gin.HandlerFunc {
 		}
 
 		entityType := c.GetString("audit_entity_type")
-		entityIDStr := c.GetString("audit_entity_id")
-		if entityType == "" || entityIDStr == "" {
+		if entityType == "" {
 			return
 		}
+		raw, _ := c.Get("audit_entity_id")
+		entityID := idEntitas(raw)
 
 		oldValue := getStringPtr(c, "audit_old_value")
 		newValue := getStringPtr(c, "audit_new_value")
 		description := getStringPtr(c, "audit_description")
 
-		entityID, err := uuid.Parse(entityIDStr)
-		if err != nil {
-			return
+		// Gagal mencatat tidak menggagalkan aksinya, tapi harus terlihat di log server.
+		if err := auditLogSvc.LogFromContext(c, entity.AuditAction(action), entityType, entityID, oldValue, newValue, description); err != nil {
+			log.Printf("audit log tidak tersimpan (%s %s %s): %v", action, entityType, entityID, err)
 		}
-
-		_ = auditLogSvc.LogFromContext(c, entity.AuditAction(action), entityType, entityID, oldValue, newValue, description)
 	}
+}
+
+// idEntitas membaca ID entitas yang dipasang SetAuditContext. Pemanggil mengirim string,
+// uuid.UUID (yang punya String()), atau nilai lain yang punya String(); semuanya diterima. Dulu nilai ini dibaca
+// dengan c.GetString, yang hanya menerima string, sehingga ID bertipe uuid.UUID menjadi
+// kosong dan barisnya diam-diam tidak tersimpan. ID yang bukan UUID (mis. "import" untuk
+// impor Excel) dicatat sebagai uuid.Nil, supaya barisnya tetap ada.
+func idEntitas(v any) uuid.UUID {
+	var s string
+	switch x := v.(type) {
+	case *uuid.UUID: // pointer kosong tidak boleh sampai ke String()
+		if x != nil {
+			return *x
+		}
+	case string:
+		s = x
+	case fmt.Stringer:
+		s = x.String()
+	}
+	id, err := uuid.Parse(s)
+	if err != nil {
+		return uuid.Nil
+	}
+	return id
 }
 
 func SetAuditContext(c *gin.Context, action entity.AuditAction, entityType string, entityID interface{}) {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"mime/multipart"
 	"strings"
 
@@ -11,6 +12,7 @@ import (
 	"legal-riu-portal/internal/entity"
 	"legal-riu-portal/internal/repository"
 	"legal-riu-portal/internal/storage"
+	"legal-riu-portal/internal/utils"
 
 	"github.com/google/uuid"
 )
@@ -51,12 +53,39 @@ func nomorDraf() string {
 	return "DRAF-" + uuid.NewString()
 }
 
+// catatRepositori: sinkron Repositori Dokumen yang gagal hanya ditulis ke log server.
+// Pengajuan atau perkaranya tetap tersimpan, dan backfill saat server menyala melengkapinya.
+func catatRepositori(id uuid.UUID, err error) {
+	if err != nil {
+		log.Printf("Repositori Dokumen untuk %s tidak tersinkron: %v", id, err)
+	}
+}
+
 // hapusFileDraf menghapus file draf dari MinIO. Kegagalan diabaikan: barisnya sudah
 // terhapus, jadi file yang tertinggal tidak bisa diunduh siapa pun.
 func hapusFileDraf(store *storage.MinIOClient, paths []string) {
 	for _, p := range paths {
 		_ = store.DeleteFile(context.Background(), p)
 	}
+}
+
+// denganNomorTiket memberi nomor tiket berikutnya, lalu menyimpan pengajuan lewat simpan (buat
+// baru atau kirim draf). Nomor diambil dari yang terbesar bulan ini di luar transaksi, jadi dua
+// pengajuan yang disimpan bersamaan bisa mendapat nomor sama, dan yang kalah ditolak indeks unik
+// ticket_number. Kalau itu terjadi, nomor berikutnya diambil dan penyimpanan diulang, maksimal 3
+// kali (PR A tahap A.3, keputusan A2). Galat lain langsung dikembalikan.
+func denganNomorTiket(prefix utils.TicketPrefix, berikut func(string) (int, error), simpan func(nomor string) error) error {
+	var err error
+	for coba := 0; coba < 3; coba++ {
+		var seq int
+		if seq, err = berikut(string(prefix)); err != nil {
+			return err
+		}
+		if err = simpan(utils.GenerateTicketNumber(prefix, seq)); !repository.NomorTiketBentrok(err) {
+			return err
+		}
+	}
+	return err
 }
 
 func parseUUID(id string) (uuid.UUID, error) {

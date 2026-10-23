@@ -20,9 +20,13 @@ type RepositoryDocumentService interface {
 	DownloadDocument(access repository.DocumentAccess, id string) (*minio.Object, string, error)
 	SyncCaseDocument(caseID string, filePath string, fileName string, fileSize int64) error
 	SyncCasePhoto(caseID string, filePath string, fileName string, fileSize int64) error
-	SyncChronologyDocument(chronID string, caseID string, filePath string) error
+	SyncChronologyDocument(chronID string, caseID string, filePath string, fileName string) error
 	RemoveCaseDocuments(caseID string) error
 	RemoveChronologyDocuments(chronID string) error
+	SyncLegalOpinion(lo *entity.LegalOpinion) error
+	SyncDocumentReview(dr *entity.DocumentReview) error
+	SyncAgreement(d *entity.AgreementDocument) error
+	RemoveSubmission(id string) error
 }
 
 type repositoryDocumentService struct {
@@ -129,7 +133,10 @@ func (s *repositoryDocumentService) SyncCasePhoto(caseID string, filePath string
 	return s.repo.UpsertBySource(doc)
 }
 
-func (s *repositoryDocumentService) SyncChronologyDocument(chronID string, caseID string, filePath string) error {
+// SyncChronologyDocument mencatat satu lampiran kronologi. fileName berisi nama asli untuk
+// unggahan baru (PR A tahap A.4b). Untuk lampiran yang sudah ada fileName kosong, dan barisnya
+// hanya diaktifkan lagi supaya nama aslinya tidak tertimpa nama objek.
+func (s *repositoryDocumentService) SyncChronologyDocument(chronID string, caseID string, filePath string, fileName string) error {
 	if filePath == "" {
 		return nil
 	}
@@ -144,6 +151,10 @@ func (s *repositoryDocumentService) SyncChronologyDocument(chronID string, caseI
 		MIMEType:     detectMIME(filePath),
 		IsActive:     true,
 	}
+	if fileName == "" {
+		return s.repo.BatchUpsert([]entity.RepositoryDocument{doc})
+	}
+	doc.Title, doc.FileName = fileName, fileName
 	return s.repo.UpsertBySource(doc)
 }
 
@@ -156,6 +167,67 @@ func (s *repositoryDocumentService) RemoveCaseDocuments(caseID string) error {
 
 func (s *repositoryDocumentService) RemoveChronologyDocuments(chronID string) error {
 	return s.repo.MarkInactiveBySource("case_chronologies", []string{chronID})
+}
+
+// Sinkron pengajuan (PR A tahap A.4): setiap kali lampiran atau hasil bertambah, semua file
+// pengajuan dicatat ulang. Isi dan kuncinya sama dengan backfill saat server menyala
+// (seed.BackfillRepositoryDocuments), jadi aman dipanggil berulang tanpa baris ganda.
+// Dipanggil sesudah pengajuan bukan draf lagi; draf tidak masuk Repositori Dokumen.
+
+func (s *repositoryDocumentService) SyncLegalOpinion(lo *entity.LegalOpinion) error {
+	id := lo.ID.String()
+	var docs []entity.RepositoryDocument
+	for _, a := range lo.Attachments {
+		docs = append(docs, berkasPengajuan("legal_opinion", "legal_opinion_attachments", id, "requester", a.FilePath, a.FileName, a.FileSize))
+	}
+	for _, r := range lo.Results {
+		docs = append(docs, berkasPengajuan("legal_opinion", "legal_opinion_results", id, "approver", r.FilePath, r.FileName, 0))
+	}
+	return s.repo.BatchUpsert(docs)
+}
+
+func (s *repositoryDocumentService) SyncDocumentReview(dr *entity.DocumentReview) error {
+	id := dr.ID.String()
+	var docs []entity.RepositoryDocument
+	for _, a := range dr.Attachments {
+		docs = append(docs, berkasPengajuan("document_review", "document_review_attachments", id, "requester", a.FilePath, a.FileName, a.FileSize))
+	}
+	for _, r := range dr.Results {
+		docs = append(docs, berkasPengajuan("document_review", "document_review_results", id, "approver", r.FilePath, r.FileName, 0))
+	}
+	return s.repo.BatchUpsert(docs)
+}
+
+// SyncAgreement mencatat lampiran perjanjian, dan DOCX serta PDF final kalau sudah disetujui.
+func (s *repositoryDocumentService) SyncAgreement(d *entity.AgreementDocument) error {
+	id := d.ID.String()
+	var docs []entity.RepositoryDocument
+	for _, a := range d.Attachments {
+		docs = append(docs, berkasPengajuan("agreement_document", "agreement_attachments", id, "requester", a.FilePath, a.FileName, a.FileSize))
+	}
+	for _, p := range []string{d.GeneratedDOCXPath, d.GeneratedPDFPath} {
+		if p != "" {
+			docs = append(docs, berkasPengajuan("agreement_document", "agreement_documents", id, "approver", p, d.GeneratedFileName+filepath.Ext(p), 0))
+		}
+	}
+	return s.repo.BatchUpsert(docs)
+}
+
+// RemoveSubmission menonaktifkan semua file pengajuan LO, RD, atau perjanjian yang dihapus.
+// ID pengajuan berupa UUID, jadi tidak tertukar antarjenis sumber.
+func (s *repositoryDocumentService) RemoveSubmission(id string) error {
+	for _, sumber := range []string{"legal_opinion_attachments", "legal_opinion_results", "document_review_attachments",
+		"document_review_results", "agreement_attachments", "agreement_documents"} {
+		if err := s.repo.MarkInactiveBySource(sumber, []string{id}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func berkasPengajuan(fitur, sumber, id, pengunggah, path, nama string, ukuran int64) entity.RepositoryDocument {
+	return entity.RepositoryDocument{Title: nama, FeatureCode: fitur, SourceType: sumber, SourceID: id, UploaderType: pengunggah,
+		FilePath: path, FileName: nama, FileSize: ukuran, MIMEType: detectMIME(nama), IsActive: true}
 }
 
 func toRepositoryDocumentResponse(d entity.RepositoryDocument) dto.RepositoryDocumentResponse {

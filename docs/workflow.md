@@ -430,9 +430,12 @@ Override types:
    - RoleMiddleware("USER")
    - RequirePermission → check 'legal_opinion.create.own'
    - Handler → create DTO
-   - Service → create entity
-   - Repository → save to DB
-   - Response → { id, ticket_number, status: 'PENDING' }
+   - Service → create entity; nomor tiket berikutnya diambil lewat denganNomorTiket
+     (diulang dengan nomor baru, maksimal 3 kali, kalau bentrok dengan pengajuan bersamaan)
+   - Repository → save to DB; lampiran ke MinIO
+   - Service → lampiran langsung dicatat di Repositori Dokumen (muat → SyncLegalOpinion)
+   - AuditMiddleware → catat aksi dari SetAuditContext di handler
+   - Response → { id, ticket_number, status: 'SUBMITTED' }
 7. Frontend:
    - TanStack Query invalidate
    - Redirect to detail page
@@ -578,6 +581,14 @@ export default function SomePage() {
    - [ ] Register routes in `internal/router/router.go`
    - [ ] Add permission codes in `internal/seed/permissions.go`
    - [ ] Assign to roles in `rolePermissionSeedData()`
+   - [ ] Aksi yang mengubah data memanggil `middleware.SetAuditContext` (atau `SetAuditContextWithValues` untuk nilai
+         lama dan baru) di handler, dan tesnya memeriksa baris `audit_logs` yang terbentuk
+   - [ ] Query lewat `db.Table(...)` atau SQL mentah menambah `deleted_at IS NULL` sendiri, dan query atas tabel
+         pengajuan mengecualikan draf (`bukanDraf`)
+   - [ ] Aksi yang menambah atau menghapus file mencatatnya di Repositori Dokumen saat itu juga (fungsi `Sync*` dan
+         `Remove*` di `internal/service/document_repository.service.go`), dengan isi yang sama dengan backfill di
+         `internal/seed/repository_document_seed.go`, dan sumber barunya punya aturan akses
+         (`docs/case_company_access.md` bagian 9)
 
 2. **Frontend**
    - [ ] Create pages in appropriate role folder (`admin/`, `legal/`, etc.)
