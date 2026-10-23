@@ -60,6 +60,7 @@ GET /api/v1/admin/agreement-templates/:id/preview: ADMIN
 GET /api/v1/admin/agreement-templates/placeholders: ADMIN
 GET /api/v1/admin/agreement-types: ADMIN
 GET /api/v1/admin/audit-logs: ADMIN
+GET /api/v1/admin/audit-logs/actors: ADMIN
 GET /api/v1/admin/case-categories: ADMIN
 GET /api/v1/admin/case-categories/:id: ADMIN
 GET /api/v1/admin/case-categories/import/template: ADMIN
@@ -187,6 +188,7 @@ GET /api/v1/legal/agreement-templates/:id/download: LEGAL
 GET /api/v1/legal/agreement-templates/:id/preview: LEGAL
 GET /api/v1/legal/agreement-templates/placeholders: LEGAL
 GET /api/v1/legal/audit-logs: LEGAL
+GET /api/v1/legal/audit-logs/actors: LEGAL
 GET /api/v1/legal/dashboard/recent: LEGAL
 GET /api/v1/legal/dashboard/stats: LEGAL
 GET /api/v1/legal/legal-cases: LEGAL

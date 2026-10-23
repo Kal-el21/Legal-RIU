@@ -522,6 +522,151 @@ func TestAuditLogLimitTidakWajar(t *testing.T) {
 	}
 }
 
+// Saringan Audit Log (PR Audit Log tahap L.1): pelaku, entitas, pencarian nama pelaku, tanggal
+// dalam WIB, batas limit, bentuk pelaku yang ringkas, pelaku yang akunnya dihapus, dan daftar pelaku.
+func TestAuditLogSaringan(t *testing.T) {
+	admin := masukPeran(t, entity.RoleAdmin)
+	legal := masukPeran(t, entity.RoleLegal)
+	var induk string
+	dbTes.Raw("SELECT id FROM companies WHERE is_parent").Scan(&induk)
+	pelaku := func(surel, nama string, peran entity.UserRole) string {
+		t.Helper()
+		if err := tambahUser(surel, peran, uuid.MustParse(induk)); err != nil {
+			t.Fatal(err)
+		}
+		var id string
+		dbTes.Exec("UPDATE users SET full_name = ? WHERE email = ?", nama, surel)
+		dbTes.Raw("SELECT id FROM users WHERE email = ?", surel).Scan(&id)
+		return id
+	}
+	type barisAudit struct {
+		UserID     string         `json:"user_id"`
+		User       map[string]any `json:"user"`
+		EntityType string         `json:"entity_type"`
+		EntityID   string         `json:"entity_id"`
+	}
+	ambil := func(token, alamat string) ([]barisAudit, int) {
+		t.Helper()
+		w := panggil(t, token, http.MethodGet, alamat, nil)
+		harapKode(t, w, http.StatusOK, alamat)
+		var h struct {
+			Items []barisAudit `json:"items"`
+			Limit int          `json:"limit"`
+		}
+		isiData(t, w, &h)
+		return h.Items, h.Limit
+	}
+	const dasar = "/api/v1/admin/audit-logs?limit=100"
+	semuaMilik := func(items []barisAudit, cocok func(barisAudit) bool) bool {
+		return len(items) > 0 && !slices.ContainsFunc(items, func(b barisAudit) bool { return !cocok(b) })
+	}
+
+	const surelA, surelB = "tes-audit-saring-a@example.com", "tes-audit-saring-b@example.com"
+	idA := pelaku(surelA, "Pelaku Saringan Alfa", entity.RoleUser)
+	idB := pelaku(surelB, "Pelaku Saringan Beta", entity.RoleUser)
+	tokenA := masuk(t, surelA) // login tercatat atas nama A
+	masuk(t, surelB)
+
+	t.Run("Pelaku", func(t *testing.T) {
+		items, _ := ambil(admin, dasar+"&user_id="+idA)
+		if !semuaMilik(items, func(b barisAudit) bool { return b.UserID == idA }) {
+			t.Errorf("saringan pelaku A: %+v", items)
+		}
+		if got := items[0].User; len(got) != 4 || got["full_name"] != "Pelaku Saringan Alfa" || got["email"] != surelA || got["role"] != "USER" {
+			t.Errorf("pelaku di jawaban harus berisi tepat id, full_name, email, role: %v", got)
+		}
+	})
+
+	t.Run("Entitas", func(t *testing.T) {
+		m := semuaModulPengajuan[0]
+		p := m.buat(t, tokenA)
+		m.ubahStatus(t, legal, "/legal", p.ID, "UNDER_REVIEW", "", http.StatusOK)
+		items, _ := ambil(admin, dasar+"&entity_id="+p.ID)
+		if len(items) < 2 || !semuaMilik(items, func(b barisAudit) bool { return b.EntityID == p.ID }) {
+			t.Errorf("saringan entitas %s, harap pembuatan dan perubahan status: %+v", p.ID, items)
+		}
+	})
+
+	t.Run("CariNamaPelaku", func(t *testing.T) {
+		items, _ := ambil(admin, dasar+"&search="+url.QueryEscape("Saringan Alfa"))
+		if !semuaMilik(items, func(b barisAudit) bool { return b.UserID == idA }) {
+			t.Errorf("cari nama pelaku A: %+v", items)
+		}
+	})
+
+	t.Run("TanggalWIB", func(t *testing.T) {
+		// 06.30 WIB tanggal 15 masih tanggal 14 dalam UTC.
+		if err := dbTes.Exec(`INSERT INTO audit_logs (id, user_id, action, entity_type, entity_id, ip_address, user_agent, created_at, updated_at)
+			VALUES (gen_random_uuid(), ?, 'USER_UPDATE', 'uji_zona_waktu', gen_random_uuid(), '', '', '2026-01-15 06:30:00+07', now())`, idA).Error; err != nil {
+			t.Fatal(err)
+		}
+		const jenis = dasar + "&entity_type=uji_zona_waktu"
+		if items, _ := ambil(admin, jenis+"&date_from=2026-01-15&date_to=2026-01-15"); len(items) != 1 {
+			t.Errorf("baris 06.30 WIB tanggal 15 tidak ada di saringan tanggal 15: %+v", items)
+		}
+		if items, _ := ambil(admin, jenis+"&date_from=2026-01-14&date_to=2026-01-14"); len(items) != 0 {
+			t.Errorf("baris 06.30 WIB tanggal 15 masuk saringan tanggal 14: %+v", items)
+		}
+	})
+
+	t.Run("BatasDanIDTidakValid", func(t *testing.T) {
+		if _, limit := ambil(admin, "/api/v1/admin/audit-logs?limit=1000"); limit != 100 {
+			t.Errorf("limit 1000 dijawab dengan limit %d, harap dibatasi 100", limit)
+		}
+		for _, q := range []string{"user_id=bukan-uuid", "entity_id=bukan-uuid"} {
+			harapKode(t, panggil(t, admin, http.MethodGet, "/api/v1/admin/audit-logs?"+q, nil), http.StatusBadRequest, q)
+		}
+	})
+
+	t.Run("PelakuTerhapus", func(t *testing.T) {
+		if err := dbTes.Exec("UPDATE users SET deleted_at = now() WHERE id = ?", idB).Error; err != nil {
+			t.Fatal(err)
+		}
+		items, _ := ambil(admin, dasar+"&user_id="+idB)
+		if len(items) == 0 || items[0].User["full_name"] != "Pelaku Saringan Beta" {
+			t.Errorf("nama pelaku yang akunnya dihapus hilang: %+v", items)
+		}
+	})
+
+	t.Run("DaftarPelaku", func(t *testing.T) {
+		daftar := func(token, alamat string, kode int) []map[string]any {
+			t.Helper()
+			w := panggil(t, token, http.MethodGet, alamat, nil)
+			harapKode(t, w, kode, alamat)
+			var d []map[string]any
+			if kode == http.StatusOK {
+				isiData(t, w, &d)
+			}
+			return d
+		}
+		const cari = "/audit-logs/actors?q=" + "Saringan"
+		d := daftar(admin, "/api/v1/admin"+cari, http.StatusOK)
+		var nama []any
+		for _, p := range d {
+			if len(p) != 4 {
+				t.Errorf("isi pelaku harus tepat id, full_name, email, role: %v", p)
+			}
+			nama = append(nama, p["full_name"])
+		}
+		if !slices.Contains(nama, "Pelaku Saringan Alfa") || !slices.Contains(nama, "Pelaku Saringan Beta") || len(d) > 10 {
+			t.Errorf("daftar pelaku 'Saringan' (termasuk akun terhapus, maks. 10): %v", nama)
+		}
+		if d := daftar(legal, "/api/v1/legal"+cari, http.StatusOK); len(d) == 0 {
+			t.Error("LEGAL tidak mendapat daftar pelaku")
+		}
+		daftar(masukPeran(t, entity.RoleUser), "/api/v1/legal"+cari, http.StatusForbidden)
+
+		// LEGAL yang izin audit_log.view-nya dicabut tidak mendapat daftar pelaku maupun audit log.
+		const surelC = "tes-audit-saring-legal@example.com"
+		idC := pelaku(surelC, "Legal Tanpa Audit", entity.RoleLegal)
+		harapKode(t, panggil(t, admin, http.MethodPut, "/api/v1/admin/users/"+idC+"/permissions",
+			map[string]any{"overrides": []map[string]string{{"code": "audit_log.view", "effect": "DENY"}}}), http.StatusOK, "mencabut audit_log.view")
+		tokenC := masuk(t, surelC)
+		daftar(tokenC, "/api/v1/legal"+cari, http.StatusForbidden)
+		daftar(tokenC, "/api/v1/legal/audit-logs", http.StatusForbidden)
+	})
+}
+
 // File yang tercatat di database tetapi tidak ada di penyimpanan dijawab 404.
 // MinIO baru melapor "tidak ada" saat isi file dibaca; sebelumnya jawaban 200
 // sudah telanjur terkirim dan browser menyimpan file 0 KB.

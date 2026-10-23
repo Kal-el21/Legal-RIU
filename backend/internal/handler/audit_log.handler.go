@@ -11,6 +11,7 @@ import (
 	"legal-riu-portal/internal/utils"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 type AuditLogHandler struct {
@@ -22,19 +23,38 @@ func NewAuditLogHandler(auditLogSvc service.AuditLogService, auditLogRepo reposi
 	return &AuditLogHandler{auditLogSvc: auditLogSvc, auditLogRepo: auditLogRepo}
 }
 
-type AuditLogResponse struct {
-	ID          string             `json:"id"`
-	UserID      string             `json:"user_id"`
-	User        *dto.UserResponse  `json:"user,omitempty"`
-	Action      entity.AuditAction `json:"action"`
-	EntityType  string             `json:"entity_type"`
-	EntityID    string             `json:"entity_id"`
-	OldValue    *string            `json:"old_value,omitempty"`
-	NewValue    *string            `json:"new_value,omitempty"`
-	Description *string            `json:"description,omitempty"`
-	IPAddress   string             `json:"ip_address"`
-	UserAgent   string             `json:"user_agent"`
-	CreatedAt   time.Time          `json:"created_at"`
+// wib: tanggal di saringan Audit Log dibaca sebagai tanggal WIB, bukan UTC. Zona tetap,
+// supaya tidak bergantung pada data zona waktu di image container.
+var wib = time.FixedZone("WIB", 7*60*60)
+
+func toPelakuAudit(u *entity.User) *dto.PelakuAudit {
+	if u == nil || u.ID == uuid.Nil {
+		return nil
+	}
+	return &dto.PelakuAudit{ID: u.ID.String(), FullName: u.FullName, Email: u.Email, Role: string(u.Role)}
+}
+
+func toAuditLogResponse(l *entity.AuditLog) dto.AuditLogResponse {
+	return dto.AuditLogResponse{
+		ID: l.ID.String(), UserID: l.UserID.String(), User: toPelakuAudit(&l.User),
+		Action: string(l.Action), EntityType: l.EntityType, EntityID: l.EntityID.String(),
+		OldValue: l.OldValue, NewValue: l.NewValue, Description: l.Description,
+		IPAddress: l.IPAddress, UserAgent: l.UserAgent, CreatedAt: l.CreatedAt,
+	}
+}
+
+// uuidQuery membaca saringan ID dari query; kosong berarti tidak disaring.
+func uuidQuery(c *gin.Context, nama string) (*uuid.UUID, bool) {
+	v := c.Query(nama)
+	if v == "" {
+		return nil, true
+	}
+	id, err := uuid.Parse(v)
+	if err != nil {
+		utils.BadRequest(c, nama+" tidak valid", nil)
+		return nil, false
+	}
+	return &id, true
 }
 
 // GET /api/v1/admin/audit-logs
@@ -43,12 +63,15 @@ func (h *AuditLogHandler) GetAll(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
 	// Nilai yang tidak masuk akal (termasuk bukan angka) diganti nilai bawaan;
-	// limit dipakai membagi.
+	// limit dipakai membagi, dan dibatasi 100 supaya satu permintaan tidak memuat semua baris.
 	if page <= 0 {
 		page = 1
 	}
 	if limit <= 0 {
 		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
 	}
 	filters.Page = page
 	filters.Limit = limit
@@ -59,17 +82,24 @@ func (h *AuditLogHandler) GetAll(c *gin.Context) {
 	if entityType := c.Query("entity_type"); entityType != "" {
 		filters.EntityType = &entityType
 	}
+	var ok bool
+	if filters.UserID, ok = uuidQuery(c, "user_id"); !ok {
+		return
+	}
+	if filters.EntityID, ok = uuidQuery(c, "entity_id"); !ok {
+		return
+	}
 	if search := c.Query("search"); search != "" {
 		filters.Search = &search
 	}
 	if dateFrom := c.Query("date_from"); dateFrom != "" {
-		if t, err := time.Parse("2006-01-02", dateFrom); err == nil {
+		if t, err := time.ParseInLocation("2006-01-02", dateFrom, wib); err == nil {
 			filters.DateFrom = &t
 		}
 	}
 	if dateTo := c.Query("date_to"); dateTo != "" {
-		if t, err := time.Parse("2006-01-02", dateTo); err == nil {
-			dateToEnd := t.Add(23*time.Hour + 59*time.Minute + 59*time.Second)
+		if t, err := time.ParseInLocation("2006-01-02", dateTo, wib); err == nil {
+			dateToEnd := t.Add(24*time.Hour - time.Nanosecond)
 			filters.DateTo = &dateToEnd
 		}
 	}
@@ -92,8 +122,12 @@ func (h *AuditLogHandler) GetAll(c *gin.Context) {
 
 	totalPages := int((total + int64(filters.Limit) - 1) / int64(filters.Limit))
 
+	hasil := make([]dto.AuditLogResponse, 0, len(items))
+	for i := range items {
+		hasil = append(hasil, toAuditLogResponse(&items[i]))
+	}
 	response := map[string]interface{}{
-		"items":       items,
+		"items":       hasil,
 		"total":       total,
 		"page":        filters.Page,
 		"limit":       filters.Limit,
@@ -101,4 +135,19 @@ func (h *AuditLogHandler) GetAll(c *gin.Context) {
 	}
 
 	utils.OK(c, "Success", response)
+}
+
+// GET /api/v1/admin/audit-logs/actors?q= dan /legal/...: pelaku untuk saringan Audit Log,
+// maks. 10, termasuk akun yang sudah dihapus (PR Audit Log tahap L.1).
+func (h *AuditLogHandler) GetActors(c *gin.Context) {
+	users, err := h.auditLogRepo.Pelaku(c.Query("q"), 10)
+	if err != nil {
+		utils.InternalError(c, "gagal memuat daftar pelaku")
+		return
+	}
+	hasil := make([]*dto.PelakuAudit, 0, len(users))
+	for i := range users {
+		hasil = append(hasil, toPelakuAudit(&users[i]))
+	}
+	utils.OK(c, "Success", hasil)
 }

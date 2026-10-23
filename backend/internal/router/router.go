@@ -326,6 +326,7 @@ func New(cfg *config.Config, db *gorm.DB, store *storage.MinIOClient) (*gin.Engi
 	admin.POST("/users/:id/reset-password", userHandler.ResetPassword)
 
 	admin.GET("/audit-logs", auditLogHandler.GetAll)
+	admin.GET("/audit-logs/actors", requirePermission("audit_log.view"), auditLogHandler.GetActors)
 	admin.GET("/notification-settings", notificationSettingHandler.GetAll)
 	admin.PUT("/notification-settings/:id", notificationSettingHandler.Update)
 
@@ -369,6 +370,7 @@ func New(cfg *config.Config, db *gorm.DB, store *storage.MinIOClient) (*gin.Engi
 	registerLegalCaseRoutes(legal, legalCaseHandler, requirePermission)
 
 	legal.GET("/audit-logs", requirePermission("audit_log.view"), auditLogHandler.GetAll)
+	legal.GET("/audit-logs/actors", requirePermission("audit_log.view"), auditLogHandler.GetActors)
 
 	legal.GET("/materials", requirePermission("legal_material.view", "legal_material.manage"), materialHandler.GetAll)
 	legal.GET("/materials/:id", requirePermission("legal_material.view", "legal_material.manage"), materialHandler.GetByID)
