@@ -115,7 +115,7 @@ func (h *DocumentTypeHandler) ImportDocumentTypes(c *gin.Context) {
 		return
 	}
 	middleware.SetAuditContext(c, entity.ActionFileUpload, "document_type", "import")
-	c.Set("audit_description", "Document types imported")
+	c.Set("audit_description", keteranganImpor("jenis dokumen", result))
 	utils.OK(c, "Impor jenis dokumen selesai", result)
 }
 

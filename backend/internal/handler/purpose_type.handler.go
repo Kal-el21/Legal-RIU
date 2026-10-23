@@ -115,7 +115,7 @@ func (h *PurposeTypeHandler) ImportPurposeTypes(c *gin.Context) {
 		return
 	}
 	middleware.SetAuditContext(c, entity.ActionFileUpload, "purpose_type", "import")
-	c.Set("audit_description", "Purpose types imported")
+	c.Set("audit_description", keteranganImpor("tujuan pembuatan", result))
 	utils.OK(c, "Impor tujuan pembuatan selesai", result)
 }
 

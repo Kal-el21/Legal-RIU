@@ -47,6 +47,13 @@ var (
 	ErrIsianBelumLengkap = errors.New("Semua field wajib diisi")
 )
 
+// PerubahanStatus: nomor tiket dan status pengajuan sebelum dan sesudah aksi approver, untuk
+// audit log (PR Audit Log tahap L.3). Lama sama dengan Baru kalau status tidak berubah.
+type PerubahanStatus struct {
+	Tiket      string
+	Lama, Baru entity.SubmissionStatus
+}
+
 // nomorDraf: nomor tiket sementara untuk draf (keputusan K1). Polanya tidak cocok dengan
 // <prefix>-YYYYMM-NNNN, jadi urutan nomor asli tidak terganggu oleh draf yang dibuang.
 func nomorDraf() string {

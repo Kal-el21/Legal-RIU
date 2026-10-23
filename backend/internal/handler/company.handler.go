@@ -160,7 +160,7 @@ func (h *CompanyHandler) ImportCompanies(c *gin.Context) {
 		return
 	}
 	middleware.SetAuditContext(c, entity.ActionFileUpload, "company", "import")
-	c.Set("audit_description", "Companies imported")
+	c.Set("audit_description", keteranganImpor("perusahaan", result))
 	utils.OK(c, "Impor perusahaan selesai", result)
 }
 

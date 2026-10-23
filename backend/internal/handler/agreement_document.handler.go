@@ -262,10 +262,7 @@ func (h *AgreementDocumentHandler) UpdateStatus(c *gin.Context) {
 		return
 	}
 	baru := string(v.Status)
-	desc := "Status perjanjian " + v.TicketNumber + " diubah dari " + lama + " ke " + baru
-	if strings.TrimSpace(req.Note) != "" {
-		desc += ". Catatan: " + strings.TrimSpace(req.Note)
-	}
+	desc := "Status perjanjian " + v.TicketNumber + " diubah dari " + lama + " ke " + baru + denganCatatan(req.Note)
 	middleware.SetAuditContextWithValues(c, entity.ActionStatusChange, "agreement_document", v.ID.String(), &lama, &baru, &desc)
 	utils.OK(c, "Status diperbarui", v)
 }

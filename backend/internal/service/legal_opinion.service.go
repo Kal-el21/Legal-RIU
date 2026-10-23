@@ -25,8 +25,8 @@ type LegalOpinionService interface {
 	Update(id string, userID string, req dto.UpdateLegalOpinionRequest) (*entity.LegalOpinion, error)
 	Delete(id string, userID string) error
 	Resubmit(id string, userID string, files []*multipart.FileHeader) (*entity.LegalOpinion, error)
-	UpdateStatus(id string, req dto.UpdateStatusRequest) error
-	UploadResult(id string, adminID string, req dto.UploadResultRequest, file *multipart.FileHeader) error
+	UpdateStatus(id string, req dto.UpdateStatusRequest) (*PerubahanStatus, error)
+	UploadResult(id string, adminID string, req dto.UploadResultRequest, file *multipart.FileHeader) (*PerubahanStatus, error)
 	DownloadFile(filePath, userID, role string) (*minio.Object, string, error)
 	GeneratePDF(id string) ([]byte, error)
 	SaveDraft(userID string, req dto.CreateLegalOpinionRequest, files []*multipart.FileHeader) (*entity.LegalOpinion, error)
@@ -202,45 +202,48 @@ func (s *legalOpinionService) Resubmit(id string, userID string, files []*multip
 	return s.muat(lo.ID)
 }
 
-func (s *legalOpinionService) UpdateStatus(id string, req dto.UpdateStatusRequest) error {
+func (s *legalOpinionService) UpdateStatus(id string, req dto.UpdateStatusRequest) (*PerubahanStatus, error) {
 	uid, err := parseUUID(id)
 	if err != nil {
-		return errors.New("ID tidak valid")
+		return nil, errors.New("ID tidak valid")
 	}
 
 	lo, err := s.repo.FindByID(uid)
 	if err != nil || lo.Status == entity.StatusDraft {
-		return errors.New("pengajuan tidak ditemukan")
+		return nil, errors.New("pengajuan tidak ditemukan")
 	}
 
 	newStatus := entity.SubmissionStatus(req.Status)
 	if !isValidStatusTransition(lo.Status, newStatus) {
-		return errors.New("perubahan status tidak valid")
+		return nil, errors.New("perubahan status tidak valid")
 	}
 
-	return s.repo.UpdateStatus(uid, newStatus, req.AdminNote)
+	if err := s.repo.UpdateStatus(uid, newStatus, req.AdminNote); err != nil {
+		return nil, err
+	}
+	return &PerubahanStatus{Tiket: lo.TicketNumber, Lama: lo.Status, Baru: newStatus}, nil
 }
 
-func (s *legalOpinionService) UploadResult(id string, adminID string, req dto.UploadResultRequest, file *multipart.FileHeader) error {
+func (s *legalOpinionService) UploadResult(id string, adminID string, req dto.UploadResultRequest, file *multipart.FileHeader) (*PerubahanStatus, error) {
 	uid, err := parseUUID(id)
 	if err != nil {
-		return errors.New("ID tidak valid")
+		return nil, errors.New("ID tidak valid")
 	}
 	adminUID, err := parseUUID(adminID)
 	if err != nil {
-		return errors.New("admin tidak valid")
+		return nil, errors.New("admin tidak valid")
 	}
 
 	// Get current legal opinion to check status
 	lo, err := s.repo.FindByID(uid)
 	if err != nil || lo.Status == entity.StatusDraft {
-		return errors.New("pengajuan tidak ditemukan")
+		return nil, errors.New("pengajuan tidak ditemukan")
 	}
 
 	ctx := context.Background()
 	objectPath, fileName, err := s.storage.UploadFile(ctx, "legal-opinions/results", file, fmt.Sprintf("opinion-result-%s", lo.ID.String()))
 	if err != nil {
-		return errors.New("gagal mengupload hasil kajian")
+		return nil, errors.New("gagal mengupload hasil kajian")
 	}
 
 	result := &entity.LegalOpinionResult{
@@ -251,18 +254,20 @@ func (s *legalOpinionService) UploadResult(id string, adminID string, req dto.Up
 		Notes:          req.Notes,
 	}
 	if err := s.repo.AddResult(result); err != nil {
-		return errors.New("gagal menyimpan hasil kajian")
+		return nil, errors.New("gagal menyimpan hasil kajian")
 	}
 
 	// Auto-complete: If status is UNDER_REVIEW, automatically set to COMPLETED
+	ubah := &PerubahanStatus{Tiket: lo.TicketNumber, Lama: lo.Status, Baru: lo.Status}
 	if lo.Status == entity.StatusUnderReview {
 		if err := s.repo.UpdateStatus(uid, entity.StatusCompleted, ""); err != nil {
-			return errors.New("gagal mengupdate status ke COMPLETED")
+			return nil, errors.New("gagal mengupdate status ke COMPLETED")
 		}
+		ubah.Baru = entity.StatusCompleted
 	}
 
 	s.muat(uid) // hasil kajian langsung masuk Repositori Dokumen
-	return nil
+	return ubah, nil
 }
 
 // DownloadFile hanya melayani file yang terdaftar sebagai lampiran atau hasil

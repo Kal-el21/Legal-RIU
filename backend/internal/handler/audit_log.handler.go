@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"legal-riu-portal/internal/dto"
@@ -41,6 +43,24 @@ func toAuditLogResponse(l *entity.AuditLog) dto.AuditLogResponse {
 		OldValue: l.OldValue, NewValue: l.NewValue, Description: l.Description,
 		IPAddress: l.IPAddress, UserAgent: l.UserAgent, CreatedAt: l.CreatedAt,
 	}
+}
+
+// denganCatatan menambahkan catatan approver ke keterangan audit dengan format yang dipisah
+// halaman Audit Log (pisahCatatan di frontend/src/lib/audit.ts).
+func denganCatatan(catatan string) string {
+	if c := strings.TrimSpace(catatan); c != "" {
+		return ". Catatan: " + c
+	}
+	return ""
+}
+
+// keteranganImpor: keterangan audit impor Excel dengan jumlah baris yang masuk dan dilewati
+// (PR Audit Log tahap L.3).
+func keteranganImpor(jenis string, hasil *dto.ImportResult) string {
+	if hasil == nil {
+		return "Impor " + jenis
+	}
+	return fmt.Sprintf("Impor %s: %d baris masuk, %d dilewati", jenis, hasil.Imported, hasil.Skipped)
 }
 
 // uuidQuery membaca saringan ID dari query; kosong berarti tidak disaring.

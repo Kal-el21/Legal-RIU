@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"errors"
 	"mime/multipart"
-	"strconv"
 
 	"legal-riu-portal/internal/dto"
 	"legal-riu-portal/internal/entity"
@@ -90,7 +89,7 @@ func (h *LegalOpinionHandler) Create(c *gin.Context) {
 		}
 		utils.Created(c, "Pengajuan berhasil dibuat", lo)
 		middleware.SetAuditContext(c, entity.ActionUserUpdate, "legal_opinion", lo.ID.String())
-		c.Set("audit_description", "Legal opinion created")
+		c.Set("audit_description", "Pengajuan Legal Opinion "+lo.TicketNumber+" dibuat")
 		return
 	}
 
@@ -113,11 +112,7 @@ func (h *LegalOpinionHandler) Create(c *gin.Context) {
 		return
 	}
 	middleware.SetAuditContext(c, entity.ActionUserUpdate, "legal_opinion", lo.ID.String())
-	desc := "Legal opinion created"
-	if len(files) > 0 {
-		desc = "Legal opinion created with " + strconv.Itoa(len(files)) + " file(s)"
-	}
-	c.Set("audit_description", desc)
+	c.Set("audit_description", "Pengajuan Legal Opinion "+lo.TicketNumber+" dibuat"+denganLampiran(files))
 	utils.Created(c, "Pengajuan berhasil dibuat", lo)
 }
 
@@ -196,7 +191,7 @@ func (h *LegalOpinionHandler) SubmitDraft(c *gin.Context) {
 		return
 	}
 	middleware.SetAuditContext(c, entity.ActionUserUpdate, "legal_opinion", id)
-	c.Set("audit_description", "Legal opinion created from draft")
+	c.Set("audit_description", "Pengajuan Legal Opinion "+lo.TicketNumber+" dikirim dari draf")
 	utils.OK(c, "Pengajuan berhasil dikirim", lo)
 }
 
@@ -215,6 +210,7 @@ func (h *LegalOpinionHandler) Update(c *gin.Context) {
 		return
 	}
 	middleware.SetAuditContext(c, entity.ActionUserUpdate, "legal_opinion", id)
+	c.Set("audit_description", "Isian pengajuan Legal Opinion "+lo.TicketNumber+" diubah")
 	utils.OK(c, "Pengajuan berhasil diupdate", lo)
 }
 
@@ -227,6 +223,7 @@ func (h *LegalOpinionHandler) Delete(c *gin.Context) {
 		return
 	}
 	middleware.SetAuditContext(c, entity.ActionDelete, "legal_opinion", id)
+	c.Set("audit_description", "Pengajuan Legal Opinion dihapus")
 	utils.OK(c, "Pengajuan berhasil dihapus", nil)
 }
 
@@ -244,11 +241,7 @@ func (h *LegalOpinionHandler) Resubmit(c *gin.Context) {
 		return
 	}
 	middleware.SetAuditContext(c, entity.ActionUserUpdate, "legal_opinion", id)
-	desc := "Legal opinion resubmitted"
-	if len(files) > 0 {
-		desc = "Legal opinion resubmitted with " + strconv.Itoa(len(files)) + " file(s)"
-	}
-	c.Set("audit_description", desc)
+	c.Set("audit_description", "Pengajuan Legal Opinion "+lo.TicketNumber+" diajukan ulang"+denganLampiran(files))
 	utils.OK(c, "Pengajuan berhasil diajukan ulang", lo)
 }
 
@@ -287,12 +280,15 @@ func (h *LegalOpinionHandler) AdminUpdateStatus(c *gin.Context) {
 		utils.BadRequest(c, "Validasi gagal", err.Error())
 		return
 	}
-	if err := h.svc.UpdateStatus(id, req); err != nil {
+	ubah, err := h.svc.UpdateStatus(id, req)
+	if err != nil {
 		utils.BadRequest(c, err.Error(), nil)
 		return
 	}
-	desc := "Status changed to " + req.Status
-	middleware.SetAuditContextWithValues(c, entity.ActionStatusChange, "legal_opinion", id, nil, &req.Status, &desc)
+	// Status lama dan baru serta catatan approver dicatat (PR Audit Log tahap L.3).
+	lama, baru := string(ubah.Lama), string(ubah.Baru)
+	desc := "Status Legal Opinion " + ubah.Tiket + " diubah dari " + lama + " ke " + baru + denganCatatan(req.AdminNote)
+	middleware.SetAuditContextWithValues(c, entity.ActionStatusChange, "legal_opinion", id, &lama, &baru, &desc)
 	utils.OK(c, "Status berhasil diubah", nil)
 }
 
@@ -306,11 +302,21 @@ func (h *LegalOpinionHandler) AdminUploadResult(c *gin.Context) {
 		return
 	}
 	req := dto.UploadResultRequest{Notes: c.PostForm("notes")}
-	if err := h.svc.UploadResult(id, adminID, req, file); err != nil {
+	ubah, err := h.svc.UploadResult(id, adminID, req, file)
+	if err != nil {
 		utils.InternalError(c, err.Error())
 		return
 	}
-	middleware.SetAuditContext(c, entity.ActionFileUpload, "legal_opinion", id)
+	// Unggah hasil saat Sedang Direview menyelesaikan pengajuan; perubahan statusnya ikut dicatat.
+	desc := "Hasil kajian Legal Opinion " + ubah.Tiket + " diunggah: " + file.Filename
+	var lama, baru *string
+	if ubah.Baru != ubah.Lama {
+		l, b := string(ubah.Lama), string(ubah.Baru)
+		lama, baru = &l, &b
+		desc += "; status diubah dari " + l + " ke " + b
+	}
+	desc += denganCatatan(req.Notes)
+	middleware.SetAuditContextWithValues(c, entity.ActionFileUpload, "legal_opinion", id, lama, baru, &desc)
 	utils.OK(c, "Hasil kajian berhasil diupload", nil)
 }
 

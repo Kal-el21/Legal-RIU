@@ -5,6 +5,7 @@ import (
 
 	"legal-riu-portal/internal/dto"
 	"legal-riu-portal/internal/entity"
+	"legal-riu-portal/internal/middleware"
 	"legal-riu-portal/internal/service"
 	"legal-riu-portal/internal/utils"
 
@@ -72,6 +73,8 @@ func (h *DivisionHandler) Create(c *gin.Context) {
 		utils.BadRequest(c, err.Error(), nil)
 		return
 	}
+	middleware.SetAuditContext(c, entity.ActionUserUpdate, "division", item.ID)
+	c.Set("audit_description", "Divisi "+item.Name+" dibuat")
 	utils.Created(c, "Divisi berhasil dibuat", toDivisionResponse(item))
 }
 
@@ -90,6 +93,8 @@ func (h *DivisionHandler) Update(c *gin.Context) {
 		utils.BadRequest(c, err.Error(), nil)
 		return
 	}
+	middleware.SetAuditContext(c, entity.ActionUserUpdate, "division", item.ID)
+	c.Set("audit_description", "Divisi "+item.Name+" diubah")
 	utils.OK(c, "Divisi berhasil diupdate", toDivisionResponse(item))
 }
 
@@ -99,6 +104,8 @@ func (h *DivisionHandler) Delete(c *gin.Context) {
 		utils.BadRequest(c, err.Error(), nil)
 		return
 	}
+	middleware.SetAuditContext(c, entity.ActionDelete, "division", id)
+	c.Set("audit_description", "Divisi dihapus")
 	utils.OK(c, "Divisi berhasil dihapus", nil)
 }
 
@@ -113,6 +120,8 @@ func (h *DivisionHandler) ImportDivisions(c *gin.Context) {
 		utils.BadRequest(c, err.Error(), nil)
 		return
 	}
+	middleware.SetAuditContext(c, entity.ActionFileUpload, "division", "import")
+	c.Set("audit_description", keteranganImpor("divisi", result))
 	utils.OK(c, "Impor divisi selesai", result)
 }
 

@@ -26,7 +26,7 @@ export function nadaAksi(aksi: string): NadaAksi {
   return AKSI[aksi as AuditAction]?.nada ?? 'abu'
 }
 
-// Semua jenis entitas yang ditulis backend (SetAuditContext dan auditLogSvc.Log).
+// Semua jenis entitas yang ditulis backend (SetAuditContext dan auditLogSvc.Log); divisi sejak L.3.
 export const ENTITAS: Record<string, string> = {
   legal_opinion: 'Legal Opinion',
   document_review: 'Review Dokumen',
@@ -37,6 +37,7 @@ export const ENTITAS: Record<string, string> = {
   legal_case: 'Perkara',
   legal_material: 'Materi Legal',
   company: 'Perusahaan',
+  division: 'Divisi',
   case_type: 'Jenis perkara',
   case_category: 'Kategori perkara',
   purpose_type: 'Tujuan pembuatan',
@@ -137,6 +138,7 @@ const DETAIL: Record<string, string> = {
 // Data tanpa halaman detail per ID: tautannya ke halaman kelolanya (hanya ada di panel admin).
 const KELOLA_ADMIN: Record<string, string> = {
   company: 'companies',
+  division: 'divisions',
   case_type: 'case-types',
   case_category: 'case-categories',
   purpose_type: 'purpose-types',
