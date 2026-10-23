@@ -3,19 +3,21 @@
 import { STATUS_LABEL } from './utils'
 import type { AuditAction, AuditLog, SubmissionStatus, UserRole } from '@/types'
 
-export type NadaAksi = 'biru' | 'hijau' | 'abu' | 'merah' | 'ungu' | 'kuning' | 'teal'
+// Warna mengikuti halaman lain di ALEA (tahap L.6): aksi netral, hanya penghapusan yang merah.
+// Warna status pengajuan datang dari StatusBadge, bukan dari aksinya.
+export type NadaAksi = 'netral' | 'hapus'
 
 export const AKSI: Record<AuditAction, { label: string; nada: NadaAksi }> = {
-  STATUS_CHANGE: { label: 'Status diubah', nada: 'biru' },
-  FILE_UPLOAD: { label: 'File diunggah', nada: 'hijau' },
-  USER_UPDATE: { label: 'Data dibuat atau diubah', nada: 'abu' },
-  LOGIN: { label: 'Masuk', nada: 'teal' },
-  LOGOUT: { label: 'Keluar', nada: 'abu' },
-  DELETE: { label: 'Dihapus', nada: 'merah' },
-  FILE_DELETE: { label: 'File dihapus', nada: 'merah' },
-  PERMISSION_UPDATE: { label: 'Izin diubah', nada: 'ungu' },
-  PARENT_CHANGE: { label: 'Induk perusahaan diganti', nada: 'kuning' },
-  SIGNATORY_CHANGE: { label: 'Penandatangan diubah', nada: 'kuning' },
+  STATUS_CHANGE: { label: 'Status diubah', nada: 'netral' },
+  FILE_UPLOAD: { label: 'File diunggah', nada: 'netral' },
+  USER_UPDATE: { label: 'Data dibuat atau diubah', nada: 'netral' },
+  LOGIN: { label: 'Masuk', nada: 'netral' },
+  LOGOUT: { label: 'Keluar', nada: 'netral' },
+  DELETE: { label: 'Dihapus', nada: 'hapus' },
+  FILE_DELETE: { label: 'File dihapus', nada: 'hapus' },
+  PERMISSION_UPDATE: { label: 'Izin diubah', nada: 'netral' },
+  PARENT_CHANGE: { label: 'Induk perusahaan diganti', nada: 'netral' },
+  SIGNATORY_CHANGE: { label: 'Penandatangan diubah', nada: 'netral' },
 }
 
 export function labelAksi(aksi: string): string {
@@ -23,7 +25,7 @@ export function labelAksi(aksi: string): string {
 }
 
 export function nadaAksi(aksi: string): NadaAksi {
-  return AKSI[aksi as AuditAction]?.nada ?? 'abu'
+  return AKSI[aksi as AuditAction]?.nada ?? 'netral'
 }
 
 // Semua jenis entitas yang ditulis backend (SetAuditContext dan auditLogSvc.Log); divisi sejak L.3.
@@ -81,6 +83,12 @@ export function pisahCatatan(keterangan?: string): { keterangan: string; catatan
 const POLA_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 const tampilNilai = (v?: string) => (v ? STATUS_LABEL[v as SubmissionStatus] ?? v : undefined)
+
+// kodeStatus: nilai yang berupa status pengajuan, untuk ditampilkan dengan StatusBadge. Status perkara
+// (teks bebas, mis. "Banding") dan nilai lain tidak dikenali dan tetap ditampilkan sebagai teks.
+export function kodeStatus(nilai?: string): SubmissionStatus | undefined {
+  return nilai && Object.keys(STATUS_LABEL).includes(nilai) ? (nilai as SubmissionStatus) : undefined
+}
 
 // perbandingan: nilai lama dan baru untuk ditampilkan, dengan status pengajuan dibaca
 // labelnya. Nilai berupa ID (mis. perusahaan di ganti induk) tidak ditampilkan, karena

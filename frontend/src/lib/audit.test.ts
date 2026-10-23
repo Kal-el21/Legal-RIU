@@ -1,11 +1,17 @@
 import { describe, expect, it } from 'vitest'
-import { AKSI, ENTITAS, jamWIB, kelompokPerHari, labelAksi, labelEntitas, perbandingan, pisahCatatan, tautanData } from './audit'
+import { AKSI, ENTITAS, jamWIB, kelompokPerHari, kodeStatus, labelAksi, labelEntitas, nadaAksi, perbandingan, pisahCatatan, tautanData } from './audit'
 
 describe('label', () => {
   it('semua aksi berlabel bahasa Indonesia, kode yang tidak dikenal ditampilkan apa adanya', () => {
     expect(labelAksi('STATUS_CHANGE')).toBe('Status diubah')
     expect(labelAksi('AKSI_BARU')).toBe('AKSI_BARU')
     expect(Object.values(AKSI).every((a) => a.label && !a.label.includes('_'))).toBe(true)
+  })
+
+  it('hanya penghapusan yang bernada merah; aksi yang tidak dikenal netral', () => {
+    const hapus = Object.entries(AKSI).filter(([, a]) => a.nada === 'hapus').map(([k]) => k)
+    expect(hapus.sort()).toEqual(['DELETE', 'FILE_DELETE'])
+    expect(nadaAksi('AKSI_BARU')).toBe('netral')
   })
 
   it('jenis data berlabel, yang tidak dikenal apa adanya', () => {
@@ -40,6 +46,16 @@ describe('perbandingan', () => {
   it('tanpa nilai, atau nilai berupa ID, tidak ditampilkan', () => {
     expect(perbandingan({})).toBeNull()
     expect(perbandingan({ old_value: '8f14e45f-ceea-467a-9575-9a9d5a3c1b2e', new_value: '1679091c-5a88-4faf-b5e6-7b0f1c6a4b3d' })).toBeNull()
+  })
+})
+
+describe('kodeStatus', () => {
+  it('status pengajuan dikenali untuk StatusBadge; status perkara dan nilai lain tidak', () => {
+    expect(kodeStatus('NEED_REVISION')).toBe('NEED_REVISION')
+    expect(kodeStatus('COMPLETED')).toBe('COMPLETED')
+    expect(kodeStatus('Banding')).toBeUndefined()
+    expect(kodeStatus('toString')).toBeUndefined()
+    expect(kodeStatus(undefined)).toBeUndefined()
   })
 })
 
