@@ -81,18 +81,6 @@ const ALLOWED_MIME_TYPES = [
 ]
 const MAX_FILE_SIZE = 100 * 1024 * 1024 // 100 MB
 
-// Sync validation - extension and size only
-export function validateFileSync(file: File): string | null {
-  const ext = '.' + file.name.split('.').pop()?.toLowerCase()
-  if (!ALLOWED_EXTENSIONS.includes(ext)) {
-    return `Format file tidak didukung. Gunakan: PDF, DOC, DOCX`
-  }
-  if (file.size > MAX_FILE_SIZE) {
-    return `Ukuran file melebihi batas maksimal 100 MB`
-  }
-  return null
-}
-
 // Async validation - includes content/Magic number check
 async function validateFileContent(file: File): Promise<string | null> {
   const buffer = await file.slice(0, 4).arrayBuffer()
@@ -130,4 +118,17 @@ export async function validateFile(file: File): Promise<string | null> {
   
   // Validate file content via magic numbers
   return validateFileContent(file)
+}
+
+// pilahLampiran memeriksa file yang dipilih satu per satu dengan validateFile: yang sah
+// dikembalikan untuk diunggah, yang ditolak menjadi pesan "<nama file>: <alasan>".
+export async function pilahLampiran(files: File[]): Promise<{ sah: File[]; ditolak: string[] }> {
+  const sah: File[] = []
+  const ditolak: string[] = []
+  for (const f of files) {
+    const err = await validateFile(f)
+    if (err) ditolak.push(`${f.name}: ${err}`)
+    else sah.push(f)
+  }
+  return { sah, ditolak }
 }

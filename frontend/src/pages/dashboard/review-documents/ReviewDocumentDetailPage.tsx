@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import StatusBadge from '@/components/common/StatusBadge'
 import { useDocumentReview, useDeleteDocumentReview, useResubmitDocumentReview } from '@/hooks/useDocumentReview'
 import { useAuthStore } from '@/store/auth.store'
-import { formatDateTime, formatFileSize, validateFileSync } from '@/lib/utils'
+import { formatDateTime, formatFileSize, pilahLampiran } from '@/lib/utils'
 import { documentReviewService } from '@/services/document-review.service'
 import type { SubmissionStatus } from '@/types'
 
@@ -19,6 +19,7 @@ export default function ReviewDocumentDetailPage() {
   const resubmitMutation = useResubmitDocumentReview()
 
   const [resubmitFiles, setResubmitFiles] = useState<File[]>([])
+  const [resubmitErrors, setResubmitErrors] = useState<string[]>([])
   const [showResubmit, setShowResubmit] = useState(false)
 
   const handleDelete = async () => {
@@ -31,6 +32,14 @@ export default function ReviewDocumentDetailPage() {
     await resubmitMutation.mutateAsync({ id: id!, files: resubmitFiles })
     setShowResubmit(false)
     setResubmitFiles([])
+    setResubmitErrors([])
+  }
+
+  const handleResubmitFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { sah, ditolak } = await pilahLampiran(Array.from(e.target.files ?? []))
+    setResubmitErrors(ditolak)
+    setResubmitFiles((prev) => [...prev, ...sah])
+    e.target.value = ''
   }
 
   const handleDownload = async (filePath: string) => {
@@ -173,12 +182,15 @@ export default function ReviewDocumentDetailPage() {
                 <label className="flex flex-col items-center gap-2 p-6 border-2 border-dashed border-gray-200 rounded-xl cursor-pointer hover:bg-gray-50 transition-colors">
                   <FileText className="w-6 h-6 text-gray-400" />
                   <p className="text-sm text-gray-500">Upload dokumen revisi (opsional)</p>
-                  <input type="file" multiple accept=".pdf,.doc,.docx" className="hidden"
-                    onChange={(e) => {
-                      const valid = Array.from(e.target.files ?? []).filter((f) => !validateFileSync(f))
-                      setResubmitFiles((p) => [...p, ...valid])
-                    }} />
+                  <input type="file" multiple accept=".pdf,.doc,.docx" className="hidden" onChange={handleResubmitFileChange} />
                 </label>
+                {resubmitErrors.length > 0 && (
+                  <div className="space-y-1">
+                    {resubmitErrors.map((e, i) => (
+                      <p key={i} className="text-xs text-red-500">{e}</p>
+                    ))}
+                  </div>
+                )}
                 {resubmitFiles.length > 0 && (
                   <div className="space-y-1.5">
                     {resubmitFiles.map((f, i) => (
