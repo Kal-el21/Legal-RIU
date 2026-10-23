@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"legal-riu-portal/internal/dto"
 	"legal-riu-portal/internal/entity"
 	"legal-riu-portal/internal/middleware"
@@ -155,6 +156,14 @@ func auditPerjanjian(c *gin.Context, aksi entity.AuditAction, id, keterangan str
 	middleware.SetAuditContextWithValues(c, aksi, "agreement_document", id, nil, nil, &keterangan)
 }
 
+// keteranganRincian: "diubah: <rincian>" atau "disimpan tanpa perubahan" untuk audit log.
+func keteranganRincian(rincian []string) string {
+	if len(rincian) == 0 {
+		return "disimpan tanpa perubahan"
+	}
+	return "diubah: " + strings.Join(rincian, "; ")
+}
+
 func denganLampiran(files []*multipart.FileHeader) string {
 	if len(files) == 0 {
 		return ""
@@ -187,18 +196,29 @@ func (h *AgreementDocumentHandler) GetByID(c *gin.Context) {
 	log.Printf("[agreement] GetByID OK id=%s status=%s", c.Param("id"), v.Status)
 	utils.OK(c, "Success", v)
 }
+// BolehBuka: pemeriksa akses riwayat (PR Audit Log tahap L.4), sama dengan GetByID.
+func (h *AgreementDocumentHandler) BolehBuka(c *gin.Context) (uuid.UUID, bool) {
+	all := middleware.RoleWithAllAccess(c, "agreement_document.view.all") != "USER"
+	d, e := h.svc.GetByID(c.Param("id"), middleware.GetUserID(c), all)
+	if e != nil {
+		utils.NotFound(c, e.Error())
+		return uuid.Nil, false
+	}
+	return d.ID, true
+}
+
 func (h *AgreementDocumentHandler) Update(c *gin.Context) {
 	var req dto.UpdateAgreementDocumentRequest
 	if e := c.ShouldBindJSON(&req); e != nil {
 		utils.BadRequest(c, "Data tidak valid", e.Error())
 		return
 	}
-	v, e := h.svc.Update(c.Param("id"), middleware.GetUserID(c), req)
+	v, rincian, e := h.svc.Update(c.Param("id"), middleware.GetUserID(c), req)
 	if e != nil {
 		utils.BadRequest(c, e.Error(), nil)
 		return
 	}
-	auditPerjanjian(c, entity.ActionUserUpdate, v.ID.String(), "Isian pengajuan perjanjian "+v.TicketNumber+" diubah")
+	auditPerjanjian(c, entity.ActionUserUpdate, v.ID.String(), "Isian pengajuan perjanjian "+v.TicketNumber+" "+keteranganRincian(rincian))
 	utils.OK(c, "Pengajuan diperbarui", v)
 }
 func (h *AgreementDocumentHandler) Delete(c *gin.Context) {
@@ -229,18 +249,23 @@ func (h *AgreementDocumentHandler) UpdateMeta(c *gin.Context) {
 		utils.BadRequest(c, "Data tidak valid", e.Error())
 		return
 	}
-	v, ganti, e := h.svc.UpdateMeta(c.Param("id"), req)
+	v, ganti, rincian, e := h.svc.UpdateMeta(c.Param("id"), req)
 	if e != nil {
 		utils.BadRequest(c, e.Error(), nil)
 		return
 	}
 	// Satu permintaan hanya menghasilkan satu baris audit: pergantian penandatangan usulan
 	// (PR 11, P3) dicatat dengan aksinya sendiri, selebihnya sebagai perubahan data persetujuan.
+	// Keterangan menyebut setiap data yang berubah (PR Audit Log tahap L.3b), juga di baris
+	// pergantian penandatangan, supaya perubahan lain di permintaan yang sama tidak hilang.
 	if ganti != nil {
 		desc := "Penandatangan Pihak Pertama " + v.TicketNumber + " diganti approver"
+		if len(rincian) > 0 {
+			desc += "; data persetujuan: " + strings.Join(rincian, "; ")
+		}
 		middleware.SetAuditContextWithValues(c, entity.ActionSignatoryChange, "agreement_document", v.ID.String(), &ganti.Usulan, &ganti.Pilihan, &desc)
 	} else {
-		auditPerjanjian(c, entity.ActionUserUpdate, v.ID.String(), "Data persetujuan perjanjian "+v.TicketNumber+" diubah")
+		auditPerjanjian(c, entity.ActionUserUpdate, v.ID.String(), "Data persetujuan perjanjian "+v.TicketNumber+" "+keteranganRincian(rincian))
 	}
 	utils.OK(c, "Metadata diperbarui", v)
 }
@@ -262,10 +287,7 @@ func (h *AgreementDocumentHandler) UpdateStatus(c *gin.Context) {
 		return
 	}
 	baru := string(v.Status)
-	desc := "Status perjanjian " + v.TicketNumber + " diubah dari " + lama + " ke " + baru
-	if strings.TrimSpace(req.Note) != "" {
-		desc += ". Catatan: " + strings.TrimSpace(req.Note)
-	}
+	desc := "Status perjanjian " + v.TicketNumber + " diubah dari " + lama + " ke " + baru + denganCatatan(req.Note)
 	middleware.SetAuditContextWithValues(c, entity.ActionStatusChange, "agreement_document", v.ID.String(), &lama, &baru, &desc)
 	utils.OK(c, "Status diperbarui", v)
 }

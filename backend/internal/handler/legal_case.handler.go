@@ -5,6 +5,7 @@ import (
 	"errors"
 	"mime/multipart"
 	"strconv"
+	"strings"
 
 	"legal-riu-portal/internal/dto"
 	"legal-riu-portal/internal/entity"
@@ -107,6 +108,26 @@ func (h *LegalCaseHandler) GetByID(c *gin.Context) {
 	utils.OK(c, "Success", legalCase)
 }
 
+// BolehBuka: pemeriksa akses riwayat (PR Audit Log tahap L.4), sama dengan GetByID, termasuk
+// batasan perusahaan Legal AU.
+func (h *LegalCaseHandler) BolehBuka(c *gin.Context) (uuid.UUID, bool) {
+	scope, ok := h.companyScope(c)
+	if !ok {
+		return uuid.Nil, false
+	}
+	legalCase, err := h.svc.GetByID(scope, c.Param("id"))
+	if err != nil {
+		utils.NotFound(c, err.Error())
+		return uuid.Nil, false
+	}
+	id, err := uuid.Parse(legalCase.ID)
+	if err != nil {
+		utils.NotFound(c, "kasus hukum tidak ditemukan")
+		return uuid.Nil, false
+	}
+	return id, true
+}
+
 func (h *LegalCaseHandler) Create(c *gin.Context) {
 	scope, ok := h.companyScope(c)
 	if !ok {
@@ -125,7 +146,7 @@ func (h *LegalCaseHandler) Create(c *gin.Context) {
 	}
 
 	middleware.SetAuditContext(c, entity.ActionUserUpdate, "legal_case", legalCase.ID)
-	c.Set("audit_description", "Legal case created")
+	c.Set("audit_description", "Perkara "+legalCase.TicketNumber+" dibuat")
 	utils.Created(c, "Kasus hukum berhasil dibuat", legalCase)
 }
 
@@ -140,14 +161,24 @@ func (h *LegalCaseHandler) Update(c *gin.Context) {
 		return
 	}
 
+	// Status lama dibaca dulu: LEGAL dan ADMIN mengubah status perkara lewat form ini
+	// (alamat /status hanya ada di Legal AU), jadi perubahan statusnya dicatat sebagai
+	// perubahan status (PR Audit Log tahap L.3).
+	sebelum, _ := h.svc.GetByID(scope, c.Param("id"))
 	legalCase, err := h.svc.Update(scope, c.Param("id"), req)
 	if err != nil {
 		utils.BadRequest(c, err.Error(), nil)
 		return
 	}
 
-	middleware.SetAuditContext(c, entity.ActionUserUpdate, "legal_case", legalCase.ID)
-	c.Set("audit_description", "Legal case updated")
+	if sebelum != nil && sebelum.CurrentStatus != legalCase.CurrentStatus {
+		lama, baru := sebelum.CurrentStatus, legalCase.CurrentStatus
+		desc := "Data perkara " + legalCase.TicketNumber + " diubah; status dari " + lama + " ke " + baru
+		middleware.SetAuditContextWithValues(c, entity.ActionStatusChange, "legal_case", legalCase.ID, &lama, &baru, &desc)
+	} else {
+		middleware.SetAuditContext(c, entity.ActionUserUpdate, "legal_case", legalCase.ID)
+		c.Set("audit_description", "Data perkara "+legalCase.TicketNumber+" diubah")
+	}
 	utils.OK(c, "Kasus hukum berhasil diupdate", legalCase)
 }
 
@@ -163,6 +194,7 @@ func (h *LegalCaseHandler) Delete(c *gin.Context) {
 	}
 
 	middleware.SetAuditContext(c, entity.ActionDelete, "legal_case", id)
+	c.Set("audit_description", "Perkara dihapus")
 	utils.OK(c, "Kasus hukum berhasil dihapus", nil)
 }
 
@@ -186,7 +218,7 @@ func (h *LegalCaseHandler) UploadDocument(c *gin.Context) {
 	}
 
 	middleware.SetAuditContext(c, entity.ActionFileUpload, "legal_case", id)
-	c.Set("audit_description", "Legal case document uploaded")
+	c.Set("audit_description", "Dokumen perkara diunggah: "+file.Filename)
 	utils.OK(c, "Dokumen berhasil diupload", legalCase)
 }
 
@@ -210,7 +242,7 @@ func (h *LegalCaseHandler) UploadPhoto(c *gin.Context) {
 	}
 
 	middleware.SetAuditContext(c, entity.ActionFileUpload, "legal_case", id)
-	c.Set("audit_description", "Legal case photo uploaded")
+	c.Set("audit_description", "Foto perkara diunggah: "+file.Filename)
 	utils.OK(c, "Foto berhasil diupload", legalCase)
 }
 
@@ -228,7 +260,7 @@ func (h *LegalCaseHandler) DeletePhoto(c *gin.Context) {
 	}
 
 	middleware.SetAuditContext(c, entity.ActionFileDelete, "legal_case", id)
-	c.Set("audit_description", "Legal case photo deleted")
+	c.Set("audit_description", "Foto perkara dihapus")
 	utils.OK(c, "Foto berhasil dihapus", legalCase)
 }
 
@@ -252,7 +284,7 @@ func (h *LegalCaseHandler) ImportChronologies(c *gin.Context) {
 	}
 
 	middleware.SetAuditContext(c, entity.ActionFileUpload, "legal_case", id)
-	c.Set("audit_description", "Legal case chronologies imported")
+	c.Set("audit_description", keteranganImpor("kronologi perkara", result))
 	utils.OK(c, "Impor kronologi selesai", result)
 }
 
@@ -309,7 +341,7 @@ func (h *LegalCaseHandler) DeleteDocument(c *gin.Context) {
 	}
 
 	middleware.SetAuditContext(c, entity.ActionFileDelete, "legal_case", id)
-	c.Set("audit_description", "Legal case document deleted")
+	c.Set("audit_description", "Dokumen perkara dihapus")
 	utils.OK(c, "Dokumen berhasil dihapus", legalCase)
 }
 
@@ -343,7 +375,7 @@ func (h *LegalCaseHandler) CreateChronology(c *gin.Context) {
 	}
 
 	middleware.SetAuditContext(c, entity.ActionUserUpdate, "legal_case", c.Param("id"))
-	c.Set("audit_description", "Legal case chronology added")
+	c.Set("audit_description", "Kronologi ditambahkan: "+chronology.Agenda)
 	utils.Created(c, "Kronologi kasus berhasil ditambahkan", chronology)
 }
 
@@ -364,7 +396,7 @@ func (h *LegalCaseHandler) UpdateChronology(c *gin.Context) {
 	}
 
 	middleware.SetAuditContext(c, entity.ActionUserUpdate, "legal_case", c.Param("id"))
-	c.Set("audit_description", "Legal case chronology updated")
+	c.Set("audit_description", "Kronologi diubah: "+chronology.Agenda)
 	utils.OK(c, "Kronologi kasus berhasil diupdate", chronology)
 }
 
@@ -379,7 +411,7 @@ func (h *LegalCaseHandler) DeleteChronology(c *gin.Context) {
 	}
 
 	middleware.SetAuditContext(c, entity.ActionDelete, "legal_case", c.Param("id"))
-	c.Set("audit_description", "Legal case chronology deleted")
+	c.Set("audit_description", "Kronologi dihapus")
 	utils.OK(c, "Kronologi kasus berhasil dihapus", nil)
 }
 
@@ -444,7 +476,7 @@ func (h *LegalCaseHandler) CreateRegency(c *gin.Context) {
 	}
 
 	middleware.SetAuditContext(c, entity.ActionUserUpdate, "regency", regency.ID)
-	c.Set("audit_description", "Regency created")
+	c.Set("audit_description", "Kabupaten/kota "+regency.Name+" dibuat")
 	utils.Created(c, "Kabupaten/Kota berhasil dibuat", regency)
 }
 
@@ -462,7 +494,7 @@ func (h *LegalCaseHandler) UpdateRegency(c *gin.Context) {
 	}
 
 	middleware.SetAuditContext(c, entity.ActionUserUpdate, "regency", regency.ID)
-	c.Set("audit_description", "Regency updated")
+	c.Set("audit_description", "Kabupaten/kota "+regency.Name+" diubah")
 	utils.OK(c, "Kabupaten/Kota berhasil diupdate", regency)
 }
 
@@ -474,7 +506,7 @@ func (h *LegalCaseHandler) DeleteRegency(c *gin.Context) {
 	}
 
 	middleware.SetAuditContext(c, entity.ActionDelete, "regency", id)
-	c.Set("audit_description", "Regency deleted")
+	c.Set("audit_description", "Kabupaten/kota dihapus")
 	utils.OK(c, "Kabupaten/Kota berhasil dihapus", nil)
 }
 
@@ -492,7 +524,7 @@ func (h *LegalCaseHandler) CreateCedant(c *gin.Context) {
 	}
 
 	middleware.SetAuditContext(c, entity.ActionUserUpdate, "cedant", cedant.ID)
-	c.Set("audit_description", "Cedant created")
+	c.Set("audit_description", "Cedant "+cedant.Name+" dibuat")
 	utils.Created(c, "Cedant berhasil dibuat", cedant)
 }
 
@@ -510,7 +542,7 @@ func (h *LegalCaseHandler) UpdateCedant(c *gin.Context) {
 	}
 
 	middleware.SetAuditContext(c, entity.ActionUserUpdate, "cedant", cedant.ID)
-	c.Set("audit_description", "Cedant updated")
+	c.Set("audit_description", "Cedant "+cedant.Name+" diubah")
 	utils.OK(c, "Cedant berhasil diupdate", cedant)
 }
 
@@ -522,7 +554,7 @@ func (h *LegalCaseHandler) DeleteCedant(c *gin.Context) {
 	}
 
 	middleware.SetAuditContext(c, entity.ActionDelete, "cedant", id)
-	c.Set("audit_description", "Cedant deleted")
+	c.Set("audit_description", "Cedant dihapus")
 	utils.OK(c, "Cedant berhasil dihapus", nil)
 }
 
@@ -538,7 +570,7 @@ func (h *LegalCaseHandler) ImportCedants(c *gin.Context) {
 		return
 	}
 	middleware.SetAuditContext(c, entity.ActionFileUpload, "cedant", "import")
-	c.Set("audit_description", "Cedants imported")
+	c.Set("audit_description", keteranganImpor("cedant", result))
 	utils.OK(c, "Impor cedant selesai", result)
 }
 
@@ -565,7 +597,7 @@ func (h *LegalCaseHandler) ImportRegencies(c *gin.Context) {
 		return
 	}
 	middleware.SetAuditContext(c, entity.ActionFileUpload, "regency", "import")
-	c.Set("audit_description", "Regencies imported")
+	c.Set("audit_description", keteranganImpor("kabupaten/kota", result))
 	utils.OK(c, "Impor regensi selesai", result)
 }
 
@@ -595,7 +627,8 @@ func (h *LegalCaseHandler) UpdateStatus(c *gin.Context) {
 	}
 
 	// Perkara yang tidak ada dan perkara perusahaan lain dijawab sama.
-	if _, err := h.svc.GetByID(scope, id); err != nil {
+	sebelum, err := h.svc.GetByID(scope, id)
+	if err != nil {
 		utils.NotFound(c, err.Error())
 		return
 	}
@@ -605,8 +638,9 @@ func (h *LegalCaseHandler) UpdateStatus(c *gin.Context) {
 		return
 	}
 
-	middleware.SetAuditContext(c, entity.ActionStatusChange, "legal_case", id)
-	c.Set("audit_description", "Legal case status updated")
+	lama, baru := sebelum.CurrentStatus, strings.TrimSpace(body.Status)
+	desc := "Status perkara " + sebelum.TicketNumber + " diubah dari " + lama + " ke " + baru
+	middleware.SetAuditContextWithValues(c, entity.ActionStatusChange, "legal_case", id, &lama, &baru, &desc)
 	utils.OK(c, "Status kasus berhasil diupdate", nil)
 }
 

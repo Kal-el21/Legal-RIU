@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import { AlertTriangle, ArrowLeft, Download, FileText } from 'lucide-react'
 import { agreementService, type AgreementDocument, type AgreementSchema } from '@/services/agreement-document.service'
 import type { FieldDef, Nilai } from '@/lib/agreement-draft'
@@ -10,6 +11,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import StatusBadge from '@/components/common/StatusBadge'
+import RiwayatAktivitas from '@/components/shared/RiwayatAktivitas'
 import { formatDate, formatDateTime } from '@/lib/utils'
 import type { SubmissionStatus } from '@/types'
 
@@ -144,6 +146,7 @@ function DataPengajuan({ data, schema }: { data: Record<string, unknown>; schema
 export default function AgreementDocumentDetail({ apiBase = '', approver = false }: Props) {
   const navigate = useNavigate()
   const { id } = useParams()
+  const queryClient = useQueryClient()
   const [document, setDocument] = useState<AgreementDocument>()
   const [schema, setSchema] = useState<AgreementSchema>()
   const [note, setNote] = useState('')
@@ -240,10 +243,12 @@ export default function AgreementDocumentDetail({ apiBase = '', approver = false
       setDocument(value)
       setMeta(isianAwalPersetujuan(value, master))
       setError('')
+      // Aksi di halaman ini tidak lewat useMutation, jadi riwayatnya dimuat ulang di sini.
+      void queryClient.invalidateQueries({ queryKey: ['riwayat', 'agreement_document'] })
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Gagal memuat pengajuan')
     }
-  }, [apiBase, id, muatMaster])
+  }, [apiBase, id, muatMaster, queryClient])
 
   // Satu aksi pada satu waktu: persetujuan butuh beberapa detik untuk menyiapkan
   // PDF, dan tanpa kunci tombol yang ditekan dua kali mengirim dua persetujuan.
@@ -367,6 +372,9 @@ export default function AgreementDocumentDetail({ apiBase = '', approver = false
           {approver && <a href={agreementService.fileUrl(apiBase, id!, 'docx')}><Button variant="outline" className="flex items-center gap-2"><Download className="w-4 h-4" /> Download DOCX</Button></a>}
         </div>}
       </div>
+    </div>
+    <div className="mt-6">
+      <RiwayatAktivitas kunci={['agreement_document', apiBase, id!]} ambil={() => agreementService.history(id!, apiBase)} />
     </div>
   </div>
 }

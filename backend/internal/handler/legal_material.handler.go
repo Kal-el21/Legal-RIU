@@ -129,7 +129,7 @@ func (h *LegalMaterialHandler) ImportLegalMaterials(c *gin.Context) {
 		return
 	}
 	middleware.SetAuditContext(c, entity.ActionFileUpload, "legal_material", "import")
-	c.Set("audit_description", "Legal materials imported")
+	c.Set("audit_description", keteranganImpor("materi legal", result))
 	utils.OK(c, "Impor materi selesai", result)
 }
 

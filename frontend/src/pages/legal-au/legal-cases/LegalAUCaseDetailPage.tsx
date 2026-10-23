@@ -2,6 +2,8 @@ import { useParams, Link } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useLegalCase } from '@/hooks/useLegalCase'
+import { legalCaseService } from '@/services/legal-case.service'
+import RiwayatAktivitas from '@/components/shared/RiwayatAktivitas'
 import { formatDateTime } from '@/lib/utils'
 import CaseChronologySection from '@/pages/admin/legal-cases/components/CaseChronologySection'
 
@@ -93,6 +95,10 @@ export default function LegalAUCaseDetailPage() {
       )}
 
       <CaseChronologySection caseId={id!} />
+
+      <div className="mt-6">
+        <RiwayatAktivitas kunci={['legal_case', id!]} ambil={() => legalCaseService.history(id!)} />
+      </div>
     </div>
   )
 }

@@ -75,8 +75,18 @@ func TestAuditPerjanjian(t *testing.T) {
 	p := buatPerjanjian(t, pemilik, formPerjanjian())
 	harapAuditBaru(t, p.ID, 0, entity.ActionUserUpdate, p.TicketNumber+" dibuat", "membuat perjanjian")
 
-	harapKode(t, panggil(t, pemilik, http.MethodPut, urlPerjanjian("", "/", p.ID), map[string]any{"form_data": formPerjanjian()}), http.StatusOK, "mengubah isian")
-	harapAuditBaru(t, p.ID, 1, entity.ActionUserUpdate, "diubah", "mengubah isian")
+	// Rincian isian yang berubah, dengan label dan nilai yang terbaca (PR Audit Log tahap L.3b).
+	ubahan := formPerjanjian()
+	ubahan["nilai_kontrak"] = 2000000
+	ubahan["pihak_kedua_nama"] = "PT Mitra Baru"
+	ubahan["ruang_lingkup"] = []any{"Menyusun laporan", "Presentasi hasil"}
+	harapKode(t, panggil(t, pemilik, http.MethodPut, urlPerjanjian("", "/", p.ID), map[string]any{"form_data": ubahan}), http.StatusOK, "mengubah isian")
+	ub := harapAuditBaru(t, p.ID, 1, entity.ActionUserUpdate, "Nilai Kontrak (Rupiah): Rp 1.000.000 → Rp 2.000.000", "mengubah isian")
+	for _, m := range []string{"Nama Perusahaan: PT Mitra Tes → PT Mitra Baru", "Ruang Lingkup Pekerjaan diubah"} {
+		if ub.Description == nil || !strings.Contains(*ub.Description, m) {
+			t.Errorf("keterangan ubah isian tidak memuat %q: %v", m, ub.Description)
+		}
+	}
 
 	statusPerjanjian(t, legal, p.ID, "UNDER_REVIEW", "", http.StatusOK)
 	b := harapAuditBaru(t, p.ID, 2, entity.ActionStatusChange, "dari SUBMITTED ke UNDER_REVIEW", "mulai memeriksa")
@@ -91,7 +101,10 @@ func TestAuditPerjanjian(t *testing.T) {
 	}
 
 	harapKode(t, panggil(t, legal, http.MethodPatch, urlPerjanjian("/legal", "/", p.ID, "/meta"), map[string]string{"signing_place": "Bandung"}), http.StatusOK, "data persetujuan")
-	harapAuditBaru(t, p.ID, 3, entity.ActionUserUpdate, "Data persetujuan", "data persetujuan")
+	harapAuditBaru(t, p.ID, 3, entity.ActionUserUpdate, "Tempat tanda tangan: ", "data persetujuan")
+	if b := auditPerjanjian(t, p.ID)[3]; b.Description == nil || !strings.HasSuffix(*b.Description, "→ Bandung") {
+		t.Errorf("keterangan data persetujuan: %v", b.Description)
+	}
 
 	statusPerjanjian(t, legal, p.ID, "NEED_REVISION", "lengkapi lampiran", http.StatusOK)
 	harapAuditBaru(t, p.ID, 4, entity.ActionStatusChange, "Catatan: lengkapi lampiran", "kembalikan untuk revisi")
@@ -103,6 +116,12 @@ func TestAuditPerjanjian(t *testing.T) {
 	harapAuditBaru(t, p.ID, 6, entity.ActionStatusChange, "dari RESUBMITTED ke UNDER_REVIEW", "periksa ulang")
 	statusPerjanjian(t, legal, p.ID, "REJECTED", "tidak sesuai", http.StatusOK)
 	harapAuditBaru(t, p.ID, 7, entity.ActionStatusChange, "dari UNDER_REVIEW ke REJECTED", "tolak")
+
+	t.Run("TanpaPerubahan", func(t *testing.T) {
+		h := buatPerjanjian(t, pemilik, formPerjanjian())
+		harapKode(t, panggil(t, pemilik, http.MethodPut, urlPerjanjian("", "/", h.ID), map[string]any{"form_data": formPerjanjian()}), http.StatusOK, "menyimpan isian yang sama")
+		harapAuditBaru(t, h.ID, 1, entity.ActionUserUpdate, h.TicketNumber+" disimpan tanpa perubahan", "menyimpan isian yang sama")
+	})
 
 	t.Run("Hapus", func(t *testing.T) {
 		h := buatPerjanjian(t, pemilik, formPerjanjian())
@@ -147,4 +166,97 @@ func TestLoginLewatProxyTercatat(t *testing.T) {
 	if len(ip) != 1 || ip[0] != "203.0.113.7" {
 		t.Errorf("baris login lewat proxy: %v, harap satu baris dengan IP 203.0.113.7", ip)
 	}
+}
+
+// auditTerakhir: baris audit terbaru untuk satu data.
+func auditTerakhir(t *testing.T, jenis, id string) barisAudit {
+	t.Helper()
+	var b barisAudit
+	if err := dbTes.Raw("SELECT action, old_value, new_value, description FROM audit_logs WHERE entity_type = ? AND entity_id = ? ORDER BY created_at DESC, id DESC LIMIT 1", jenis, id).Scan(&b).Error; err != nil {
+		t.Fatal(err)
+	}
+	return b
+}
+
+// harapAuditTerakhir: baris audit terbaru data itu beraksi `aksi`, dengan nilai lama dan baru, dan
+// keterangannya memuat setiap teks di `memuat`.
+func harapAuditTerakhir(t *testing.T, jenis, id string, aksi entity.AuditAction, lama, baru string, memuat ...string) {
+	t.Helper()
+	b := auditTerakhir(t, jenis, id)
+	nilai := func(p *string) string {
+		if p == nil {
+			return ""
+		}
+		return *p
+	}
+	ket := nilai(b.Description)
+	if b.Action != string(aksi) || nilai(b.OldValue) != lama || nilai(b.NewValue) != baru {
+		t.Errorf("audit %s: %s %q -> %q, harap %s %q -> %q (keterangan %q)", jenis, b.Action, nilai(b.OldValue), nilai(b.NewValue), aksi, lama, baru, ket)
+	}
+	for _, m := range memuat {
+		if !strings.Contains(ket, m) {
+			t.Errorf("keterangan audit %s %q tidak memuat %q", jenis, ket, m)
+		}
+	}
+}
+
+// Perubahan status Legal Opinion, Review Dokumen, dan perkara mencatat status lama, status baru, dan
+// catatan approver, termasuk status yang berubah lewat unggah hasil dan lewat form ubah perkara;
+// keterangannya berbahasa Indonesia (PR Audit Log tahap L.3).
+func TestAuditStatusLamaDanCatatan(t *testing.T) {
+	pemilik := masukPeran(t, entity.RoleUser)
+	legal := masukPeran(t, entity.RoleLegal)
+	label := map[string]string{"LegalOpinion": "Legal Opinion", "ReviewDocument": "Review Dokumen"}
+	jenisDari := map[string]string{"legal_opinions": "legal_opinion", "document_reviews": "document_review"}
+
+	for _, m := range semuaModulPengajuan {
+		t.Run(m.nama, func(t *testing.T) {
+			jenis, nama := jenisDari[m.tabel], label[m.nama]
+			p := m.buat(t, pemilik)
+			harapAuditTerakhir(t, jenis, p.ID, entity.ActionUserUpdate, "", "", "Pengajuan "+nama+" "+p.TicketNumber+" dibuat")
+
+			m.ubahStatus(t, legal, "/legal", p.ID, "UNDER_REVIEW", "", http.StatusOK)
+			harapAuditTerakhir(t, jenis, p.ID, entity.ActionStatusChange, "SUBMITTED", "UNDER_REVIEW", "Status "+nama+" "+p.TicketNumber+" diubah dari SUBMITTED ke UNDER_REVIEW")
+			if ket := auditTerakhir(t, jenis, p.ID).Description; ket != nil && strings.Contains(*ket, "Catatan") {
+				t.Errorf("perubahan status tanpa catatan menulis catatan: %q", *ket)
+			}
+
+			m.ubahStatus(t, legal, "/legal", p.ID, "NEED_REVISION", "lengkapi data", http.StatusOK)
+			harapAuditTerakhir(t, jenis, p.ID, entity.ActionStatusChange, "UNDER_REVIEW", "NEED_REVISION", ". Catatan: lengkapi data")
+
+			harapKode(t, panggil(t, pemilik, http.MethodPost, m.url("", "/", p.ID, "/resubmit"), nil), http.StatusOK, "ajukan ulang")
+			harapAuditTerakhir(t, jenis, p.ID, entity.ActionUserUpdate, "", "", "Pengajuan "+nama+" "+p.TicketNumber+" diajukan ulang")
+
+			if !tanpaMinIO {
+				m.ubahStatus(t, legal, "/legal", p.ID, "UNDER_REVIEW", "", http.StatusOK)
+				harapKode(t, panggilForm(t, legal, http.MethodPost, m.url("/legal", "/", p.ID, "/result"),
+					map[string]string{"notes": "sudah dikaji"}, berkas{"result", "hasil.pdf", []byte("hasil")}), http.StatusOK, "unggah hasil")
+				harapAuditTerakhir(t, jenis, p.ID, entity.ActionFileUpload, "UNDER_REVIEW", "COMPLETED",
+					"diunggah: hasil.pdf", "status diubah dari UNDER_REVIEW ke COMPLETED", ". Catatan: sudah dikaji")
+			}
+
+			h := m.buat(t, pemilik)
+			harapKode(t, panggil(t, pemilik, http.MethodDelete, m.url("", "/", h.ID), nil), http.StatusOK, "hapus pengajuan")
+			harapAuditTerakhir(t, jenis, h.ID, entity.ActionDelete, "", "", "Pengajuan "+nama+" dihapus")
+		})
+	}
+
+	t.Run("Perkara", func(t *testing.T) {
+		p := buatPerkara(t, legal)
+		harapAuditTerakhir(t, "legal_case", p.ID, entity.ActionUserUpdate, "", "", "Perkara "+p.TicketNumber+" dibuat")
+
+		// LEGAL dan ADMIN mengubah status lewat form ubah perkara.
+		form := formPerkara(t)
+		form["current_status"] = "Banding"
+		harapKode(t, panggil(t, legal, http.MethodPut, perkaraLegal+"/"+p.ID, form), http.StatusOK, "mengubah status lewat form")
+		harapAuditTerakhir(t, "legal_case", p.ID, entity.ActionStatusChange, "Berjalan", "Banding", "Data perkara "+p.TicketNumber+" diubah; status dari Berjalan ke Banding")
+
+		form["case_name"] = "Perkara tes diubah"
+		harapKode(t, panggil(t, legal, http.MethodPut, perkaraLegal+"/"+p.ID, form), http.StatusOK, "mengubah tanpa ganti status")
+		harapAuditTerakhir(t, "legal_case", p.ID, entity.ActionUserUpdate, "", "", "Data perkara "+p.TicketNumber+" diubah")
+
+		harapKode(t, panggil(t, masukPeran(t, entity.RoleLegalAU), http.MethodPatch, perkaraLegalAU+"/"+p.ID+"/status",
+			map[string]string{"current_status": "Kasasi"}), http.StatusOK, "Legal AU mengubah status")
+		harapAuditTerakhir(t, "legal_case", p.ID, entity.ActionStatusChange, "Banding", "Kasasi", "Status perkara "+p.TicketNumber+" diubah dari Banding ke Kasasi")
+	})
 }

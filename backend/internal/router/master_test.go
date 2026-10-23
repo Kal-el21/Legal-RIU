@@ -33,7 +33,7 @@ type masterData struct {
 
 var semuaMaster = []masterData{
 	{
-		nama: "Divisi", alamat: "/divisions", kolomWajib: "name", kolomDiubah: "name",
+		nama: "Divisi", alamat: "/divisions", kolomWajib: "name", kolomDiubah: "name", entitas: "division",
 		buat:     map[string]any{"name": "Divisi Uji", "description": "awal"},
 		ubah:     map[string]any{"name": "Divisi Uji Diubah", "description": "akhir"},
 		csvImpor: "name,description\nDivisi Impor,dari impor\n,tanpa nama\n",
@@ -172,6 +172,14 @@ func TestMasterData(t *testing.T) {
 				t.Errorf("hasil impor: %+v", hasil)
 			}
 			harapAudit(entity.ActionFileUpload, uuid.Nil.String(), imporSebelum+1, "impor")
+			// Keterangan impor menyebut jumlah baris yang masuk (PR Audit Log tahap L.3).
+			if m.entitas != "" {
+				var ket string
+				dbTes.Raw("SELECT description FROM audit_logs WHERE entity_type = ? AND action = ? ORDER BY created_at DESC LIMIT 1", m.entitas, entity.ActionFileUpload).Scan(&ket)
+				if !strings.Contains(ket, ": 1 baris masuk") {
+					t.Errorf("keterangan audit impor %s: %q, harap menyebut 1 baris masuk", m.entitas, ket)
+				}
+			}
 			w = panggil(t, admin, http.MethodGet, alamat+"/import/template", nil)
 			harapKode(t, w, http.StatusOK, "unduh template impor")
 			if !bytes.HasPrefix(w.Body.Bytes(), []byte("PK")) {

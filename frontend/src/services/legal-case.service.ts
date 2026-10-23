@@ -1,7 +1,7 @@
 import api from './api'
 import { namaDariHeader } from '@/lib/nama-unduhan'
 import { useAuthStore } from '@/store/auth.store'
-import type { ApiResponse, CaseChronology, Cedant, Company, Division, LegalCase, PaginatedData, Regency, CaseType, CaseCategory, PurposeType, ImportResult, ParentChangePreview, ParentChangeResult } from '@/types'
+import type { ApiResponse, AuditLog, CaseChronology, Cedant, Company, Division, LegalCase, PaginatedData, Regency, CaseType, CaseCategory, PurposeType, ImportResult, ParentChangePreview, ParentChangeResult } from '@/types'
 
 export interface LegalCaseFilters {
   page?: number
@@ -75,6 +75,12 @@ export const legalCaseService = {
   getByID: async (id: string) => {
     const res = await api.get<ApiResponse<LegalCase>>(`${getLegalCaseRouteBase()}/${id}`)
     return res.data.data!
+  },
+
+  // Riwayat aktivitas data ini, terbaru di atas.
+  history: async (id: string) => {
+    const res = await api.get<ApiResponse<AuditLog[]>>(`${getLegalCaseRouteBase()}/${id}/history`)
+    return res.data.data ?? []
   },
 
   create: async (data: LegalCaseFormData) => {

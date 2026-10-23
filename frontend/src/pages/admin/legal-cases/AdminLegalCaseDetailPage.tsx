@@ -14,6 +14,7 @@ import type { CaseChronology } from '@/types'
 import LegalCaseFormDialog from './components/LegalCaseFormDialog'
 import ChronologyImportCard from './components/ChronologyImportCard'
 import PermissionGate from '@/components/common/PermissionGate'
+import RiwayatAktivitas from '@/components/shared/RiwayatAktivitas'
 
 export default function AdminLegalCaseDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -295,6 +296,10 @@ export default function AdminLegalCaseDetailPage() {
             </div>
           )}
         </Section>
+      </div>
+
+      <div className="mt-6">
+        <RiwayatAktivitas kunci={['legal_case', id!]} ambil={() => legalCaseService.history(id!)} />
       </div>
 
       <LegalCaseFormDialog open={editOpen} onOpenChange={setEditOpen} legalCase={legalCase} />

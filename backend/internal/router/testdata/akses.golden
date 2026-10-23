@@ -49,6 +49,7 @@ GET /api/v1/admin/agreement-documents: ADMIN
 GET /api/v1/admin/agreement-documents/:id: ADMIN
 GET /api/v1/admin/agreement-documents/:id/attachments/:attachmentId: ADMIN
 GET /api/v1/admin/agreement-documents/:id/docx: ADMIN
+GET /api/v1/admin/agreement-documents/:id/history: ADMIN
 GET /api/v1/admin/agreement-documents/:id/pdf: ADMIN
 GET /api/v1/admin/agreement-documents/:id/preview: ADMIN
 GET /api/v1/admin/agreement-documents/:id/schema: ADMIN
@@ -60,6 +61,7 @@ GET /api/v1/admin/agreement-templates/:id/preview: ADMIN
 GET /api/v1/admin/agreement-templates/placeholders: ADMIN
 GET /api/v1/admin/agreement-types: ADMIN
 GET /api/v1/admin/audit-logs: ADMIN
+GET /api/v1/admin/audit-logs/actors: ADMIN
 GET /api/v1/admin/case-categories: ADMIN
 GET /api/v1/admin/case-categories/:id: ADMIN
 GET /api/v1/admin/case-categories/import/template: ADMIN
@@ -83,6 +85,7 @@ GET /api/v1/admin/document-types/import/template: ADMIN
 GET /api/v1/admin/legal-cases: ADMIN
 GET /api/v1/admin/legal-cases/:id: ADMIN
 GET /api/v1/admin/legal-cases/:id/chronology: ADMIN
+GET /api/v1/admin/legal-cases/:id/history: ADMIN
 GET /api/v1/admin/legal-cases/:id/pdf: ADMIN
 GET /api/v1/admin/legal-cases/cedants: ADMIN
 GET /api/v1/admin/legal-cases/cedants/import/template: ADMIN
@@ -94,6 +97,7 @@ GET /api/v1/admin/legal-cases/regencies: ADMIN
 GET /api/v1/admin/legal-cases/regencies/import/template: ADMIN
 GET /api/v1/admin/legal-opinions: ADMIN
 GET /api/v1/admin/legal-opinions/:id: ADMIN
+GET /api/v1/admin/legal-opinions/:id/history: ADMIN
 GET /api/v1/admin/legal-opinions/:id/pdf: ADMIN
 GET /api/v1/admin/legal-opinions/download: ADMIN
 GET /api/v1/admin/materials: ADMIN
@@ -110,6 +114,7 @@ GET /api/v1/admin/reports/legal-cases: ADMIN
 GET /api/v1/admin/reports/legal-opinions: ADMIN
 GET /api/v1/admin/review-documents: ADMIN
 GET /api/v1/admin/review-documents/:id: ADMIN
+GET /api/v1/admin/review-documents/:id/history: ADMIN
 GET /api/v1/admin/review-documents/:id/pdf: ADMIN
 GET /api/v1/admin/review-documents/download: ADMIN
 GET /api/v1/admin/users: ADMIN
@@ -119,6 +124,7 @@ GET /api/v1/agreement-document-types/:code/schema: ADMIN LEGAL USER
 GET /api/v1/agreement-documents: USER
 GET /api/v1/agreement-documents/:id: USER
 GET /api/v1/agreement-documents/:id/attachments/:attachmentId: USER
+GET /api/v1/agreement-documents/:id/history: USER
 GET /api/v1/agreement-documents/:id/pdf: USER
 GET /api/v1/agreement-documents/:id/preview: USER
 GET /api/v1/agreement-documents/:id/schema: USER
@@ -137,6 +143,7 @@ GET /api/v1/document-types: ADMIN LEGAL LEGAL_AU USER EXTERNAL
 GET /api/v1/external/legal-cases: EXTERNAL
 GET /api/v1/external/legal-cases/:id: EXTERNAL
 GET /api/v1/external/legal-cases/:id/chronology: EXTERNAL
+GET /api/v1/external/legal-cases/:id/history: EXTERNAL
 GET /api/v1/external/legal-cases/:id/pdf: EXTERNAL
 GET /api/v1/external/legal-cases/cedants: EXTERNAL
 GET /api/v1/external/legal-cases/cedants/import/template: -
@@ -148,6 +155,7 @@ GET /api/v1/external/legal-cases/regencies: EXTERNAL
 GET /api/v1/external/legal-cases/regencies/import/template: -
 GET /api/v1/legal-au/cases: LEGAL_AU
 GET /api/v1/legal-au/cases/:id: LEGAL_AU
+GET /api/v1/legal-au/cases/:id/history: LEGAL_AU
 GET /api/v1/legal-au/cases/:id/pdf: LEGAL_AU
 GET /api/v1/legal-au/cases/cedants: LEGAL_AU
 GET /api/v1/legal-au/cases/chronology/template: LEGAL_AU
@@ -159,6 +167,7 @@ GET /api/v1/legal-au/materials/:id: LEGAL_AU
 GET /api/v1/legal-cases: -
 GET /api/v1/legal-cases/:id: -
 GET /api/v1/legal-cases/:id/chronology: -
+GET /api/v1/legal-cases/:id/history: -
 GET /api/v1/legal-cases/:id/pdf: -
 GET /api/v1/legal-cases/cedants: -
 GET /api/v1/legal-cases/cedants/import/template: -
@@ -170,6 +179,7 @@ GET /api/v1/legal-cases/regencies: -
 GET /api/v1/legal-cases/regencies/import/template: -
 GET /api/v1/legal-opinions: USER
 GET /api/v1/legal-opinions/:id: USER
+GET /api/v1/legal-opinions/:id/history: USER
 GET /api/v1/legal-opinions/:id/pdf: USER
 GET /api/v1/legal-opinions/download: USER
 GET /api/v1/legal/agreement-company-master: LEGAL
@@ -177,6 +187,7 @@ GET /api/v1/legal/agreement-documents: LEGAL
 GET /api/v1/legal/agreement-documents/:id: LEGAL
 GET /api/v1/legal/agreement-documents/:id/attachments/:attachmentId: LEGAL
 GET /api/v1/legal/agreement-documents/:id/docx: LEGAL
+GET /api/v1/legal/agreement-documents/:id/history: LEGAL
 GET /api/v1/legal/agreement-documents/:id/pdf: LEGAL
 GET /api/v1/legal/agreement-documents/:id/preview: LEGAL
 GET /api/v1/legal/agreement-documents/:id/schema: LEGAL
@@ -187,11 +198,13 @@ GET /api/v1/legal/agreement-templates/:id/download: LEGAL
 GET /api/v1/legal/agreement-templates/:id/preview: LEGAL
 GET /api/v1/legal/agreement-templates/placeholders: LEGAL
 GET /api/v1/legal/audit-logs: LEGAL
+GET /api/v1/legal/audit-logs/actors: LEGAL
 GET /api/v1/legal/dashboard/recent: LEGAL
 GET /api/v1/legal/dashboard/stats: LEGAL
 GET /api/v1/legal/legal-cases: LEGAL
 GET /api/v1/legal/legal-cases/:id: LEGAL
 GET /api/v1/legal/legal-cases/:id/chronology: LEGAL
+GET /api/v1/legal/legal-cases/:id/history: LEGAL
 GET /api/v1/legal/legal-cases/:id/pdf: LEGAL
 GET /api/v1/legal/legal-cases/cedants: LEGAL
 GET /api/v1/legal/legal-cases/cedants/import/template: LEGAL
@@ -203,6 +216,7 @@ GET /api/v1/legal/legal-cases/regencies: LEGAL
 GET /api/v1/legal/legal-cases/regencies/import/template: LEGAL
 GET /api/v1/legal/legal-opinions: LEGAL
 GET /api/v1/legal/legal-opinions/:id: LEGAL
+GET /api/v1/legal/legal-opinions/:id/history: LEGAL
 GET /api/v1/legal/legal-opinions/:id/pdf: LEGAL
 GET /api/v1/legal/legal-opinions/download: LEGAL
 GET /api/v1/legal/materials: LEGAL
@@ -212,6 +226,7 @@ GET /api/v1/legal/reports/legal-cases: LEGAL
 GET /api/v1/legal/reports/legal-opinions: LEGAL
 GET /api/v1/legal/review-documents: LEGAL
 GET /api/v1/legal/review-documents/:id: LEGAL
+GET /api/v1/legal/review-documents/:id/history: LEGAL
 GET /api/v1/legal/review-documents/:id/pdf: LEGAL
 GET /api/v1/legal/review-documents/download: LEGAL
 GET /api/v1/materials: ADMIN LEGAL LEGAL_AU USER
@@ -219,6 +234,7 @@ GET /api/v1/materials/:id: ADMIN LEGAL LEGAL_AU USER
 GET /api/v1/notifications: ADMIN LEGAL USER
 GET /api/v1/review-documents: USER
 GET /api/v1/review-documents/:id: USER
+GET /api/v1/review-documents/:id/history: USER
 GET /api/v1/review-documents/download: USER
 PATCH /api/v1/admin/agreement-documents/:id/meta: ADMIN
 PATCH /api/v1/admin/agreement-documents/:id/status: ADMIN

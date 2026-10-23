@@ -116,7 +116,7 @@ func (h *CaseCategoryHandler) ImportCaseCategories(c *gin.Context) {
 		return
 	}
 	middleware.SetAuditContext(c, entity.ActionFileUpload, "case_category", "import")
-	c.Set("audit_description", "Case categories imported")
+	c.Set("audit_description", keteranganImpor("kategori perkara", result))
 	utils.OK(c, "Impor kategori selesai", result)
 }
 

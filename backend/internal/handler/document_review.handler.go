@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"errors"
 	"mime/multipart"
-	"strconv"
 
 	"legal-riu-portal/internal/dto"
 	"legal-riu-portal/internal/entity"
@@ -13,6 +12,7 @@ import (
 	"legal-riu-portal/internal/utils"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 type DocumentReviewHandler struct {
@@ -67,6 +67,17 @@ func (h *DocumentReviewHandler) GetByID(c *gin.Context) {
 	utils.OK(c, "Success", dr)
 }
 
+// BolehBuka: pemeriksa akses riwayat (PR Audit Log tahap L.4), sama dengan GetByID: pengajuan
+// orang lain dan draf orang lain dijawab 404.
+func (h *DocumentReviewHandler) BolehBuka(c *gin.Context) (uuid.UUID, bool) {
+	dr, err := h.svc.GetByID(c.Param("id"), middleware.GetUserID(c), middleware.RoleWithAllAccess(c, "document_review.view.all"))
+	if err != nil {
+		utils.NotFound(c, err.Error())
+		return uuid.Nil, false
+	}
+	return dr.ID, true
+}
+
 // POST /api/v1/review-documents
 func (h *DocumentReviewHandler) Create(c *gin.Context) {
 	if err := c.Request.ParseMultipartForm(110 << 20); err != nil {
@@ -86,7 +97,7 @@ func (h *DocumentReviewHandler) Create(c *gin.Context) {
 			return
 		}
 		middleware.SetAuditContext(c, entity.ActionUserUpdate, "document_review", dr.ID.String())
-		c.Set("audit_description", "Document review created")
+		c.Set("audit_description", "Pengajuan Review Dokumen "+dr.TicketNumber+" dibuat")
 		utils.Created(c, "Pengajuan berhasil dibuat", dr)
 		return
 	}
@@ -110,11 +121,7 @@ func (h *DocumentReviewHandler) Create(c *gin.Context) {
 		return
 	}
 	middleware.SetAuditContext(c, entity.ActionUserUpdate, "document_review", dr.ID.String())
-	desc := "Document review created"
-	if len(files) > 0 {
-		desc = "Document review created with " + strconv.Itoa(len(files)) + " file(s)"
-	}
-	c.Set("audit_description", desc)
+	c.Set("audit_description", "Pengajuan Review Dokumen "+dr.TicketNumber+" dibuat"+denganLampiran(files))
 	utils.Created(c, "Pengajuan berhasil dibuat", dr)
 }
 
@@ -173,7 +180,7 @@ func (h *DocumentReviewHandler) SubmitDraft(c *gin.Context) {
 		return
 	}
 	middleware.SetAuditContext(c, entity.ActionUserUpdate, "document_review", id)
-	c.Set("audit_description", "Document review created from draft")
+	c.Set("audit_description", "Pengajuan Review Dokumen "+dr.TicketNumber+" dikirim dari draf")
 	utils.OK(c, "Pengajuan berhasil dikirim", dr)
 }
 
@@ -192,6 +199,7 @@ func (h *DocumentReviewHandler) Update(c *gin.Context) {
 		return
 	}
 	middleware.SetAuditContext(c, entity.ActionUserUpdate, "document_review", id)
+	c.Set("audit_description", "Isian pengajuan Review Dokumen "+dr.TicketNumber+" diubah")
 	utils.OK(c, "Pengajuan berhasil diupdate", dr)
 }
 
@@ -204,6 +212,7 @@ func (h *DocumentReviewHandler) Delete(c *gin.Context) {
 		return
 	}
 	middleware.SetAuditContext(c, entity.ActionDelete, "document_review", id)
+	c.Set("audit_description", "Pengajuan Review Dokumen dihapus")
 	utils.OK(c, "Pengajuan berhasil dihapus", nil)
 }
 
@@ -221,11 +230,7 @@ func (h *DocumentReviewHandler) Resubmit(c *gin.Context) {
 		return
 	}
 	middleware.SetAuditContext(c, entity.ActionUserUpdate, "document_review", id)
-	desc := "Document review resubmitted"
-	if len(files) > 0 {
-		desc = "Document review resubmitted with " + strconv.Itoa(len(files)) + " file(s)"
-	}
-	c.Set("audit_description", desc)
+	c.Set("audit_description", "Pengajuan Review Dokumen "+dr.TicketNumber+" diajukan ulang"+denganLampiran(files))
 	utils.OK(c, "Pengajuan berhasil diajukan ulang", dr)
 }
 
@@ -264,12 +269,15 @@ func (h *DocumentReviewHandler) AdminUpdateStatus(c *gin.Context) {
 		utils.BadRequest(c, "Validasi gagal", err.Error())
 		return
 	}
-	if err := h.svc.UpdateStatus(id, req); err != nil {
+	ubah, err := h.svc.UpdateStatus(id, req)
+	if err != nil {
 		utils.BadRequest(c, err.Error(), nil)
 		return
 	}
-	desc := "Status changed to " + req.Status
-	middleware.SetAuditContextWithValues(c, entity.ActionStatusChange, "document_review", id, nil, &req.Status, &desc)
+	// Status lama dan baru serta catatan approver dicatat (PR Audit Log tahap L.3).
+	lama, baru := string(ubah.Lama), string(ubah.Baru)
+	desc := "Status Review Dokumen " + ubah.Tiket + " diubah dari " + lama + " ke " + baru + denganCatatan(req.AdminNote)
+	middleware.SetAuditContextWithValues(c, entity.ActionStatusChange, "document_review", id, &lama, &baru, &desc)
 	utils.OK(c, "Status berhasil diubah", nil)
 }
 
@@ -283,11 +291,21 @@ func (h *DocumentReviewHandler) AdminUploadResult(c *gin.Context) {
 		return
 	}
 	req := dto.UploadResultRequest{Notes: c.PostForm("notes")}
-	if err := h.svc.UploadResult(id, adminID, req, file); err != nil {
+	ubah, err := h.svc.UploadResult(id, adminID, req, file)
+	if err != nil {
 		utils.InternalError(c, err.Error())
 		return
 	}
-	middleware.SetAuditContext(c, entity.ActionFileUpload, "document_review", id)
+	// Unggah hasil saat Sedang Direview menyelesaikan pengajuan; perubahan statusnya ikut dicatat.
+	desc := "Hasil review Review Dokumen " + ubah.Tiket + " diunggah: " + file.Filename
+	var lama, baru *string
+	if ubah.Baru != ubah.Lama {
+		l, b := string(ubah.Lama), string(ubah.Baru)
+		lama, baru = &l, &b
+		desc += "; status diubah dari " + l + " ke " + b
+	}
+	desc += denganCatatan(req.Notes)
+	middleware.SetAuditContextWithValues(c, entity.ActionFileUpload, "document_review", id, lama, baru, &desc)
 	utils.OK(c, "Hasil review berhasil diupload", nil)
 }
 

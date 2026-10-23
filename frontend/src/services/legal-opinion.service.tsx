@@ -2,7 +2,7 @@ import api from './api'
 import { formDraf } from '@/lib/draf'
 import { namaDariHeader } from '@/lib/nama-unduhan'
 import { useAuthStore } from '@/store/auth.store'
-import type { ApiResponse, LegalOpinion, PaginatedData } from '@/types'
+import type { ApiResponse, AuditLog, LegalOpinion, PaginatedData } from '@/types'
 
 export interface CreateLegalOpinionData {
   requestor_name: string
@@ -37,6 +37,12 @@ export const legalOpinionService = {
   getByID: async (id: string) => {
     const res = await api.get<ApiResponse<LegalOpinion>>(`${getLegalOpinionEndpoint()}/${id}`)
     return res.data.data!
+  },
+
+  // Riwayat aktivitas data ini, terbaru di atas.
+  history: async (id: string) => {
+    const res = await api.get<ApiResponse<AuditLog[]>>(`${getLegalOpinionEndpoint()}/${id}/history`)
+    return res.data.data ?? []
   },
 
   create: async (data: CreateLegalOpinionData) => {

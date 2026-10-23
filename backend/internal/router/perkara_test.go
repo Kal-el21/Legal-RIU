@@ -561,6 +561,9 @@ func TestPerkaraPerPerusahaan(t *testing.T) {
 	t.Run("DetailDitolak", func(t *testing.T) {
 		harapKode(t, panggil(t, orangLuar, http.MethodGet, perkaraLegalAU+"/"+p.ID, nil), http.StatusNotFound, "user perusahaan lain melihat detail perkara")
 	})
+	t.Run("RiwayatDitolak", func(t *testing.T) {
+		harapKode(t, panggil(t, orangLuar, http.MethodGet, perkaraLegalAU+"/"+p.ID+"/history", nil), http.StatusNotFound, "user perusahaan lain melihat riwayat perkara")
+	})
 	t.Run("PDFDitolak", func(t *testing.T) {
 		w := panggil(t, orangLuar, http.MethodGet, perkaraLegalAU+"/"+p.ID+"/pdf", nil)
 		if w.Code == http.StatusOK {

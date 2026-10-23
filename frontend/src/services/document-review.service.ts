@@ -2,7 +2,7 @@ import api from './api'
 import { formDraf } from '@/lib/draf'
 import { namaDariHeader } from '@/lib/nama-unduhan'
 import { useAuthStore } from '@/store/auth.store'
-import type { ApiResponse, DocumentReview, PaginatedData } from '@/types'
+import type { ApiResponse, AuditLog, DocumentReview, PaginatedData } from '@/types'
 
 export interface CreateDocumentReviewData {
   requestor_name: string
@@ -41,6 +41,12 @@ export const documentReviewService = {
   getByID: async (id: string) => {
     const res = await api.get<ApiResponse<DocumentReview>>(`${getDocumentReviewEndpoint()}/${id}`)
     return res.data.data!
+  },
+
+  // Riwayat aktivitas data ini, terbaru di atas.
+  history: async (id: string) => {
+    const res = await api.get<ApiResponse<AuditLog[]>>(`${getDocumentReviewEndpoint()}/${id}/history`)
+    return res.data.data ?? []
   },
 
   create: async (data: CreateDocumentReviewData) => {

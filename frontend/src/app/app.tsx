@@ -22,6 +22,8 @@ const queryClient = new QueryClient({
   mutationCache: new MutationCache({
     onSuccess: (_data, _variables, _context, mutation) => {
       if (mutation.meta?.success) toast.success(mutation.meta.success)
+      // Setiap aksi bisa menambah baris audit; riwayat yang sedang terbuka dimuat ulang.
+      void queryClient.invalidateQueries({ queryKey: ['riwayat'] })
     },
     onError: (error, _variables, _context, mutation) => {
       if (mutation.meta?.errorToast === false) return

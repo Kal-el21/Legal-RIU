@@ -101,6 +101,20 @@ Setiap fitur memiliki kumpulan aksi default. Admin dapat memberikan/mencabut aks
 |-------------|-------|-----------|
 | `audit_log.view` | View Audit Log | Melihat log aktivitas sistem |
 
+Secara bawaan ADMIN dan LEGAL punya `audit_log.view`. Alamat yang memakainya:
+
+| Alamat | Permission | Fungsi |
+|---|---|---|
+| `GET /admin/audit-logs`, `GET /legal/audit-logs` | `audit_log.view` | Daftar aktivitas; saringan `action`, `entity_type`, `user_id`, `entity_id`, `search`, `date_from`, `date_to` (tanggal WIB), maks. 100 baris per halaman |
+| `GET /admin/audit-logs/actors?q=`, `GET /legal/audit-logs/actors?q=` | `audit_log.view` | Maks. 10 pelaku yang pernah tercatat, untuk saringan pelaku |
+
+**Riwayat per data** (`GET <alamat detail>/history`) ada di samping setiap alamat detail Legal Opinion, Review Dokumen,
+Perjanjian, dan perkara, di semua panel yang punya detail itu. **Tidak ada kode permission baru**: permission-nya sama
+dengan alamat detail (`view.own` / `view.all` modulnya, `case_management.view` untuk perkara), dan aksesnya diperiksa
+dengan aturan detail yang sama. Siapa pun yang tidak boleh membuka datanya mendapat 404, termasuk untuk draf orang lain
+dan perkara perusahaan lain (Legal AU). IP dan user agent hanya diisi untuk yang punya `audit_log.view`; untuk yang lain
+keduanya kosong di jawaban backend. Maks. 200 baris terbaru.
+
 ### 2.7 Master Data
 | Action Code | Label | Keterangan |
 |-------------|-------|-----------|
@@ -241,7 +255,7 @@ Tabel ini menunjukkan permission default yang dimiliki setiap role **sebelum ove
 | | Reset Password | ✅ | ❌ | ❌ | ❌ | ❌ |
 | | Delete User | ✅ | ❌ | ❌ | ❌ | ❌ |
 | | Manage Permissions | ✅ | ❌ | ❌ | ❌ | ❌ |
-| **Audit Log** | View | ✅ | ❌ | ❌ | ❌ | ❌ |
+| **Audit Log** | View | ✅ | ✅ | ❌ | ❌ | ❌ |
 | **Master Data** | View | ✅ | ❌ | ❌ | ❌ | ❌ |
 | | Manage | ✅ | ❌ | ❌ | ❌ | ❌ |
 | | Ganti Perusahaan Induk | ✅ | ❌ | ❌ | ❌ | ❌ |
@@ -435,6 +449,8 @@ Bagian ini menjelaskan status implementasi permission untuk setiap fitur, termas
 | Aksi | Status | Detail |
 |------|--------|--------|
 | View | ✅ | `audit_log.view` |
+| Saring per pelaku dan per data | ✅ | `audit_log.view` (alamat `actors`, saringan `user_id` dan `entity_id`) |
+| Riwayat per data di halaman detail | ✅ | Permission detail modulnya; IP dan user agent hanya untuk `audit_log.view` (bagian 2.6) |
 | **Kekurangan / Belum Ada** | | |
 | `audit_log.export` | ⚠️ | Belum ada export audit log. |
 | `audit_log.filter` | ⚠️ | Saat ini filter sudah ada di UI, tetapi tidak ada permission khusus untuk akses filter lanjutan. |

@@ -30,14 +30,14 @@ type AgreementDocumentService interface {
 	GetAll(string, bool, dto.AgreementListQuery) ([]entity.AgreementDocument, int64, error)
 	GetByID(string, string, bool) (*entity.AgreementDocument, error)
 	Detail(string, string, bool) (*entity.AgreementDocument, error)
-	Update(string, string, dto.UpdateAgreementDocumentRequest) (*entity.AgreementDocument, error)
+	Update(string, string, dto.UpdateAgreementDocumentRequest) (*entity.AgreementDocument, []string, error)
 	Delete(string, string) error
 	Resubmit(string, string, []*multipart.FileHeader) (*entity.AgreementDocument, error)
 	SaveDraft(userID string, req dto.CreateAgreementDocumentRequest, files []*multipart.FileHeader) (*entity.AgreementDocument, error)
 	UpdateDraft(id, userID string, req dto.CreateAgreementDocumentRequest, files []*multipart.FileHeader) (*entity.AgreementDocument, error)
 	DeleteDraftAttachment(id, attachmentID, userID string) error
 	SubmitDraft(id, userID string) (*entity.AgreementDocument, error)
-	UpdateMeta(string, dto.AgreementMetaRequest) (*entity.AgreementDocument, *PergantianPenandatangan, error)
+	UpdateMeta(string, dto.AgreementMetaRequest) (*entity.AgreementDocument, *PergantianPenandatangan, []string, error)
 	UpdateStatus(context.Context, string, string, dto.AgreementStatusRequest) (*entity.AgreementDocument, error)
 	Preview(context.Context, string, string, bool) ([]byte, error)
 	PreviewDraft(context.Context, string, dto.PreviewDraftRequest) ([]byte, error)
@@ -275,31 +275,34 @@ func (s *agreementDocumentService) GetByID(id, userID string, all bool) (*entity
 	}
 	return d, nil
 }
-func (s *agreementDocumentService) Update(id, userID string, req dto.UpdateAgreementDocumentRequest) (*entity.AgreementDocument, error) {
+// Update juga mengembalikan rincian isian yang berubah untuk audit log (PR Audit Log tahap L.3b).
+func (s *agreementDocumentService) Update(id, userID string, req dto.UpdateAgreementDocumentRequest) (*entity.AgreementDocument, []string, error) {
 	d, e := s.GetByID(id, userID, false)
 	if e != nil {
-		return nil, e
+		return nil, nil, e
 	}
 	if d.Status != entity.StatusSubmitted && d.Status != entity.StatusNeedRevision {
-		return nil, errors.New("pengajuan tidak dapat diubah pada status ini")
+		return nil, nil, errors.New("pengajuan tidak dapat diubah pada status ini")
 	}
 	sections, e := s.sectionsFor(d)
 	if e != nil {
-		return nil, e
+		return nil, nil, e
 	}
 	lama, e := decodeForm(d.FormData)
 	if e != nil {
-		return nil, e
+		return nil, nil, e
 	}
 	pertahankanIsianApprover(req.FormData, lama)
 	if e = validateAgreementForm(sections, req.FormData); e != nil {
-		return nil, e
+		return nil, nil, e
 	}
+	rincian := rincianIsian(sections, lama, req.FormData)
 	d.FormData, _ = json.Marshal(req.FormData)
 	if e = s.repo.Save(d); e != nil {
-		return nil, e
+		return nil, nil, e
 	}
-	return s.repo.FindByID(d.ID)
+	v, e := s.repo.FindByID(d.ID)
+	return v, rincian, e
 }
 func (s *agreementDocumentService) Delete(id, userID string) error {
 	d, e := s.GetByID(id, userID, false)
@@ -527,30 +530,34 @@ func (s *agreementDocumentService) uploadAttachments(d *entity.AgreementDocument
 	return nil
 }
 
-func (s *agreementDocumentService) UpdateMeta(id string, req dto.AgreementMetaRequest) (*entity.AgreementDocument, *PergantianPenandatangan, error) {
+// UpdateMeta juga mengembalikan rincian data persetujuan yang berubah untuk audit log (PR Audit
+// Log tahap L.3b): nomor perjanjian, tempat dan tanggal tanda tangan, PIC, telepon, email, dan
+// penandatangan Pihak Pertama yang berubah tanpa dicatat sebagai pergantian.
+func (s *agreementDocumentService) UpdateMeta(id string, req dto.AgreementMetaRequest) (*entity.AgreementDocument, *PergantianPenandatangan, []string, error) {
 	uid, e := uuid.Parse(id)
 	if e != nil {
-		return nil, nil, errors.New("ID tidak valid")
+		return nil, nil, nil, errors.New("ID tidak valid")
 	}
 	d, e := s.repo.FindByID(uid)
 	if e != nil || d.Status == entity.StatusDraft {
-		return nil, nil, errors.New("pengajuan tidak ditemukan")
+		return nil, nil, nil, errors.New("pengajuan tidak ditemukan")
 	}
 	if d.Status == entity.StatusCompleted || d.Status == entity.StatusRejected {
-		return nil, nil, errors.New("pengajuan sudah final")
+		return nil, nil, nil, errors.New("pengajuan sudah final")
 	}
 	data, e := decodeForm(d.FormData)
 	if e != nil {
-		return nil, nil, e
+		return nil, nil, nil, e
 	}
+	sebelum := dataPersetujuan(d.AgreementNumber, data)
 	if req.AgreementNumber != nil && strings.TrimSpace(*req.AgreementNumber) != "" {
 		num := strings.TrimSpace(*req.AgreementNumber)
 		taken, e := s.repo.AgreementNumberTaken(num, d.ID)
 		if e != nil {
-			return nil, nil, errors.New("gagal memeriksa nomor perjanjian")
+			return nil, nil, nil, errors.New("gagal memeriksa nomor perjanjian")
 		}
 		if taken {
-			return nil, nil, repository.ErrAgreementNumberTaken
+			return nil, nil, nil, repository.ErrAgreementNumberTaken
 		}
 		d.AgreementNumber = &num
 	}
@@ -559,20 +566,52 @@ func (s *agreementDocumentService) UpdateMeta(id string, req dto.AgreementMetaRe
 	setOptional(data, "pihak_pertama_pic", req.Pic)
 	setOptional(data, "pihak_pertama_telepon", req.Phone)
 	setOptional(data, "pihak_pertama_email", req.Email)
-	pergantian, e := s.pilihPenandatanganApprover(d, data, req)
+	pergantian, rincianPenandatangan, e := s.pilihPenandatanganApprover(d, data, req)
 	if e != nil {
-		return nil, nil, e
+		return nil, nil, nil, e
+	}
+	var rincian []string
+	sesudah := dataPersetujuan(d.AgreementNumber, data)
+	for i, k := range sebelum {
+		if r, ok := rincianNilai(k.label, k.tipe, k.nilai, sesudah[i].nilai); ok {
+			rincian = append(rincian, r)
+		}
+	}
+	if rincianPenandatangan != "" {
+		rincian = append(rincian, rincianPenandatangan)
 	}
 	d.FormData, _ = json.Marshal(data)
 	if e = s.repo.Save(d); e != nil {
 		// Pesan database tidak diteruskan ke pengguna.
 		if errors.Is(e, repository.ErrAgreementNumberTaken) {
-			return nil, nil, e
+			return nil, nil, nil, e
 		}
-		return nil, nil, errors.New("gagal menyimpan metadata")
+		return nil, nil, nil, errors.New("gagal menyimpan metadata")
 	}
 	v, e := s.repo.FindByID(d.ID)
-	return v, pergantian, e
+	return v, pergantian, rincian, e
+}
+
+// dataPersetujuan: isian data persetujuan approver yang dibandingkan untuk audit log, berurutan.
+func dataPersetujuan(nomor *string, data map[string]interface{}) []struct {
+	label, tipe string
+	nilai       interface{}
+} {
+	var n interface{}
+	if nomor != nil {
+		n = *nomor
+	}
+	return []struct {
+		label, tipe string
+		nilai       interface{}
+	}{
+		{"Nomor perjanjian", "text", n},
+		{"Tempat tanda tangan", "text", data["tempat_ttd"]},
+		{"Tanggal tanda tangan", "date", data["tanggal_ttd"]},
+		{"PIC Pihak Pertama", "text", data["pihak_pertama_pic"]},
+		{"Telepon Pihak Pertama", "text", data["pihak_pertama_telepon"]},
+		{"Email Pihak Pertama", "text", data["pihak_pertama_email"]},
+	}
 }
 func setOptional(m map[string]interface{}, k string, v *string) {
 	if v != nil {
@@ -611,7 +650,7 @@ func (s *agreementDocumentService) UpdateStatus(ctx context.Context, id, approve
 			return nil, errors.New("transisi status tidak valid")
 		}
 		if strings.TrimSpace(req.Note) == "" {
-			return nil, errors.New("catatan approver wajib diisi")
+			return nil, ErrCatatanWajib
 		}
 	case entity.StatusCompleted:
 		return s.approve(ctx, d, aid)

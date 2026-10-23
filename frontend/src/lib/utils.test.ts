@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { pilahLampiran } from './utils'
+import { catatanWajib, pilahLampiran } from './utils'
+
+describe('catatanWajib', () => {
+  it('hanya Perlu Revisi dan Ditolak yang wajib bercatatan', () => {
+    expect(['NEED_REVISION', 'REJECTED'].every(catatanWajib)).toBe(true)
+    expect(['UNDER_REVIEW', 'COMPLETED', ''].some(catatanWajib)).toBe(false)
+  })
+})
 
 const pdf = (nama: string) => new File(['%PDF-1.7 isi'], nama, { type: 'application/pdf' })
 
