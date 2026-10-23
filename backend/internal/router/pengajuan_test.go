@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -124,6 +125,46 @@ func (m modulPengajuan) unduh(t *testing.T, token, path, nama string) []byte {
 	harapKode(t, w, http.StatusOK, "mengunduh "+path)
 	harapNamaUnduhan(t, w, nama, "mengunduh "+path)
 	return w.Body.Bytes()
+}
+
+// Perlu Revisi dan Ditolak wajib disertai catatan approver, sedangkan Ditinjau dan Selesai tidak.
+// Catatan disimpan tanpa spasi tepi, bertahan saat pengaju mengajukan ulang, dan tidak terbawa ke
+// perubahan status berikutnya (PR Audit Log tahap L.3a).
+func TestCatatanWajib(t *testing.T) {
+	pemilik := masukPeran(t, entity.RoleUser)
+	legal := masukPeran(t, entity.RoleLegal)
+	for _, m := range semuaModulPengajuan {
+		t.Run(m.nama, func(t *testing.T) {
+			p := m.buat(t, pemilik)
+			m.ubahStatus(t, legal, "/legal", p.ID, "UNDER_REVIEW", "", http.StatusOK)
+			for _, status := range []string{"NEED_REVISION", "REJECTED"} {
+				for _, catatan := range []string{"", "   "} {
+					w := panggil(t, legal, http.MethodPatch, m.url("/legal", "/", p.ID, "/status"), map[string]string{"status": status, "admin_note": catatan})
+					harapKode(t, w, http.StatusBadRequest, status+" dengan catatan "+strconv.Quote(catatan))
+					if !strings.Contains(w.Body.String(), "catatan approver wajib diisi") {
+						t.Errorf("pesan %s tanpa catatan: %s", status, w.Body)
+					}
+				}
+			}
+			if s := m.ambil(t, pemilik, "", p.ID).Status; s != "UNDER_REVIEW" {
+				t.Fatalf("status sesudah ditolak karena tanpa catatan: %s", s)
+			}
+
+			m.ubahStatus(t, legal, "/legal", p.ID, "NEED_REVISION", "  lengkapi data  ", http.StatusOK)
+			if got := m.ambil(t, pemilik, "", p.ID).AdminNote; got != "lengkapi data" {
+				t.Errorf("catatan revisi tersimpan %q, harap tanpa spasi tepi", got)
+			}
+			harapKode(t, panggil(t, pemilik, http.MethodPost, m.url("", "/", p.ID, "/resubmit"), nil), http.StatusOK, "ajukan ulang")
+			if got := m.ambil(t, pemilik, "", p.ID).AdminNote; got != "lengkapi data" {
+				t.Errorf("catatan revisi sesudah diajukan ulang: %q, harap tetap terbaca pengaju", got)
+			}
+			m.ubahStatus(t, legal, "/legal", p.ID, "UNDER_REVIEW", "", http.StatusOK)
+			if got := m.ambil(t, pemilik, "", p.ID).AdminNote; got != "" {
+				t.Errorf("catatan putaran sebelumnya terbawa ke perubahan status berikutnya: %q", got)
+			}
+			m.ubahStatus(t, legal, "/legal", p.ID, "COMPLETED", "", http.StatusOK)
+		})
+	}
 }
 
 // Alur tanpa file: buat, kepemilikan, ubah, mesin status, ajukan ulang, PDF, hapus.

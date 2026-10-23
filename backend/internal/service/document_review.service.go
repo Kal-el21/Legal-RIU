@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"mime/multipart"
 	"path"
+	"strings"
 	"time"
 
 	"legal-riu-portal/internal/dto"
@@ -189,7 +190,7 @@ func (s *documentReviewService) Resubmit(id string, userID string, files []*mult
 		}
 	}
 
-	if err := s.repo.UpdateStatus(dr.ID, entity.StatusResubmitted, ""); err != nil {
+	if err := s.repo.UpdateStatus(dr.ID, entity.StatusResubmitted, nil); err != nil {
 		return nil, errors.New("gagal mengubah status")
 	}
 
@@ -211,8 +212,12 @@ func (s *documentReviewService) UpdateStatus(id string, req dto.UpdateStatusRequ
 	if !isValidStatusTransition(dr.Status, newStatus) {
 		return nil, errors.New("perubahan status tidak valid")
 	}
+	catatan := strings.TrimSpace(req.AdminNote)
+	if catatanWajib(newStatus) && catatan == "" {
+		return nil, ErrCatatanWajib
+	}
 
-	if err := s.repo.UpdateStatus(uid, newStatus, req.AdminNote); err != nil {
+	if err := s.repo.UpdateStatus(uid, newStatus, &catatan); err != nil {
 		return nil, err
 	}
 	return &PerubahanStatus{Tiket: dr.TicketNumber, Lama: dr.Status, Baru: newStatus}, nil
@@ -254,7 +259,7 @@ func (s *documentReviewService) UploadResult(id string, adminID string, req dto.
 	// Auto-complete: If status is UNDER_REVIEW, automatically set to COMPLETED
 	ubah := &PerubahanStatus{Tiket: dr.TicketNumber, Lama: dr.Status, Baru: dr.Status}
 	if dr.Status == entity.StatusUnderReview {
-		if err := s.repo.UpdateStatus(uid, entity.StatusCompleted, ""); err != nil {
+		if err := s.repo.UpdateStatus(uid, entity.StatusCompleted, nil); err != nil {
 			return nil, errors.New("gagal mengupdate status ke COMPLETED")
 		}
 		ubah.Baru = entity.StatusCompleted

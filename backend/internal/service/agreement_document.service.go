@@ -611,7 +611,7 @@ func (s *agreementDocumentService) UpdateStatus(ctx context.Context, id, approve
 			return nil, errors.New("transisi status tidak valid")
 		}
 		if strings.TrimSpace(req.Note) == "" {
-			return nil, errors.New("catatan approver wajib diisi")
+			return nil, ErrCatatanWajib
 		}
 	case entity.StatusCompleted:
 		return s.approve(ctx, d, aid)
