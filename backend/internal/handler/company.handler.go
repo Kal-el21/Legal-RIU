@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -111,7 +112,7 @@ func (h *CompanyHandler) Delete(c *gin.Context) {
 func (h *CompanyHandler) PreviewMakeParent(c *gin.Context) {
 	resp, err := h.svc.PreviewMakeParent(c.Param("id"))
 	if err != nil {
-		utils.NotFound(c, err.Error())
+		galatGantiInduk(c, err)
 		return
 	}
 	utils.OK(c, "Success", resp)
@@ -120,7 +121,7 @@ func (h *CompanyHandler) PreviewMakeParent(c *gin.Context) {
 func (h *CompanyHandler) MakeParent(c *gin.Context) {
 	resp, err := h.svc.MakeParent(c.Param("id"))
 	if err != nil {
-		utils.BadRequest(c, err.Error(), nil)
+		galatGantiInduk(c, err)
 		return
 	}
 	// Dicatat supaya pergantian bisa ditelusuri dan LEGAL yang janggal bisa
@@ -133,6 +134,18 @@ func (h *CompanyHandler) MakeParent(c *gin.Context) {
 		previousName, resp.Parent.Name, len(resp.MovedLegalIDs), strings.Join(resp.MovedLegalIDs, ", "))
 	middleware.SetAuditContextWithValues(c, entity.ActionParentChange, "company", resp.Parent.ID, &previousID, &resp.Parent.ID, &desc)
 	utils.OK(c, "Perusahaan induk berhasil diganti", resp)
+}
+
+// galatGantiInduk: perusahaan tidak ada 404, kegagalan database 500, penolakan aturan 400.
+func galatGantiInduk(c *gin.Context, err error) {
+	switch {
+	case errors.Is(err, service.ErrPerusahaanTidakAda):
+		utils.NotFound(c, err.Error())
+	case errors.Is(err, service.ErrHitungDampakInduk), errors.Is(err, service.ErrGantiIndukGagal):
+		utils.InternalError(c, err.Error())
+	default:
+		utils.BadRequest(c, err.Error(), nil)
+	}
 }
 
 func (h *CompanyHandler) ImportCompanies(c *gin.Context) {

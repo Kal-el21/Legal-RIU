@@ -23,7 +23,7 @@ import LampiranTersimpan from "@/components/shared/LampiranTersimpan";
 import { useDivisions } from "@/hooks/useLegalCase";
 import { useDocumentTypes } from "@/hooks/useDocumentType";
 import { useAuthStore } from "@/store/auth.store";
-import { validateFile, formatFileSize } from "@/lib/utils";
+import { pilahLampiran, formatFileSize } from "@/lib/utils";
 
 const schema = z.object({
   requestor_name: z.string().min(1, "Wajib diisi"),
@@ -116,18 +116,9 @@ export default function ReviewDocumentFormPage() {
   }, [existing, isDraft, navigate]);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selected = Array.from(e.target.files ?? []);
-    const errs: string[] = [];
-    const validFiles: File[] = [];
-    
-    for (const f of selected) {
-      const err = await validateFile(f);
-      if (err) errs.push(`${f.name}: ${err}`);
-      else validFiles.push(f);
-    }
-    
-    setFileErrors(errs);
-    setFiles((prev) => [...prev, ...validFiles]);
+    const { sah, ditolak } = await pilahLampiran(Array.from(e.target.files ?? []));
+    setFileErrors(ditolak);
+    setFiles((prev) => [...prev, ...sah]);
     e.target.value = "";
   };
 

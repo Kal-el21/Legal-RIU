@@ -13,6 +13,15 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/xuri/excelize/v2"
+	"gorm.io/gorm"
+)
+
+// Galat ganti induk yang dibedakan handler (PR B tahap B.3): perusahaan tidak ada dijawab 404,
+// kegagalan database 500. Penolakan aturan lainnya (sudah induk, masih ada Legal AU) dijawab 400.
+var (
+	ErrPerusahaanTidakAda = errors.New("perusahaan tidak ditemukan")
+	ErrHitungDampakInduk  = errors.New("gagal menghitung dampak pergantian induk")
+	ErrGantiIndukGagal    = errors.New("gagal mengganti perusahaan induk, coba lagi")
 )
 
 type CompanyService interface {
@@ -103,14 +112,15 @@ func (s *companyService) Delete(id string) error {
 	return nil
 }
 
+// findTarget: ID yang tidak valid juga dijawab ErrPerusahaanTidakAda, sama dengan GetByID (404).
 func (s *companyService) findTarget(id string) (*entity.Company, error) {
 	uid, err := uuid.Parse(id)
 	if err != nil {
-		return nil, errors.New("ID tidak valid")
+		return nil, ErrPerusahaanTidakAda
 	}
 	company, err := s.repo.FindByID(uid)
 	if err != nil {
-		return nil, errors.New("perusahaan tidak ditemukan")
+		return nil, ErrPerusahaanTidakAda
 	}
 	return company, nil
 }
@@ -124,7 +134,7 @@ func (s *companyService) PreviewMakeParent(id string) (*dto.ParentChangePreviewR
 	}
 	legalToMove, legalAU, err := s.repo.ParentChangeImpact(target.ID)
 	if err != nil {
-		return nil, errors.New("gagal menghitung dampak pergantian induk")
+		return nil, ErrHitungDampakInduk
 	}
 	resp := &dto.ParentChangePreviewResponse{
 		Target:        toCompanyResponse(target),
@@ -158,15 +168,18 @@ func (s *companyService) MakeParent(id string) (*dto.ParentChangeResponse, error
 	// perusahaan kalau itu pernah terjadi.
 	_, legalAU, err := s.repo.ParentChangeImpact(target.ID)
 	if err != nil {
-		return nil, errors.New("gagal menghitung dampak pergantian induk")
+		return nil, ErrHitungDampakInduk
 	}
 	if len(legalAU) > 0 {
 		return nil, fmt.Errorf("masih ada %d Legal AU di perusahaan ini; pindahkan atau ganti perannya dulu, karena Legal AU tidak boleh terdaftar di induk", len(legalAU))
 	}
 	previous, _ := s.repo.FindParent()
 	moved, err := s.repo.MakeParent(target.ID)
+	if errors.Is(err, gorm.ErrRecordNotFound) { // terhapus sesudah diperiksa
+		return nil, ErrPerusahaanTidakAda
+	}
 	if err != nil {
-		return nil, errors.New("gagal mengganti perusahaan induk, coba lagi")
+		return nil, ErrGantiIndukGagal
 	}
 
 	target.IsParent, target.IsInternal = true, true

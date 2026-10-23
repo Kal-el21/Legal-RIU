@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import StatusBadge from '@/components/common/StatusBadge'
 import { useLegalOpinion, useDeleteLegalOpinion, useResubmitLegalOpinion } from '@/hooks/useLegalOpinion'
 import { useAuthStore } from '@/store/auth.store'
-import { formatDateTime, formatFileSize, validateFile } from '@/lib/utils'
+import { formatDateTime, formatFileSize, pilahLampiran } from '@/lib/utils'
 import { legalOpinionService } from '@/services/legal-opinion.service'
 import type { SubmissionStatus } from '@/types'
 
@@ -46,18 +46,9 @@ export default function LegalOpinionDetailPage() {
   }
 
   const handleResubmitFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selected = Array.from(e.target.files ?? [])
-    const errs: string[] = []
-    const validFiles: File[] = []
-    
-    for (const f of selected) {
-      const err = await validateFile(f)
-      if (err) errs.push(`${f.name}: ${err}`)
-      else validFiles.push(f)
-    }
-    
-    setResubmitErrors(errs)
-    setResubmitFiles((prev) => [...prev, ...validFiles])
+    const { sah, ditolak } = await pilahLampiran(Array.from(e.target.files ?? []))
+    setResubmitErrors(ditolak)
+    setResubmitFiles((prev) => [...prev, ...sah])
     e.target.value = ''
   }
 
@@ -218,7 +209,7 @@ export default function LegalOpinionDetailPage() {
                 )}
                 <div className="flex gap-2">
                   <Button variant="outline" onClick={() => setShowResubmit(false)}>Batal</Button>
-                  <Button onClick={handleResubmit} disabled={resubmitMutation.isPending || resubmitFiles.length === 0}
+                  <Button onClick={handleResubmit} disabled={resubmitMutation.isPending}
                     className="text-white" style={{ background: '#C8102E' }}>
                     {resubmitMutation.isPending ? 'Mengajukan...' : 'Konfirmasi Ajukan Ulang'}
                   </Button>

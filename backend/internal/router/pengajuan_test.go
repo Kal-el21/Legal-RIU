@@ -201,7 +201,8 @@ func TestAlurPengajuan(t *testing.T) {
 			// ADMIN menolak, pemilik mengajukan ulang lagi, lalu selesai.
 			m.ubahStatus(t, admin, "/admin", p.ID, "UNDER_REVIEW", "", http.StatusOK)
 			m.ubahStatus(t, admin, "/admin", p.ID, "REJECTED", "tidak sesuai", http.StatusOK)
-			harapKode(t, panggil(t, pemilik, http.MethodPost, m.url("", "/", p.ID, "/resubmit"), nil), http.StatusOK, "ajukan ulang setelah ditolak")
+			// Seperti tombol Ajukan Ulang tanpa file (PR B tahap B.2): form multipart kosong.
+			harapKode(t, panggilForm(t, pemilik, http.MethodPost, m.url("", "/", p.ID, "/resubmit"), nil), http.StatusOK, "ajukan ulang setelah ditolak, tanpa file")
 			m.ubahStatus(t, legal, "/legal", p.ID, "UNDER_REVIEW", "", http.StatusOK)
 			m.ubahStatus(t, legal, "/legal", p.ID, "COMPLETED", "", http.StatusOK)
 			m.ubahStatus(t, legal, "/legal", p.ID, "UNDER_REVIEW", "", http.StatusBadRequest) // COMPLETED adalah akhir

@@ -670,9 +670,14 @@ func TestGantiInduk(t *testing.T) {
 	}
 
 	harapKode(t, jadikanInduk(tujuan), http.StatusBadRequest, "menjadikan induk perusahaan yang sudah induk")
+	// Perusahaan yang tidak ada dijawab 404 di pratinjau maupun saat mengganti (PR B tahap B.3; ganti
+	// induk sebelumnya menjawab 400).
 	terhapus := buatPerusahaan("terhapus")
 	harapKode(t, panggil(t, admin, http.MethodDelete, alamat+"/"+terhapus, nil), http.StatusOK, "menghapus perusahaan uji")
-	harapKode(t, jadikanInduk(terhapus), http.StatusBadRequest, "menjadikan induk perusahaan yang dihapus")
+	for _, id := range []string{terhapus, uuid.NewString(), "bukan-uuid"} {
+		harapKode(t, jadikanInduk(id), http.StatusNotFound, "menjadikan induk perusahaan yang tidak ada ("+id+")")
+		harapKode(t, panggil(t, admin, http.MethodGet, alamat+"/"+id+"/make-parent/preview", nil), http.StatusNotFound, "pratinjau induk perusahaan yang tidak ada ("+id+")")
+	}
 
 	t.Run("Dibalik", func(t *testing.T) {
 		// Legal AU yang terdaftar di induk lama dipindah dulu.

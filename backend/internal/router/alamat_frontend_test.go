@@ -95,7 +95,6 @@ var pengecualianAlamat = []pengecualian{
 	{"GET", "/companies", "USER", "form perkara USER (hanya lewat override) memuat rujukan yang tidak menerima USER", false},
 
 	// Kode yang tidak pernah dijalankan oleh peran itu.
-	{"*", "/external/dashboard/*", "*", "ExternalDashboardPage tidak terdaftar di routes/index.tsx", false},
 	{"GET", "/purpose-types", "LEGAL LEGAL_AU USER EXTERNAL", "tujuan pembuatan hanya dimuat halaman admin", false},
 	{"GET", "/review-documents/X/pdf", "USER", "unduh PDF Review Dokumen hanya ada di halaman admin dan legal", false},
 	{"PATCH", "/agreement-documents/X/*", "USER", "aksi approver; detail perjanjian USER dibuka tanpa approver", false},
