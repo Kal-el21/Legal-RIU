@@ -132,7 +132,7 @@ export default function ReviewDocumentDetailPage() {
         </Card>
 
         {(dr.attachments?.length ?? 0) > 0 && (
-          <Card title="Draft Perjanjian">
+          <Card title="Draf Dokumen">
             <div className="space-y-2">
               {dr.attachments?.map((att) => (
                 <div key={att.id} className="flex items-center gap-3 p-3 rounded-lg bg-gray-50 border border-gray-100">

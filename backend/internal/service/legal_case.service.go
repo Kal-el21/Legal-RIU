@@ -63,10 +63,10 @@ type LegalCaseService interface {
 }
 
 type legalCaseService struct {
-	repo         repository.LegalCaseRepository
-	storage      *storage.MinIOClient
-	pdfSvc       PDFService
-	repoDocSvc   RepositoryDocumentService
+	repo       repository.LegalCaseRepository
+	storage    *storage.MinIOClient
+	pdfSvc     PDFService
+	repoDocSvc RepositoryDocumentService
 }
 
 func NewLegalCaseService(repo repository.LegalCaseRepository, s *storage.MinIOClient, repoDocSvc RepositoryDocumentService) LegalCaseService {
@@ -254,6 +254,10 @@ func (s *legalCaseService) Update(scope *uuid.UUID, id string, req dto.UpdateLeg
 }
 
 func (s *legalCaseService) UpdateStatus(scope *uuid.UUID, id string, status string) error {
+	status = strings.TrimSpace(status)
+	if status == "" {
+		return errors.New("Status Terkini wajib diisi")
+	}
 	legalCase, err := s.findCase(scope, id)
 	if err != nil {
 		return err
@@ -863,6 +867,25 @@ func (s *legalCaseService) DeletePhoto(scope *uuid.UUID, caseID string) (*dto.Le
 }
 
 func (s *legalCaseService) buildLegalCase(companyID *uuid.UUID, req dto.CreateLegalCaseRequest) (*entity.LegalCase, error) {
+	caseName := strings.TrimSpace(req.CaseName)
+	currentStatus := strings.TrimSpace(req.CurrentStatus)
+	level := strings.TrimSpace(req.Level)
+	if caseName == "" {
+		return nil, errors.New("Nama Kasus wajib diisi")
+	}
+	if currentStatus == "" {
+		return nil, errors.New("Status Terkini wajib diisi")
+	}
+	if level == "" {
+		return nil, errors.New("Tingkat wajib diisi")
+	}
+	if req.CaseValue < 0 {
+		return nil, errors.New("Nilai Kasus tidak boleh negatif")
+	}
+	if req.TechnicalReserve < 0 {
+		return nil, errors.New("Cadangan Teknis tidak boleh negatif")
+	}
+
 	caseDate, err := parseRequiredDate(req.CaseDate)
 	if err != nil {
 		return nil, errors.New("tanggal kasus tidak valid")
@@ -909,7 +932,7 @@ func (s *legalCaseService) buildLegalCase(companyID *uuid.UUID, req dto.CreateLe
 	}
 
 	legalCase := &entity.LegalCase{
-		CaseName:          strings.TrimSpace(req.CaseName),
+		CaseName:          caseName,
 		CaseSummary:       req.CaseSummary,
 		RelatedPartyID:    relatedPartyID,
 		CategoryID:        &categoryID,
@@ -920,16 +943,12 @@ func (s *legalCaseService) buildLegalCase(companyID *uuid.UUID, req dto.CreateLe
 		PIC:               picID,
 		DocumentLink:      req.DocumentLink,
 		Photo:             req.Photo,
-		CurrentStatus:     strings.TrimSpace(req.CurrentStatus),
+		CurrentStatus:     currentStatus,
 		CaseDate:          caseDate,
-		Level:             strings.TrimSpace(req.Level),
+		Level:             level,
 		AdditionalNotes:   req.AdditionalNotes,
 		LocationRegencyID: locationRegencyID,
 		CompanyID:         companyID,
-	}
-
-	if legalCase.CaseName == "" || legalCase.PIC == uuid.Nil || legalCase.Level == "" {
-		return nil, errors.New("field wajib belum lengkap")
 	}
 
 	return legalCase, nil

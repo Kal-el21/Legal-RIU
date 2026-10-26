@@ -27,16 +27,28 @@ const LEGAL_TYPES = [
 ]
 
 const schema = z.object({
-  requestor_name: z.string().min(1, 'Wajib diisi'),
-  requestor_position: z.string().min(1, 'Wajib diisi'),
-  requestor_division: z.string().min(1, 'Wajib diisi'),
-  requestor_email: z.string().email('Email tidak valid'),
-  requestor_phone: z.string().min(1, 'Wajib diisi'),
-  legal_type: z.string().min(1, 'Pilih jenis kajian'),
-  legal_type_other: z.string().optional(),
-  title: z.string().min(1, 'Wajib diisi'),
-  chronology: z.string().min(10, 'Kronologis terlalu singkat'),
-  question: z.string().min(5, 'Pertanyaan terlalu singkat'),
+  requestor_name: z.string().trim().min(1, 'Nama Lengkap wajib diisi'),
+  requestor_position: z.string().trim().min(1, 'Posisi Jabatan wajib diisi'),
+  requestor_division: z.string().trim().min(1, 'Divisi pada RIU wajib diisi'),
+  requestor_email: z.string().trim().min(1, 'Email Kantor wajib diisi').email('Email pemohon tidak valid'),
+  requestor_phone: z.string().trim().min(1, 'Nomor WhatsApp wajib diisi'),
+  legal_type: z.string().trim().min(1, 'Jenis Kajian Hukum wajib diisi'),
+  legal_type_other: z.string().trim().optional(),
+  title: z.string().trim().min(1, 'Judul Permasalahan Hukum wajib diisi'),
+  chronology: z.string().trim()
+    .min(1, 'Kronologis Permasalahan wajib diisi')
+    .refine((value) => value.length >= 10, 'Kronologis terlalu singkat'),
+  question: z.string().trim()
+    .min(1, 'Pertanyaan Permasalahan Hukum wajib diisi')
+    .refine((value) => value.length >= 5, 'Pertanyaan terlalu singkat'),
+}).superRefine((data, context) => {
+  if (data.legal_type === 'Lain-Lain' && !data.legal_type_other) {
+    context.addIssue({
+      code: 'custom',
+      path: ['legal_type_other'],
+      message: 'Jenis kajian lainnya wajib diisi',
+    })
+  }
 })
 
 type FormData = z.infer<typeof schema>
@@ -209,7 +221,7 @@ export default function LegalOpinionFormPage() {
             </Field>
 
             {legalType === 'Lain-Lain' && (
-              <Field label="Jenis Kajian Lainnya" error={errors.legal_type_other?.message}>
+              <Field label="Jenis Kajian Lainnya *" error={errors.legal_type_other?.message}>
                 <Input {...register('legal_type_other')} placeholder="Sebutkan jenis kajian" />
               </Field>
             )}

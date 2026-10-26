@@ -26,17 +26,25 @@ import { useAuthStore } from "@/store/auth.store";
 import { pilahLampiran, formatFileSize } from "@/lib/utils";
 
 const schema = z.object({
-  requestor_name: z.string().min(1, "Wajib diisi"),
-  requestor_position: z.string().min(1, "Wajib diisi"),
-  requestor_division: z.string().min(1, "Wajib diisi"),
-  requestor_email: z.string().email("Email tidak valid"),
-  requestor_phone: z.string().min(1, "Wajib diisi"),
-  document_name: z.string().min(1, "Wajib diisi"),
-  second_party: z.string().min(1, "Wajib diisi"),
-  third_party: z.string().optional(),
-  document_type: z.string().min(1, "Pilih jenis dokumen"),
-  document_type_other: z.string().optional(),
-  additional_note: z.string().optional(),
+  requestor_name: z.string().trim().min(1, "Nama Lengkap wajib diisi"),
+  requestor_position: z.string().trim().min(1, "Posisi Jabatan wajib diisi"),
+  requestor_division: z.string().trim().min(1, "Divisi pada RIU wajib diisi"),
+  requestor_email: z.string().trim().min(1, "Email Kantor wajib diisi").email("Email pemohon tidak valid"),
+  requestor_phone: z.string().trim().min(1, "Nomor WhatsApp wajib diisi"),
+  document_name: z.string().trim().min(1, "Nama Dokumen wajib diisi"),
+  second_party: z.string().trim().min(1, "Pihak Kedua / Vendor / Broker / Ceding wajib diisi"),
+  third_party: z.string().trim().optional(),
+  document_type: z.string().trim().min(1, "Jenis Dokumen wajib diisi"),
+  document_type_other: z.string().trim().optional(),
+  additional_note: z.string().trim().optional(),
+}).superRefine((data, context) => {
+  if (data.document_type === "Lain-Lain" && !data.document_type_other) {
+    context.addIssue({
+      code: "custom",
+      path: ["document_type_other"],
+      message: "Jenis dokumen lainnya wajib diisi",
+    });
+  }
 });
 
 type FormData = z.infer<typeof schema>;
@@ -71,6 +79,7 @@ export default function ReviewDocumentFormPage() {
   const deleteAttachmentMutation = useDeleteDocumentReviewDraftAttachment();
   const divisionOptions = divisions.map((division) => division.name);
   const documentTypeOptions = documentTypes.filter(dt => dt.is_active).map(dt => dt.label)
+  const hasDraftAttachment = files.length > 0 || (isDraft && (existing?.attachments?.length ?? 0) > 0)
 
   const {
     register,
@@ -305,7 +314,7 @@ export default function ReviewDocumentFormPage() {
 
             {documentType === "Lain-Lain" && (
               <Field
-                label="Jenis Dokumen Lainnya"
+                label="Jenis Dokumen Lainnya *"
                 error={errors.document_type_other?.message}
               >
                 <Input
@@ -335,7 +344,7 @@ export default function ReviewDocumentFormPage() {
               className="text-base font-semibold mb-2"
               style={{ color: "#0B2545" }}
             >
-              Draft Perjanjian
+              Draf Dokumen *
             </h2>
             <p className="text-xs text-gray-400 mb-5">
               Format: PDF, DOC, DOCX — Maks. 100 MB per file
@@ -349,7 +358,7 @@ export default function ReviewDocumentFormPage() {
               <Upload className="w-8 h-8 text-gray-400" />
               <div className="text-center">
                 <p className="text-sm font-medium text-gray-600">
-                  Klik untuk upload draft
+                  Klik untuk unggah draf dokumen
                 </p>
                 <p className="text-xs text-gray-400 mt-0.5">
                   PDF, DOC, atau DOCX
@@ -371,6 +380,11 @@ export default function ReviewDocumentFormPage() {
                   </p>
                 ))}
               </div>
+            )}
+            {!isEdit && !hasDraftAttachment && (
+              <p className="mt-3 text-xs text-red-600" role="alert">
+                Lampirkan draf dokumen yang akan direview
+              </p>
             )}
             {files.length > 0 && (
               <div className="mt-4 space-y-2">
@@ -416,7 +430,7 @@ export default function ReviewDocumentFormPage() {
           )}
           <Button
             type="submit"
-            disabled={isLoading}
+            disabled={isLoading || deleteAttachmentMutation.isPending || (!isEdit && !hasDraftAttachment)}
             className="text-white"
             style={{ background: "#C8102E" }}
           >

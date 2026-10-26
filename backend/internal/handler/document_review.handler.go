@@ -86,14 +86,10 @@ func (h *DocumentReviewHandler) Create(c *gin.Context) {
 			utils.BadRequest(c, "Gagal memparse request", err.Error())
 			return
 		}
-		if !req.Complete() {
-			utils.BadRequest(c, "Semua field wajib diisi", nil)
-			return
-		}
 		userID := middleware.GetUserID(c)
 		dr, svcErr := h.svc.Create(userID, req, nil)
 		if svcErr != nil {
-			utils.InternalError(c, svcErr.Error())
+			jawabGalatBuatPengajuan(c, svcErr)
 			return
 		}
 		middleware.SetAuditContext(c, entity.ActionUserUpdate, "document_review", dr.ID.String())
@@ -104,20 +100,11 @@ func (h *DocumentReviewHandler) Create(c *gin.Context) {
 
 	req := formDocumentReview(c)
 
-	if !req.Complete() {
-		utils.BadRequest(c, "Semua field wajib diisi", nil)
-		return
-	}
-
 	files := lampiranForm(c)
 	userID := middleware.GetUserID(c)
 	dr, err := h.svc.Create(userID, req, files)
-	if errors.Is(err, service.ErrInvalidFile) {
-		utils.BadRequest(c, err.Error(), nil)
-		return
-	}
 	if err != nil {
-		utils.InternalError(c, err.Error())
+		jawabGalatBuatPengajuan(c, err)
 		return
 	}
 	middleware.SetAuditContext(c, entity.ActionUserUpdate, "document_review", dr.ID.String())
@@ -234,7 +221,6 @@ func (h *DocumentReviewHandler) Resubmit(c *gin.Context) {
 	utils.OK(c, "Pengajuan berhasil diajukan ulang", dr)
 }
 
-
 // GET /api/v1/review-documents/download?path=xxx
 func (h *DocumentReviewHandler) Download(c *gin.Context) {
 	filePath := c.Query("path")
@@ -254,7 +240,6 @@ func (h *DocumentReviewHandler) Download(c *gin.Context) {
 		return
 	}
 	defer obj.Close()
-
 
 	c.DataFromReader(-1, -1, "application/octet-stream", obj, map[string]string{
 		"Content-Disposition": utils.HeaderUnduhan("attachment", fileName),

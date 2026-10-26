@@ -521,6 +521,25 @@ permission `case_management.update`.
 | Backend entity | PascalCase singular | `LegalCase`, `User` |
 | DB table | snake_case plural | `legal_cases`, `users` |
 
+### Required-Field Validation Pattern
+
+Validasi isian wajib dilakukan di backend; validasi frontend hanya membantu pengguna mengisi formulir.
+
+- Untuk request Legal Opinion dan Review Dokumen, panggil `Normalize()` sebelum menyimpan agar teks dirapikan dengan
+  `strings.TrimSpace`, lalu `Validate()` untuk memeriksa isian wajib, format email, dan aturan kondisional seperti
+  keterangan "Lain-Lain".
+- Pesan validasi menyebut label isian dalam bahasa Indonesia, misalnya `"Nama Dokumen wajib diisi"`. Tandai galat
+  dengan `tandaiIsianBelumLengkap` agar `errors.Is(err, ErrIsianBelumLengkap)` dikenali handler dan dipetakan menjadi
+  HTTP 400 tanpa menghilangkan pesan spesifik. Gunakan pemeriksaan yang sama pada buat, ubah, dan kirim draf.
+- Aturan yang terkait file diperiksa di service sebelum efek samping seperti menyimpan file atau mengambil nomor tiket.
+  Pakai galat bertipe/sentinel tersendiri bila handler perlu memetakan aturan itu ke respons HTTP 400.
+- Untuk perkara, `buildLegalCase` memangkas teks sebelum memeriksa nama kasus, status terkini, dan tingkat; nilai
+  perkara dan cadangan teknis menolak nilai negatif, tetapi nol tetap diterima. Terapkan pemeriksaan di service agar
+  berlaku pada create dan update.
+- Form frontend menyamakan aturannya dengan backend (misalnya `.trim().min(1)` dan `superRefine` untuk aturan
+  kondisional). Jangan mengandalkan form sebagai pengganti validasi API, dan jangan mengganti pesan server dengan
+  pesan umum.
+
 ### Frontend Permission Check Pattern
 
 ```tsx
@@ -632,6 +651,8 @@ Aturan:
    - [ ] Add permission checks with `hasPermission()`
    - [ ] Jenis data atau aksi audit baru didaftarkan di `frontend/src/lib/audit.ts`; halaman detail baru memasang
          `<RiwayatAktivitas>` (lihat Audit Log Pattern)
+   - [ ] Validasi form mencerminkan aturan backend (termasuk trim dan aturan kondisional); pesan validasi dari server
+         tetap ditampilkan apa adanya
 
 3. **Documentation**
    - [ ] Update `docs/permission_matrix.md` if new permissions added

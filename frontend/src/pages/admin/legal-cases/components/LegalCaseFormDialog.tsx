@@ -28,20 +28,20 @@ function validateUploadFile(file: File, extensions: string[]): string | null {
 }
 
 const schema = z.object({
-  case_name: z.string().min(1, 'Wajib diisi'),
+  case_name: z.string().trim().min(1, 'Nama Kasus wajib diisi'),
   case_summary: z.string().optional(),
   related_party_id: z.string().min(1, 'Pilih pihak terkait'),
   category_id: z.string().min(1, 'Wajib diisi'),
   specification: z.string().optional(),
   case_type_id: z.string().min(1, 'Pilih jenis kasus'),
-  technical_reserve: z.number().optional(),
-  case_value: z.number().min(0, 'Nilai tidak valid'),
+  technical_reserve: z.number().min(0, 'Cadangan Teknis tidak boleh negatif').optional(),
+  case_value: z.number().min(0, 'Nilai Kasus tidak boleh negatif'),
   pic: z.string().min(1, 'Pilih PIC'),
   document_link: z.string().optional(),
   photo: z.string().optional(),
-  current_status: z.string().optional(),
+  current_status: z.string().trim().min(1, 'Status Terkini wajib diisi'),
   case_date: z.string().min(1, 'Tanggal wajib diisi'),
-  level: z.string().min(1, 'Wajib diisi'),
+  level: z.string().trim().min(1, 'Tingkat wajib diisi'),
   additional_notes: z.string().optional(),
   location_regency_id: z.string().min(1, 'Pilih kabupaten/kota'),
   company_id: z.string().min(1, 'Wajib diisi'),
@@ -284,7 +284,7 @@ export default function LegalCaseFormDialog({ open, onOpenChange, legalCase }: L
             <Field label="Tingkat" error={errors.level?.message}>
               <Input {...register('level')} placeholder="Contoh: Pengadilan Negeri" />
             </Field>
-            <Field label="Status Terkini" error={errors.current_status?.message}>
+            <Field label="Status Terkini *" error={errors.current_status?.message}>
               <Input {...register('current_status')} placeholder="Status terkini" />
             </Field>
             <Field label="Nilai Kasus" error={errors.case_value?.message}>

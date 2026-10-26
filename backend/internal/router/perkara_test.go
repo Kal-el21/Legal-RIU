@@ -157,6 +157,12 @@ func TestAlurPerkara(t *testing.T) {
 	t.Run("Validasi", func(t *testing.T) {
 		kasus := map[string]func(map[string]any){
 			"nama kosong":           func(f map[string]any) { delete(f, "case_name") },
+			"nama hanya spasi":      func(f map[string]any) { f["case_name"] = "   " },
+			"status kosong":         func(f map[string]any) { f["current_status"] = "" },
+			"status hanya spasi":    func(f map[string]any) { f["current_status"] = "   " },
+			"tingkat hanya spasi":   func(f map[string]any) { f["level"] = "   " },
+			"nilai negatif":         func(f map[string]any) { f["case_value"] = -1 },
+			"cadangan teknis minus": func(f map[string]any) { f["technical_reserve"] = -1 },
 			"cedant tidak ada":      func(f map[string]any) { f["related_party_id"] = uuid.NewString() },
 			"kabupaten bukan UUID":  func(f map[string]any) { f["location_regency_id"] = "bukan-uuid" },
 			"tanggal tidak terbaca": func(f map[string]any) { f["case_date"] = "tiga puluh februari" },
@@ -164,7 +170,39 @@ func TestAlurPerkara(t *testing.T) {
 		for nama, rusak := range kasus {
 			form := formPerkara(t)
 			rusak(form)
-			harapKode(t, panggil(t, legal, http.MethodPost, perkaraLegal, form), http.StatusBadRequest, nama)
+			w := panggil(t, legal, http.MethodPost, perkaraLegal, form)
+			harapKode(t, w, http.StatusBadRequest, nama)
+			pesan := map[string]string{
+				"nama hanya spasi":      "Nama Kasus wajib diisi",
+				"status kosong":         "Status Terkini wajib diisi",
+				"status hanya spasi":    "Status Terkini wajib diisi",
+				"tingkat hanya spasi":   "Tingkat wajib diisi",
+				"nilai negatif":         "Nilai Kasus tidak boleh negatif",
+				"cadangan teknis minus": "Cadangan Teknis tidak boleh negatif",
+			}[nama]
+			if pesan != "" && !strings.Contains(w.Body.String(), pesan) {
+				t.Errorf("%s: pesan %q tidak ditemukan pada %s", nama, pesan, w.Body)
+			}
+		}
+		form := formPerkara(t)
+		form["case_name"] = "  Perkara rapi  "
+		form["current_status"] = "  Berjalan  "
+		form["level"] = "  Pengadilan Negeri  "
+		form["case_value"] = 0
+		form["technical_reserve"] = 0
+		w := panggil(t, legal, http.MethodPost, perkaraLegal, form)
+		harapKode(t, w, http.StatusCreated, "nama, status, tingkat berjarak dan nilai nol")
+		var dibuat perkara
+		isiData(t, w, &dibuat)
+		if dibuat.CaseName != "Perkara rapi" || dibuat.CurrentStatus != "Berjalan" {
+			t.Errorf("perkara setelah dibuat dengan isian berjarak: nama=%q status=%q", dibuat.CaseName, dibuat.CurrentStatus)
+		}
+		var tingkat string
+		if err := dbTes.Raw("SELECT level FROM legal_cases WHERE id = ?", dibuat.ID).Scan(&tingkat).Error; err != nil {
+			t.Fatalf("membaca tingkat perkara: %v", err)
+		}
+		if tingkat != "Pengadilan Negeri" {
+			t.Errorf("tingkat tersimpan %q, harap tanpa spasi tepi", tingkat)
 		}
 	})
 
@@ -185,6 +223,23 @@ func TestAlurPerkara(t *testing.T) {
 		if got := ambilPerkara(t, legal, perkaraLegal, p.ID).CaseName; got != "Perkara diubah" {
 			t.Errorf("nama setelah diubah: %q", got)
 		}
+		for nama, rusak := range map[string]func(map[string]any){
+			"nama hanya spasi":      func(f map[string]any) { f["case_name"] = "   " },
+			"status hanya spasi":    func(f map[string]any) { f["current_status"] = "   " },
+			"tingkat hanya spasi":   func(f map[string]any) { f["level"] = "   " },
+			"nilai negatif":         func(f map[string]any) { f["case_value"] = -1 },
+			"cadangan teknis minus": func(f map[string]any) { f["technical_reserve"] = -1 },
+		} {
+			formRusak := formPerkara(t)
+			rusak(formRusak)
+			w := panggil(t, legal, http.MethodPut, perkaraLegal+"/"+p.ID, formRusak)
+			harapKode(t, w, http.StatusBadRequest, "ubah perkara dengan "+nama)
+		}
+		formNol := formPerkara(t)
+		formNol["case_name"] = "Perkara diubah"
+		formNol["case_value"] = 0
+		formNol["technical_reserve"] = 0
+		harapKode(t, panggil(t, legal, http.MethodPut, perkaraLegal+"/"+p.ID, formNol), http.StatusOK, "nilai perkara dan cadangan nol")
 
 		// Pencarian dan saringan daftar.
 		for cari, harap := range map[string]bool{"?search=diubah": true, "?search=tidak-ada-yang-cocok": false} {
@@ -201,12 +256,13 @@ func TestAlurPerkara(t *testing.T) {
 	})
 
 	t.Run("Status", func(t *testing.T) {
-		w := panggil(t, legalAU, http.MethodPatch, perkaraLegalAU+"/"+p.ID+"/status", map[string]string{"current_status": "Selesai"})
+		w := panggil(t, legalAU, http.MethodPatch, perkaraLegalAU+"/"+p.ID+"/status", map[string]string{"current_status": "  Selesai  "})
 		harapKode(t, w, http.StatusOK, "LEGAL_AU mengubah status")
 		if got := ambilPerkara(t, legal, perkaraLegal, p.ID).CurrentStatus; got != "Selesai" {
 			t.Errorf("status setelah diubah: %q", got)
 		}
 		harapKode(t, panggil(t, legalAU, http.MethodPatch, perkaraLegalAU+"/"+p.ID+"/status", map[string]string{}), http.StatusBadRequest, "status kosong")
+		harapKode(t, panggil(t, legalAU, http.MethodPatch, perkaraLegalAU+"/"+p.ID+"/status", map[string]string{"current_status": "   "}), http.StatusBadRequest, "status hanya spasi")
 		harapKode(t, panggil(t, legalAU, http.MethodPatch, perkaraLegalAU+"/"+uuid.NewString()+"/status", map[string]string{"current_status": "Selesai"}), http.StatusNotFound, "status perkara yang tidak ada")
 	})
 

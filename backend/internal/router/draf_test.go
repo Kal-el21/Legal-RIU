@@ -569,10 +569,10 @@ func ujiDrafPengajuan(t *testing.T, m modulPengajuan, pemilik, lain string) {
 	}
 	draf := m.url("", "/", d.ID)
 
-	// Mengirim draf yang belum lengkap ditolak dengan pesan yang sama seperti pembuatan langsung.
+	// Mengirim draf yang belum lengkap menyebut isian pertama yang belum diisi.
 	w := panggil(t, pemilik, http.MethodPost, draf+"/submit", nil)
 	harapKode(t, w, http.StatusBadRequest, "kirim draf belum lengkap")
-	if !strings.Contains(w.Body.String(), "Semua field wajib diisi") {
+	if !strings.Contains(w.Body.String(), "Nama Lengkap wajib diisi") {
 		t.Errorf("pesan kirim draf belum lengkap: %s", w.Body)
 	}
 
@@ -603,6 +603,27 @@ func ujiDrafPengajuan(t *testing.T, m modulPengajuan, pemilik, lain string) {
 	d, kode = simpan(pemilik, http.MethodPut, draf+"/draft", kolom, files...)
 	if kode != http.StatusOK || d.judul() != "Judul lengkap" || len(d.Attachments) != len(files) {
 		t.Fatalf("ubah draf: kode %d, judul %q, lampiran %d", kode, d.judul(), len(d.Attachments))
+	}
+	if m.nama == "ReviewDocument" {
+		if tanpaMinIO {
+			w = panggil(t, pemilik, http.MethodPost, draf+"/submit", nil)
+			harapKode(t, w, http.StatusBadRequest, "kirim draf Review Dokumen tanpa lampiran")
+			if !strings.Contains(w.Body.String(), "Lampirkan draf dokumen yang akan direview") {
+				t.Errorf("pesan draf Review Dokumen tanpa lampiran: %s", w.Body)
+			}
+			if err := dbTes.Create(&entity.DocumentReviewAttachment{
+				DocumentReviewID: uuid.MustParse(d.ID),
+				FileName:         "Draf-uji.pdf",
+				FilePath:         "uji-tanpa-minio/" + d.ID + "/draf-uji.pdf",
+				UploadRound:      1,
+			}).Error; err != nil {
+				t.Fatalf("menyisipkan metadata draf Review Dokumen: %v", err)
+			}
+		} else {
+			if len(d.Attachments) == 0 {
+				t.Fatal("draf Review Dokumen perlu lampiran untuk dapat dikirim")
+			}
+		}
 	}
 	if !tanpaMinIO {
 		// Satu file ditolak: tidak ada lampiran yang ikut tersimpan, termasuk file yang sah.
