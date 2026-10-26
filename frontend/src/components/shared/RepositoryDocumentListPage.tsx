@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import type { RepositoryDocument } from '@/types'
 import {
   filterJenisDokumen,
   formatTanggalUnggah,
@@ -31,6 +32,56 @@ interface RepositoryDocumentListPageProps {
   basePath: string
   title: string
   description: string
+}
+
+function NamaDokumen({ doc }: { doc: RepositoryDocument }) {
+  return (
+    <div className="min-w-0">
+      <div className="line-clamp-2 break-words font-medium leading-5 text-gray-900" title={doc.file_name}>
+        {doc.file_name}
+      </div>
+      <div className="mt-1 text-xs text-gray-500">{labelJenisDokumen(doc)}</div>
+    </div>
+  )
+}
+
+function AsalDokumen({ doc, panel }: { doc: RepositoryDocument; panel: string }) {
+  const href = tautanDokumenSumber(doc, panel)
+  const asal = (
+    <>
+      {doc.source_number && (
+        <span className="inline-flex max-w-full truncate rounded-md bg-gray-100 px-2 py-1 font-mono text-xs font-medium text-gray-700">
+          {doc.source_number}
+        </span>
+      )}
+      {doc.source_title && (
+        <span className="line-clamp-2 text-sm leading-5 text-gray-600">
+          {doc.source_title}
+        </span>
+      )}
+      {!doc.source_number && !doc.source_title && <span className="text-sm text-gray-500">-</span>}
+    </>
+  )
+
+  return href ? (
+    <Link
+      to={href}
+      className="flex min-w-0 flex-col items-start gap-1.5 text-[#0B2545] hover:text-[#C8102E] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0B2545] focus-visible:ring-offset-2"
+    >
+      {asal}
+    </Link>
+  ) : (
+    <div className="flex min-w-0 flex-col items-start gap-1.5">{asal}</div>
+  )
+}
+
+function PengunggahDokumen({ type }: { type: string }) {
+  return (
+    <span className="inline-flex items-center gap-1 text-xs text-gray-500">
+      {type === 'approver' ? <BadgeCheck className="h-3.5 w-3.5" /> : <User className="h-3.5 w-3.5" />}
+      {labelPengunggah(type)}
+    </span>
+  )
 }
 
 export default function RepositoryDocumentListPage({
@@ -162,7 +213,7 @@ export default function RepositoryDocumentListPage({
         />
       </div>
 
-      <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+      <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white">
         {isLoading ? (
           <div className="p-12 text-center text-gray-400">Memuat data...</div>
         ) : isError ? (
@@ -172,68 +223,99 @@ export default function RepositoryDocumentListPage({
             <p className="font-medium text-gray-500">Tidak ada dokumen ditemukan</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-slate-50">
-                  <TableHead>Dokumen</TableHead>
-                  <TableHead>Asal</TableHead>
-                  <TableHead>Modul</TableHead>
-                  <TableHead>Diunggah</TableHead>
-                  <TableHead>Ukuran</TableHead>
-                  <TableHead className="text-right">Unduh</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {documents.map((doc) => {
-                  const href = tautanDokumenSumber(doc, panel)
-                  return (
+          <>
+            <div className="hidden xl:block">
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-b border-gray-100 bg-slate-50">
+                    <TableHead className="px-6 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500">Dokumen</TableHead>
+                    <TableHead className="px-4 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500">Asal</TableHead>
+                    <TableHead className="px-4 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500">Modul</TableHead>
+                    <TableHead className="px-4 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500">Diunggah</TableHead>
+                    <TableHead className="px-4 py-3.5 text-right text-xs font-semibold uppercase tracking-wide text-gray-500">Ukuran</TableHead>
+                    <TableHead className="px-6 py-3.5 text-right text-xs font-semibold uppercase tracking-wide text-gray-500">Unduh</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody className="divide-y divide-gray-50">
+                  {documents.map((doc) => (
                     <TableRow key={doc.id}>
-                      <TableCell className="min-w-52">
-                        <div className="font-medium text-gray-900 break-all">{doc.file_name}</div>
-                        <div className="mt-1 text-xs text-gray-500">{labelJenisDokumen(doc)}</div>
+                      <TableCell className="max-w-[22rem] whitespace-normal px-6 py-4">
+                        <NamaDokumen doc={doc} />
                       </TableCell>
-                      <TableCell className="min-w-48">
-                        {href ? (
-                          <Link to={href} className="block font-medium text-blue-700 hover:underline">
-                            {doc.source_number && <div>{doc.source_number}</div>}
-                            {doc.source_title && <div className="mt-1 text-xs">{doc.source_title}</div>}
-                            {!doc.source_number && !doc.source_title && 'Buka data'}
-                          </Link>
-                        ) : (
-                          <div className="font-medium text-gray-700">
-                            {doc.source_number && <div>{doc.source_number}</div>}
-                            {doc.source_title && <div className="mt-1 text-xs text-gray-500">{doc.source_title}</div>}
-                            {!doc.source_number && !doc.source_title && '-'}
-                          </div>
-                        )}
+                      <TableCell className="max-w-[18rem] whitespace-normal px-4 py-4">
+                        <AsalDokumen doc={doc} panel={panel} />
                       </TableCell>
-                      <TableCell>{labelModul(doc.feature_code)}</TableCell>
-                      <TableCell className="min-w-36">
-                        <div>{formatTanggalUnggah(doc.uploaded_at ?? doc.created_at)}</div>
-                        <div className="mt-1 inline-flex items-center gap-1 text-xs text-gray-500">
-                          {doc.uploader_type === 'approver' ? <BadgeCheck className="h-3 w-3" /> : <User className="h-3 w-3" />}
-                          {labelPengunggah(doc.uploader_type)}
-                        </div>
+                      <TableCell className="whitespace-nowrap px-4 py-4 text-sm text-gray-700">
+                        {labelModul(doc.feature_code)}
                       </TableCell>
-                      <TableCell className="whitespace-nowrap">{formatUkuranDokumen(doc.file_size)}</TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="whitespace-nowrap px-4 py-4">
+                        <div className="text-sm text-gray-700">{formatTanggalUnggah(doc.uploaded_at ?? doc.created_at)}</div>
+                        <div className="mt-1"><PengunggahDokumen type={doc.uploader_type} /></div>
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap px-4 py-4 text-right text-sm tabular-nums text-gray-600">
+                        {formatUkuranDokumen(doc.file_size)}
+                      </TableCell>
+                      <TableCell className="px-6 py-4 text-right">
                         <Button
                           variant="ghost"
                           size="sm"
                           aria-label={`Unduh ${doc.file_name}`}
                           disabled={downloadMutation.isPending}
                           onClick={() => handleDownload(doc.id)}
+                          className="text-gray-500 hover:text-[#C8102E] focus-visible:ring-[#0B2545]"
                         >
                           <Download className="h-4 w-4" />
                         </Button>
                       </TableCell>
                     </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
-          </div>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+
+            <ul className="divide-y divide-gray-100 xl:hidden">
+              {documents.map((doc) => (
+                <li key={doc.id} className="p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <NamaDokumen doc={doc} />
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      aria-label={`Unduh ${doc.file_name}`}
+                      disabled={downloadMutation.isPending}
+                      onClick={() => handleDownload(doc.id)}
+                      className="shrink-0 text-gray-600 hover:border-[#C8102E] hover:text-[#C8102E] focus-visible:ring-[#0B2545]"
+                    >
+                      <Download className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <div className="mt-3">
+                    <AsalDokumen doc={doc} panel={panel} />
+                  </div>
+                  <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                    <div>
+                      <dt className="text-xs text-gray-500">Modul</dt>
+                      <dd className="mt-0.5 text-gray-700">{labelModul(doc.feature_code)}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-gray-500">Diunggah</dt>
+                      <dd className="mt-0.5 text-gray-700">{formatTanggalUnggah(doc.uploaded_at ?? doc.created_at)}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-gray-500">Pengunggah</dt>
+                      <dd className="mt-0.5"><PengunggahDokumen type={doc.uploader_type} /></dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-gray-500">Ukuran</dt>
+                      <dd className="mt-0.5 tabular-nums text-gray-700">{formatUkuranDokumen(doc.file_size)}</dd>
+                    </div>
+                  </dl>
+                </li>
+              ))}
+            </ul>
+          </>
         )}
       </div>
 
