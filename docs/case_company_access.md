@@ -244,6 +244,19 @@ atau dihapus, atau saat pengajuan atau perkaranya dihapus. Draf tidak masuk samp
 dikirim. Saat server menyala, backfill mencocokkan ulang repositori dengan data
 yang ada, sebagai jaring pengaman.
 
+Daftar menampilkan konteks dokumen selain nama file: nomor dan judul pengajuan
+atau perkara, jenis dokumen, modul asal, tanggal unggah, pengunggah, ukuran, dan
+tombol unduh. Konteks dicatat pada baris Repositori saat sinkron; backfill
+mengisi atau menyegarkan konteks baris lama. Ukuran yang tidak diketahui
+ditampilkan sebagai "-". Pencarian mencakup nama file, nomor, dan judul asal;
+pencarian, filter modul/jenis/rentang tanggal, dan halaman disimpan pada URL.
+
+Nomor atau judul menjadi tautan detail bila panel pengguna memiliki route detail
+untuk sumber tersebut. Lampiran kronologi menampilkan nomor dan judul perkara
+tanpa tautan langsung karena ID sumbernya adalah ID kronologi, bukan ID perkara.
+Menampilkan dokumen, membuka detail, dan mengunduh tetap mengikuti aturan akses
+sumber di atas; perubahan tampilan tidak memberi izin tambahan.
+
 Rujukan kode: `DocumentAccess` di
 `backend/internal/repository/document_repository.repository.go` (saringannya)
 dan `access()` di `backend/internal/handler/document_repository.handler.go`
