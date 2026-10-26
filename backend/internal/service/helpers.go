@@ -47,6 +47,22 @@ var (
 	ErrIsianBelumLengkap = errors.New("Semua field wajib diisi")
 )
 
+// ErrCatatanWajib: Perlu Revisi dan Ditolak tanpa catatan approver ditolak (PR Audit Log tahap
+// L.3a, keputusan L6), untuk Legal Opinion, Review Dokumen, dan Perjanjian.
+var ErrCatatanWajib = errors.New("catatan approver wajib diisi")
+
+// catatanWajib: status yang mengembalikan atau menolak pengajuan, jadi pengaju perlu tahu alasannya.
+func catatanWajib(status entity.SubmissionStatus) bool {
+	return status == entity.StatusNeedRevision || status == entity.StatusRejected
+}
+
+// PerubahanStatus: nomor tiket dan status pengajuan sebelum dan sesudah aksi approver, untuk
+// audit log (PR Audit Log tahap L.3). Lama sama dengan Baru kalau status tidak berubah.
+type PerubahanStatus struct {
+	Tiket      string
+	Lama, Baru entity.SubmissionStatus
+}
+
 // nomorDraf: nomor tiket sementara untuk draf (keputusan K1). Polanya tidak cocok dengan
 // <prefix>-YYYYMM-NNNN, jadi urutan nomor asli tidak terganggu oleh draf yang dibuang.
 func nomorDraf() string {

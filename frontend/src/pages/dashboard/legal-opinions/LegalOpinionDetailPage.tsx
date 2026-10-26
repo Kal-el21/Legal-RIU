@@ -6,6 +6,7 @@ import StatusBadge from '@/components/common/StatusBadge'
 import { useLegalOpinion, useDeleteLegalOpinion, useResubmitLegalOpinion } from '@/hooks/useLegalOpinion'
 import { useAuthStore } from '@/store/auth.store'
 import { formatDateTime, formatFileSize, pilahLampiran } from '@/lib/utils'
+import RiwayatAktivitas from '@/components/shared/RiwayatAktivitas'
 import { legalOpinionService } from '@/services/legal-opinion.service'
 import type { SubmissionStatus } from '@/types'
 
@@ -218,6 +219,10 @@ export default function LegalOpinionDetailPage() {
             )}
           </div>
         )}
+      </div>
+
+      <div className="mt-5">
+        <RiwayatAktivitas kunci={['legal_opinion', id!]} ambil={() => legalOpinionService.history(id!)} />
       </div>
     </div>
   )

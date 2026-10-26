@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"mime/multipart"
 	"path"
+	"strings"
 	"time"
 
 	"legal-riu-portal/internal/dto"
@@ -25,8 +26,8 @@ type DocumentReviewService interface {
 	Update(id string, userID string, req dto.UpdateDocumentReviewRequest) (*entity.DocumentReview, error)
 	Delete(id string, userID string) error
 	Resubmit(id string, userID string, files []*multipart.FileHeader) (*entity.DocumentReview, error)
-	UpdateStatus(id string, req dto.UpdateStatusRequest) error
-	UploadResult(id string, adminID string, req dto.UploadResultRequest, file *multipart.FileHeader) error
+	UpdateStatus(id string, req dto.UpdateStatusRequest) (*PerubahanStatus, error)
+	UploadResult(id string, adminID string, req dto.UploadResultRequest, file *multipart.FileHeader) (*PerubahanStatus, error)
 	DownloadFile(filePath, userID, role string) (*minio.Object, string, error)
 
 	GeneratePDF(id string) ([]byte, error)
@@ -189,52 +190,59 @@ func (s *documentReviewService) Resubmit(id string, userID string, files []*mult
 		}
 	}
 
-	if err := s.repo.UpdateStatus(dr.ID, entity.StatusResubmitted, ""); err != nil {
+	if err := s.repo.UpdateStatus(dr.ID, entity.StatusResubmitted, nil); err != nil {
 		return nil, errors.New("gagal mengubah status")
 	}
 
 	return s.muat(dr.ID)
 }
 
-func (s *documentReviewService) UpdateStatus(id string, req dto.UpdateStatusRequest) error {
+func (s *documentReviewService) UpdateStatus(id string, req dto.UpdateStatusRequest) (*PerubahanStatus, error) {
 	uid, err := parseUUID(id)
 	if err != nil {
-		return errors.New("ID tidak valid")
+		return nil, errors.New("ID tidak valid")
 	}
 
 	dr, err := s.repo.FindByID(uid)
 	if err != nil || dr.Status == entity.StatusDraft {
-		return errors.New("pengajuan tidak ditemukan")
+		return nil, errors.New("pengajuan tidak ditemukan")
 	}
 
 	newStatus := entity.SubmissionStatus(req.Status)
 	if !isValidStatusTransition(dr.Status, newStatus) {
-		return errors.New("perubahan status tidak valid")
+		return nil, errors.New("perubahan status tidak valid")
+	}
+	catatan := strings.TrimSpace(req.AdminNote)
+	if catatanWajib(newStatus) && catatan == "" {
+		return nil, ErrCatatanWajib
 	}
 
-	return s.repo.UpdateStatus(uid, newStatus, req.AdminNote)
+	if err := s.repo.UpdateStatus(uid, newStatus, &catatan); err != nil {
+		return nil, err
+	}
+	return &PerubahanStatus{Tiket: dr.TicketNumber, Lama: dr.Status, Baru: newStatus}, nil
 }
 
-func (s *documentReviewService) UploadResult(id string, adminID string, req dto.UploadResultRequest, file *multipart.FileHeader) error {
+func (s *documentReviewService) UploadResult(id string, adminID string, req dto.UploadResultRequest, file *multipart.FileHeader) (*PerubahanStatus, error) {
 	uid, err := parseUUID(id)
 	if err != nil {
-		return errors.New("ID tidak valid")
+		return nil, errors.New("ID tidak valid")
 	}
 	adminUID, err := parseUUID(adminID)
 	if err != nil {
-		return errors.New("admin tidak valid")
+		return nil, errors.New("admin tidak valid")
 	}
 
 	// Get current document review to check status
 	dr, err := s.repo.FindByID(uid)
 	if err != nil || dr.Status == entity.StatusDraft {
-		return errors.New("pengajuan tidak ditemukan")
+		return nil, errors.New("pengajuan tidak ditemukan")
 	}
 
 	ctx := context.Background()
 	objectPath, fileName, err := s.storage.UploadFile(ctx, "document-reviews/results", file, fmt.Sprintf("review-result-%s", uid.String()))
 	if err != nil {
-		return errors.New("gagal mengupload hasil review")
+		return nil, errors.New("gagal mengupload hasil review")
 	}
 
 	result := &entity.DocumentReviewResult{
@@ -245,18 +253,20 @@ func (s *documentReviewService) UploadResult(id string, adminID string, req dto.
 		Notes:            req.Notes,
 	}
 	if err := s.repo.AddResult(result); err != nil {
-		return errors.New("gagal menyimpan hasil review")
+		return nil, errors.New("gagal menyimpan hasil review")
 	}
 
 	// Auto-complete: If status is UNDER_REVIEW, automatically set to COMPLETED
+	ubah := &PerubahanStatus{Tiket: dr.TicketNumber, Lama: dr.Status, Baru: dr.Status}
 	if dr.Status == entity.StatusUnderReview {
-		if err := s.repo.UpdateStatus(uid, entity.StatusCompleted, ""); err != nil {
-			return errors.New("gagal mengupdate status ke COMPLETED")
+		if err := s.repo.UpdateStatus(uid, entity.StatusCompleted, nil); err != nil {
+			return nil, errors.New("gagal mengupdate status ke COMPLETED")
 		}
+		ubah.Baru = entity.StatusCompleted
 	}
 
 	s.muat(uid) // hasil review langsung masuk Repositori Dokumen
-	return nil
+	return ubah, nil
 }
 
 // DownloadFile hanya melayani file yang terdaftar sebagai lampiran atau hasil

@@ -5,7 +5,7 @@ import { useLegalOpinion, useLegalUpdateStatus, useAdminDownloadPDF } from '@/ho
 import { useAuthStore } from '@/store/auth.store'
 import { useQueryClient, useMutation } from '@tanstack/react-query'
 import SharedLegalOpinionDetailPage from '@/components/shared/LegalOpinionDetailPage'
-import { validateFile } from '@/lib/utils'
+import { catatanWajib, validateFile } from '@/lib/utils'
 import { legalOpinionService } from '@/services/legal-opinion.service'
 
 export default function LegalLegalOpinionDetailPage() {
@@ -87,8 +87,10 @@ export default function LegalLegalOpinionDetailPage() {
               </select>
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs text-gray-500">Catatan Admin (opsional)</label>
+              <label htmlFor="catatan-status" className="text-xs text-gray-500">Catatan Admin ({catatanWajib(newStatus) ? 'wajib' : 'opsional'})</label>
               <textarea
+                id="catatan-status"
+                required={catatanWajib(newStatus)}
                 value={adminNote}
                 onChange={(e) => setAdminNote(e.target.value)}
                 placeholder="Tambahkan catatan untuk pemohon..."
@@ -98,7 +100,7 @@ export default function LegalLegalOpinionDetailPage() {
             </div>
             <button
               onClick={handleStatusUpdate}
-              disabled={!newStatus || updateStatus.isPending}
+              disabled={!newStatus || (catatanWajib(newStatus) && !adminNote.trim()) || updateStatus.isPending}
               className="w-full text-white text-sm py-2.5 rounded-lg disabled:opacity-50"
               style={{ background: '#0B2545' }}
             >

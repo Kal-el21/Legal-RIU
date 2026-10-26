@@ -64,6 +64,12 @@ export const STATUS_COLOR: Record<SubmissionStatus, string> = {
   COMPLETED: 'bg-green-100 text-green-700',
 }
 
+// catatanWajib: Perlu Revisi dan Ditolak wajib disertai catatan untuk pemohon (sama dengan backend,
+// ErrCatatanWajib di service/helpers.go).
+export function catatanWajib(status: string): boolean {
+  return status === 'NEED_REVISION' || status === 'REJECTED'
+}
+
 export function getStatusLabel(status: SubmissionStatus): string {
   return STATUS_LABEL[status] ?? status
 }

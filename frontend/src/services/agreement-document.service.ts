@@ -1,6 +1,7 @@
 import api from './api'
 import axios from 'axios'
 import type { Penandatangan, UsulanPenandatangan } from '@/lib/penandatangan'
+import type { AuditLog } from '@/types'
 export interface AgreementField {name:string;label:string;type:string;required:boolean;options?:string[];fields?:AgreementField[];split_of?:string}
 export interface AgreementSchema {code:string;name:string;template_id:string;template_version:number;sections:{title:string;fields:AgreementField[]}[]}
 // Penanda untuk approver: pengajuan berjalan masih memakai versi template lama.
@@ -43,6 +44,7 @@ export const agreementService={
   },
   list:(base='',query?:Record<string,unknown>)=>api.get(`${base}/agreement-documents`, query ? {params:query} : undefined).then(r=>data<{items:AgreementDocument[]}>(r).items),
  get:(id:string,base='')=>api.get(`${base}/agreement-documents/${id}`).then(r=>data<AgreementDocument>(r)),
+ history:(id:string,base='')=>api.get(`${base}/agreement-documents/${id}/history`).then(r=>data<AuditLog[]>(r)??[]),
  create:(payload:unknown,files:File[])=>{const f=new FormData();f.append('data',JSON.stringify(payload));files.forEach(x=>f.append('attachments',x));return api.post('/agreement-documents',f).then(r=>data<AgreementDocument>(r))},
  update:(id:string,form_data:Record<string,unknown>)=>api.put(`/agreement-documents/${id}`,{form_data}),
  remove:(id:string)=>api.delete(`/agreement-documents/${id}`),

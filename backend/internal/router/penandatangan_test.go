@@ -290,6 +290,22 @@ func TestPenandatanganPersetujuan(t *testing.T) {
 	if catatan.OldValue != "Sari, Direktur (usulan)" || catatan.NewValue != "Andi, Direktur Utama (dari Daftar)" {
 		t.Errorf("audit log penggantian: %+v", catatan)
 	}
+	// Pergantian penandatangan bersama perubahan data persetujuan lain di satu simpanan: baris
+	// SIGNATORY_CHANGE ikut menyebut perubahan lainnya (PR Audit Log tahap L.3b).
+	q := ajukan(750_000_000)
+	meta(q.ID, map[string]any{"party_one_signatory_id": andi.ID, "agreement_number": "PKS/UJI/L3B"}, http.StatusOK)
+	var ketGanti string
+	dbTes.Raw("SELECT description FROM audit_logs WHERE action = 'SIGNATORY_CHANGE' AND entity_id = ?", q.ID).Scan(&ketGanti)
+	if !strings.Contains(ketGanti, "Nomor perjanjian: (kosong) → PKS/UJI/L3B") {
+		t.Errorf("keterangan pergantian penandatangan bersama nomor perjanjian: %q", ketGanti)
+	}
+	// Kembali ke usulan bukan pergantian (tanpa SIGNATORY_CHANGE), tetapi tetap tercatat di rincian.
+	meta(q.ID, map[string]any{"party_one_signatory_id": sari.ID}, http.StatusOK)
+	var ketKembali string
+	dbTes.Raw("SELECT description FROM audit_logs WHERE action = 'USER_UPDATE' AND entity_id = ? ORDER BY created_at DESC LIMIT 1", q.ID).Scan(&ketKembali)
+	if !strings.Contains(ketKembali, "Penandatangan Pihak Pertama: Andi, Direktur Utama (dari Daftar) → Sari, Direktur (") {
+		t.Errorf("keterangan kembali ke usulan: %q", ketKembali)
+	}
 
 	// Isian approver yang dikirim pengaju tidak tersimpan: saat membuat dibuang, saat
 	// revisi yang tersimpan tetap dipakai. Pengaju tidak bisa menentukan penandatangan.

@@ -565,6 +565,38 @@ export default function SomePage() {
 }
 ```
 
+### Audit Log Pattern
+
+Aksi yang mengubah data dicatat dari handler; `AuditMiddleware` menulis barisnya sesudah handler selesai, dan hanya
+kalau konteksnya dipasang.
+
+```go
+// Cukup aksi, jenis data, dan ID:
+middleware.SetAuditContext(c, entity.ActionUserUpdate, "legal_material", item.ID)
+
+// Dengan nilai lama, nilai baru, dan keterangan (handler/legal_opinion.handler.go, UpdateStatus):
+desc := "Status Legal Opinion " + ubah.Tiket + " diubah dari " + lama + " ke " + baru + denganCatatan(req.AdminNote)
+middleware.SetAuditContextWithValues(c, entity.ActionStatusChange, "legal_opinion", id, &lama, &baru, &desc)
+```
+
+Aturan:
+- **Keterangan** ditulis dalam bahasa Indonesia untuk pembaca awam, menyebut datanya (nomor tiket, nama), mis.
+  "Isian pengajuan perjanjian PKS-001 diubah: Nilai kontrak: Rp1.000.000 → Rp2.000.000".
+- **Catatan approver** ditempel dengan `denganCatatan` (`". Catatan: <isi>"`); halaman Audit Log memisahkannya lewat
+  `pisahCatatan` di `frontend/src/lib/audit.ts`. Jangan mengubah format salah satunya tanpa yang lain.
+- **Perubahan status** memakai `STATUS_CHANGE` dengan nilai lama dan baru berupa kode status; halaman menampilkannya
+  sebagai "lama → baru".
+- **ID** boleh `uuid.UUID`, string, atau nilai yang punya `String()`. ID yang bukan UUID (mis. impor Excel) tercatat
+  sebagai UUID kosong.
+- **Jenis data baru** (`entity_type`) didaftarkan di `ENTITAS` (`frontend/src/lib/audit.ts`), dan kalau datanya punya
+  halaman detail, juga di `DETAIL` supaya tautan "Buka data" muncul. **Aksi baru** (`entity.Action*`) didaftarkan di
+  `AKSI` dan ikonnya di `components/shared/BarisAudit.tsx`.
+- **Modul baru dengan halaman detail** mendapat riwayat per data: method `BolehBuka(c) (uuid.UUID, bool)` di handlernya
+  dengan aturan akses yang sama dengan `GetByID`, route `GET .../:id/history` memakai
+  `auditLogHandler.Riwayat("<jenis>", h.BolehBuka)` dengan permission yang sama dengan detail, fungsi `history` di
+  service frontend, dan `<RiwayatAktivitas>` di halaman detailnya.
+- Tesnya memeriksa baris `audit_logs` yang terbentuk (contoh: `internal/router/pemantauan_test.go`).
+
 ---
 
 ## Adding a New Feature
@@ -598,6 +630,8 @@ export default function SomePage() {
    - [ ] Register routes in `routes/index.tsx`
    - [ ] Add sidebar menu in `layouts/*Layout.tsx`
    - [ ] Add permission checks with `hasPermission()`
+   - [ ] Jenis data atau aksi audit baru didaftarkan di `frontend/src/lib/audit.ts`; halaman detail baru memasang
+         `<RiwayatAktivitas>` (lihat Audit Log Pattern)
 
 3. **Documentation**
    - [ ] Update `docs/permission_matrix.md` if new permissions added

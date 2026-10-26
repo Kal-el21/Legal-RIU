@@ -223,3 +223,53 @@ func TestKatalogDaftarDanGrup(t *testing.T) {
 		}
 	}
 }
+
+// rincianIsian menyebut isian yang berubah dengan label dan nilai yang terbaca, dan isian daftar
+// dan grup tanpa nilai (PR Audit Log tahap L.3b).
+func TestRincianIsian(t *testing.T) {
+	sections := append(bagianTermin(), AgreementSectionDefinition{Title: "Pihak", Fields: []AgreementFieldDefinition{
+		{Name: "pihak_kedua_nama", Label: "Nama Perusahaan", Type: "text"},
+		{Name: "mulai", Label: "Tanggal Mulai", Type: "date"},
+		{Name: "uraian", Label: "Uraian", Type: "textarea"},
+	}})
+	lama := isianJSON(t, `{"nilai_kontrak": 1000000, "termin": [{"persen": 100, "syarat": "a"}], "ruang_lingkup": ["a"],
+		"pihak_kedua_nama": "PT Lama", "mulai": "2026-01-01", "uraian": "x"}`)
+
+	t.Run("TanpaPerubahan", func(t *testing.T) {
+		// Angka dari database (json.Number) dan dari browser (float64) dianggap sama.
+		baru := isianJSON(t, `{"nilai_kontrak": 1000000, "termin": [{"persen": 100, "syarat": "a"}], "ruang_lingkup": ["a"],
+			"pihak_kedua_nama": " PT Lama ", "mulai": "2026-01-01", "uraian": "x"}`)
+		baru["nilai_kontrak"] = float64(1000000)
+		if got := rincianIsian(sections, lama, baru); len(got) != 0 {
+			t.Errorf("rincian tanpa perubahan: %q", got)
+		}
+	})
+
+	t.Run("Berubah", func(t *testing.T) {
+		baru := isianJSON(t, `{"nilai_kontrak": "2.500.000", "termin": [{"persen": 50, "syarat": "a"}, {"syarat": "b"}], "ruang_lingkup": ["a", "b"],
+			"pihak_kedua_nama": "PT Baru", "mulai": "2026-02-03", "uraian": ""}`)
+		baru["uraian"] = strings.Repeat("panjang ", 20)
+		got := rincianIsian(sections, lama, baru)
+		harap := []string{
+			"Nilai Kontrak: Rp 1.000.000 → Rp 2.500.000",
+			"Termin diubah",
+			"Ruang Lingkup diubah",
+			"Nama Perusahaan: PT Lama → PT Baru",
+			"Tanggal Mulai: 1 Januari 2026 → 3 Februari 2026",
+			"Uraian: x → " + strings.TrimSpace(strings.Repeat("panjang ", 20))[:100] + "…",
+		}
+		if strings.Join(got, "|") != strings.Join(harap, "|") {
+			t.Errorf("rincian:\n  dapat %q\n  harap %q", got, harap)
+		}
+	})
+
+	t.Run("KosongDanNull", func(t *testing.T) {
+		kosong := map[string]interface{}{"ruang_lingkup": []interface{}{}}
+		if got := rincianIsian(bagianTermin(), map[string]interface{}{}, kosong); len(got) != 0 {
+			t.Errorf("daftar kosong dan tidak ada dianggap berubah: %q", got)
+		}
+		if got := rincianIsian(sections, map[string]interface{}{}, map[string]interface{}{"pihak_kedua_nama": "PT A"}); len(got) != 1 || got[0] != "Nama Perusahaan: (kosong) → PT A" {
+			t.Errorf("isian baru diisi: %q", got)
+		}
+	})
+}

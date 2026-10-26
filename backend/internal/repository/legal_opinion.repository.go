@@ -15,7 +15,7 @@ type LegalOpinionRepository interface {
 	FindAll(userID *uuid.UUID, status string, page, limit int) ([]entity.LegalOpinion, int64, error)
 	Update(lo *entity.LegalOpinion) error
 	Delete(id uuid.UUID) error
-	UpdateStatus(id uuid.UUID, status entity.SubmissionStatus, adminNote string) error
+	UpdateStatus(id uuid.UUID, status entity.SubmissionStatus, adminNote *string) error
 	NextTicketSequence(prefix string) (int, error)
 	AddAttachment(att *entity.LegalOpinionAttachment) error
 	GetLatestUploadRound(loID uuid.UUID) (int, error)
@@ -93,11 +93,14 @@ func (r *legalOpinionRepository) Delete(id uuid.UUID) error {
 	return r.db.Delete(&entity.LegalOpinion{}, "id = ?", id).Error
 }
 
-func (r *legalOpinionRepository) UpdateStatus(id uuid.UUID, status entity.SubmissionStatus, adminNote string) error {
+// UpdateStatus: adminNote nil membiarkan catatan approver apa adanya (ajukan ulang, selesai karena
+// unggah hasil); selain itu catatan disimpan apa adanya, termasuk kosong, supaya catatan putaran
+// sebelumnya tidak terbawa (PR Audit Log tahap L.3a).
+func (r *legalOpinionRepository) UpdateStatus(id uuid.UUID, status entity.SubmissionStatus, adminNote *string) error {
 	now := time.Now()
 	updates := map[string]interface{}{"status": status, "status_updated_at": now}
-	if adminNote != "" {
-		updates["admin_note"] = adminNote
+	if adminNote != nil {
+		updates["admin_note"] = *adminNote
 	}
 	return r.db.Model(&entity.LegalOpinion{}).Where("id = ?", id).Updates(updates).Error
 }
