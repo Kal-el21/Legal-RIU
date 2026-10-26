@@ -43,6 +43,8 @@ export default function RepositoryDocumentListPage({
   const [search, setSearch] = useState('')
 
   const { data, isLoading } = useRepositoryDocuments({
+    page: 1,
+    limit: 100,
     feature_code: featureCode === 'all' ? undefined : featureCode || undefined,
     search: search || undefined,
   })
@@ -62,7 +64,7 @@ export default function RepositoryDocumentListPage({
     })
   }
 
-  const filtered = data ?? []
+  const filtered = data?.items ?? []
 
   return (
     <div className="p-6 max-w-7xl mx-auto">

@@ -2,7 +2,11 @@ package handler
 
 import (
 	"net/http"
+	"strconv"
+	"strings"
+	"time"
 
+	"legal-riu-portal/internal/dto"
 	"legal-riu-portal/internal/middleware"
 	"legal-riu-portal/internal/repository"
 	"legal-riu-portal/internal/service"
@@ -10,6 +14,18 @@ import (
 
 	"github.com/gin-gonic/gin"
 )
+
+var jenisDokumenRepositori = map[string]bool{
+	"legal_opinion_attachments":   true,
+	"legal_opinion_results":       true,
+	"document_review_attachments": true,
+	"document_review_results":     true,
+	"agreement_attachments":       true,
+	"agreement_documents":         true,
+	"legal_cases":                 true,
+	"legal_cases_photo":           true,
+	"case_chronologies":           true,
+}
 
 type RepositoryDocumentHandler struct {
 	svc      service.RepositoryDocumentService
@@ -59,14 +75,65 @@ func (h *RepositoryDocumentHandler) GetAll(c *gin.Context) {
 	if !ok {
 		return
 	}
-	featureCode := c.Query("feature_code")
-	search := c.Query("search")
-	items, err := h.svc.GetAllDocuments(access, featureCode, search)
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "100"))
+	if page <= 0 {
+		page = 1
+	}
+	if limit <= 0 {
+		limit = 100
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	filters := dto.RepositoryDocumentFilters{
+		Page:        page,
+		Limit:       limit,
+		FeatureCode: strings.TrimSpace(c.Query("feature_code")),
+		SourceType:  strings.TrimSpace(c.Query("source_type")),
+		MIMEType:    strings.TrimSpace(c.Query("mime_type")),
+		Search:      strings.TrimSpace(c.Query("search")),
+	}
+	if filters.SourceType != "" && !jenisDokumenRepositori[filters.SourceType] {
+		utils.BadRequest(c, "Jenis dokumen tidak valid", nil)
+		return
+	}
+	if filters.MIMEType != "" {
+		if filters.SourceType != "agreement_documents" ||
+			(filters.MIMEType != "application/pdf" &&
+				filters.MIMEType != "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
+			utils.BadRequest(c, "Tipe file tidak valid", nil)
+			return
+		}
+	}
+	wib := time.FixedZone("WIB", 7*60*60)
+	if value := c.Query("date_from"); value != "" {
+		tanggal, err := time.ParseInLocation("2006-01-02", value, wib)
+		if err != nil {
+			utils.BadRequest(c, "Tanggal awal tidak valid", nil)
+			return
+		}
+		filters.DateFrom = &tanggal
+	}
+	if value := c.Query("date_to"); value != "" {
+		tanggal, err := time.ParseInLocation("2006-01-02", value, wib)
+		if err != nil {
+			utils.BadRequest(c, "Tanggal akhir tidak valid", nil)
+			return
+		}
+		tanggal = tanggal.Add(24*time.Hour - time.Nanosecond)
+		filters.DateTo = &tanggal
+	}
+	if filters.DateFrom != nil && filters.DateTo != nil && filters.DateFrom.After(*filters.DateTo) {
+		utils.BadRequest(c, "Rentang tanggal tidak valid", nil)
+		return
+	}
+	result, err := h.svc.GetAllDocuments(access, filters)
 	if err != nil {
 		utils.InternalError(c, err.Error())
 		return
 	}
-	utils.OK(c, "Success", items)
+	utils.OK(c, "Success", result)
 }
 
 func (h *RepositoryDocumentHandler) GetByID(c *gin.Context) {

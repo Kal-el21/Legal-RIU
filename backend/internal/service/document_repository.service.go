@@ -11,12 +11,13 @@ import (
 	"legal-riu-portal/internal/entity"
 	"legal-riu-portal/internal/repository"
 	"legal-riu-portal/internal/storage"
+	"legal-riu-portal/internal/utils"
 
 	"github.com/minio/minio-go/v7"
 )
 
 type RepositoryDocumentService interface {
-	GetAllDocuments(access repository.DocumentAccess, featureCode string, search string) ([]dto.RepositoryDocumentResponse, error)
+	GetAllDocuments(access repository.DocumentAccess, filters dto.RepositoryDocumentFilters) (dto.RepositoryDocumentListResponse, error)
 	GetDocumentByID(access repository.DocumentAccess, id string) (*dto.RepositoryDocumentResponse, error)
 	DownloadDocument(access repository.DocumentAccess, id string) (*minio.Object, string, error)
 	SyncCaseDocument(legalCase *entity.LegalCase, filePath string, fileName string, fileSize int64, uploadedAt time.Time) error
@@ -32,20 +33,27 @@ type RepositoryDocumentService interface {
 }
 
 type repositoryDocumentService struct {
-	repo    repository.RepositoryDocumentRepository
-	storage *storage.MinIOClient
+	repo     repository.RepositoryDocumentRepository
+	caseRepo repository.LegalCaseRepository
+	storage  *storage.MinIOClient
 }
 
-func NewRepositoryDocumentService(repo repository.RepositoryDocumentRepository, s *storage.MinIOClient) RepositoryDocumentService {
-	return &repositoryDocumentService{repo: repo, storage: s}
+func NewRepositoryDocumentService(repo repository.RepositoryDocumentRepository, caseRepo repository.LegalCaseRepository, s *storage.MinIOClient) RepositoryDocumentService {
+	return &repositoryDocumentService{repo: repo, caseRepo: caseRepo, storage: s}
 }
 
-func (s *repositoryDocumentService) GetAllDocuments(access repository.DocumentAccess, featureCode string, search string) ([]dto.RepositoryDocumentResponse, error) {
-	docs, err := s.repo.FindAll(access, featureCode, search)
+func (s *repositoryDocumentService) GetAllDocuments(access repository.DocumentAccess, filters dto.RepositoryDocumentFilters) (dto.RepositoryDocumentListResponse, error) {
+	docs, total, err := s.repo.FindAll(access, filters)
 	if err != nil {
-		return nil, err
+		return dto.RepositoryDocumentListResponse{}, err
 	}
-	return toRepositoryDocumentResponses(docs), nil
+	return dto.RepositoryDocumentListResponse{
+		Items:      toRepositoryDocumentResponses(docs),
+		Total:      total,
+		Page:       filters.Page,
+		Limit:      filters.Limit,
+		TotalPages: int((total + int64(filters.Limit) - 1) / int64(filters.Limit)),
+	}, nil
 }
 
 func (s *repositoryDocumentService) GetDocumentByID(access repository.DocumentAccess, id string) (*dto.RepositoryDocumentResponse, error) {
@@ -97,7 +105,26 @@ func (s *repositoryDocumentService) DownloadDocument(access repository.DocumentA
 	if err != nil {
 		return nil, "", errors.New("gagal mengambil file dari storage")
 	}
-	return obj, doc.FileName, nil
+	return obj, s.namaUnduhan(doc), nil
+}
+
+func (s *repositoryDocumentService) namaUnduhan(doc *entity.RepositoryDocument) string {
+	switch doc.SourceType {
+	case "legal_opinion_attachments", "document_review_attachments", "agreement_attachments":
+		return utils.NamaUnduhan(stringPointer(doc.SourceNumber), "Lampiran", doc.FileName)
+	case "legal_opinion_results", "document_review_results":
+		return utils.NamaUnduhan(stringPointer(doc.SourceNumber), "Hasil", doc.FileName)
+	case "agreement_documents":
+		return doc.FileName
+	case "legal_cases", "legal_cases_photo", "case_chronologies":
+		if tiket, jenis, nama := s.caseRepo.NamaFilePerkara(doc.FilePath); jenis != "" {
+			if nama == "" {
+				nama = filepath.Base(doc.FilePath)
+			}
+			return utils.NamaUnduhan(tiket, jenis, nama)
+		}
+	}
+	return doc.FileName
 }
 
 func (s *repositoryDocumentService) SyncCaseDocument(legalCase *entity.LegalCase, filePath string, fileName string, fileSize int64, uploadedAt time.Time) error {
@@ -309,6 +336,13 @@ func toRepositoryDocumentResponse(d entity.RepositoryDocument) dto.RepositoryDoc
 
 func pointer[T any](value T) *T {
 	return &value
+}
+
+func stringPointer(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
 }
 
 func toRepositoryDocumentResponses(docs []entity.RepositoryDocument) []dto.RepositoryDocumentResponse {

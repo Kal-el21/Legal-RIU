@@ -2,6 +2,17 @@ package dto
 
 import "time"
 
+type RepositoryDocumentFilters struct {
+	Page        int
+	Limit       int
+	FeatureCode string
+	SourceType  string
+	MIMEType    string
+	DateFrom    *time.Time
+	DateTo      *time.Time
+	Search      string
+}
+
 type RepositoryDocumentResponse struct {
 	ID           string     `json:"id"`
 	Title        string     `json:"title"`
@@ -20,4 +31,12 @@ type RepositoryDocumentResponse struct {
 	UpdatedBy    string     `json:"updated_by"`
 	CreatedAt    time.Time  `json:"created_at"`
 	UpdatedAt    time.Time  `json:"updated_at"`
+}
+
+type RepositoryDocumentListResponse struct {
+	Items      []RepositoryDocumentResponse `json:"items"`
+	Total      int64                        `json:"total"`
+	Page       int                          `json:"page"`
+	Limit      int                          `json:"limit"`
+	TotalPages int                          `json:"total_pages"`
 }

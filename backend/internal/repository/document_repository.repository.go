@@ -2,6 +2,7 @@ package repository
 
 import (
 	"errors"
+	"legal-riu-portal/internal/dto"
 	"legal-riu-portal/internal/entity"
 	"strings"
 	"time"
@@ -73,7 +74,7 @@ func (a DocumentAccess) where() (string, []any) {
 }
 
 type RepositoryDocumentRepository interface {
-	FindAll(access DocumentAccess, featureCode string, search string) ([]entity.RepositoryDocument, error)
+	FindAll(access DocumentAccess, filters dto.RepositoryDocumentFilters) ([]entity.RepositoryDocument, int64, error)
 	FindByID(access DocumentAccess, id uuid.UUID) (*entity.RepositoryDocument, error)
 	BatchUpsert(docs []entity.RepositoryDocument) error
 	UpdateCaseMetadata(caseID string, sourceNumber string, sourceTitle string) error
@@ -89,18 +90,39 @@ func NewRepositoryDocumentRepository(db *gorm.DB) RepositoryDocumentRepository {
 	return &repositoryDocumentRepository{db: db}
 }
 
-func (r *repositoryDocumentRepository) FindAll(access DocumentAccess, featureCode string, search string) ([]entity.RepositoryDocument, error) {
+func (r *repositoryDocumentRepository) FindAll(access DocumentAccess, filters dto.RepositoryDocumentFilters) ([]entity.RepositoryDocument, int64, error) {
 	var docs []entity.RepositoryDocument
+	var total int64
 	visible, args := access.where()
-	query := r.db.Where("is_active = ?", true).Where(visible, args...)
-	if featureCode != "" {
-		query = query.Where("feature_code = ?", featureCode)
+	query := r.db.Model(&entity.RepositoryDocument{}).Where("is_active = ?", true).Where(visible, args...)
+	if filters.FeatureCode != "" {
+		query = query.Where("feature_code = ?", filters.FeatureCode)
 	}
-	if search != "" {
-		query = query.Where("title ILIKE ?", "%"+search+"%")
+	if filters.SourceType != "" {
+		query = query.Where("source_type = ?", filters.SourceType)
 	}
-	err := query.Order("created_at DESC").Find(&docs).Error
-	return docs, err
+	if filters.MIMEType != "" {
+		query = query.Where("mime_type = ?", filters.MIMEType)
+	}
+	if filters.DateFrom != nil {
+		query = query.Where("COALESCE(uploaded_at, created_at) >= ?", *filters.DateFrom)
+	}
+	if filters.DateTo != nil {
+		query = query.Where("COALESCE(uploaded_at, created_at) <= ?", *filters.DateTo)
+	}
+	if filters.Search != "" {
+		like := "%" + filters.Search + "%"
+		query = query.Where("file_name ILIKE ? OR source_number ILIKE ? OR source_title ILIKE ?", like, like, like)
+	}
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	err := query.
+		Order("COALESCE(uploaded_at, created_at) DESC, created_at DESC, id DESC").
+		Offset((filters.Page - 1) * filters.Limit).
+		Limit(filters.Limit).
+		Find(&docs).Error
+	return docs, total, err
 }
 
 func (r *repositoryDocumentRepository) FindByID(access DocumentAccess, id uuid.UUID) (*entity.RepositoryDocument, error) {

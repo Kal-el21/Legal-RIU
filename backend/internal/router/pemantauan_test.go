@@ -8,6 +8,7 @@ package router
 
 import (
 	"bytes"
+	"mime"
 	"net/http"
 	"net/url"
 	"slices"
@@ -823,12 +824,14 @@ func TestRepositoriDokumen(t *testing.T) {
 		t.Helper()
 		w := panggil(t, token, http.MethodGet, alamat, nil)
 		harapKode(t, w, http.StatusOK, "daftar repositori")
-		var daftar []struct {
-			ID       string `json:"id"`
-			SourceID string `json:"source_id"`
+		var hasil struct {
+			Items []struct {
+				ID       string `json:"id"`
+				SourceID string `json:"source_id"`
+			} `json:"items"`
 		}
-		isiData(t, w, &daftar)
-		for _, d := range daftar {
+		isiData(t, w, &hasil)
+		for _, d := range hasil.Items {
 			if d.SourceID == p.ID {
 				return d.ID
 			}
@@ -858,6 +861,14 @@ func TestRepositoriDokumen(t *testing.T) {
 	if !bytes.Equal(w.Body.Bytes(), isi) {
 		t.Errorf("isi yang diunduh dari repositori berbeda: %q", w.Body)
 	}
+	_, parametros, err := mime.ParseMediaType(w.Header().Get("Content-Disposition"))
+	if err != nil {
+		t.Fatalf("header nama unduhan repositori tidak valid: %v", err)
+	}
+	namaUnduhan := parametros["filename"]
+	if harap := p.TicketNumber + "_Dokumen_putusan.pdf"; namaUnduhan != harap {
+		t.Errorf("nama unduhan repositori: %q, harap sama dengan modul perkara %q", namaUnduhan, harap)
+	}
 
 	// Menghapus dokumen perkara ikut mencabutnya dari repositori.
 	harapKode(t, panggil(t, legal, http.MethodDelete, perkaraLegal+"/"+p.ID+"/document", nil), http.StatusOK, "hapus dokumen perkara")
@@ -883,8 +894,95 @@ func TestRepositoriDokumen(t *testing.T) {
 	})
 }
 
+func TestRepositoriSaringanDanPaging(t *testing.T) {
+	admin := masukPeran(t, entity.RoleAdmin)
+	const alamat = "/api/v1/document-repositories"
+	waktuDasar := time.Date(2026, 3, 20, 10, 0, 0, 0, time.FixedZone("WIB", 7*60*60))
+	documents := []entity.RepositoryDocument{
+		{Title: "Lampiran.pdf", FeatureCode: "legal_opinion", SourceType: "legal_opinion_attachments",
+			SourceID: uuid.NewString(), SourceNumber: ptr("R2-REPO-UNIQUE-LO-1"), SourceTitle: ptr("R2-REPO-UNIQUE Judul Khusus"),
+			UploadedAt: ptr(waktuDasar), FilePath: "uji-r2/lo-lampiran.pdf", FileName: "Lampiran.pdf", IsActive: true},
+		{Title: "Hasil.pdf", FeatureCode: "legal_opinion", SourceType: "legal_opinion_results",
+			SourceID: uuid.NewString(), SourceNumber: ptr("R2-REPO-UNIQUE-LO-1"), SourceTitle: ptr("R2-REPO-UNIQUE Judul Khusus"),
+			UploadedAt: ptr(waktuDasar.Add(time.Hour)), FilePath: "uji-r2/lo-hasil.pdf", FileName: "Hasil.pdf", IsActive: true},
+		{Title: "Final.pdf", FeatureCode: "agreement_document", SourceType: "agreement_documents", MIMEType: "application/pdf",
+			SourceID: uuid.NewString(), SourceNumber: ptr("R2-REPO-UNIQUE-PKS-1"), SourceTitle: ptr("R2-REPO-UNIQUE Perjanjian"),
+			UploadedAt: ptr(waktuDasar.Add(2 * time.Hour)), FilePath: "uji-r2/pks.pdf", FileName: "Final.pdf", IsActive: true},
+		{Title: "Final.docx", FeatureCode: "agreement_document", SourceType: "agreement_documents",
+			MIMEType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+			SourceID: uuid.NewString(), SourceNumber: ptr("R2-REPO-UNIQUE-PKS-1"), SourceTitle: ptr("R2-REPO-UNIQUE Perjanjian"),
+			UploadedAt: ptr(waktuDasar.Add(3 * time.Hour)), FilePath: "uji-r2/pks.docx", FileName: "Final.docx", IsActive: true},
+	}
+	if err := dbTes.Create(&documents).Error; err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { dbTes.Exec("DELETE FROM repository_documents WHERE file_path LIKE 'uji-r2/%'") })
+
+	type item struct {
+		SourceType string `json:"source_type"`
+		FileName   string `json:"file_name"`
+	}
+	type result struct {
+		Items      []item `json:"items"`
+		Total      int64  `json:"total"`
+		Page       int    `json:"page"`
+		Limit      int    `json:"limit"`
+		TotalPages int    `json:"total_pages"`
+	}
+	ambil := func(query string) (result, int) {
+		t.Helper()
+		w := panggil(t, admin, http.MethodGet, alamat+query, nil)
+		var got result
+		if w.Code == http.StatusOK {
+			isiData(t, w, &got)
+		}
+		return got, w.Code
+	}
+
+	halamanSatu, kode := ambil("?page=1&limit=2&search=R2-REPO-UNIQUE")
+	if kode != http.StatusOK {
+		t.Fatalf("daftar halaman pertama: dapat %d", kode)
+	}
+	if halamanSatu.Total != 4 || halamanSatu.Page != 1 || halamanSatu.Limit != 2 || halamanSatu.TotalPages != 2 ||
+		len(halamanSatu.Items) != 2 || halamanSatu.Items[0].FileName != "Final.docx" {
+		t.Errorf("halaman pertama tidak sesuai: %+v", halamanSatu)
+	}
+	halamanDua, kode := ambil("?page=2&limit=2&search=R2-REPO-UNIQUE")
+	if kode != http.StatusOK || halamanDua.Total != 4 || len(halamanDua.Items) != 2 ||
+		halamanDua.Items[0].FileName != "Hasil.pdf" {
+		t.Errorf("halaman kedua tidak sesuai (status %d): %+v", kode, halamanDua)
+	}
+	batasMaksimum, kode := ambil("?limit=101&search=R2-REPO-UNIQUE")
+	if kode != http.StatusOK || batasMaksimum.Limit != 100 || batasMaksimum.Total != 4 {
+		t.Errorf("limit di atas batas tidak dibatasi 100 (status %d): %+v", kode, batasMaksimum)
+	}
+
+	for _, k := range []struct {
+		query string
+		total int64
+		label string
+	}{
+		{"?search=R2-REPO-UNIQUE-LO-1", 2, "cari nomor sumber"},
+		{"?search=R2-REPO-UNIQUE+Judul+Khusus", 2, "cari judul sumber"},
+		{"?source_type=legal_opinion_results&search=R2-REPO-UNIQUE-LO-1", 1, "saring jenis sumber"},
+		{"?feature_code=agreement_document&source_type=agreement_documents&mime_type=application%2Fpdf&search=R2-REPO-UNIQUE-PKS-1", 1, "saring PDF final"},
+		{"?feature_code=agreement_document&source_type=agreement_documents&mime_type=application%2Fvnd.openxmlformats-officedocument.wordprocessingml.document&search=R2-REPO-UNIQUE-PKS-1", 1, "saring DOCX final"},
+		{"?date_from=2026-03-20&date_to=2026-03-20&search=R2-REPO-UNIQUE", 4, "saring tanggal unggah WIB"},
+	} {
+		got, status := ambil(k.query)
+		if status != http.StatusOK || got.Total != k.total {
+			t.Errorf("%s: status=%d jumlah=%d, harap %d", k.label, status, got.Total, k.total)
+		}
+	}
+	for _, query := range []string{"?source_type=jenis_tidak_dikenal", "?date_from=bukan-tanggal"} {
+		if _, status := ambil(query); status != http.StatusBadRequest {
+			t.Errorf("saringan tidak valid %q: dapat %d, harap 400", query, status)
+		}
+	}
+}
+
 func TestRepositoriMetadataSumber(t *testing.T) {
-	repoDoc := service.NewRepositoryDocumentService(repository.NewRepositoryDocumentRepository(dbTes), nil)
+	repoDoc := service.NewRepositoryDocumentService(repository.NewRepositoryDocumentRepository(dbTes), repository.NewLegalCaseRepository(dbTes), nil)
 	waktu := time.Date(2026, 8, 14, 9, 30, 0, 0, time.UTC)
 	approvedAt := waktu.Add(time.Hour)
 	caseEntity := &entity.LegalCase{
@@ -1098,12 +1196,14 @@ func TestRepositoriDokumenMengikutiSumber(t *testing.T) {
 	for nama, tkn := range token {
 		w := panggil(t, tkn, http.MethodGet, alamat+"?search=uji-repo-", nil)
 		harapKode(t, w, http.StatusOK, nama+": daftar repositori")
-		var daftar []struct {
-			ID string `json:"id"`
+		var daftar struct {
+			Items []struct {
+				ID string `json:"id"`
+			} `json:"items"`
 		}
 		isiData(t, w, &daftar)
-		diDaftar := make(map[string]bool, len(daftar))
-		for _, b := range daftar {
+		diDaftar := make(map[string]bool, len(daftar.Items))
+		for _, b := range daftar.Items {
 			diDaftar[b.ID] = true
 		}
 		for _, d := range dokumen {
