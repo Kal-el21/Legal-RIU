@@ -1,33 +1,31 @@
-import { useState } from 'react'
-import { Download, Search, BadgeCheck, User } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
+import { ChevronLeft, ChevronRight, Download, Search, BadgeCheck, User } from 'lucide-react'
+import { toast } from 'sonner'
 import { useRepositoryDocuments, useDownloadRepositoryDocument } from '@/hooks/useRepositoryDocument'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import {
+  filterJenisDokumen,
+  formatTanggalUnggah,
+  formatUkuranDokumen,
+  JENIS_DOKUMEN,
+  labelJenisDokumen,
+  labelModul,
+  labelPengunggah,
+  tautanDokumenSumber,
+} from '@/lib/repository-document'
 
-const FEATURE_OPTIONS = [
-  { value: 'all', label: 'Semua' },
+const MODUL_OPTIONS = [
   { value: 'legal_opinion', label: 'Legal Opinion' },
   { value: 'document_review', label: 'Review Dokumen' },
-  { value: 'case_management', label: 'Case Management' },
-  { value: 'agreement_document', label: 'Dokumen Perjanjian' },
-  { value: 'general', label: 'Umum' },
+  { value: 'agreement_document', label: 'Perjanjian' },
+  { value: 'case_management', label: 'Perkara' },
 ]
 
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return bytes + ' B'
-  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
-  return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
-}
-
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('id-ID', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  })
-}
+const LIMIT = 20
 
 interface RepositoryDocumentListPageProps {
   basePath: string
@@ -36,120 +34,232 @@ interface RepositoryDocumentListPageProps {
 }
 
 export default function RepositoryDocumentListPage({
+  basePath,
   title,
   description,
 }: RepositoryDocumentListPageProps) {
-  const [featureCode, setFeatureCode] = useState('all')
-  const [search, setSearch] = useState('')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [search, setSearch] = useState(searchParams.get('search') ?? '')
+  const urlSearch = searchParams.get('search') ?? ''
+  const panel = `/${basePath.split('/')[1]}`
+  const page = Math.max(1, Number(searchParams.get('page')) || 1)
+  const featureCode = searchParams.get('feature_code') ?? ''
+  const dateFrom = searchParams.get('date_from') ?? ''
+  const dateTo = searchParams.get('date_to') ?? ''
+  const type = searchParams.get('type') ?? ''
+  const typeFilter = filterJenisDokumen(type)
 
-  const { data, isLoading } = useRepositoryDocuments({
-    page: 1,
-    limit: 100,
-    feature_code: featureCode === 'all' ? undefined : featureCode || undefined,
-    search: search || undefined,
+  useEffect(() => {
+    const timer = window.setTimeout(() => setSearch(urlSearch), 0)
+    return () => window.clearTimeout(timer)
+  }, [urlSearch])
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      if (search.trim() === urlSearch) return
+      setSearchParams((current) => {
+        const next = new URLSearchParams(current)
+        if (search.trim()) next.set('search', search.trim())
+        else next.delete('search')
+        next.delete('page')
+        return next
+      })
+    }, 300)
+    return () => window.clearTimeout(timer)
+  }, [search, setSearchParams, urlSearch])
+
+  const setFilter = (key: string, value: string) => {
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current)
+      if (value) next.set(key, value)
+      else next.delete(key)
+      if (key !== 'page') next.delete('page')
+      return next
+    })
+  }
+
+  const { data, isLoading, isError } = useRepositoryDocuments({
+    page,
+    limit: LIMIT,
+    feature_code: featureCode || undefined,
+    ...typeFilter,
+    date_from: dateFrom || undefined,
+    date_to: dateTo || undefined,
+    search: urlSearch || undefined,
   })
 
   const downloadMutation = useDownloadRepositoryDocument()
-
   const handleDownload = (id: string) => {
     downloadMutation.mutate(id, {
       onSuccess: (result) => {
         const url = URL.createObjectURL(result.blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = result.filename
-        a.click()
-        URL.revokeObjectURL(url)
+        const anchor = document.createElement('a')
+        anchor.href = url
+        anchor.download = result.filename
+        anchor.click()
+        window.setTimeout(() => URL.revokeObjectURL(url), 1000)
       },
+      onError: () => toast.error('Gagal mengunduh dokumen. Silakan coba lagi.'),
     })
   }
 
-  const filtered = data?.items ?? []
+  const documents = data?.items ?? []
+  const totalPages = data?.total_pages ?? 0
+  const firstItem = data?.total ? (page - 1) * LIMIT + 1 : 0
+  const lastItem = data?.total ? Math.min(page * LIMIT, data.total) : 0
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold" style={{ color: '#0B2545' }}>{title}</h1>
-          <p className="text-sm text-gray-500 mt-0.5">{description}</p>
-        </div>
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold" style={{ color: '#0B2545' }}>{title}</h1>
+        <p className="text-sm text-gray-500 mt-0.5">{description}</p>
       </div>
 
-      <div className="flex gap-4 mb-6">
-        <div className="relative flex-1 max-w-xs">
+      <div className="grid grid-cols-1 gap-3 mb-5 md:grid-cols-2 xl:grid-cols-5">
+        <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <Input
-            placeholder="Cari judul atau file..."
+            aria-label="Cari dokumen"
+            placeholder="Cari nama, nomor, atau judul asal..."
             className="pl-9"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(event) => setSearch(event.target.value)}
           />
         </div>
-        <Select value={featureCode} onValueChange={setFeatureCode}>
-          <SelectTrigger className="w-56">
-            <SelectValue placeholder="Filter feature" />
+        <Select value={featureCode || 'all'} onValueChange={(value) => setFilter('feature_code', value === 'all' ? '' : value)}>
+          <SelectTrigger aria-label="Saring modul">
+            <SelectValue placeholder="Semua modul" />
           </SelectTrigger>
           <SelectContent>
-            {FEATURE_OPTIONS.map((opt) => (
-              <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+            <SelectItem value="all">Semua modul</SelectItem>
+            {MODUL_OPTIONS.map((option) => (
+              <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
             ))}
           </SelectContent>
         </Select>
+        <Select value={type || 'all'} onValueChange={(value) => setFilter('type', value === 'all' ? '' : value)}>
+          <SelectTrigger aria-label="Saring jenis dokumen">
+            <SelectValue placeholder="Semua jenis dokumen" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Semua jenis dokumen</SelectItem>
+            {JENIS_DOKUMEN.map((option) => (
+              <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Input
+          aria-label="Tanggal unggah mulai"
+          type="date"
+          value={dateFrom}
+          onChange={(event) => setFilter('date_from', event.target.value)}
+        />
+        <Input
+          aria-label="Tanggal unggah sampai"
+          type="date"
+          value={dateTo}
+          onChange={(event) => setFilter('date_to', event.target.value)}
+        />
       </div>
 
       <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
         {isLoading ? (
           <div className="p-12 text-center text-gray-400">Memuat data...</div>
-        ) : !filtered.length ? (
+        ) : isError ? (
+          <div role="alert" className="p-12 text-center text-red-600">Dokumen gagal dimuat. Silakan muat ulang halaman.</div>
+        ) : !documents.length ? (
           <div className="p-16 text-center">
             <p className="font-medium text-gray-500">Tidak ada dokumen ditemukan</p>
           </div>
         ) : (
-          <Table>
-            <TableHeader>
-              <tr className="border-b border-gray-100" style={{ background: '#f8fafc' }}>
-                <TableHead className="text-left px-6 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">Judul</TableHead>
-                <TableHead className="text-left px-4 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">Feature</TableHead>
-                <TableHead className="text-left px-4 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">Uploader</TableHead>
-                <TableHead className="text-left px-4 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">File</TableHead>
-                <TableHead className="text-left px-4 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">Ukuran</TableHead>
-                <TableHead className="text-left px-4 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">Tanggal</TableHead>
-                <TableHead className="px-6 py-3.5 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide">Aksi</TableHead>
-              </tr>
-            </TableHeader>
-            <TableBody className="divide-y divide-gray-50">
-              {filtered.map((doc) => (
-                <TableRow key={doc.id} className="hover:bg-gray-50/50 transition-colors">
-                  <TableCell className="px-6 py-4 text-sm text-gray-900 font-medium max-w-xs truncate">{doc.title}</TableCell>
-                  <TableCell className="px-4 py-4 text-sm">
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
-                      {doc.feature_code}
-                    </span>
-                  </TableCell>
-                  <TableCell className="px-4 py-4 text-sm">
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
-                      {doc.uploader_type === 'approver' ? <BadgeCheck className="w-3 h-3" /> : <User className="w-3 h-3" />}
-                      {doc.uploader_type}
-                    </span>
-                  </TableCell>
-                  <TableCell className="px-4 py-4 text-sm text-gray-700 max-w-xs truncate">{doc.file_name}</TableCell>
-                  <TableCell className="px-4 py-4 text-sm text-gray-500">{formatFileSize(doc.file_size)}</TableCell>
-                  <TableCell className="px-4 py-4 text-sm text-gray-500">{formatDate(doc.created_at)}</TableCell>
-                  <TableCell className="px-6 py-4 text-right">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleDownload(doc.id)}
-                      className="h-7 px-2 text-xs"
-                    >
-                      <Download className="h-3 w-3" />
-                    </Button>
-                  </TableCell>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-slate-50">
+                  <TableHead>Dokumen</TableHead>
+                  <TableHead>Asal</TableHead>
+                  <TableHead>Modul</TableHead>
+                  <TableHead>Diunggah</TableHead>
+                  <TableHead>Ukuran</TableHead>
+                  <TableHead className="text-right">Unduh</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {documents.map((doc) => {
+                  const href = tautanDokumenSumber(doc, panel)
+                  return (
+                    <TableRow key={doc.id}>
+                      <TableCell className="min-w-52">
+                        <div className="font-medium text-gray-900 break-all">{doc.file_name}</div>
+                        <div className="mt-1 text-xs text-gray-500">{labelJenisDokumen(doc)}</div>
+                      </TableCell>
+                      <TableCell className="min-w-48">
+                        {href ? (
+                          <Link to={href} className="block font-medium text-blue-700 hover:underline">
+                            {doc.source_number && <div>{doc.source_number}</div>}
+                            {doc.source_title && <div className="mt-1 text-xs">{doc.source_title}</div>}
+                            {!doc.source_number && !doc.source_title && 'Buka data'}
+                          </Link>
+                        ) : (
+                          <div className="font-medium text-gray-700">
+                            {doc.source_number && <div>{doc.source_number}</div>}
+                            {doc.source_title && <div className="mt-1 text-xs text-gray-500">{doc.source_title}</div>}
+                            {!doc.source_number && !doc.source_title && '-'}
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell>{labelModul(doc.feature_code)}</TableCell>
+                      <TableCell className="min-w-36">
+                        <div>{formatTanggalUnggah(doc.uploaded_at ?? doc.created_at)}</div>
+                        <div className="mt-1 inline-flex items-center gap-1 text-xs text-gray-500">
+                          {doc.uploader_type === 'approver' ? <BadgeCheck className="h-3 w-3" /> : <User className="h-3 w-3" />}
+                          {labelPengunggah(doc.uploader_type)}
+                        </div>
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap">{formatUkuranDokumen(doc.file_size)}</TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          aria-label={`Unduh ${doc.file_name}`}
+                          disabled={downloadMutation.isPending}
+                          onClick={() => handleDownload(doc.id)}
+                        >
+                          <Download className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
+          </div>
         )}
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm text-gray-600">
+        <span>Menampilkan {firstItem}–{lastItem} dari {data?.total ?? 0} dokumen</span>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            aria-label="Halaman sebelumnya"
+            disabled={page <= 1 || isLoading}
+            onClick={() => setFilter('page', String(page - 1))}
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <span>Halaman {page} dari {totalPages}</span>
+          <Button
+            variant="outline"
+            size="sm"
+            aria-label="Halaman berikutnya"
+            disabled={page >= totalPages || isLoading}
+            onClick={() => setFilter('page', String(page + 1))}
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
     </div>
   )

@@ -4,8 +4,8 @@ export default function UserRepositoryDocumentListPage() {
   return (
     <RepositoryDocumentListPage
       basePath="/dashboard/repository-documents"
-      title="Dokumen Repository"
-      description="Daftar dokumen per feature"
+      title="Repositori Dokumen"
+      description="Arsip dokumen dari pengajuan dan perkara yang dapat Anda akses."
     />
   )
 }

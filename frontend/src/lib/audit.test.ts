@@ -101,6 +101,10 @@ describe('tautanData', () => {
   it('data yang dihapus, sesi login, dan panel lain tidak bertautan', () => {
     expect(tautanData({ action: 'DELETE', entity_type: 'legal_opinion', entity_id: id }, '/admin')).toBeNull()
     expect(tautanData({ action: 'LOGIN', entity_type: 'auth', entity_id: id }, '/admin')).toBeNull()
-    expect(tautanData({ action: 'STATUS_CHANGE', entity_type: 'legal_opinion', entity_id: id }, '/legal-au')).toBeNull()
+    expect(tautanData({ action: 'STATUS_CHANGE', entity_type: 'legal_opinion', entity_id: id }, '/legal-au')).toBe(`/legal-au/legal-opinions/${id}`)
+    expect(tautanData({ action: 'FILE_UPLOAD', entity_type: 'legal_case', entity_id: id }, '/legal-au')).toBe(`/legal-au/cases/${id}`)
+    expect(tautanData({ action: 'FILE_UPLOAD', entity_type: 'agreement_document', entity_id: id }, '/legal-au')).toBeNull()
+    expect(tautanData({ action: 'FILE_UPLOAD', entity_type: 'legal_case', entity_id: id }, '/external')).toBe(`/external/legal-cases/${id}`)
+    expect(tautanData({ action: 'FILE_UPLOAD', entity_type: 'legal_case', entity_id: id }, '/dashboard')).toBe(`/dashboard/legal-cases/${id}`)
   })
 })
