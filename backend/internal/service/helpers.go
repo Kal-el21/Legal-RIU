@@ -44,8 +44,23 @@ var ErrFileNotFound = storage.ErrNotFound
 var (
 	ErrDrafTidakAda      = errors.New("draf tidak ditemukan")
 	ErrLampiranTidakAda  = errors.New("lampiran tidak ditemukan")
-	ErrIsianBelumLengkap = errors.New("Semua field wajib diisi")
+	ErrIsianBelumLengkap = errors.New("isian wajib belum lengkap")
+	ErrLampiranDrafWajib = errors.New("Lampirkan draf dokumen yang akan direview")
 )
+
+type isianBelumLengkapError struct{ pesan string }
+
+func (e isianBelumLengkapError) Error() string { return e.pesan }
+func (e isianBelumLengkapError) Is(target error) bool {
+	return target == ErrIsianBelumLengkap
+}
+
+func tandaiIsianBelumLengkap(err error) error {
+	if err == nil {
+		return nil
+	}
+	return isianBelumLengkapError{pesan: err.Error()}
+}
 
 // ErrCatatanWajib: Perlu Revisi dan Ditolak tanpa catatan approver ditolak (PR Audit Log tahap
 // L.3a, keputusan L6), untuk Legal Opinion, Review Dokumen, dan Perjanjian.

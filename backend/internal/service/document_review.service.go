@@ -49,6 +49,13 @@ func NewDocumentReviewService(repo repository.DocumentReviewRepository, s *stora
 }
 
 func (s *documentReviewService) Create(userID string, req dto.CreateDocumentReviewRequest, files []*multipart.FileHeader) (*entity.DocumentReview, error) {
+	req.Normalize()
+	if err := req.Validate(); err != nil {
+		return nil, tandaiIsianBelumLengkap(err)
+	}
+	if len(files) == 0 {
+		return nil, ErrLampiranDrafWajib
+	}
 	uid, err := parseUUID(userID)
 	if err != nil {
 		return nil, errors.New("user tidak valid")
@@ -120,6 +127,10 @@ func (s *documentReviewService) Update(id string, userID string, req dto.UpdateD
 
 	if dr.Status != entity.StatusSubmitted {
 		return nil, errors.New("pengajuan hanya dapat diedit saat berstatus SUBMITTED")
+	}
+	req.Normalize()
+	if err := req.Validate(); err != nil {
+		return nil, tandaiIsianBelumLengkap(err)
 	}
 
 	dr.RequestorName = req.RequestorName
@@ -361,9 +372,15 @@ func (s *documentReviewService) SubmitDraft(id, userID string) (*entity.Document
 	if err != nil {
 		return nil, err
 	}
-	if !permintaanDocumentReview(dr).Complete() {
-		return nil, ErrIsianBelumLengkap
+	req := permintaanDocumentReview(dr)
+	req.Normalize()
+	if err := req.Validate(); err != nil {
+		return nil, tandaiIsianBelumLengkap(err)
 	}
+	if len(dr.Attachments) == 0 {
+		return nil, ErrLampiranDrafWajib
+	}
+	isiDocumentReview(dr, req)
 	now := time.Now()
 	dr.Status = entity.StatusSubmitted
 	dr.CreatedAt = now
@@ -397,6 +414,7 @@ func (s *documentReviewService) drafMilik(id, userID string) (*entity.DocumentRe
 }
 
 func isiDocumentReview(dr *entity.DocumentReview, req dto.CreateDocumentReviewRequest) {
+	req.Normalize()
 	dr.RequestorName = req.RequestorName
 	dr.RequestorPosition = req.RequestorPosition
 	dr.RequestorDivision = req.RequestorDivision

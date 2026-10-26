@@ -1,5 +1,11 @@
 package dto
 
+import (
+	"errors"
+	"net/mail"
+	"strings"
+)
+
 type CreateDocumentReviewRequest struct {
 	RequestorName     string `json:"requestor_name"`
 	RequestorPosition string `json:"requestor_position"`
@@ -14,26 +20,66 @@ type CreateDocumentReviewRequest struct {
 	AdditionalNote    string `json:"additional_note"`
 }
 
-// Complete memeriksa kolom wajib. Dipakai jalur form maupun JSON, supaya
-// pengajuan kosong tidak bisa tersimpan lewat salah satunya.
-func (r CreateDocumentReviewRequest) Complete() bool {
-	return r.RequestorName != "" && r.RequestorPosition != "" && r.RequestorDivision != "" &&
-		r.RequestorEmail != "" && r.RequestorPhone != "" && r.DocumentName != "" &&
-		r.SecondParty != "" && r.DocumentType != ""
+func (r *CreateDocumentReviewRequest) Normalize() {
+	r.RequestorName = strings.TrimSpace(r.RequestorName)
+	r.RequestorPosition = strings.TrimSpace(r.RequestorPosition)
+	r.RequestorDivision = strings.TrimSpace(r.RequestorDivision)
+	r.RequestorEmail = strings.TrimSpace(r.RequestorEmail)
+	r.RequestorPhone = strings.TrimSpace(r.RequestorPhone)
+	r.DocumentName = strings.TrimSpace(r.DocumentName)
+	r.SecondParty = strings.TrimSpace(r.SecondParty)
+	r.ThirdParty = strings.TrimSpace(r.ThirdParty)
+	r.DocumentType = strings.TrimSpace(r.DocumentType)
+	r.DocumentTypeOther = strings.TrimSpace(r.DocumentTypeOther)
+	r.AdditionalNote = strings.TrimSpace(r.AdditionalNote)
+}
+
+func (r CreateDocumentReviewRequest) Validate() error {
+	for _, field := range []struct{ value, label string }{
+		{r.RequestorName, "Nama Lengkap"},
+		{r.RequestorPosition, "Posisi Jabatan"},
+		{r.RequestorDivision, "Divisi pada RIU"},
+		{r.RequestorEmail, "Email Kantor"},
+		{r.RequestorPhone, "Nomor WhatsApp"},
+		{r.DocumentName, "Nama Dokumen"},
+		{r.SecondParty, "Pihak Kedua / Vendor / Broker / Ceding"},
+		{r.DocumentType, "Jenis Dokumen"},
+	} {
+		if strings.TrimSpace(field.value) == "" {
+			return errors.New(field.label + " wajib diisi")
+		}
+	}
+	if _, err := mail.ParseAddress(strings.TrimSpace(r.RequestorEmail)); err != nil {
+		return errors.New("Email pemohon tidak valid")
+	}
+	if r.DocumentType == "Lain-Lain" && strings.TrimSpace(r.DocumentTypeOther) == "" {
+		return errors.New("Jenis dokumen lainnya wajib diisi")
+	}
+	return nil
 }
 
 type UpdateDocumentReviewRequest struct {
-	RequestorName     string `json:"requestor_name" binding:"required"`
-	RequestorPosition string `json:"requestor_position" binding:"required"`
-	RequestorDivision string `json:"requestor_division" binding:"required"`
-	RequestorEmail    string `json:"requestor_email" binding:"required,email"`
-	RequestorPhone    string `json:"requestor_phone" binding:"required"`
-	DocumentName      string `json:"document_name" binding:"required"`
-	SecondParty       string `json:"second_party" binding:"required"`
+	RequestorName     string `json:"requestor_name"`
+	RequestorPosition string `json:"requestor_position"`
+	RequestorDivision string `json:"requestor_division"`
+	RequestorEmail    string `json:"requestor_email"`
+	RequestorPhone    string `json:"requestor_phone"`
+	DocumentName      string `json:"document_name"`
+	SecondParty       string `json:"second_party"`
 	ThirdParty        string `json:"third_party"`
-	DocumentType      string `json:"document_type" binding:"required"`
+	DocumentType      string `json:"document_type"`
 	DocumentTypeOther string `json:"document_type_other"`
 	AdditionalNote    string `json:"additional_note"`
+}
+
+func (r *UpdateDocumentReviewRequest) Normalize() {
+	req := CreateDocumentReviewRequest(*r)
+	req.Normalize()
+	*r = UpdateDocumentReviewRequest(req)
+}
+
+func (r UpdateDocumentReviewRequest) Validate() error {
+	return CreateDocumentReviewRequest(r).Validate()
 }
 
 type DocumentReviewListQuery struct {

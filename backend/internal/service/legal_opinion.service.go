@@ -48,6 +48,10 @@ func NewLegalOpinionService(repo repository.LegalOpinionRepository, s *storage.M
 }
 
 func (s *legalOpinionService) Create(userID string, req dto.CreateLegalOpinionRequest, files []*multipart.FileHeader) (*entity.LegalOpinion, error) {
+	req.Normalize()
+	if err := req.Validate(); err != nil {
+		return nil, tandaiIsianBelumLengkap(err)
+	}
 	uid, err := parseUUID(userID)
 	if err != nil {
 		return nil, errors.New("user tidak valid")
@@ -123,6 +127,10 @@ func (s *legalOpinionService) Update(id string, userID string, req dto.UpdateLeg
 	// Only editable when SUBMITTED (BR-005)
 	if lo.Status != entity.StatusSubmitted {
 		return nil, errors.New("pengajuan hanya dapat diedit saat berstatus SUBMITTED")
+	}
+	req.Normalize()
+	if err := req.Validate(); err != nil {
+		return nil, tandaiIsianBelumLengkap(err)
 	}
 
 	lo.RequestorName = req.RequestorName
@@ -380,9 +388,12 @@ func (s *legalOpinionService) SubmitDraft(id, userID string) (*entity.LegalOpini
 	if err != nil {
 		return nil, err
 	}
-	if !permintaanLegalOpinion(lo).Complete() {
-		return nil, ErrIsianBelumLengkap
+	req := permintaanLegalOpinion(lo)
+	req.Normalize()
+	if err := req.Validate(); err != nil {
+		return nil, tandaiIsianBelumLengkap(err)
 	}
+	isiLegalOpinion(lo, req)
 	now := time.Now()
 	lo.Status = entity.StatusSubmitted
 	lo.CreatedAt = now
@@ -416,6 +427,7 @@ func (s *legalOpinionService) drafMilik(id, userID string) (*entity.LegalOpinion
 }
 
 func isiLegalOpinion(lo *entity.LegalOpinion, req dto.CreateLegalOpinionRequest) {
+	req.Normalize()
 	lo.RequestorName = req.RequestorName
 	lo.RequestorPosition = req.RequestorPosition
 	lo.RequestorDivision = req.RequestorDivision

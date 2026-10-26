@@ -18,6 +18,8 @@ import (
 	"testing"
 
 	"legal-riu-portal/internal/entity"
+	"legal-riu-portal/internal/repository"
+	"legal-riu-portal/internal/utils"
 )
 
 type modulPengajuan struct {
@@ -79,11 +81,86 @@ func (m modulPengajuan) url(awalan string, sisa ...string) string {
 
 func (m modulPengajuan) buat(t *testing.T, token string, files ...berkas) pengajuan {
 	t.Helper()
+	if m.nama == "ReviewDocument" && len(files) == 0 {
+		if tanpaMinIO {
+			return buatReviewDokumenDenganLampiranTiruan(t, token, m.kolom)
+		}
+		files = append(files, berkas{"attachments", "Draf-uji.pdf", []byte("lampiran tes")})
+	}
 	w := panggilForm(t, token, http.MethodPost, m.url(""), m.kolom, files...)
 	harapKode(t, w, http.StatusCreated, "membuat pengajuan")
 	var p pengajuan
 	isiData(t, w, &p)
 	return p
+}
+
+func buatReviewDokumenDenganLampiranTiruan(t *testing.T, token string, kolom map[string]string) pengajuan {
+	t.Helper()
+	var surel string
+	for kandidat, tokenTersimpan := range tokenUser {
+		if tokenTersimpan == token {
+			surel = kandidat
+			break
+		}
+	}
+	if surel == "" {
+		t.Fatal("token pengaju tidak ditemukan di data tes")
+	}
+	var user entity.User
+	if err := dbTes.Select("id").Where("email = ?", surel).First(&user).Error; err != nil {
+		t.Fatalf("memuat pengaju Review Dokumen: %v", err)
+	}
+	seq, err := repository.NewDocumentReviewRepository(dbTes).NextTicketSequence(string(utils.PrefixDocumentReview))
+	if err != nil {
+		t.Fatalf("mengambil nomor tiket Review Dokumen: %v", err)
+	}
+	dr := entity.DocumentReview{
+		TicketNumber:      utils.GenerateTicketNumber(utils.PrefixDocumentReview, seq),
+		UserID:            user.ID,
+		RequestorName:     kolom["requestor_name"],
+		RequestorPosition: kolom["requestor_position"],
+		RequestorDivision: kolom["requestor_division"],
+		RequestorEmail:    kolom["requestor_email"],
+		RequestorPhone:    kolom["requestor_phone"],
+		DocumentName:      kolom["document_name"],
+		SecondParty:       kolom["second_party"],
+		DocumentType:      kolom["document_type"],
+		DocumentTypeOther: kolom["document_type_other"],
+		Status:            entity.StatusSubmitted,
+	}
+	if err := dbTes.Create(&dr).Error; err != nil {
+		t.Fatalf("menyisipkan Review Dokumen untuk tes tanpa MinIO: %v", err)
+	}
+	attachment := entity.DocumentReviewAttachment{
+		DocumentReviewID: dr.ID,
+		FileName:         "Draf-uji.pdf",
+		FilePath:         "uji-tanpa-minio/" + dr.ID.String() + "/draf-uji.pdf",
+		FileSize:         int64(len("lampiran tes")),
+		UploadRound:      1,
+	}
+	if err := dbTes.Create(&attachment).Error; err != nil {
+		t.Fatalf("menyisipkan metadata lampiran Review Dokumen: %v", err)
+	}
+	if err := dbTes.Create(&entity.AuditLog{
+		UserID:      user.ID,
+		Action:      entity.ActionUserUpdate,
+		EntityType:  "document_review",
+		EntityID:    dr.ID,
+		Description: ptr("Pengajuan Review Dokumen " + dr.TicketNumber + " dibuat"),
+		IPAddress:   "127.0.0.1",
+		UserAgent:   "test",
+	}).Error; err != nil {
+		t.Fatalf("menyisipkan audit log Review Dokumen: %v", err)
+	}
+	return pengajuan{
+		ID: dr.ID.String(), TicketNumber: dr.TicketNumber, Status: string(dr.Status),
+		Attachments: []struct {
+			ID          string `json:"id"`
+			FileName    string `json:"file_name"`
+			FilePath    string `json:"file_path"`
+			UploadRound int    `json:"upload_round"`
+		}{{ID: attachment.ID.String(), FileName: attachment.FileName, FilePath: attachment.FilePath, UploadRound: attachment.UploadRound}},
+	}
 }
 
 func (m modulPengajuan) ambil(t *testing.T, token, awalan, id string) pengajuan {
@@ -167,7 +244,7 @@ func TestCatatanWajib(t *testing.T) {
 	}
 }
 
-// Alur tanpa file: buat, kepemilikan, ubah, mesin status, ajukan ulang, PDF, hapus.
+// Alur pengajuan: buat, kepemilikan, ubah, mesin status, ajukan ulang, PDF, hapus.
 func TestAlurPengajuan(t *testing.T) {
 	pemilik := masukPeran(t, entity.RoleUser)
 	lain := masuk(t, surelUserLain)
@@ -270,6 +347,130 @@ func TestAlurPengajuan(t *testing.T) {
 			delete(kurang, m.kolomJudul)
 			harapKode(t, panggilForm(t, pemilik, http.MethodPost, m.url(""), kurang), http.StatusBadRequest, "kolom wajib kosong")
 		})
+	}
+}
+
+func TestValidasiIsianPengajuan(t *testing.T) {
+	pemilik := masukPeran(t, entity.RoleUser)
+	for _, m := range semuaModulPengajuan {
+		t.Run(m.nama, func(t *testing.T) {
+			labels := map[string]string{
+				"requestor_name":     "Nama Lengkap",
+				"requestor_position": "Posisi Jabatan",
+				"requestor_division": "Divisi pada RIU",
+				"requestor_email":    "Email Kantor",
+				"requestor_phone":    "Nomor WhatsApp",
+			}
+			if m.nama == "LegalOpinion" {
+				labels["legal_type"] = "Jenis Kajian Hukum"
+				labels["title"] = "Judul Permasalahan Hukum"
+				labels["chronology"] = "Kronologis Permasalahan"
+				labels["question"] = "Pertanyaan Permasalahan Hukum"
+			} else {
+				labels["document_name"] = "Nama Dokumen"
+				labels["second_party"] = "Pihak Kedua / Vendor / Broker / Ceding"
+				labels["document_type"] = "Jenis Dokumen"
+			}
+
+			for field, label := range labels {
+				for _, value := range []string{"", "   "} {
+					kolom := maps.Clone(m.kolom)
+					kolom[field] = value
+					w := panggilForm(t, pemilik, http.MethodPost, m.url(""), kolom)
+					harapKode(t, w, http.StatusBadRequest, "isian "+field+" "+strconv.Quote(value))
+					if !strings.Contains(w.Body.String(), label+" wajib diisi") {
+						t.Errorf("pesan untuk %s %q tidak menyebut %q: %s", field, value, label, w.Body)
+					}
+				}
+			}
+
+			kolom := maps.Clone(m.kolom)
+			kolom["requestor_email"] = "bukan-surel"
+			w := panggilForm(t, pemilik, http.MethodPost, m.url(""), kolom)
+			harapKode(t, w, http.StatusBadRequest, "email tidak valid")
+			if !strings.Contains(w.Body.String(), "Email pemohon tidak valid") {
+				t.Errorf("pesan email tidak valid: %s", w.Body)
+			}
+
+			kolom = maps.Clone(m.kolom)
+			if m.nama == "LegalOpinion" {
+				kolom["legal_type"] = "Lain-Lain"
+			} else {
+				kolom["document_type"] = "Lain-Lain"
+			}
+			w = panggilForm(t, pemilik, http.MethodPost, m.url(""), kolom)
+			harapKode(t, w, http.StatusBadRequest, "Lain-Lain tanpa keterangan")
+			pesanLain := "Jenis kajian lainnya wajib diisi"
+			if m.nama == "ReviewDocument" {
+				pesanLain = "Jenis dokumen lainnya wajib diisi"
+			}
+			if !strings.Contains(w.Body.String(), pesanLain) {
+				t.Errorf("pesan Lain-Lain tanpa keterangan: %s", w.Body)
+			}
+
+			p := m.buat(t, pemilik)
+			kolom = maps.Clone(m.kolom)
+			kolom["requestor_name"] = "  Nama diperbarui  "
+			kolom["requestor_email"] = "  baru@example.com  "
+			if m.nama == "LegalOpinion" {
+				kolom["legal_type"] = "Lain-Lain"
+				kolom["legal_type_other"] = "  Kajian khusus  "
+			} else {
+				kolom["document_type"] = "Lain-Lain"
+				kolom["document_type_other"] = "  Dokumen khusus  "
+			}
+			w = panggil(t, pemilik, http.MethodPut, m.url("", "/", p.ID), kolom)
+			harapKode(t, w, http.StatusOK, "mengubah dengan keterangan Lain-Lain")
+
+			var nama, surel, jenisLain string
+			tabel := m.tabel
+			kolomLain := "legal_type_other"
+			if m.nama == "ReviewDocument" {
+				kolomLain = "document_type_other"
+			}
+			query := "SELECT requestor_name, requestor_email, " + kolomLain + " FROM " + tabel + " WHERE id = ?"
+			if err := dbTes.Raw(query, p.ID).Row().Scan(&nama, &surel, &jenisLain); err != nil {
+				t.Fatalf("membaca isian tersimpan: %v", err)
+			}
+			if nama != "Nama diperbarui" || surel != "baru@example.com" || jenisLain == "" || strings.TrimSpace(jenisLain) != jenisLain {
+				t.Errorf("isian tersimpan tidak dinormalisasi: nama=%q email=%q lainnya=%q", nama, surel, jenisLain)
+			}
+		})
+	}
+}
+
+func TestReviewDocumentWajibLampiran(t *testing.T) {
+	butuhMinIO(t)
+	pemilik := masukPeran(t, entity.RoleUser)
+	m := semuaModulPengajuan[1]
+	repo := repository.NewDocumentReviewRepository(dbTes)
+	seq, err := repo.NextTicketSequence(string(utils.PrefixDocumentReview))
+	if err != nil {
+		t.Fatalf("mengambil nomor tiket acuan: %v", err)
+	}
+	w := panggilForm(t, pemilik, http.MethodPost, m.url(""), m.kolom)
+	harapKode(t, w, http.StatusBadRequest, "membuat Review Dokumen tanpa lampiran")
+	if !strings.Contains(w.Body.String(), "Lampirkan draf dokumen yang akan direview") {
+		t.Errorf("pesan tanpa lampiran: %s", w.Body)
+	}
+	w = panggil(t, pemilik, http.MethodPost, m.url(""), m.kolom)
+	harapKode(t, w, http.StatusBadRequest, "membuat Review Dokumen lewat JSON tanpa lampiran")
+
+	kolom := maps.Clone(m.kolom)
+	kolom["requestor_name"] = "  Nama dengan spasi  "
+	w = panggilForm(t, pemilik, http.MethodPost, m.url(""), kolom, berkas{"attachments", "draf.pdf", []byte("isi")})
+	harapKode(t, w, http.StatusCreated, "membuat Review Dokumen dengan lampiran")
+	var p pengajuan
+	isiData(t, w, &p)
+	if want := utils.GenerateTicketNumber(utils.PrefixDocumentReview, seq); p.TicketNumber != want {
+		t.Errorf("nomor tiket sesudah percobaan tanpa lampiran %q, harap %q", p.TicketNumber, want)
+	}
+	var nama string
+	if err := dbTes.Raw("SELECT requestor_name FROM document_reviews WHERE id = ?", p.ID).Scan(&nama).Error; err != nil {
+		t.Fatalf("membaca nama tersimpan: %v", err)
+	}
+	if nama != "Nama dengan spasi" {
+		t.Errorf("nama tersimpan %q, harap tanpa spasi tepi", nama)
 	}
 }
 
@@ -469,7 +670,6 @@ func TestPengajuanBelumBenar(t *testing.T) {
 				const tidakAda = "00000000-0000-0000-0000-000000000000"
 				harapKode(t, panggil(t, legal, http.MethodGet, m.url("/legal", "/", tidakAda, "/pdf"), nil), http.StatusNotFound, "LEGAL meminta PDF yang tidak ada")
 			})
-
 
 		})
 	}

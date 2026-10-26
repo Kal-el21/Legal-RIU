@@ -89,14 +89,10 @@ func (h *LegalOpinionHandler) Create(c *gin.Context) {
 			utils.BadRequest(c, "Gagal memparse request", err.Error())
 			return
 		}
-		if !req.Complete() {
-			utils.BadRequest(c, "Semua field wajib diisi", nil)
-			return
-		}
 		userID := middleware.GetUserID(c)
 		lo, svcErr := h.svc.Create(userID, req, nil)
 		if svcErr != nil {
-			utils.InternalError(c, svcErr.Error())
+			jawabGalatBuatPengajuan(c, svcErr)
 			return
 		}
 		utils.Created(c, "Pengajuan berhasil dibuat", lo)
@@ -107,20 +103,11 @@ func (h *LegalOpinionHandler) Create(c *gin.Context) {
 
 	req := formLegalOpinion(c)
 
-	if !req.Complete() {
-		utils.BadRequest(c, "Semua field wajib diisi", nil)
-		return
-	}
-
 	files := lampiranForm(c)
 	userID := middleware.GetUserID(c)
 	lo, err := h.svc.Create(userID, req, files)
-	if errors.Is(err, service.ErrInvalidFile) {
-		utils.BadRequest(c, err.Error(), nil)
-		return
-	}
 	if err != nil {
-		utils.InternalError(c, err.Error())
+		jawabGalatBuatPengajuan(c, err)
 		return
 	}
 	middleware.SetAuditContext(c, entity.ActionUserUpdate, "legal_opinion", lo.ID.String())
@@ -158,11 +145,19 @@ func jawabGalatDraf(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, service.ErrDrafTidakAda), errors.Is(err, service.ErrLampiranTidakAda):
 		utils.NotFound(c, err.Error())
-	case errors.Is(err, service.ErrInvalidFile), errors.Is(err, service.ErrIsianBelumLengkap):
+	case errors.Is(err, service.ErrInvalidFile), errors.Is(err, service.ErrIsianBelumLengkap), errors.Is(err, service.ErrLampiranDrafWajib):
 		utils.BadRequest(c, err.Error(), nil)
 	default:
 		utils.InternalError(c, err.Error())
 	}
+}
+
+func jawabGalatBuatPengajuan(c *gin.Context, err error) {
+	if errors.Is(err, service.ErrInvalidFile) || errors.Is(err, service.ErrIsianBelumLengkap) || errors.Is(err, service.ErrLampiranDrafWajib) {
+		utils.BadRequest(c, err.Error(), nil)
+		return
+	}
+	utils.InternalError(c, err.Error())
 }
 
 // POST /api/v1/legal-opinions/drafts: simpan draf baru; isian boleh belum lengkap (PR Draf).
@@ -257,7 +252,6 @@ func (h *LegalOpinionHandler) Resubmit(c *gin.Context) {
 	utils.OK(c, "Pengajuan berhasil diajukan ulang", lo)
 }
 
-
 // GET /api/v1/legal-opinions/download?path=xxx
 func (h *LegalOpinionHandler) Download(c *gin.Context) {
 	filePath := c.Query("path")
@@ -277,7 +271,6 @@ func (h *LegalOpinionHandler) Download(c *gin.Context) {
 		return
 	}
 	defer obj.Close()
-
 
 	c.DataFromReader(-1, -1, "application/octet-stream", obj, map[string]string{
 		"Content-Disposition": utils.HeaderUnduhan("attachment", fileName),
