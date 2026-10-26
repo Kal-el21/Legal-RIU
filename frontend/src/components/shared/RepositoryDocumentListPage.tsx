@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, Download, Search, BadgeCheck, User } from 'lucide-react'
+import { ChevronDown, ChevronLeft, ChevronRight, Download, Search, BadgeCheck, User, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { useRepositoryDocuments, useDownloadRepositoryDocument } from '@/hooks/useRepositoryDocument'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import type { RepositoryDocument } from '@/types'
@@ -91,6 +92,7 @@ export default function RepositoryDocumentListPage({
 }: RepositoryDocumentListPageProps) {
   const [searchParams, setSearchParams] = useSearchParams()
   const [search, setSearch] = useState(searchParams.get('search') ?? '')
+  const [filterOpen, setFilterOpen] = useState(false)
   const urlSearch = searchParams.get('search') ?? ''
   const panel = `/${basePath.split('/')[1]}`
   const page = Math.max(1, Number(searchParams.get('page')) || 1)
@@ -99,6 +101,7 @@ export default function RepositoryDocumentListPage({
   const dateTo = searchParams.get('date_to') ?? ''
   const type = searchParams.get('type') ?? ''
   const typeFilter = filterJenisDokumen(type)
+  const activeTypeLabel = JENIS_DOKUMEN.find((option) => option.value === type)?.label
 
   useEffect(() => {
     const timer = window.setTimeout(() => setSearch(urlSearch), 0)
@@ -125,6 +128,15 @@ export default function RepositoryDocumentListPage({
       if (value) next.set(key, value)
       else next.delete(key)
       if (key !== 'page') next.delete('page')
+      return next
+    })
+  }
+
+  const clearFilters = () => {
+    setSearch('')
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current)
+      for (const key of ['search', 'feature_code', 'type', 'date_from', 'date_to', 'page']) next.delete(key)
       return next
     })
   }
@@ -166,52 +178,134 @@ export default function RepositoryDocumentListPage({
         <p className="text-sm text-gray-500 mt-0.5">{description}</p>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 mb-5 md:grid-cols-2 xl:grid-cols-5">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <Input
-            aria-label="Cari dokumen"
-            placeholder="Cari nama, nomor, atau judul asal..."
-            className="pl-9"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-          />
+      <section aria-label="Pencarian dan filter dokumen" className="mb-5 rounded-2xl border border-gray-100 bg-white p-4">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_220px_auto]">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Input
+              aria-label="Cari dokumen"
+              placeholder="Cari nama file, nomor, atau judul asal..."
+              className="pl-9"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+          </div>
+          <Select value={featureCode || 'all'} onValueChange={(value) => setFilter('feature_code', value === 'all' ? '' : value)}>
+            <SelectTrigger aria-label="Saring modul" className="w-full">
+              <SelectValue placeholder="Semua modul" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Semua modul</SelectItem>
+              {MODUL_OPTIONS.map((option) => (
+                <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button
+            type="button"
+            variant="outline"
+            aria-expanded={filterOpen}
+            aria-controls="repository-document-extra-filters"
+            onClick={() => setFilterOpen((open) => !open)}
+            className="justify-between gap-2"
+          >
+            Filter lainnya
+            <ChevronDown className={`h-4 w-4 transition-transform ${filterOpen ? 'rotate-180' : ''}`} />
+          </Button>
         </div>
-        <Select value={featureCode || 'all'} onValueChange={(value) => setFilter('feature_code', value === 'all' ? '' : value)}>
-          <SelectTrigger aria-label="Saring modul">
-            <SelectValue placeholder="Semua modul" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Semua modul</SelectItem>
-            {MODUL_OPTIONS.map((option) => (
-              <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={type || 'all'} onValueChange={(value) => setFilter('type', value === 'all' ? '' : value)}>
-          <SelectTrigger aria-label="Saring jenis dokumen">
-            <SelectValue placeholder="Semua jenis dokumen" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Semua jenis dokumen</SelectItem>
-            {JENIS_DOKUMEN.map((option) => (
-              <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Input
-          aria-label="Tanggal unggah mulai"
-          type="date"
-          value={dateFrom}
-          onChange={(event) => setFilter('date_from', event.target.value)}
-        />
-        <Input
-          aria-label="Tanggal unggah sampai"
-          type="date"
-          value={dateTo}
-          onChange={(event) => setFilter('date_to', event.target.value)}
-        />
-      </div>
+
+        <div
+          id="repository-document-extra-filters"
+          hidden={!filterOpen}
+          className="mt-4 grid grid-cols-1 gap-3 border-t border-gray-100 pt-4 sm:grid-cols-2"
+        >
+          <div className="space-y-1.5">
+            <Label htmlFor="repository-document-type" className="text-xs font-medium text-gray-600">Jenis dokumen</Label>
+            <Select value={type || 'all'} onValueChange={(value) => setFilter('type', value === 'all' ? '' : value)}>
+              <SelectTrigger id="repository-document-type" aria-label="Saring jenis dokumen" className="w-full">
+                <SelectValue placeholder="Semua jenis dokumen" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Semua jenis dokumen</SelectItem>
+                {JENIS_DOKUMEN.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <fieldset className="space-y-1.5">
+            <legend className="text-xs font-medium text-gray-600">Tanggal unggah</legend>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <Label htmlFor="repository-document-date-from" className="text-xs text-gray-500">Dari</Label>
+                <Input
+                  id="repository-document-date-from"
+                  aria-label="Tanggal unggah dari"
+                  type="date"
+                  max={dateTo || undefined}
+                  value={dateFrom}
+                  onChange={(event) => setFilter('date_from', event.target.value)}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="repository-document-date-to" className="text-xs text-gray-500">Sampai</Label>
+                <Input
+                  id="repository-document-date-to"
+                  aria-label="Tanggal unggah sampai"
+                  type="date"
+                  min={dateFrom || undefined}
+                  value={dateTo}
+                  onChange={(event) => setFilter('date_to', event.target.value)}
+                />
+              </div>
+            </div>
+          </fieldset>
+        </div>
+
+        {(urlSearch || featureCode || type || dateFrom || dateTo) && (
+          <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-gray-100 pt-3">
+            <span className="text-xs font-medium text-gray-500">Filter aktif:</span>
+            {urlSearch && (
+              <Button type="button" variant="outline" size="sm" title={`Pencarian: ${urlSearch}`} onClick={() => { setSearch(''); setFilter('search', '') }} className="h-7 max-w-full gap-1.5 px-2 text-xs">
+                <span className="truncate">Pencarian: {urlSearch}</span>
+                <X className="h-3 w-3 shrink-0" aria-hidden="true" />
+                <span className="sr-only">Hapus filter pencarian</span>
+              </Button>
+            )}
+            {featureCode && (
+              <Button type="button" variant="outline" size="sm" onClick={() => setFilter('feature_code', '')} className="h-7 gap-1.5 px-2 text-xs">
+                {MODUL_OPTIONS.find((option) => option.value === featureCode)?.label ?? featureCode}
+                <X className="h-3 w-3" aria-hidden="true" />
+                <span className="sr-only">Hapus filter modul</span>
+              </Button>
+            )}
+            {type && (
+              <Button type="button" variant="outline" size="sm" onClick={() => setFilter('type', '')} className="h-7 gap-1.5 px-2 text-xs">
+                {activeTypeLabel ?? type}
+                <X className="h-3 w-3" aria-hidden="true" />
+                <span className="sr-only">Hapus filter jenis dokumen</span>
+              </Button>
+            )}
+            {dateFrom && (
+              <Button type="button" variant="outline" size="sm" onClick={() => setFilter('date_from', '')} className="h-7 gap-1.5 px-2 text-xs">
+                Dari {formatTanggalUnggah(dateFrom)}
+                <X className="h-3 w-3" aria-hidden="true" />
+                <span className="sr-only">Hapus tanggal mulai</span>
+              </Button>
+            )}
+            {dateTo && (
+              <Button type="button" variant="outline" size="sm" onClick={() => setFilter('date_to', '')} className="h-7 gap-1.5 px-2 text-xs">
+                Sampai {formatTanggalUnggah(dateTo)}
+                <X className="h-3 w-3" aria-hidden="true" />
+                <span className="sr-only">Hapus tanggal akhir</span>
+              </Button>
+            )}
+            <Button type="button" variant="ghost" size="sm" onClick={clearFilters} className="h-7 px-2 text-xs text-[#0B2545] hover:text-[#C8102E]">
+              Bersihkan filter
+            </Button>
+          </div>
+        )}
+      </section>
 
       <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white">
         {isLoading ? (
