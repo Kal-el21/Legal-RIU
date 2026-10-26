@@ -12,8 +12,11 @@ import (
 	"net/url"
 	"slices"
 	"testing"
+	"time"
 
 	"legal-riu-portal/internal/entity"
+	"legal-riu-portal/internal/repository"
+	"legal-riu-portal/internal/service"
 
 	"github.com/google/uuid"
 )
@@ -667,7 +670,6 @@ func TestAuditLogSaringan(t *testing.T) {
 	})
 }
 
-
 // Riwayat per data di halaman detail (PR Audit Log tahap L.4): yang boleh membuka detail melihat
 // riwayatnya, terbaru di atas; yang tidak boleh mendapat jawaban yang sama dengan detail; IP hanya
 // untuk yang punya audit_log.view (keputusan L3 dan L7).
@@ -838,6 +840,18 @@ func TestRepositoriDokumen(t *testing.T) {
 	if id == "" {
 		t.Fatal("dokumen perkara yang baru diunggah tidak muncul di repositori")
 	}
+	w = panggil(t, legal, http.MethodGet, alamat+"/"+id, nil)
+	harapKode(t, w, http.StatusOK, "metadata dokumen repositori")
+	var metadata struct {
+		SourceNumber string     `json:"source_number"`
+		SourceTitle  string     `json:"source_title"`
+		UploadedAt   *time.Time `json:"uploaded_at"`
+	}
+	isiData(t, w, &metadata)
+	if metadata.SourceNumber != p.TicketNumber || metadata.SourceTitle != p.CaseName || metadata.UploadedAt == nil {
+		t.Errorf("metadata dokumen perkara: %+v, harap nomor=%q judul=%q dan waktu unggah terisi",
+			metadata, p.TicketNumber, p.CaseName)
+	}
 	harapKode(t, panggil(t, legal, http.MethodGet, alamat+"/"+id, nil), http.StatusOK, "detail dokumen repositori")
 	w = panggil(t, legal, http.MethodGet, alamat+"/"+id+"/download", nil)
 	harapKode(t, w, http.StatusOK, "unduh dari repositori")
@@ -867,6 +881,113 @@ func TestRepositoriDokumen(t *testing.T) {
 		harapKode(t, panggil(t, user, http.MethodGet, alamat+"/"+id, nil), http.StatusNotFound, "USER membuka detail dokumen perkara")
 		harapKode(t, panggil(t, user, http.MethodGet, alamat+"/"+id+"/download", nil), http.StatusNotFound, "USER mengunduh dokumen perkara")
 	})
+}
+
+func TestRepositoriMetadataSumber(t *testing.T) {
+	repoDoc := service.NewRepositoryDocumentService(repository.NewRepositoryDocumentRepository(dbTes), nil)
+	waktu := time.Date(2026, 8, 14, 9, 30, 0, 0, time.UTC)
+	approvedAt := waktu.Add(time.Hour)
+	caseEntity := &entity.LegalCase{
+		Base:         entity.Base{ID: uuid.New()},
+		TicketNumber: "PKR-REPO-1",
+		CaseName:     "Perkara Metadata",
+		DocumentLink: "uji-metadata/perkara.pdf",
+		Photo:        "uji-metadata/perkara.png",
+	}
+	chronology := &entity.CaseChronology{Base: entity.Base{ID: uuid.New()}}
+	lo := &entity.LegalOpinion{
+		Base:         entity.Base{ID: uuid.New()},
+		TicketNumber: "LO-REPO-1",
+		Title:        "Opini Awal",
+		Attachments: []entity.LegalOpinionAttachment{{
+			FilePath: "uji-metadata/lo.pdf", FileName: "Nama Asli LO.pdf", CreatedAt: waktu,
+		}},
+		Results: []entity.LegalOpinionResult{{
+			FilePath: "uji-metadata/lo-hasil.pdf", FileName: "Hasil LO.pdf", CreatedAt: waktu,
+		}},
+	}
+	review := &entity.DocumentReview{
+		Base:         entity.Base{ID: uuid.New()},
+		TicketNumber: "RD-REPO-1",
+		DocumentName: "Dokumen Review",
+		Attachments: []entity.DocumentReviewAttachment{{
+			FilePath: "uji-metadata/rd.pdf", FileName: "Lampiran RD.pdf", CreatedAt: waktu,
+		}},
+		Results: []entity.DocumentReviewResult{{
+			FilePath: "uji-metadata/rd-hasil.pdf", FileName: "Hasil RD.pdf", CreatedAt: waktu,
+		}},
+	}
+	agreement := &entity.AgreementDocument{
+		Base:              entity.Base{ID: uuid.New()},
+		TicketNumber:      "PKS-REPO-1",
+		FormData:          []byte(`{"pihak_kedua_nama":"Mitra Perjanjian"}`),
+		GeneratedDOCXPath: "uji-metadata/pks.docx",
+		GeneratedPDFPath:  "uji-metadata/pks.pdf",
+		GeneratedFileName: "PKS Final",
+		ApprovedAt:        &approvedAt,
+		Attachments: []entity.AgreementAttachment{{
+			FilePath: "uji-metadata/pks-lampiran.pdf", FileName: "Lampiran PKS.pdf", CreatedAt: waktu,
+		}},
+	}
+
+	for nama, err := range map[string]error{
+		"Legal Opinion":   repoDoc.SyncLegalOpinion(lo),
+		"Review Dokumen":  repoDoc.SyncDocumentReview(review),
+		"Perjanjian":      repoDoc.SyncAgreement(agreement),
+		"Dokumen Perkara": repoDoc.SyncCaseDocument(caseEntity, "uji-metadata/perkara.pdf", "Dokumen Perkara.pdf", 10, waktu),
+		"Foto Perkara":    repoDoc.SyncCasePhoto(caseEntity, "uji-metadata/perkara.png", "Foto Perkara.png", 10, waktu),
+		"Kronologi": repoDoc.SyncChronologyDocument(caseEntity, chronology,
+			"uji-metadata/kronologi.pdf", "Kronologi.pdf", &waktu),
+	} {
+		if err != nil {
+			t.Errorf("%s: gagal menyinkronkan metadata: %v", nama, err)
+		}
+	}
+	t.Cleanup(func() {
+		dbTes.Exec("DELETE FROM repository_documents WHERE file_path LIKE ?", "uji-metadata/%")
+	})
+
+	type metadata struct {
+		SourceNumber string
+		SourceTitle  string
+		UploadedAt   time.Time
+		FileName     string
+	}
+	periksa := func(path, nomor, judul, namaFile string, uploaded time.Time) {
+		t.Helper()
+		var got metadata
+		if err := dbTes.Raw(`SELECT source_number, source_title, uploaded_at, file_name
+			FROM repository_documents WHERE file_path = ?`, path).Scan(&got).Error; err != nil {
+			t.Fatalf("membaca metadata %s: %v", path, err)
+		}
+		if got.SourceNumber != nomor || got.SourceTitle != judul || !got.UploadedAt.Equal(uploaded) || got.FileName != namaFile {
+			t.Errorf("%s: metadata dapat %+v, harap nomor=%q judul=%q file=%q waktu=%s",
+				path, got, nomor, judul, namaFile, uploaded.Format(time.RFC3339))
+		}
+	}
+	periksa("uji-metadata/lo.pdf", lo.TicketNumber, lo.Title, "Nama Asli LO.pdf", waktu)
+	periksa("uji-metadata/lo-hasil.pdf", lo.TicketNumber, lo.Title, "Hasil LO.pdf", waktu)
+	periksa("uji-metadata/rd.pdf", review.TicketNumber, review.DocumentName, "Lampiran RD.pdf", waktu)
+	periksa("uji-metadata/rd-hasil.pdf", review.TicketNumber, review.DocumentName, "Hasil RD.pdf", waktu)
+	periksa("uji-metadata/pks-lampiran.pdf", agreement.TicketNumber, "Mitra Perjanjian", "Lampiran PKS.pdf", waktu)
+	periksa("uji-metadata/pks.docx", agreement.TicketNumber, "Mitra Perjanjian", "PKS Final.docx", approvedAt)
+	periksa("uji-metadata/pks.pdf", agreement.TicketNumber, "Mitra Perjanjian", "PKS Final.pdf", approvedAt)
+	periksa("uji-metadata/perkara.pdf", caseEntity.TicketNumber, caseEntity.CaseName, "Dokumen Perkara.pdf", waktu)
+	periksa("uji-metadata/perkara.png", caseEntity.TicketNumber, caseEntity.CaseName, "Foto Perkara.png", waktu)
+	periksa("uji-metadata/kronologi.pdf", caseEntity.TicketNumber, caseEntity.CaseName, "Kronologi.pdf", waktu)
+
+	lo.Title = "Opini Diperbarui"
+	if err := repoDoc.SyncLegalOpinion(lo); err != nil {
+		t.Fatal(err)
+	}
+	periksa("uji-metadata/lo.pdf", lo.TicketNumber, lo.Title, "Nama Asli LO.pdf", waktu)
+
+	caseEntity.CaseName = "Perkara Diperbarui"
+	if err := repoDoc.SyncCaseMetadata(caseEntity); err != nil {
+		t.Fatal(err)
+	}
+	periksa("uji-metadata/perkara.pdf", caseEntity.TicketNumber, caseEntity.CaseName, "Dokumen Perkara.pdf", waktu)
+	periksa("uji-metadata/perkara.png", caseEntity.TicketNumber, caseEntity.CaseName, "Foto Perkara.png", waktu)
 }
 
 // Repositori dokumen mengikuti hak akses sumbernya: sebuah dokumen hanya

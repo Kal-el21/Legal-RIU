@@ -323,10 +323,11 @@ func TestRepositoriTidakKembar(t *testing.T) {
 	}
 	perk := buatPerkara(t, legal)
 	dokumen := "legal-cases/documents/case-" + perk.ID + "-uji.pdf"
+	waktuLama := time.Date(2025, 3, 17, 7, 45, 0, 0, time.UTC)
 	if err := dbTes.Exec("UPDATE legal_cases SET document_link = ? WHERE id = ?", dokumen, perk.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := dbTes.Create(&entity.RepositoryDocument{Title: "Gugatan Asli.pdf", FeatureCode: "case_management", SourceType: "legal_cases",
+	if err := dbTes.Create(&entity.RepositoryDocument{Base: entity.Base{CreatedAt: waktuLama}, Title: "Gugatan Asli.pdf", FeatureCode: "case_management", SourceType: "legal_cases",
 		SourceID: perk.ID, FilePath: dokumen, FileName: "Gugatan Asli.pdf", IsActive: true}).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -336,7 +337,7 @@ func TestRepositoriTidakKembar(t *testing.T) {
 	if err := dbTes.Exec("UPDATE legal_cases SET photo = ? WHERE id = ?", foto, perk.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := dbTes.Create(&entity.RepositoryDocument{Title: "Sidang Asli.png", FeatureCode: "case_management", SourceType: "legal_cases_photo",
+	if err := dbTes.Create(&entity.RepositoryDocument{Base: entity.Base{CreatedAt: waktuLama}, Title: "Sidang Asli.png", FeatureCode: "case_management", SourceType: "legal_cases_photo",
 		SourceID: perk.ID, FilePath: foto, FileName: "Sidang Asli.png", IsActive: true}).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -353,6 +354,48 @@ func TestRepositoriTidakKembar(t *testing.T) {
 	}
 	if got := namaDi(foto); got != "Sidang Asli.png" {
 		t.Errorf("nama foto perkara sesudah backfill: %q, harap nama aslinya", got)
+	}
+
+	for _, p := range []string{dokumen, foto} {
+		var got struct {
+			SourceNumber string
+			SourceTitle  string
+			UploadedAt   time.Time
+			CreatedAt    time.Time
+		}
+		if err := dbTes.Raw(`SELECT source_number, source_title, uploaded_at, created_at
+			FROM repository_documents WHERE file_path = ?`, p).Scan(&got).Error; err != nil {
+			t.Fatal(err)
+		}
+		if got.SourceNumber != perk.TicketNumber || got.SourceTitle != perk.CaseName {
+			t.Errorf("%s konteks sumber: nomor=%q judul=%q, harap nomor=%q judul=%q",
+				p, got.SourceNumber, got.SourceTitle, perk.TicketNumber, perk.CaseName)
+		}
+		if !got.UploadedAt.Equal(got.CreatedAt) {
+			t.Errorf("%s waktu unggah legacy %s tidak memakai waktu baris repositori %s",
+				p, got.UploadedAt, got.CreatedAt)
+		}
+	}
+
+	namaPerkaraBaru := "Perkara Diperbarui Saat Backfill"
+	if err := dbTes.Model(&entity.LegalCase{}).Where("id = ?", perk.ID).Update("case_name", namaPerkaraBaru).Error; err != nil {
+		t.Fatal(err)
+	}
+	backfill()
+	for _, p := range []string{dokumen, foto} {
+		var judul string
+		if err := dbTes.Raw("SELECT source_title FROM repository_documents WHERE file_path = ?", p).Scan(&judul).Error; err != nil {
+			t.Fatal(err)
+		}
+		if judul != namaPerkaraBaru {
+			t.Errorf("%s judul sumber sesudah backfill: %q, harap %q", p, judul, namaPerkaraBaru)
+		}
+	}
+	if got := namaDi(dokumen); got != "Gugatan Asli.pdf" {
+		t.Errorf("nama dokumen perkara sesudah refresh konteks: %q, harap nama aslinya", got)
+	}
+	if got := namaDi(foto); got != "Sidang Asli.png" {
+		t.Errorf("nama foto sesudah refresh konteks: %q, harap nama aslinya", got)
 	}
 
 	// Sebelum PR A tahap A.4b, backfill mencatat foto sebagai legal_cases bernama objek, dan baris

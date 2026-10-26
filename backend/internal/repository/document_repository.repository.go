@@ -4,6 +4,7 @@ import (
 	"errors"
 	"legal-riu-portal/internal/entity"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -75,6 +76,7 @@ type RepositoryDocumentRepository interface {
 	FindAll(access DocumentAccess, featureCode string, search string) ([]entity.RepositoryDocument, error)
 	FindByID(access DocumentAccess, id uuid.UUID) (*entity.RepositoryDocument, error)
 	BatchUpsert(docs []entity.RepositoryDocument) error
+	UpdateCaseMetadata(caseID string, sourceNumber string, sourceTitle string) error
 	MarkInactiveBySource(sourceType string, sourceIDs []string) error
 	UpsertBySource(doc entity.RepositoryDocument) error
 }
@@ -111,29 +113,62 @@ func (r *repositoryDocumentRepository) FindByID(access DocumentAccess, id uuid.U
 	return &doc, nil
 }
 
-// BatchUpsert mencatat file hasil backfill. Baris dengan sumber dan path yang sama hanya
-// diaktifkan kembali, tanpa mengubah isinya, supaya nama asli yang disimpan saat unggah
-// (dokumen dan foto perkara) tidak ditimpa nama objek. File yang belum tercatat dibuat baru.
+// BatchUpsert refreshes source context without overwriting file metadata captured at upload.
 func (r *repositoryDocumentRepository) BatchUpsert(docs []entity.RepositoryDocument) error {
 	if len(docs) == 0 {
 		return nil
 	}
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		for _, doc := range docs {
-			res := tx.Model(&entity.RepositoryDocument{}).
+			var existing entity.RepositoryDocument
+			err := tx.Unscoped().
 				Where("source_type = ? AND source_id = ? AND file_path = ?", doc.SourceType, doc.SourceID, doc.FilePath).
-				Update("is_active", true)
-			if res.Error != nil {
-				return res.Error
-			}
-			if res.RowsAffected == 0 {
+				First(&existing).Error
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				if doc.CreatedAt.IsZero() {
+					doc.CreatedAt = time.Now()
+				}
+				if doc.UploadedAt == nil {
+					doc.UploadedAt = &doc.CreatedAt
+				}
 				if err := tx.Create(&doc).Error; err != nil {
 					return err
 				}
+				continue
+			}
+			if err != nil {
+				return err
+			}
+			uploadedAt := existing.UploadedAt
+			if doc.UploadedAt != nil {
+				uploadedAt = doc.UploadedAt
+			} else if uploadedAt == nil {
+				uploadedAt = &existing.CreatedAt
+			}
+			if err := tx.Unscoped().Model(&existing).Updates(map[string]interface{}{
+				"source_number": doc.SourceNumber,
+				"source_title":  doc.SourceTitle,
+				"uploaded_at":   uploadedAt,
+				"is_active":     true,
+				"deleted_at":    nil,
+			}).Error; err != nil {
+				return err
 			}
 		}
 		return nil
 	})
+}
+
+func (r *repositoryDocumentRepository) UpdateCaseMetadata(caseID string, sourceNumber string, sourceTitle string) error {
+	return r.db.Model(&entity.RepositoryDocument{}).
+		Where(`(source_type IN ? AND source_id = ?)
+			OR (source_type = 'case_chronologies' AND source_id IN (
+				SELECT id::text FROM case_chronologies WHERE case_id = ?
+			))`, []string{"legal_cases", "legal_cases_photo"}, caseID, caseID).
+		Updates(map[string]interface{}{
+			"source_number": sourceNumber,
+			"source_title":  sourceTitle,
+		}).Error
 }
 
 func (r *repositoryDocumentRepository) MarkInactiveBySource(sourceType string, sourceIDs []string) error {
@@ -163,6 +198,11 @@ func (r *repositoryDocumentRepository) UpsertBySource(doc entity.RepositoryDocum
 	existing.MIMEType = doc.MIMEType
 	existing.FileSize = doc.FileSize
 	existing.UploaderType = doc.UploaderType
+	existing.SourceNumber = doc.SourceNumber
+	existing.SourceTitle = doc.SourceTitle
+	if doc.UploadedAt != nil {
+		existing.UploadedAt = doc.UploadedAt
+	}
 	existing.IsActive = true
 	return r.db.Save(&existing).Error
 }

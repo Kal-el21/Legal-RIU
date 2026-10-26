@@ -148,7 +148,7 @@ func (s *documentReviewService) Update(id string, userID string, req dto.UpdateD
 	if err := s.repo.Update(dr); err != nil {
 		return nil, errors.New("gagal mengupdate pengajuan")
 	}
-	return s.repo.FindByID(dr.ID)
+	return s.muat(dr.ID)
 }
 
 func (s *documentReviewService) Delete(id string, userID string) error {
