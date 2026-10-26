@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { ChevronDown, ChevronLeft, ChevronRight, Download, Search, BadgeCheck, User, X } from 'lucide-react'
+import { ChevronDown, ChevronLeft, ChevronRight, Download, FileSearch, LoaderCircle, Search, BadgeCheck, User, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { useRepositoryDocuments, useDownloadRepositoryDocument } from '@/hooks/useRepositoryDocument'
 import { Button } from '@/components/ui/button'
@@ -93,6 +93,7 @@ export default function RepositoryDocumentListPage({
   const [searchParams, setSearchParams] = useSearchParams()
   const [search, setSearch] = useState(searchParams.get('search') ?? '')
   const [filterOpen, setFilterOpen] = useState(false)
+  const [downloadingIds, setDownloadingIds] = useState<Set<string>>(() => new Set())
   const urlSearch = searchParams.get('search') ?? ''
   const panel = `/${basePath.split('/')[1]}`
   const page = Math.max(1, Number(searchParams.get('page')) || 1)
@@ -141,7 +142,7 @@ export default function RepositoryDocumentListPage({
     })
   }
 
-  const { data, isLoading, isError } = useRepositoryDocuments({
+  const { data, isLoading, isFetching, isError, refetch } = useRepositoryDocuments({
     page,
     limit: LIMIT,
     feature_code: featureCode || undefined,
@@ -152,21 +153,29 @@ export default function RepositoryDocumentListPage({
   })
 
   const downloadMutation = useDownloadRepositoryDocument()
-  const handleDownload = (id: string) => {
-    downloadMutation.mutate(id, {
-      onSuccess: (result) => {
-        const url = URL.createObjectURL(result.blob)
-        const anchor = document.createElement('a')
-        anchor.href = url
-        anchor.download = result.filename
-        anchor.click()
-        window.setTimeout(() => URL.revokeObjectURL(url), 1000)
-      },
-      onError: () => toast.error('Gagal mengunduh dokumen. Silakan coba lagi.'),
-    })
+  const handleDownload = async (id: string) => {
+    setDownloadingIds((current) => new Set(current).add(id))
+    try {
+      const result = await downloadMutation.mutateAsync(id)
+      const url = URL.createObjectURL(result.blob)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = result.filename
+      anchor.click()
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+    } catch {
+      toast.error('Gagal mengunduh dokumen. Silakan coba lagi.')
+    } finally {
+      setDownloadingIds((current) => {
+        const next = new Set(current)
+        next.delete(id)
+        return next
+      })
+    }
   }
 
   const documents = data?.items ?? []
+  const hasActiveFilters = Boolean(urlSearch || featureCode || type || dateFrom || dateTo)
   const totalPages = data?.total_pages ?? 0
   const firstItem = data?.total ? (page - 1) * LIMIT + 1 : 0
   const lastItem = data?.total ? Math.min(page * LIMIT, data.total) : 0
@@ -309,12 +318,51 @@ export default function RepositoryDocumentListPage({
 
       <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white">
         {isLoading ? (
-          <div className="p-12 text-center text-gray-400">Memuat data...</div>
+          <div role="status" aria-live="polite" className="space-y-4 p-6">
+            <span className="sr-only">Memuat dokumen...</span>
+            {Array.from({ length: 4 }, (_, index) => (
+              <div key={index} className="animate-pulse border-b border-gray-100 pb-4 last:border-0">
+                <div className="h-4 w-2/5 rounded bg-gray-100" />
+                <div className="mt-3 h-3 w-1/4 rounded bg-gray-100" />
+              </div>
+            ))}
+          </div>
         ) : isError ? (
-          <div role="alert" className="p-12 text-center text-red-600">Dokumen gagal dimuat. Silakan muat ulang halaman.</div>
+          <div role="alert" className="p-12 text-center">
+            <p className="font-medium text-gray-800">Dokumen gagal dimuat</p>
+            <p className="mt-1 text-sm text-gray-500">Periksa koneksi Anda, lalu coba muat daftar kembali.</p>
+            <Button
+              type="button"
+              variant="outline"
+              className="mt-4 text-[#0B2545] hover:border-[#0B2545]"
+              disabled={isFetching}
+              onClick={() => { void refetch() }}
+            >
+              {isFetching && <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />}
+              Coba lagi
+            </Button>
+          </div>
         ) : !documents.length ? (
-          <div className="p-16 text-center">
-            <p className="font-medium text-gray-500">Tidak ada dokumen ditemukan</p>
+          <div className="p-12 text-center sm:p-16">
+            <FileSearch className="mx-auto h-9 w-9 text-gray-400" aria-hidden="true" />
+            <p className="mt-4 font-medium text-gray-800">
+              {hasActiveFilters ? 'Tidak ada dokumen yang cocok' : 'Belum ada dokumen'}
+            </p>
+            <p className="mt-1 text-sm text-gray-500">
+              {hasActiveFilters
+                ? 'Coba ubah kata kunci atau saringan yang digunakan.'
+                : 'Dokumen yang dapat Anda akses akan tampil di sini.'}
+            </p>
+            {hasActiveFilters && (
+              <Button
+                type="button"
+                variant="outline"
+                className="mt-4 text-[#0B2545] hover:border-[#0B2545]"
+                onClick={clearFilters}
+              >
+                Bersihkan filter
+              </Button>
+            )}
           </div>
         ) : (
           <>
@@ -354,11 +402,14 @@ export default function RepositoryDocumentListPage({
                           variant="ghost"
                           size="sm"
                           aria-label={`Unduh ${doc.file_name}`}
-                          disabled={downloadMutation.isPending}
+                          disabled={downloadingIds.has(doc.id)}
                           onClick={() => handleDownload(doc.id)}
                           className="text-gray-500 hover:text-[#C8102E] focus-visible:ring-[#0B2545]"
                         >
-                          <Download className="h-4 w-4" />
+                          {downloadingIds.has(doc.id)
+                            ? <LoaderCircle className="h-4 w-4 animate-spin" />
+                            : <Download className="h-4 w-4" />}
+                          {downloadingIds.has(doc.id) && <span className="sr-only">Sedang mengunduh</span>}
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -378,11 +429,14 @@ export default function RepositoryDocumentListPage({
                       variant="outline"
                       size="icon"
                       aria-label={`Unduh ${doc.file_name}`}
-                      disabled={downloadMutation.isPending}
+                      disabled={downloadingIds.has(doc.id)}
                       onClick={() => handleDownload(doc.id)}
                       className="shrink-0 text-gray-600 hover:border-[#C8102E] hover:text-[#C8102E] focus-visible:ring-[#0B2545]"
                     >
-                      <Download className="h-4 w-4" />
+                      {downloadingIds.has(doc.id)
+                        ? <LoaderCircle className="h-4 w-4 animate-spin" />
+                        : <Download className="h-4 w-4" />}
+                      {downloadingIds.has(doc.id) && <span className="sr-only">Sedang mengunduh</span>}
                     </Button>
                   </div>
                   <div className="mt-3">
