@@ -275,6 +275,7 @@ func (s *agreementDocumentService) GetByID(id, userID string, all bool) (*entity
 	}
 	return d, nil
 }
+
 // Update juga mengembalikan rincian isian yang berubah untuk audit log (PR Audit Log tahap L.3b).
 func (s *agreementDocumentService) Update(id, userID string, req dto.UpdateAgreementDocumentRequest) (*entity.AgreementDocument, []string, error) {
 	d, e := s.GetByID(id, userID, false)
@@ -301,7 +302,7 @@ func (s *agreementDocumentService) Update(id, userID string, req dto.UpdateAgree
 	if e = s.repo.Save(d); e != nil {
 		return nil, nil, e
 	}
-	v, e := s.repo.FindByID(d.ID)
+	v, e := s.muat(d.ID)
 	return v, rincian, e
 }
 func (s *agreementDocumentService) Delete(id, userID string) error {
@@ -588,7 +589,7 @@ func (s *agreementDocumentService) UpdateMeta(id string, req dto.AgreementMetaRe
 		}
 		return nil, nil, nil, errors.New("gagal menyimpan metadata")
 	}
-	v, e := s.repo.FindByID(d.ID)
+	v, e := s.muat(d.ID)
 	return v, pergantian, rincian, e
 }
 
@@ -776,6 +777,7 @@ func (s *agreementDocumentService) Preview(ctx context.Context, id, userID strin
 	}
 	return s.converter.ToPDF(ctx, docx)
 }
+
 // PreviewDraft membentuk PDF pratinjau dari isian yang belum dikirim (langkah
 // Tinjau di wizard) tanpa menyimpan apa pun. Validasinya sama dengan saat Kirim,
 // jadi yang terlihat di pratinjau sama dengan yang akan dikirim.
@@ -927,6 +929,7 @@ func decodeForm(raw json.RawMessage) (map[string]interface{}, error) {
 	e := dec.Decode(&m)
 	return m, e
 }
+
 // partyOneSnapshot: data Pihak Pertama yang dibekukan ke dokumen saat disetujui. Sejak
 // PR 11 penandatangan berasal dari Daftar Penandatangan (pilihan approver atau usulan),
 // bukan dari kolom penandatangan lama di master; tanpa penandatangan tercetak "-".

@@ -4,8 +4,8 @@ export default function AdminRepositoryDocumentListPage() {
   return (
     <RepositoryDocumentListPage
       basePath="/admin/repository-documents"
-      title="Dokumen Repository"
-      description="Daftar dokumen per feature"
+      title="Repositori Dokumen"
+      description="Arsip dokumen dari pengajuan dan perkara yang dapat Anda akses."
     />
   )
 }

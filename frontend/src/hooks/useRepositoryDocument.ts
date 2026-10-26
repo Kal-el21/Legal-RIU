@@ -3,11 +3,11 @@ import { documentRepositoryService } from '@/services/document-repository.servic
 
 const KEYS = {
   all: ['repository-documents'] as const,
-  list: (params?: { feature_code?: string; search?: string }) => [...KEYS.all, 'list', params] as const,
+  list: (params?: Parameters<typeof documentRepositoryService.getAll>[0]) => [...KEYS.all, 'list', params] as const,
   detail: (id: string) => [...KEYS.all, 'detail', id] as const,
 }
 
-export function useRepositoryDocuments(params?: { feature_code?: string; search?: string }) {
+export function useRepositoryDocuments(params?: Parameters<typeof documentRepositoryService.getAll>[0]) {
   return useQuery({
     queryKey: KEYS.list(params),
     queryFn: () => documentRepositoryService.getAll(params),

@@ -147,7 +147,7 @@ func (s *legalOpinionService) Update(id string, userID string, req dto.UpdateLeg
 	if err := s.repo.Update(lo); err != nil {
 		return nil, errors.New("gagal mengupdate pengajuan")
 	}
-	return s.repo.FindByID(lo.ID)
+	return s.muat(lo.ID)
 }
 
 func (s *legalOpinionService) Delete(id string, userID string) error {

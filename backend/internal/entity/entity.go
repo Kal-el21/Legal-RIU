@@ -321,7 +321,7 @@ type LegalCase struct {
 	Specification     string           `gorm:"type:text" json:"specification"`
 	CaseTypeID        *uuid.UUID       `gorm:"type:uuid;index" json:"case_type_id,omitempty"`
 	CaseTypeRef       CaseType         `gorm:"foreignKey:CaseTypeID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT;" json:"case_type_ref,omitempty"`
-	TechnicalReserve  float64         `gorm:"type:decimal(18,2)" json:"technical_reserve"`
+	TechnicalReserve  float64          `gorm:"type:decimal(18,2)" json:"technical_reserve"`
 	CaseValue         float64          `gorm:"type:decimal(18,2)" json:"case_value"`
 	PIC               uuid.UUID        `gorm:"type:uuid;index" json:"pic"`
 	PICDivision       Division         `gorm:"foreignKey:PIC" json:"pic_division,omitempty"`
@@ -431,16 +431,19 @@ type NotificationRead struct {
 
 type RepositoryDocument struct {
 	Base
-	Title        string    `gorm:"size:255;not null;index" json:"title"`
-	FeatureCode  string    `gorm:"size:80;not null;index" json:"feature_code"`
-	SourceType   string    `gorm:"size:80;index" json:"source_type"`
-	SourceID     string    `gorm:"size:80;index" json:"source_id"`
-	UploaderType string    `gorm:"size:50" json:"uploader_type"`
-	FilePath     string    `gorm:"size:500;not null" json:"-"`
-	FileName     string    `gorm:"size:255;not null" json:"file_name"`
-	MIMEType     string    `gorm:"size:150" json:"mime_type"`
-	FileSize     int64     `json:"file_size"`
-	IsActive     bool      `gorm:"not null;default:true;index" json:"is_active"`
-	CreatedBy    uuid.UUID `gorm:"type:uuid;not null;index" json:"created_by"`
-	UpdatedBy    uuid.UUID `gorm:"type:uuid;not null;index" json:"updated_by"`
+	Title        string     `gorm:"size:255;not null;index" json:"title"`
+	FeatureCode  string     `gorm:"size:80;not null;index" json:"feature_code"`
+	SourceType   string     `gorm:"size:80;index" json:"source_type"`
+	SourceID     string     `gorm:"size:80;index" json:"source_id"`
+	SourceNumber *string    `gorm:"size:150;index" json:"source_number,omitempty"`
+	SourceTitle  *string    `gorm:"size:255;index" json:"source_title,omitempty"`
+	UploadedAt   *time.Time `gorm:"index" json:"uploaded_at,omitempty"`
+	UploaderType string     `gorm:"size:50" json:"uploader_type"`
+	FilePath     string     `gorm:"size:500;not null" json:"-"`
+	FileName     string     `gorm:"size:255;not null" json:"file_name"`
+	MIMEType     string     `gorm:"size:150" json:"mime_type"`
+	FileSize     int64      `json:"file_size"`
+	IsActive     bool       `gorm:"not null;default:true;index" json:"is_active"`
+	CreatedBy    uuid.UUID  `gorm:"type:uuid;not null;index" json:"created_by"`
+	UpdatedBy    uuid.UUID  `gorm:"type:uuid;not null;index" json:"updated_by"`
 }

@@ -446,6 +446,9 @@ export interface RepositoryDocument {
   feature_code: string
   source_type: string
   source_id: string
+  source_number?: string | null
+  source_title?: string | null
+  uploaded_at?: string | null
   uploader_type: 'requester' | 'approver'
   file_name: string
   mime_type?: string

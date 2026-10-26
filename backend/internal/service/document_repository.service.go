@@ -5,22 +5,25 @@ import (
 	"errors"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"legal-riu-portal/internal/dto"
 	"legal-riu-portal/internal/entity"
 	"legal-riu-portal/internal/repository"
 	"legal-riu-portal/internal/storage"
+	"legal-riu-portal/internal/utils"
 
 	"github.com/minio/minio-go/v7"
 )
 
 type RepositoryDocumentService interface {
-	GetAllDocuments(access repository.DocumentAccess, featureCode string, search string) ([]dto.RepositoryDocumentResponse, error)
+	GetAllDocuments(access repository.DocumentAccess, filters dto.RepositoryDocumentFilters) (dto.RepositoryDocumentListResponse, error)
 	GetDocumentByID(access repository.DocumentAccess, id string) (*dto.RepositoryDocumentResponse, error)
 	DownloadDocument(access repository.DocumentAccess, id string) (*minio.Object, string, error)
-	SyncCaseDocument(caseID string, filePath string, fileName string, fileSize int64) error
-	SyncCasePhoto(caseID string, filePath string, fileName string, fileSize int64) error
-	SyncChronologyDocument(chronID string, caseID string, filePath string, fileName string) error
+	SyncCaseDocument(legalCase *entity.LegalCase, filePath string, fileName string, fileSize int64, uploadedAt time.Time) error
+	SyncCasePhoto(legalCase *entity.LegalCase, filePath string, fileName string, fileSize int64, uploadedAt time.Time) error
+	SyncCaseMetadata(legalCase *entity.LegalCase) error
+	SyncChronologyDocument(legalCase *entity.LegalCase, chronology *entity.CaseChronology, filePath string, fileName string, uploadedAt *time.Time) error
 	RemoveCaseDocuments(caseID string) error
 	RemoveChronologyDocuments(chronID string) error
 	SyncLegalOpinion(lo *entity.LegalOpinion) error
@@ -30,20 +33,27 @@ type RepositoryDocumentService interface {
 }
 
 type repositoryDocumentService struct {
-	repo    repository.RepositoryDocumentRepository
-	storage *storage.MinIOClient
+	repo     repository.RepositoryDocumentRepository
+	caseRepo repository.LegalCaseRepository
+	storage  *storage.MinIOClient
 }
 
-func NewRepositoryDocumentService(repo repository.RepositoryDocumentRepository, s *storage.MinIOClient) RepositoryDocumentService {
-	return &repositoryDocumentService{repo: repo, storage: s}
+func NewRepositoryDocumentService(repo repository.RepositoryDocumentRepository, caseRepo repository.LegalCaseRepository, s *storage.MinIOClient) RepositoryDocumentService {
+	return &repositoryDocumentService{repo: repo, caseRepo: caseRepo, storage: s}
 }
 
-func (s *repositoryDocumentService) GetAllDocuments(access repository.DocumentAccess, featureCode string, search string) ([]dto.RepositoryDocumentResponse, error) {
-	docs, err := s.repo.FindAll(access, featureCode, search)
+func (s *repositoryDocumentService) GetAllDocuments(access repository.DocumentAccess, filters dto.RepositoryDocumentFilters) (dto.RepositoryDocumentListResponse, error) {
+	docs, total, err := s.repo.FindAll(access, filters)
 	if err != nil {
-		return nil, err
+		return dto.RepositoryDocumentListResponse{}, err
 	}
-	return toRepositoryDocumentResponses(docs), nil
+	return dto.RepositoryDocumentListResponse{
+		Items:      toRepositoryDocumentResponses(docs),
+		Total:      total,
+		Page:       filters.Page,
+		Limit:      filters.Limit,
+		TotalPages: int((total + int64(filters.Limit) - 1) / int64(filters.Limit)),
+	}, nil
 }
 
 func (s *repositoryDocumentService) GetDocumentByID(access repository.DocumentAccess, id string) (*dto.RepositoryDocumentResponse, error) {
@@ -64,6 +74,9 @@ func (s *repositoryDocumentService) GetDocumentByID(access repository.DocumentAc
 		FeatureCode:  doc.FeatureCode,
 		SourceType:   doc.SourceType,
 		SourceID:     doc.SourceID,
+		SourceNumber: doc.SourceNumber,
+		SourceTitle:  doc.SourceTitle,
+		UploadedAt:   doc.UploadedAt,
 		UploaderType: doc.UploaderType,
 		FileName:     doc.FileName,
 		MIMEType:     doc.MIMEType,
@@ -92,10 +105,29 @@ func (s *repositoryDocumentService) DownloadDocument(access repository.DocumentA
 	if err != nil {
 		return nil, "", errors.New("gagal mengambil file dari storage")
 	}
-	return obj, doc.FileName, nil
+	return obj, s.namaUnduhan(doc), nil
 }
 
-func (s *repositoryDocumentService) SyncCaseDocument(caseID string, filePath string, fileName string, fileSize int64) error {
+func (s *repositoryDocumentService) namaUnduhan(doc *entity.RepositoryDocument) string {
+	switch doc.SourceType {
+	case "legal_opinion_attachments", "document_review_attachments", "agreement_attachments":
+		return utils.NamaUnduhan(stringPointer(doc.SourceNumber), "Lampiran", doc.FileName)
+	case "legal_opinion_results", "document_review_results":
+		return utils.NamaUnduhan(stringPointer(doc.SourceNumber), "Hasil", doc.FileName)
+	case "agreement_documents":
+		return doc.FileName
+	case "legal_cases", "legal_cases_photo", "case_chronologies":
+		if tiket, jenis, nama := s.caseRepo.NamaFilePerkara(doc.FilePath); jenis != "" {
+			if nama == "" {
+				nama = filepath.Base(doc.FilePath)
+			}
+			return utils.NamaUnduhan(tiket, jenis, nama)
+		}
+	}
+	return doc.FileName
+}
+
+func (s *repositoryDocumentService) SyncCaseDocument(legalCase *entity.LegalCase, filePath string, fileName string, fileSize int64, uploadedAt time.Time) error {
 	if filePath == "" {
 		return nil
 	}
@@ -103,7 +135,10 @@ func (s *repositoryDocumentService) SyncCaseDocument(caseID string, filePath str
 		Title:        fileName,
 		FeatureCode:  "case_management",
 		SourceType:   "legal_cases",
-		SourceID:     caseID,
+		SourceID:     legalCase.ID.String(),
+		SourceNumber: pointer(legalCase.TicketNumber),
+		SourceTitle:  pointer(legalCase.CaseName),
+		UploadedAt:   &uploadedAt,
 		UploaderType: "requester",
 		FilePath:     filePath,
 		FileName:     fileName,
@@ -114,7 +149,7 @@ func (s *repositoryDocumentService) SyncCaseDocument(caseID string, filePath str
 	return s.repo.UpsertBySource(doc)
 }
 
-func (s *repositoryDocumentService) SyncCasePhoto(caseID string, filePath string, fileName string, fileSize int64) error {
+func (s *repositoryDocumentService) SyncCasePhoto(legalCase *entity.LegalCase, filePath string, fileName string, fileSize int64, uploadedAt time.Time) error {
 	if filePath == "" {
 		return nil
 	}
@@ -122,7 +157,10 @@ func (s *repositoryDocumentService) SyncCasePhoto(caseID string, filePath string
 		Title:        fileName,
 		FeatureCode:  "case_management",
 		SourceType:   "legal_cases_photo",
-		SourceID:     caseID,
+		SourceID:     legalCase.ID.String(),
+		SourceNumber: pointer(legalCase.TicketNumber),
+		SourceTitle:  pointer(legalCase.CaseName),
+		UploadedAt:   &uploadedAt,
 		UploaderType: "requester",
 		FilePath:     filePath,
 		FileName:     fileName,
@@ -133,10 +171,41 @@ func (s *repositoryDocumentService) SyncCasePhoto(caseID string, filePath string
 	return s.repo.UpsertBySource(doc)
 }
 
-// SyncChronologyDocument mencatat satu lampiran kronologi. fileName berisi nama asli untuk
-// unggahan baru (PR A tahap A.4b). Untuk lampiran yang sudah ada fileName kosong, dan barisnya
-// hanya diaktifkan lagi supaya nama aslinya tidak tertimpa nama objek.
-func (s *repositoryDocumentService) SyncChronologyDocument(chronID string, caseID string, filePath string, fileName string) error {
+func (s *repositoryDocumentService) SyncCaseMetadata(legalCase *entity.LegalCase) error {
+	var docs []entity.RepositoryDocument
+	for _, source := range []struct {
+		sourceType string
+		filePath   string
+	}{
+		{"legal_cases", legalCase.DocumentLink},
+		{"legal_cases_photo", legalCase.Photo},
+	} {
+		if source.filePath == "" {
+			continue
+		}
+		fileName := filepath.Base(source.filePath)
+		docs = append(docs, entity.RepositoryDocument{
+			Title:        fileName,
+			FeatureCode:  "case_management",
+			SourceType:   source.sourceType,
+			SourceID:     legalCase.ID.String(),
+			SourceNumber: pointer(legalCase.TicketNumber),
+			SourceTitle:  pointer(legalCase.CaseName),
+			UploaderType: "requester",
+			FilePath:     source.filePath,
+			FileName:     fileName,
+			MIMEType:     detectMIME(fileName),
+			IsActive:     true,
+		})
+	}
+	if err := s.repo.BatchUpsert(docs); err != nil {
+		return err
+	}
+	return s.repo.UpdateCaseMetadata(legalCase.ID.String(), legalCase.TicketNumber, legalCase.CaseName)
+}
+
+// SyncChronologyDocument preserves existing file names/timestamps when reactivating old paths.
+func (s *repositoryDocumentService) SyncChronologyDocument(legalCase *entity.LegalCase, chronology *entity.CaseChronology, filePath string, fileName string, uploadedAt *time.Time) error {
 	if filePath == "" {
 		return nil
 	}
@@ -144,7 +213,10 @@ func (s *repositoryDocumentService) SyncChronologyDocument(chronID string, caseI
 		Title:        filepath.Base(filePath),
 		FeatureCode:  "case_management",
 		SourceType:   "case_chronologies",
-		SourceID:     chronID,
+		SourceID:     chronology.ID.String(),
+		SourceNumber: pointer(legalCase.TicketNumber),
+		SourceTitle:  pointer(legalCase.CaseName),
+		UploadedAt:   uploadedAt,
 		UploaderType: "requester",
 		FilePath:     filePath,
 		FileName:     filepath.Base(filePath),
@@ -176,24 +248,26 @@ func (s *repositoryDocumentService) RemoveChronologyDocuments(chronID string) er
 
 func (s *repositoryDocumentService) SyncLegalOpinion(lo *entity.LegalOpinion) error {
 	id := lo.ID.String()
+	nomor, judul := lo.TicketNumber, lo.Title
 	var docs []entity.RepositoryDocument
 	for _, a := range lo.Attachments {
-		docs = append(docs, berkasPengajuan("legal_opinion", "legal_opinion_attachments", id, "requester", a.FilePath, a.FileName, a.FileSize))
+		docs = append(docs, berkasPengajuan("legal_opinion", "legal_opinion_attachments", id, "requester", a.FilePath, a.FileName, a.FileSize, nomor, judul, &a.CreatedAt))
 	}
 	for _, r := range lo.Results {
-		docs = append(docs, berkasPengajuan("legal_opinion", "legal_opinion_results", id, "approver", r.FilePath, r.FileName, 0))
+		docs = append(docs, berkasPengajuan("legal_opinion", "legal_opinion_results", id, "approver", r.FilePath, r.FileName, 0, nomor, judul, &r.CreatedAt))
 	}
 	return s.repo.BatchUpsert(docs)
 }
 
 func (s *repositoryDocumentService) SyncDocumentReview(dr *entity.DocumentReview) error {
 	id := dr.ID.String()
+	nomor, judul := dr.TicketNumber, dr.DocumentName
 	var docs []entity.RepositoryDocument
 	for _, a := range dr.Attachments {
-		docs = append(docs, berkasPengajuan("document_review", "document_review_attachments", id, "requester", a.FilePath, a.FileName, a.FileSize))
+		docs = append(docs, berkasPengajuan("document_review", "document_review_attachments", id, "requester", a.FilePath, a.FileName, a.FileSize, nomor, judul, &a.CreatedAt))
 	}
 	for _, r := range dr.Results {
-		docs = append(docs, berkasPengajuan("document_review", "document_review_results", id, "approver", r.FilePath, r.FileName, 0))
+		docs = append(docs, berkasPengajuan("document_review", "document_review_results", id, "approver", r.FilePath, r.FileName, 0, nomor, judul, &r.CreatedAt))
 	}
 	return s.repo.BatchUpsert(docs)
 }
@@ -201,13 +275,20 @@ func (s *repositoryDocumentService) SyncDocumentReview(dr *entity.DocumentReview
 // SyncAgreement mencatat lampiran perjanjian, dan DOCX serta PDF final kalau sudah disetujui.
 func (s *repositoryDocumentService) SyncAgreement(d *entity.AgreementDocument) error {
 	id := d.ID.String()
+	data, err := decodeForm(d.FormData)
+	if err != nil {
+		return err
+	}
+	nomor := d.TicketNumber
+	judul, _ := data["pihak_kedua_nama"].(string)
+	judul = strings.TrimSpace(judul)
 	var docs []entity.RepositoryDocument
 	for _, a := range d.Attachments {
-		docs = append(docs, berkasPengajuan("agreement_document", "agreement_attachments", id, "requester", a.FilePath, a.FileName, a.FileSize))
+		docs = append(docs, berkasPengajuan("agreement_document", "agreement_attachments", id, "requester", a.FilePath, a.FileName, a.FileSize, nomor, judul, &a.CreatedAt))
 	}
 	for _, p := range []string{d.GeneratedDOCXPath, d.GeneratedPDFPath} {
 		if p != "" {
-			docs = append(docs, berkasPengajuan("agreement_document", "agreement_documents", id, "approver", p, d.GeneratedFileName+filepath.Ext(p), 0))
+			docs = append(docs, berkasPengajuan("agreement_document", "agreement_documents", id, "approver", p, d.GeneratedFileName+filepath.Ext(p), 0, nomor, judul, d.ApprovedAt))
 		}
 	}
 	return s.repo.BatchUpsert(docs)
@@ -225,8 +306,9 @@ func (s *repositoryDocumentService) RemoveSubmission(id string) error {
 	return nil
 }
 
-func berkasPengajuan(fitur, sumber, id, pengunggah, path, nama string, ukuran int64) entity.RepositoryDocument {
+func berkasPengajuan(fitur, sumber, id, pengunggah, path, nama string, ukuran int64, nomor, judul string, uploadedAt *time.Time) entity.RepositoryDocument {
 	return entity.RepositoryDocument{Title: nama, FeatureCode: fitur, SourceType: sumber, SourceID: id, UploaderType: pengunggah,
+		SourceNumber: pointer(nomor), SourceTitle: pointer(judul), UploadedAt: uploadedAt,
 		FilePath: path, FileName: nama, FileSize: ukuran, MIMEType: detectMIME(nama), IsActive: true}
 }
 
@@ -237,6 +319,9 @@ func toRepositoryDocumentResponse(d entity.RepositoryDocument) dto.RepositoryDoc
 		FeatureCode:  d.FeatureCode,
 		SourceType:   d.SourceType,
 		SourceID:     d.SourceID,
+		SourceNumber: d.SourceNumber,
+		SourceTitle:  d.SourceTitle,
+		UploadedAt:   d.UploadedAt,
 		UploaderType: d.UploaderType,
 		FileName:     d.FileName,
 		MIMEType:     d.MIMEType,
@@ -247,6 +332,17 @@ func toRepositoryDocumentResponse(d entity.RepositoryDocument) dto.RepositoryDoc
 		CreatedAt:    d.CreatedAt,
 		UpdatedAt:    d.UpdatedAt,
 	}
+}
+
+func pointer[T any](value T) *T {
+	return &value
+}
+
+func stringPointer(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
 }
 
 func toRepositoryDocumentResponses(docs []entity.RepositoryDocument) []dto.RepositoryDocumentResponse {

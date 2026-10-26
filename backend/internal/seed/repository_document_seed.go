@@ -107,16 +107,21 @@ func backfillLegalOpinionAttachments(db *gorm.DB) ([]entity.RepositoryDocument, 
 	type row struct {
 		ID             uuid.UUID
 		LegalOpinionID uuid.UUID
+		SourceNumber   string
+		SourceTitle    string
 		FileName       string
 		FilePath       string
 		FileSize       int64
+		UploadedAt     time.Time
 	}
 	var rows []row
 	if err := db.Raw(`
-		SELECT id, legal_opinion_id, file_name, file_path, file_size
-		FROM legal_opinion_attachments
+		SELECT a.id, a.legal_opinion_id, lo.ticket_number AS source_number, lo.title AS source_title,
+			a.file_name, a.file_path, a.file_size, a.created_at AS uploaded_at
+		FROM legal_opinion_attachments a
+		JOIN legal_opinions lo ON lo.id = a.legal_opinion_id
 		WHERE file_path IS NOT NULL AND file_path != ''
-		  AND legal_opinion_id IN (SELECT id FROM legal_opinions WHERE deleted_at IS NULL AND status <> 'DRAFT')
+		  AND lo.deleted_at IS NULL AND lo.status <> 'DRAFT'
 	`).Scan(&rows).Error; err != nil {
 		return nil, err
 	}
@@ -127,6 +132,9 @@ func backfillLegalOpinionAttachments(db *gorm.DB) ([]entity.RepositoryDocument, 
 			FeatureCode:  "legal_opinion",
 			SourceType:   "legal_opinion_attachments",
 			SourceID:     r.LegalOpinionID.String(),
+			SourceNumber: &r.SourceNumber,
+			SourceTitle:  &r.SourceTitle,
+			UploadedAt:   &r.UploadedAt,
 			UploaderType: "requester",
 			FilePath:     r.FilePath,
 			FileName:     r.FileName,
@@ -141,15 +149,20 @@ func backfillLegalOpinionResults(db *gorm.DB) ([]entity.RepositoryDocument, erro
 	type row struct {
 		ID             uuid.UUID
 		LegalOpinionID uuid.UUID
+		SourceNumber   string
+		SourceTitle    string
 		FileName       string
 		FilePath       string
+		UploadedAt     time.Time
 	}
 	var rows []row
 	if err := db.Raw(`
-		SELECT id, legal_opinion_id, file_name, file_path
-		FROM legal_opinion_results
+		SELECT r.id, r.legal_opinion_id, lo.ticket_number AS source_number, lo.title AS source_title,
+			r.file_name, r.file_path, r.created_at AS uploaded_at
+		FROM legal_opinion_results r
+		JOIN legal_opinions lo ON lo.id = r.legal_opinion_id
 		WHERE file_path IS NOT NULL AND file_path != ''
-		  AND legal_opinion_id IN (SELECT id FROM legal_opinions WHERE deleted_at IS NULL AND status <> 'DRAFT')
+		  AND lo.deleted_at IS NULL AND lo.status <> 'DRAFT'
 	`).Scan(&rows).Error; err != nil {
 		return nil, err
 	}
@@ -160,6 +173,9 @@ func backfillLegalOpinionResults(db *gorm.DB) ([]entity.RepositoryDocument, erro
 			FeatureCode:  "legal_opinion",
 			SourceType:   "legal_opinion_results",
 			SourceID:     r.LegalOpinionID.String(),
+			SourceNumber: &r.SourceNumber,
+			SourceTitle:  &r.SourceTitle,
+			UploadedAt:   &r.UploadedAt,
 			UploaderType: "approver",
 			FilePath:     r.FilePath,
 			FileName:     r.FileName,
@@ -173,16 +189,21 @@ func backfillDocumentReviewAttachments(db *gorm.DB) ([]entity.RepositoryDocument
 	type row struct {
 		ID               uuid.UUID
 		DocumentReviewID uuid.UUID
+		SourceNumber     string
+		SourceTitle      string
 		FileName         string
 		FilePath         string
 		FileSize         int64
+		UploadedAt       time.Time
 	}
 	var rows []row
 	if err := db.Raw(`
-		SELECT id, document_review_id, file_name, file_path, file_size
-		FROM document_review_attachments
+		SELECT a.id, a.document_review_id, dr.ticket_number AS source_number, dr.document_name AS source_title,
+			a.file_name, a.file_path, a.file_size, a.created_at AS uploaded_at
+		FROM document_review_attachments a
+		JOIN document_reviews dr ON dr.id = a.document_review_id
 		WHERE file_path IS NOT NULL AND file_path != ''
-		  AND document_review_id IN (SELECT id FROM document_reviews WHERE deleted_at IS NULL AND status <> 'DRAFT')
+		  AND dr.deleted_at IS NULL AND dr.status <> 'DRAFT'
 	`).Scan(&rows).Error; err != nil {
 		return nil, err
 	}
@@ -193,6 +214,9 @@ func backfillDocumentReviewAttachments(db *gorm.DB) ([]entity.RepositoryDocument
 			FeatureCode:  "document_review",
 			SourceType:   "document_review_attachments",
 			SourceID:     r.DocumentReviewID.String(),
+			SourceNumber: &r.SourceNumber,
+			SourceTitle:  &r.SourceTitle,
+			UploadedAt:   &r.UploadedAt,
 			UploaderType: "requester",
 			FilePath:     r.FilePath,
 			FileName:     r.FileName,
@@ -207,15 +231,20 @@ func backfillDocumentReviewResults(db *gorm.DB) ([]entity.RepositoryDocument, er
 	type row struct {
 		ID               uuid.UUID
 		DocumentReviewID uuid.UUID
+		SourceNumber     string
+		SourceTitle      string
 		FileName         string
 		FilePath         string
+		UploadedAt       time.Time
 	}
 	var rows []row
 	if err := db.Raw(`
-		SELECT id, document_review_id, file_name, file_path
-		FROM document_review_results
+		SELECT r.id, r.document_review_id, dr.ticket_number AS source_number, dr.document_name AS source_title,
+			r.file_name, r.file_path, r.created_at AS uploaded_at
+		FROM document_review_results r
+		JOIN document_reviews dr ON dr.id = r.document_review_id
 		WHERE file_path IS NOT NULL AND file_path != ''
-		  AND document_review_id IN (SELECT id FROM document_reviews WHERE deleted_at IS NULL AND status <> 'DRAFT')
+		  AND dr.deleted_at IS NULL AND dr.status <> 'DRAFT'
 	`).Scan(&rows).Error; err != nil {
 		return nil, err
 	}
@@ -226,6 +255,9 @@ func backfillDocumentReviewResults(db *gorm.DB) ([]entity.RepositoryDocument, er
 			FeatureCode:  "document_review",
 			SourceType:   "document_review_results",
 			SourceID:     r.DocumentReviewID.String(),
+			SourceNumber: &r.SourceNumber,
+			SourceTitle:  &r.SourceTitle,
+			UploadedAt:   &r.UploadedAt,
 			UploaderType: "approver",
 			FilePath:     r.FilePath,
 			FileName:     r.FileName,
@@ -237,18 +269,24 @@ func backfillDocumentReviewResults(db *gorm.DB) ([]entity.RepositoryDocument, er
 
 func backfillAgreementAttachments(db *gorm.DB) ([]entity.RepositoryDocument, error) {
 	type row struct {
-		ID                 uuid.UUID
+		ID                  uuid.UUID
 		AgreementDocumentID uuid.UUID
-		FileName           string
-		FilePath           string
-		FileSize           int64
+		SourceNumber        string
+		SourceTitle         string
+		FileName            string
+		FilePath            string
+		FileSize            int64
+		UploadedAt          time.Time
 	}
 	var rows []row
 	if err := db.Raw(`
-		SELECT id, agreement_document_id, file_name, file_path, file_size
-		FROM agreement_attachments
+		SELECT a.id, a.agreement_document_id, d.ticket_number AS source_number,
+			COALESCE(d.form_data ->> 'pihak_kedua_nama', '') AS source_title,
+			a.file_name, a.file_path, a.file_size, a.created_at AS uploaded_at
+		FROM agreement_attachments a
+		JOIN agreement_documents d ON d.id = a.agreement_document_id
 		WHERE file_path IS NOT NULL AND file_path != ''
-		  AND agreement_document_id IN (SELECT id FROM agreement_documents WHERE deleted_at IS NULL AND status <> 'DRAFT')
+		  AND d.deleted_at IS NULL AND d.status <> 'DRAFT'
 	`).Scan(&rows).Error; err != nil {
 		return nil, err
 	}
@@ -259,6 +297,9 @@ func backfillAgreementAttachments(db *gorm.DB) ([]entity.RepositoryDocument, err
 			FeatureCode:  "agreement_document",
 			SourceType:   "agreement_attachments",
 			SourceID:     r.AgreementDocumentID.String(),
+			SourceNumber: &r.SourceNumber,
+			SourceTitle:  &r.SourceTitle,
+			UploadedAt:   &r.UploadedAt,
 			UploaderType: "requester",
 			FilePath:     r.FilePath,
 			FileName:     r.FileName,
@@ -272,13 +313,19 @@ func backfillAgreementAttachments(db *gorm.DB) ([]entity.RepositoryDocument, err
 func backfillAgreementGeneratedFiles(db *gorm.DB) ([]entity.RepositoryDocument, error) {
 	type row struct {
 		ID                uuid.UUID
+		SourceNumber      string
+		SourceTitle       string
 		GeneratedDocxPath string
 		GeneratedPdfPath  string
 		GeneratedFileName string
+		UploadedAt        time.Time
 	}
 	var rows []row
 	if err := db.Raw(`
-		SELECT id, generated_docx_path, generated_pdf_path, generated_file_name
+		SELECT id, ticket_number AS source_number,
+			COALESCE(form_data ->> 'pihak_kedua_nama', '') AS source_title,
+			generated_docx_path, generated_pdf_path, generated_file_name,
+			COALESCE(approved_at, created_at) AS uploaded_at
 		FROM agreement_documents
 		WHERE deleted_at IS NULL
 		  AND ((generated_docx_path IS NOT NULL AND generated_docx_path != '')
@@ -294,6 +341,9 @@ func backfillAgreementGeneratedFiles(db *gorm.DB) ([]entity.RepositoryDocument, 
 				FeatureCode:  "agreement_document",
 				SourceType:   "agreement_documents",
 				SourceID:     r.ID.String(),
+				SourceNumber: &r.SourceNumber,
+				SourceTitle:  &r.SourceTitle,
+				UploadedAt:   &r.UploadedAt,
 				UploaderType: "approver",
 				FilePath:     r.GeneratedDocxPath,
 				FileName:     r.GeneratedFileName + ".docx",
@@ -306,6 +356,9 @@ func backfillAgreementGeneratedFiles(db *gorm.DB) ([]entity.RepositoryDocument, 
 				FeatureCode:  "agreement_document",
 				SourceType:   "agreement_documents",
 				SourceID:     r.ID.String(),
+				SourceNumber: &r.SourceNumber,
+				SourceTitle:  &r.SourceTitle,
+				UploadedAt:   &r.UploadedAt,
 				UploaderType: "approver",
 				FilePath:     r.GeneratedPdfPath,
 				FileName:     r.GeneratedFileName + ".pdf",
@@ -319,11 +372,13 @@ func backfillAgreementGeneratedFiles(db *gorm.DB) ([]entity.RepositoryDocument, 
 func backfillLegalCaseDocuments(db *gorm.DB) ([]entity.RepositoryDocument, error) {
 	type row struct {
 		ID           uuid.UUID
+		SourceNumber string
+		SourceTitle  string
 		DocumentLink string
 	}
 	var rows []row
 	if err := db.Raw(`
-		SELECT id, document_link
+		SELECT id, ticket_number AS source_number, case_name AS source_title, document_link
 		FROM legal_cases
 		WHERE deleted_at IS NULL AND document_link IS NOT NULL AND document_link != ''
 	`).Scan(&rows).Error; err != nil {
@@ -336,6 +391,8 @@ func backfillLegalCaseDocuments(db *gorm.DB) ([]entity.RepositoryDocument, error
 			FeatureCode:  "case_management",
 			SourceType:   "legal_cases",
 			SourceID:     r.ID.String(),
+			SourceNumber: &r.SourceNumber,
+			SourceTitle:  &r.SourceTitle,
 			UploaderType: "requester",
 			FilePath:     r.DocumentLink,
 			FileName:     filepath.Base(r.DocumentLink),
@@ -347,12 +404,14 @@ func backfillLegalCaseDocuments(db *gorm.DB) ([]entity.RepositoryDocument, error
 
 func backfillLegalCasePhotos(db *gorm.DB) ([]entity.RepositoryDocument, error) {
 	type row struct {
-		ID    uuid.UUID
-		Photo string
+		ID           uuid.UUID
+		SourceNumber string
+		SourceTitle  string
+		Photo        string
 	}
 	var rows []row
 	if err := db.Raw(`
-		SELECT id, photo
+		SELECT id, ticket_number AS source_number, case_name AS source_title, photo
 		FROM legal_cases
 		WHERE deleted_at IS NULL AND photo IS NOT NULL AND photo != ''
 	`).Scan(&rows).Error; err != nil {
@@ -365,6 +424,8 @@ func backfillLegalCasePhotos(db *gorm.DB) ([]entity.RepositoryDocument, error) {
 			FeatureCode:  "case_management",
 			SourceType:   "legal_cases_photo", // sama dengan saat unggah (SyncCasePhoto), PR A tahap A.4b
 			SourceID:     r.ID.String(),
+			SourceNumber: &r.SourceNumber,
+			SourceTitle:  &r.SourceTitle,
 			UploaderType: "requester",
 			FilePath:     r.Photo,
 			FileName:     filepath.Base(r.Photo),
@@ -376,15 +437,18 @@ func backfillLegalCasePhotos(db *gorm.DB) ([]entity.RepositoryDocument, error) {
 
 func backfillChronologyDocuments(db *gorm.DB) ([]entity.RepositoryDocument, error) {
 	type row struct {
-		ID        uuid.UUID
-		Documents string
+		ID           uuid.UUID
+		SourceNumber string
+		SourceTitle  string
+		Documents    string
 	}
 	var rows []row
 	if err := db.Raw(`
-		SELECT id, documents
-		FROM case_chronologies
-		WHERE deleted_at IS NULL AND documents IS NOT NULL AND documents != ''
-		  AND case_id IN (SELECT id FROM legal_cases WHERE deleted_at IS NULL)
+		SELECT cc.id, lc.ticket_number AS source_number, lc.case_name AS source_title, cc.documents
+		FROM case_chronologies cc
+		JOIN legal_cases lc ON lc.id = cc.case_id
+		WHERE cc.deleted_at IS NULL AND cc.documents IS NOT NULL AND cc.documents != ''
+		  AND lc.deleted_at IS NULL
 	`).Scan(&rows).Error; err != nil {
 		return nil, err
 	}
@@ -403,6 +467,8 @@ func backfillChronologyDocuments(db *gorm.DB) ([]entity.RepositoryDocument, erro
 				FeatureCode:  "case_management",
 				SourceType:   "case_chronologies",
 				SourceID:     r.ID.String(),
+				SourceNumber: &r.SourceNumber,
+				SourceTitle:  &r.SourceTitle,
 				UploaderType: "requester",
 				FilePath:     p,
 				FileName:     filepath.Base(p),

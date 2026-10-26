@@ -244,6 +244,7 @@ func (s *legalCaseService) Update(scope *uuid.UUID, id string, req dto.UpdateLeg
 	if err := s.repo.Update(existing); err != nil {
 		return nil, errors.New("gagal mengupdate kasus hukum")
 	}
+	catatRepositori(uid, s.repoDocSvc.SyncCaseMetadata(existing))
 
 	legalCase, err := s.repo.FindByID(uid)
 	if err != nil {
@@ -342,8 +343,13 @@ func (s *legalCaseService) CreateChronology(scope *uuid.UUID, caseID string, req
 		return nil, errors.New("gagal menambahkan kronologi kasus")
 	}
 
+	uploadedAt := time.Now()
 	for _, path := range documents {
-		_ = s.repoDocSvc.SyncChronologyDocument(chronology.ID.String(), caseID, path, namaAsli[path])
+		var waktuUnggah *time.Time
+		if namaAsli[path] != "" {
+			waktuUnggah = &uploadedAt
+		}
+		catatRepositori(chronology.ID, s.repoDocSvc.SyncChronologyDocument(legalCase, chronology, path, namaAsli[path], waktuUnggah))
 	}
 
 	response := toCaseChronologyResponse(chronology)
@@ -351,7 +357,8 @@ func (s *legalCaseService) CreateChronology(scope *uuid.UUID, caseID string, req
 }
 
 func (s *legalCaseService) UpdateChronology(scope *uuid.UUID, caseID string, chronologyID string, req dto.UpdateCaseChronologyRequest, files []*multipart.FileHeader) (*dto.CaseChronologyResponse, error) {
-	if _, err := s.findCase(scope, caseID); err != nil {
+	legalCase, err := s.findCase(scope, caseID)
+	if err != nil {
 		return nil, err
 	}
 	caseUID, err := parseUUID(caseID)
@@ -395,11 +402,16 @@ func (s *legalCaseService) UpdateChronology(scope *uuid.UUID, caseID string, chr
 
 	_ = s.repoDocSvc.RemoveChronologyDocuments(chronology.ID.String())
 
+	uploadedAt := time.Now()
 	for _, path := range documents {
 		if path == "" {
 			continue
 		}
-		_ = s.repoDocSvc.SyncChronologyDocument(chronology.ID.String(), caseID, path, namaAsli[path])
+		var waktuUnggah *time.Time
+		if namaAsli[path] != "" {
+			waktuUnggah = &uploadedAt
+		}
+		catatRepositori(chronology.ID, s.repoDocSvc.SyncChronologyDocument(legalCase, chronology, path, namaAsli[path], waktuUnggah))
 	}
 
 	response := toCaseChronologyResponse(chronology)
@@ -767,6 +779,7 @@ func (s *legalCaseService) UploadDocument(scope *uuid.UUID, caseID string, file 
 	if err != nil {
 		return nil, errors.New("gagal upload dokumen: " + err.Error())
 	}
+	uploadedAt := time.Now()
 
 	legalCase.DocumentLink = objectName
 	if err := s.repo.Update(legalCase); err != nil {
@@ -779,7 +792,7 @@ func (s *legalCaseService) UploadDocument(scope *uuid.UUID, caseID string, file 
 		_ = s.repoDocSvc.RemoveCaseDocuments(caseID)
 	}
 
-	_ = s.repoDocSvc.SyncCaseDocument(caseID, objectName, file.Filename, file.Size)
+	catatRepositori(uid, s.repoDocSvc.SyncCaseDocument(legalCase, objectName, file.Filename, file.Size, uploadedAt))
 
 	response := toLegalCaseResponse(legalCase, true)
 	return &response, nil
@@ -823,6 +836,7 @@ func (s *legalCaseService) UploadPhoto(scope *uuid.UUID, caseID string, file *mu
 	if err != nil {
 		return nil, errors.New("gagal upload foto: " + err.Error())
 	}
+	uploadedAt := time.Now()
 
 	legalCase.Photo = objectName
 	if err := s.repo.Update(legalCase); err != nil {
@@ -835,7 +849,7 @@ func (s *legalCaseService) UploadPhoto(scope *uuid.UUID, caseID string, file *mu
 		_ = s.repoDocSvc.RemoveCaseDocuments(caseID)
 	}
 
-	_ = s.repoDocSvc.SyncCasePhoto(caseID, objectName, file.Filename, file.Size)
+	catatRepositori(uid, s.repoDocSvc.SyncCasePhoto(legalCase, objectName, file.Filename, file.Size, uploadedAt))
 
 	response := toLegalCaseResponse(legalCase, true)
 	return &response, nil

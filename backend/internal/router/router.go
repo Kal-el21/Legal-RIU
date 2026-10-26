@@ -41,7 +41,7 @@ func New(cfg *config.Config, db *gorm.DB, store *storage.MinIOClient) (*gin.Engi
 	permissionSvc := service.NewPermissionService(permissionRepo, userRepo)
 	authSvc := service.NewAuthService(userRepo, refreshTokenRepo, cfg, permissionSvc)
 	userSvc := service.NewUserService(userRepo)
-	documentRepositorySvc := service.NewRepositoryDocumentService(documentRepositoryRepo, store)
+	documentRepositorySvc := service.NewRepositoryDocumentService(documentRepositoryRepo, legalCaseRepo, store)
 	loSvc := service.NewLegalOpinionService(loRepo, store, documentRepositorySvc)
 	drSvc := service.NewDocumentReviewService(drRepo, store, documentRepositorySvc)
 	agreementTemplateSvc := service.NewAgreementTemplateService(agreementTemplateRepo, store)

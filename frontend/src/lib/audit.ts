@@ -134,13 +134,37 @@ export function kelompokPerHari<T extends Pick<AuditLog, 'created_at'>>(
 
 const ID_KOSONG = '00000000-0000-0000-0000-000000000000'
 
-// Halaman detail per data, sama alamatnya di panel admin dan legal.
-const DETAIL: Record<string, string> = {
-  legal_opinion: 'legal-opinions',
-  document_review: 'review-documents',
-  agreement_document: 'agreement-documents',
-  legal_case: 'legal-cases',
-  legal_material: 'materials',
+const DETAIL: Record<string, Record<string, string>> = {
+  '/admin': {
+    legal_opinion: 'legal-opinions',
+    document_review: 'review-documents',
+    agreement_document: 'agreement-documents',
+    legal_case: 'legal-cases',
+    legal_material: 'materials',
+  },
+  '/legal': {
+    legal_opinion: 'legal-opinions',
+    document_review: 'review-documents',
+    agreement_document: 'agreement-documents',
+    legal_case: 'legal-cases',
+    legal_material: 'materials',
+  },
+  '/dashboard': {
+    legal_opinion: 'legal-opinions',
+    document_review: 'review-documents',
+    agreement_document: 'agreement-documents',
+    legal_case: 'legal-cases',
+  },
+  '/legal-au': {
+    legal_opinion: 'legal-opinions',
+    document_review: 'review-documents',
+    legal_case: 'cases',
+  },
+  '/external': {
+    legal_opinion: 'legal-opinions',
+    document_review: 'review-documents',
+    legal_case: 'legal-cases',
+  },
 }
 
 // Data tanpa halaman detail per ID: tautannya ke halaman kelolanya (hanya ada di panel admin).
@@ -159,12 +183,11 @@ const KELOLA_ADMIN: Record<string, string> = {
   agreement_signatory: 'agreement-company-master',
 }
 
-// tautanData: alamat data yang dicatat, menurut panel pengguna ('/admin' atau '/legal').
-// Data yang dihapus, sesi login, dan panel lain tidak bertautan. Baris impor (ID kosong)
-// menuju daftar datanya.
+// tautanData: alamat data yang dicatat, menurut halaman detail yang tersedia di panel.
+// Data yang dihapus dan sesi login tidak bertautan. Baris impor (ID kosong) menuju daftar datanya.
 export function tautanData(log: Pick<AuditLog, 'action' | 'entity_type' | 'entity_id'>, panel: string): string | null {
-  if (log.action === 'DELETE' || (panel !== '/admin' && panel !== '/legal')) return null
-  const detail = DETAIL[log.entity_type]
+  if (log.action === 'DELETE') return null
+  const detail = DETAIL[panel]?.[log.entity_type]
   if (detail) return log.entity_id && log.entity_id !== ID_KOSONG ? `${panel}/${detail}/${log.entity_id}` : `${panel}/${detail}`
   const kelola = KELOLA_ADMIN[log.entity_type]
   return panel === '/admin' && kelola ? `/admin/${kelola}` : null
